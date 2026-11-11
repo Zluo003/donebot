@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+
+import { signInEnvRefusal, signInFromEnv } from "./sign-in-env.ts";
+
+describe("sign-in lists from the environment", () => {
+  it("leaves Settings in charge of a list whose variable is absent, empty or blank, as a compose file's ${X:-} passes it", () => {
+    for (const value of [undefined, "", "  ", " , "]) {
+      expect(signInFromEnv({ DONEBOT_SIGNIN_EMAILS: value, DONEBOT_SIGNIN_MEMBER_EMAILS: value }), JSON.stringify(value)).toEqual({});
+    }
+  });
+
+  it("takes a list the environment names, lower-cased, each variable on its own", () => {
+    expect(signInFromEnv({ DONEBOT_SIGNIN_EMAILS: "Boss@Example.test, @team.example.test", DONEBOT_SIGNIN_MEMBER_EMAILS: "" }))
+      .toEqual({ admins: ["boss@example.test", "@team.example.test"] });
+    expect(signInFromEnv({ DONEBOT_SIGNIN_MEMBER_EMAILS: "ada@example.test carol@example.test" }))
+      .toEqual({ members: ["ada@example.test", "carol@example.test"] });
+  });
+});
+
+describe("a Settings change the environment would overrule", () => {
+  const env = { DONEBOT_SIGNIN_EMAILS: "", DONEBOT_SIGNIN_MEMBER_EMAILS: "ada@example.test" };
+
+  it("is refused for the list the environment decides, naming the variable and where to change it", () => {
+    const refusal = signInEnvRefusal({ admins: [], members: ["ada@example.test", "new@example.test"] }, env);
+    expect(refusal).toContain("DONEBOT_SIGNIN_MEMBER_EMAILS is set where this server starts (its .env)");
+    expect(refusal).toContain("as a member");
+    expect(signInEnvRefusal({ admins: ["x@example.test"] }, { DONEBOT_SIGNIN_EMAILS: "boss@example.test" })).toContain("DONEBOT_SIGNIN_EMAILS");
+  });
+
+  it("goes ahead for a list the environment leaves to Settings, and for the decided list sent back unchanged", () => {
+    // Settings sends both lists whenever it changes one: the decided one comes back as the server showed it.
+    expect(signInEnvRefusal({ admins: ["boss@example.test"], members: ["ADA@example.test"] }, env)).toBeNull();
+    expect(signInEnvRefusal({ members: ["new@example.test"] }, { DONEBOT_SIGNIN_EMAILS: "", DONEBOT_SIGNIN_MEMBER_EMAILS: "" })).toBeNull();
+    expect(signInEnvRefusal(undefined, env)).toBeNull();
+  });
+});

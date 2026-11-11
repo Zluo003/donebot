@@ -1,0 +1,87 @@
+name: ${COMPOSE_PROJECT_NAME:-donebot}
+services:
+  omb:
+    # Collects exited browser processes; Chrome's shared memory as on the
+    # desktop containers (docs/browser-packaging.md, "Process hygiene").
+    init: true
+    shm_size: 512m
+    build:
+      context: ./deploy/local
+      args:
+        BASE_IMAGE: ${DONEBOT_BASE_IMAGE:-donebot-core:local}
+        ENGINES: ${ENGINES-@anthropic-ai/claude-code @openai/codex}
+    image: ${DONEBOT_LOCAL_IMAGE:-donebot-local:latest}
+    restart: unless-stopped
+    volumes:
+      - data:/data
+      - edge:/run/donebot
+    environment:
+      DONEBOT_PORT: "18899"
+      DONEBOT_WEBHOOK_PORT: "18900"
+      # Caddy, in its own container, reaches the server over these (deploy/local/Caddyfile). A request on a socket is
+      # never a local one. Caddy does not share the server's network: a server restarted on its own would come back
+      # in a new one and leave Caddy, and the port, behind in the old one.
+      DONEBOT_TUNNEL_SOCKET: /run/donebot/http.sock
+      DONEBOT_WEBHOOK_SOCKET: /run/donebot/hooks.sock
+      # The name the desktop app shows for this server (a container's own hostname is a random id).
+      DONEBOT_SERVER_NAME: ${DONEBOT_SERVER_NAME:-donebot-docker}
+      DONEBOT_PUBLIC_URL: ${DONEBOT_PUBLIC_URL:-http://localhost:${DONEBOT_HTTP_PORT:-18880}}
+      DONEBOT_WEBHOOK_PUBLIC_URL: ${DONEBOT_WEBHOOK_PUBLIC_URL:-${DONEBOT_PUBLIC_URL:-http://localhost:${DONEBOT_HTTP_PORT:-18880}}}
+      # "1": phones pair by QR through DoneBot Relay (docs/phone-relay-server.md). Sign the
+      # container in once first: docker compose exec omb donebot login --relay
+      DONEBOT_PHONE_RELAY: ${DONEBOT_PHONE_RELAY:-}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:18899/api/health', { signal: AbortSignal.timeout(4000) }).then(async r => { if (!r.ok || !(await r.text()).includes('donebot')) process.exit(1); }).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2}
+    restart: unless-stopped
+    ports:
+      - "${DONEBOT_BIND_ADDRESS:-127.0.0.1}:${DONEBOT_HTTP_PORT:-18880}:80"
+    environment:
+      DONEBOT_HTTPS_HOST: ${DONEBOT_HTTPS_HOST:-}
+      DONEBOT_BIND_ADDRESS: ${DONEBOT_BIND_ADDRESS:-127.0.0.1}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        export DONEBOT_UPSTREAM_SCHEME=http
+        if [ -n "$$DONEBOT_HTTPS_HOST" ] && [ "$$DONEBOT_BIND_ADDRESS" != "127.0.0.1" ]; then
+          echo "DONEBOT_HTTPS_HOST requires DONEBOT_BIND_ADDRESS=127.0.0.1; forward HTTPS through a trusted local proxy." >&2
+          exit 1
+        fi
+        if [ -n "$$DONEBOT_HTTPS_HOST" ]; then
+          export DONEBOT_UPSTREAM_SCHEME=https
+        fi
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    # Started with the server, not after it is healthy: Caddy reaches it over the socket
+    # whenever it answers, so `up` never waits on the server's health, and HTTPS is back
+    # as soon as a restarted server is.
+    depends_on:
+      omb:
+        condition: service_started
+    volumes:
+      - ./deploy/local/Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge:/run/donebot
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  data:
+    external: ${DONEBOT_DATA_EXTERNAL:-false}
+    name: ${DONEBOT_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-donebot}_data}
+  # The two sockets: in memory, made afresh by the server at each start. Not under /data, which every bot's sandbox
+  # sees; the sandbox has its own /run.
+  edge:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: mode=1777,size=1m
+  caddy_data:
+  caddy_config:

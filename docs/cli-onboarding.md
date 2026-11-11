@@ -1,0 +1,86 @@
+# Terminal setup
+
+Install [Node.js](https://nodejs.org/) 24 or newer, then choose either way to run DoneBot:
+
+```sh
+# Install once, then use the short command:
+npm install -g donebot
+donebot
+```
+
+Or, without a global install:
+
+```sh
+npx donebot
+```
+
+Use the same command next time. The first launch guides you through setup; later launches reuse your saved AI connection and phone-access choice. `donebot start` is the same as the bare command. If that workspace is already running, DoneBot opens it instead of starting a second server.
+
+## First launch
+
+The setup wizard uses Clack. Use ↑/↓ and Enter to select an option. Plain terminals show numbered choices instead.
+
+1. Choose ChatGPT/Codex, Claude Code, or an API service. Existing supported connections are also listed.
+2. Sign in with the provider, or paste an API key into the hidden prompt. Setup asks before installing a missing Codex or Claude CLI. Codex also offers device-code sign-in for a remote terminal. API choices include OpenAI, OpenRouter, Groq, and other OpenAI-compatible endpoints.
+3. Choose a model and save. An API connection asks permission to send a short test message, which the provider may charge for. Native CLI setup confirms sign-in; it does not test the chosen model with a message. Model access is checked when you send one.
+4. Optionally connect a phone, or choose **Skip for now**. Your AI setup is already saved before this step.
+
+The workspace then starts and opens its local address in a browser on this computer. On SSH or a computer without a graphical desktop, open the printed address using an appropriate connection instead. Automatic browser opening only uses the local address; `--no-open` disables it.
+
+Keep the terminal open while using your bots. This runs a foreground server, not an installed background service. Ctrl-C stops the server without deleting saved work; closing the browser alone does not stop it. Bots keep working only while the computer and server are running.
+
+Codex and Claude Code support agent tools. API-key connections currently support chat only. A ChatGPT or Claude subscription does not include separately billed API usage. Changing the saved default affects **new bots only**; existing bots and conversations keep their settings.
+
+## Optional phone access
+
+A phone cannot connect to this computer's `localhost` address. The harness also does not listen on your LAN address. The guide does not create a phone QR until a configured HTTPS address has been checked against this workspace.
+
+Choose one connection method:
+
+- **Managed HTTPS address:** setup asks explicit permission for a public endpoint through Cloudflare and a possible connector download. Device pairing protects chat and settings; the pairing page and basic server identity remain publicly reachable. Sign in to an **DoneBot account** using an emailed code, or reuse this machine's saved account. This account is separate from ChatGPT, Claude, or an API-provider account. The connection stays active while DoneBot runs.
+- **Existing Tailscale:** both computer and phone must already be signed in to the same tailnet, with HTTPS certificates enabled. Setup asks before enabling HTTPS serving to that tailnet; it does not install or sign in to Tailscale for you.
+- **Existing HTTPS address (advanced):** supply the origin of a reverse proxy you already configured, such as `https://maus.example.com`. Do not paste a password, path, query, or pairing code. Entering an address does not create the proxy or open a LAN listener.
+
+After the connection is ready:
+
+- **iPhone/iPad:** scan the QR with Camera to open Safari. If you already have the DoneBot iOS app, use its pairing scanner or paste the full link there.
+- **Android:** the QR is an app link, so scan it inside the DoneBot app. To use a browser instead, open the web address printed above it and type the code.
+
+Choose **Connect** on the phone. Scanning alone is not a successful pairing. The code is private, single-use, and works for 10 minutes. Guided phone pairing grants client access for chat and approvals, not settings or pairing administration.
+
+If the workspace starts but its HTTPS check fails, the local workspace remains usable and no phone code is created. Fix the connection and run `donebot pair` in another terminal to try again. A missing account, connector, or Tailscale prerequisite can prevent startup; follow the printed error, or use `donebot --local`. To add phone access after skipping it, stop the server, run `donebot setup`, then start it again.
+
+## Commands
+
+The examples below assume a global install; prefix them with `npx` otherwise.
+
+| Command | Use |
+| --- | --- |
+| `donebot` | Set up once, then start with saved settings. |
+| `donebot setup` | Revisit AI and optional phone setup, save, and exit without starting. This is not a reset. |
+| `donebot --no-open` | Start without opening a browser. |
+| `donebot --local` | Ignore saved remote access for this launch; keep the saved choice for next time. |
+| `donebot --no-pair` | Suppress phone setup prompts and pairing invitations. This does **not** turn off saved remote access; use `--local` for that. |
+| `donebot pair` | Create another phone invitation while the configured workspace and HTTPS connection are running. |
+| `donebot devices` | List paired devices; `donebot devices revoke ID` signs one out. |
+| `donebot serve` | Start without onboarding prompts or automatic browser opening; specify remote-access flags explicitly for a service. |
+| `donebot login` | Sign in to an DoneBot account for `--tunnel`; this does not sign in to an AI provider or start the tunnel. |
+
+`start` accepts the same server options as `serve`, including `--port`, `--data-dir`, `--tailscale`, `--tunnel`, and `--public-url`. Keep using your custom data directory and port when starting or pairing:
+
+```sh
+donebot setup --data-dir /path/to/omb-data --port 18899
+donebot --data-dir /path/to/omb-data --port 18899
+```
+
+Setup needs an interactive terminal. Later starts can run without one once setup is complete. Stop a running server before changing its setup or access mode: `--local` does not turn off a remote connection belonging to a server that is already running. You do not need to delete configuration, bots, or conversations to reconfigure it.
+
+## Credentials and cancellation
+
+API keys are hidden while typed or pasted. New API connections save their key in the data directory's `config.json` as **plaintext, not encrypted**, with owner-only permissions (`0600`) on Unix. Managed-access account credentials in `tunnel-account.json` are also plaintext with `0600` permissions on Unix. Keep these files and backups private. Native provider sign-in credentials are managed by the provider's own CLI.
+
+The packaged desktop app does not keep your AI provider and service keys there: it encrypts them with the operating system (Keychain on macOS, DPAPI on Windows, the system secret store on Linux, where a desktop without one gets only Electron's fixed-key obfuscation) in `credentials.bin` and moves keys it finds in `config.json` into that store at startup. Keys entered through this CLI setup, OpenCode provider keys, keys given to one engine (`environment` or `key`), and MCP header values stay plaintext in `config.json`, on desktop too. `mcp-oauth.json` is also plaintext.
+
+Ctrl-C during AI setup leaves unsaved OMB changes unapplied. Installations and provider sign-ins already completed remain available. Ctrl-C during the later phone step keeps the AI setup you already saved, exits without starting a server, and does not undo an account sign-in already completed. Run `donebot setup` to continue; no destructive reset is needed.
+
+For remote access and background deployment options, see [self-hosting](self-hosting.md) and [the VPS guide](deploy-vps.md).

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="440" viewBox="0 0 720 440">
+<rect width="720" height="440" fill="#eef2f7"/>
+<rect width="720" height="112" fill="#131b32"/>
+<path d="M46 30h21c25 0 40 12 40 29S92 88 67 88H46V30Zm14 14v30h7c16 0 25-5 25-15s-9-15-25-15h-7Z" fill="#f8fafc"/>
+<path d="m66 58 8 8 18-20" fill="none" stroke="#39dfb0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="124" y="71" font-family="sans-serif" font-size="34" font-weight="600" fill="#f8fafc">DoneBot</text>
+<path d="M326 206h68m-18-18 18 18-18 18" fill="none" stroke="#8e9ab2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="360" y="360" font-family="sans-serif" font-size="18" text-anchor="middle" fill="#4b5872">Drag DoneBot to Applications</text>
+</svg>

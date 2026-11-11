@@ -1,0 +1,153 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+import { BOX_ENV_NAMES, BOX_ENV_NEVER, BOX_ENV_DONEBOT_NAMES, BOX_ENV_DONEBOT_PREFIXES, boxEnvironment, boxEnvironmentAllows, instanceEnvNames } from "./env.ts";
+
+/** Every other `DONEBOT_` name the server's code knows: decided to stay on the server, never in a bot's environment. A name
+ * ending in `_` is a family (`DONEBOT_CLOUD_*`). */
+const SERVER_ONLY_OMB: ReadonlySet<string> = new Set([
+  "DONEBOT_CUA_EMBEDDED", "DONEBOT_CUA_SDK_LIBRARY", "DONEBOT_INTERNAL_DATA_DIR_LEASE", "DONEBOT_PERSONA",
+  "DONEBOT_PROBE_LOCAL_INJECT", "DONEBOT_TOKEN", "DONEBOT_TOOL_DEFINITIONS", "DONEBOT_TOOL_NAMES", "DONEBOT_TRIAL_CREDIT_KEY",
+  "DONEBOT_UPDATE_RELEASE_URL", "DONEBOT_UPDATE_STABLE_URL", "DONEBOT_URL",
+  "DONEBOT_ACP_LIMIT_QUIET_MS", "DONEBOT_ACP_NO_SIGNS_STOP_MS", "DONEBOT_ACP_PLAN_LINES", "DONEBOT_ACP_QUIET_NOTICE_MS",
+  "DONEBOT_ACP_QUIET_TICK_MS", "DONEBOT_ACP_SESSION_IDLE_", "DONEBOT_ACP_SHARED_RECYCLE_MS", "DONEBOT_ADMIN_", "DONEBOT_ADMIN_MEMBERSHIP",
+  "DONEBOT_ADMIN_URL", "DONEBOT_ADMIN_WORKSPACE", "DONEBOT_AGENT_BROWSER_PATH", "DONEBOT_AI_CHECKS", "DONEBOT_ANTHROPIC_API_KEY",
+  "DONEBOT_ANTHROPIC_API_URL", "DONEBOT_APP_VERSION", "DONEBOT_ATTACHMENTS_MAX_BYTES", "DONEBOT_AZURE_OPENAI_LIVE_DEPLOYMENT",
+  "DONEBOT_AZURE_OPENAI_LIVE_ENDPOINT", "DONEBOT_BOAT_API", "DONEBOT_BOT_BOX", "DONEBOT_BOX_CANARY", "DONEBOT_BRAND_FILE",
+  "DONEBOT_BROWSER_CONNECTION", "DONEBOT_BROWSER_IDLE_HANDOVER_MS", "DONEBOT_BROWSER_LANG", "DONEBOT_BROWSER_LEGACY_SHELL",
+  "DONEBOT_BROWSER_MAX_RUNNING", "DONEBOT_BROWSER_SANDBOX", "DONEBOT_BROWSER_SCREEN", "DONEBOT_BROWSER_TIMEZONE", "DONEBOT_BROWSER_TIMING",
+  "DONEBOT_BUG_REPORT_URL", "DONEBOT_CADDY_PATH", "DONEBOT_CHROME_PATH", "DONEBOT_CLAUDE_AUTOCOMPACT",
+  "DONEBOT_CLAUDE_INHERIT_USER_CONFIG", "DONEBOT_CLAUDE_SESSION_IDLE_", "DONEBOT_CLI_OWNER_STDIN", "DONEBOT_CLI_PREFIX",
+  "DONEBOT_CLOUDFLARED_PATH", "DONEBOT_CLOUD_", "DONEBOT_CLOUD_ADMIN_URL", "DONEBOT_CLOUD_AI_TOKEN", "DONEBOT_CLOUD_AI_URL",
+  "DONEBOT_CLOUD_BOAT_TOKEN", "DONEBOT_CLOUD_BOAT_URL", "DONEBOT_CLOUD_BOOTSTRAP_SECRET", "DONEBOT_CLOUD_CAPS_DROPPED",
+  "DONEBOT_CLOUD_CLIENT_IP_HEADER", "DONEBOT_CLOUD_COMPUTER_IDLE_MS", "DONEBOT_CLOUD_COMPUTER_START_BUDGET_MS",
+  "DONEBOT_CLOUD_CONNECTED_APPS_GRANT", "DONEBOT_CLOUD_DECIDER_TOKEN", "DONEBOT_CLOUD_DECIDER_URL", "DONEBOT_CLOUD_EDGE_ACME_EMAIL",
+  "DONEBOT_CLOUD_EDGE_ACME_FALLBACK_ONLY", "DONEBOT_CLOUD_EDGE_BIN", "DONEBOT_CLOUD_EDGE_CERT_ISSUERS",
+  "DONEBOT_CLOUD_EDGE_CLIENT_IP_HEADER", "DONEBOT_CLOUD_EDGE_CONFIG", "DONEBOT_CLOUD_EDGE_HOLD", "DONEBOT_CLOUD_EDGE_STORAGE",
+  "DONEBOT_CLOUD_EDGE_TLS", "DONEBOT_CLOUD_EDGE_TRUSTED_PROXIES", "DONEBOT_CLOUD_EXPORT_ONLY", "DONEBOT_CLOUD_HARDEN",
+  "DONEBOT_CLOUD_HOME", "DONEBOT_CLOUD_IMAGE", "DONEBOT_CLOUD_LEGACY_ORIGINS", "DONEBOT_CLOUD_MACHINE_ID", "DONEBOT_CLOUD_MOVES",
+  "DONEBOT_CLOUD_PUBLIC_HOST", "DONEBOT_CLOUD_ROLE", "DONEBOT_CLOUD_SECRETS_FD", "DONEBOT_CLOUD_STAGING",
+  "DONEBOT_CLOUD_STOPPED_HOLD_DAYS", "DONEBOT_CLOUD_TEAM_ID", "DONEBOT_CLOUD_TEAM_LANGUAGE", "DONEBOT_CLOUD_TEAM_NAME",
+  "DONEBOT_CLOUD_TRUSTED_PROXIES", "DONEBOT_CLOUD_TUNNEL_BIN", "DONEBOT_CLOUD_TUNNEL_TOKEN", "DONEBOT_CLOUD_VOICE_TOKEN",
+  "DONEBOT_CLOUD_VOICE_URL", "DONEBOT_CLOUD_X_TOKEN", "DONEBOT_CLOUD_X_URL", "DONEBOT_CODEX_LAUNCH_SLOTS", "DONEBOT_COMPANION_DIR",
+  "DONEBOT_COMPANION_HOSTED_URL", "DONEBOT_COMPANION_INTERNAL_ORIGIN", "DONEBOT_COMPANION_PORT", "DONEBOT_COMPANION_ROUTES",
+  "DONEBOT_COMPANION_TAILNET_NAME", "DONEBOT_COMPOSIO_API", "DONEBOT_COMPOSIO_BROKER", "DONEBOT_COMPOSIO_BROKER_TOKEN",
+  "DONEBOT_COMPOSIO_BROKER_URL", "DONEBOT_COMPOSIO_TOOLKITS_API", "DONEBOT_COMPUTER_CALL_ACT_WITHIN_MS",
+  "DONEBOT_COMPUTER_CALL_WAIT_MS", "DONEBOT_COMPUTER_WAIT_MAX_MS", "DONEBOT_CONTROL_PLANE_URL", "DONEBOT_CONTROL_PORT",
+  "DONEBOT_CREDENTIAL_STORE", "DONEBOT_CUSTOM_IMAGE_KEY", "DONEBOT_DATA_DIR", "DONEBOT_DECISION_RETENTION_DAYS",
+  "DONEBOT_DEEPSEEK_API_KEY", "DONEBOT_DESKTOP_LAUNCH_ID", "DONEBOT_DESKTOP_PARENT", "DONEBOT_DEVS_STATUS_MS",
+  "DONEBOT_DEV_TRUST_LOCAL_BROWSER", "DONEBOT_DISABLE_MODEL_CATALOG_FETCH", "DONEBOT_DISABLE_MODEL_MANIFEST_FETCH", "DONEBOT_DUCKDB_DIR", "DONEBOT_DUCKDB_MAX_TEMP_SIZE",
+  "DONEBOT_DUCKDB_MEMORY_LIMIT", "DONEBOT_ELEVENLABS_API", "DONEBOT_ENTERPRISE_DIR", "DONEBOT_ENVIRONMENT_LABEL", "DONEBOT_EOF",
+  "DONEBOT_FIRST_REPLY_NOTICE_MS", "DONEBOT_FISH_AUDIO_API", "DONEBOT_FISH_AUDIO_API_KEY", "DONEBOT_FLEET_SOCKET", "DONEBOT_GATE_",
+  "DONEBOT_GEMINI_API_KEY", "DONEBOT_GEMINI_IMAGE_KEY", "DONEBOT_GEMINI_TTS_API", "DONEBOT_GOAL_WAIT_MAX_MS",
+  "DONEBOT_GREENFERENCE_API_KEY", "DONEBOT_GROQ_API_KEY", "DONEBOT_HELPER_INSTANCE", "DONEBOT_HELPER_MODEL", "DONEBOT_HOOKS", "DONEBOT_HOOK_",
+  "DONEBOT_HOSTED_", "DONEBOT_HOSTED_MODELS", "DONEBOT_HOSTED_MODEL_TOKEN", "DONEBOT_HOSTED_MODEL_URL", "DONEBOT_INSTALLATION_CREDENTIAL",
+  "DONEBOT_JEV_API_KEY", "DONEBOT_LAN", "DONEBOT_LICENSE_KEY", "DONEBOT_LINUX_GPU", "DONEBOT_LIVE_PROVIDER", "DONEBOT_LOCAL_VM_UPDATE_WAIT_MS",
+  "DONEBOT_LOOPBACK_TRUST", "DONEBOT_LOOP_GUARD", "DONEBOT_LOOP_GUARD_STOP_AT", "DONEBOT_META_API_KEY", "DONEBOT_MODELGO_API_KEY", "DONEBOT_OPENAI_API_KEY",
+  "DONEBOT_OPENAI_IMAGE_KEY", "DONEBOT_OPENAI_LIVE_KEY", "DONEBOT_OPENAI_LIVE_URL", "DONEBOT_OPENROUTER_API_KEY",
+  "DONEBOT_OPENROUTER_DECIDER_KEY", "DONEBOT_PERSON_FIRST_MS", "DONEBOT_PHONE_RELAY", "DONEBOT_PHONE_RELAY_URL", "DONEBOT_PHONE_SECRET_PUBLIC_KEY", "DONEBOT_PORT", "DONEBOT_SERVES_TUNNEL", "DONEBOT_POSTIZ_API_KEY",
+  "DONEBOT_POSTIZ_CLOUD_URL", "DONEBOT_PROCESS_ID", "DONEBOT_PUBLIC_IPV4", "DONEBOT_PUBLIC_URL", "DONEBOT_QUOTA_SWITCH",
+  "DONEBOT_REPLAY_TOOL_HISTORY", "DONEBOT_ROOM_SESSIONS", "DONEBOT_SAFETY_FLOOR", "DONEBOT_SERVER_COMPILE_CACHE", "DONEBOT_SERVER_NAME",
+  "DONEBOT_SESSION_IDLE_MIN_MS", "DONEBOT_SESSION_IDLE_MS", "DONEBOT_SESSION_MAX_DAYS", "DONEBOT_SESSION_TTL_DAYS",
+  "DONEBOT_SHARED_WORKSPACE_FULL_ACCESS", "DONEBOT_SIGNIN_EMAILS", "DONEBOT_SIGNIN_MEMBER_EMAILS", "DONEBOT_SIGNIN_SMTP_FROM",
+  "DONEBOT_SIGNIN_SMTP_URL", "DONEBOT_SKILLS_DIR", "DONEBOT_SMOKE_BUNDLED_CUA", "DONEBOT_SMOKE_CUA", "DONEBOT_SMOKE_KEEP_OPEN",
+  "DONEBOT_SMOKE_TEST", "DONEBOT_SSE_HEARTBEAT_MS", "DONEBOT_STATIC_DIR", "DONEBOT_SYNC_ROOT", "DONEBOT_TAILNET_ADDRESSES", "DONEBOT_TAILNET_NAME", "DONEBOT_TAILNET_SERVED", "DONEBOT_TEAM_AWAY_WINDOW_MS",
+  "DONEBOT_TEAM_PRESENCE_GRACE_MS", "DONEBOT_TEST_INTERNAL_CAPABILITY_KEY", "DONEBOT_TEST_ORG_LIBRARY_KEY",
+  "DONEBOT_TEST_PLAN_USAGE_FILE", "DONEBOT_TEST_TAILNET_STAND_IN", "DONEBOT_TOOL_STALL_MS", "DONEBOT_TREG_KEY", "DONEBOT_TREG_URL", "DONEBOT_TTS_DEFAULT_VOICE",
+  "DONEBOT_TTS_KEY", "DONEBOT_TUNNEL_ORIGIN_PORT", "DONEBOT_TUNNEL_SOCKET", "DONEBOT_TURN_STALL_MS", "DONEBOT_UPDATE_CHANNEL", "DONEBOT_UPDATE_INSTALL",
+  "DONEBOT_USER_DATA", "DONEBOT_WARM_SUMMARY", "DONEBOT_WARM_SUMMARY_TIME_SCALE", "DONEBOT_WEBHOOK_PORT", "DONEBOT_WEBHOOK_PUBLIC_URL", "DONEBOT_WEBHOOK_SOCKET",
+  "DONEBOT_WORKERS_AI_TOKEN", "DONEBOT_XAI_TTS_API",
+]);
+
+const ROOT = new URL("../../", import.meta.url);
+
+/** The `DONEBOT_` names in the code the server runs, and in what starts it (the desktop app). */
+function knownOmbNames(): string[] {
+  const files = execFileSync("git", ["ls-files", "server", "shared", "enterprise/server", "electron"], { cwd: ROOT, encoding: "utf8" })
+    .split("\n").filter((file) => /\.(?:ts|mts|mjs|cjs|js)$/.test(file) && !/\.test\.|\/testing\/|node-test/.test(file));
+  const names = new Set<string>();
+  for (const file of files) for (const match of readFileSync(new URL(file, ROOT), "utf8").matchAll(/\bDONEBOT_[A-Z0-9_]+\b/g)) names.add(match[0]);
+  return [...names].sort();
+}
+
+describe("the box's environment allow-list", () => {
+  it("keeps what an engine needs and drops the server's own settings and the control plane", () => {
+    const kept = boxEnvironment({
+      PATH: "/usr/bin", HOME: "/data", LANG: "C.UTF-8", TZ: "Europe/Berlin", LC_ALL: "C", TERM: "xterm",
+      ANTHROPIC_API_KEY: "sk-ant-1", ANTHROPIC_BASE_URL: "http://127.0.0.1:18080/b/t/anthropic", CLAUDE_CONFIG_DIR: "/data/.claude",
+      OPENAI_API_KEY: "sk-1", CODEX_HOME: "/data/.codex", DONEBOT_HOOK_URL: "http://127.0.0.1:18899/api/internal/hook", DONEBOT_COMMS_TOKEN: "cap",
+      HTTPS_PROXY: "http://127.0.0.1:3128", NO_PROXY: "127.0.0.1", NPM_CONFIG_LOGLEVEL: "error", ELECTRON_RUN_AS_NODE: "1",
+      DONEBOT_CLOUD_BOOTSTRAP_SECRET: "s", DONEBOT_CLOUD_MACHINE_ID: "m", DONEBOT_CLOUD_ADMIN_URL: "https://a", DONEBOT_LICENSE_KEY: "k",
+      DONEBOT_DATA_DIR: "/data/.donebot", DONEBOT_PORT: "18899", DONEBOT_LOOPBACK_TRUST: "owner", AWS_SECRET_ACCESS_KEY: "aws", SSH_AUTH_SOCK: "/x",
+      SOME_RANDOM_NAME: "x", EMPTY: undefined,
+    });
+    expect(Object.keys(kept).sort()).toEqual([
+      "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "DONEBOT_COMMS_TOKEN", "DONEBOT_HOOK_URL", "ELECTRON_RUN_AS_NODE", "HOME", "HTTPS_PROXY", "LANG", "LC_ALL",
+      "NO_PROXY", "NPM_CONFIG_LOGLEVEL", "OPENAI_API_KEY", "PATH", "TERM", "TZ",
+    ]);
+  });
+
+  it("a denied name loses even against an allowing list or prefix, and the never-list beats everything", () => {
+    expect(boxEnvironmentAllows("DONEBOT_COMMS_TOKEN")).toBe(true);
+    expect(boxEnvironmentAllows("DONEBOT_COMMS_TOKEN", new Set(["DONEBOT_COMMS_TOKEN"]))).toBe(false);
+    expect(boxEnvironmentAllows("ANTHROPIC_API_KEY", new Set(["ANTHROPIC_API_KEY"]))).toBe(false);
+    expect(boxEnvironmentAllows("DONEBOT_COMPOSIO_BROKER_TOKEN")).toBe(false);
+    for (const name of BOX_ENV_NEVER) expect(boxEnvironmentAllows(name), name).toBe(false);
+    expect(boxEnvironmentAllows("DONEBOT_CLOUD_ANYTHING")).toBe(false);
+    expect(boxEnvironmentAllows("DONEBOT_CLOUDFLARED_PATH")).toBe(false);
+    expect(BOX_ENV_NAMES.has("PATH")).toBe(true);
+  });
+
+  // The CLI's session token and server address (server/headless/client.ts, scripts/mcp-server.ts): an operator may put
+  // them in the server's environment, and nothing that runs in a box reads them. The engines' own DONEBOT_ keys
+  // (OPENMAUSBOT_CODEX_API_KEY, OPENMAUSBOT_CHATGPT_TOKEN) still pass, and a spawn's allowEnv never lifts these two.
+  it("keeps the CLI's session token and server address on the server, and the engines' OPENMAUSBOT_ keys in the box", () => {
+    const kept = boxEnvironment(
+      { DONEBOT_TOKEN: "omb_sess_x", DONEBOT_URL: "http://127.0.0.1:18899", OPENMAUSBOT_CODEX_API_KEY: "k", OPENMAUSBOT_CHATGPT_TOKEN: "t" },
+      new Set(), new Set(["DONEBOT_TOKEN", "DONEBOT_URL"]),
+    );
+    expect(Object.keys(kept).sort()).toEqual(["OPENMAUSBOT_CHATGPT_TOKEN", "OPENMAUSBOT_CODEX_API_KEY"]);
+  });
+
+  it("keeps what Antigravity's runtime is started with: its harness, its file storage switch and the browser hook", () => {
+    for (const name of ["ANTIGRAVITY_HARNESS_PATH", "AGY_ACP_FORCE_FILE_STORAGE", "BROWSER", "GEMINI_HOME"]) expect(boxEnvironmentAllows(name), name).toBe(true);
+  });
+
+  it("keeps the keys one spawn vouches for, under any name, past the allow-list and the deny, never past the never-list or DONEBOT_", () => {
+    const deny = new Set(["OPENCODE_API_KEY", "DONEBOT_COMPOSIO_BROKER_TOKEN"]);
+    const allow = new Set(["NANO_GPT_API_KEY", "OPENCODE_API_KEY", "DONEBOT_LICENSE_KEY", "DONEBOT_CLOUD_AI_TOKEN", "DONEBOT_COMPOSIO_BROKER_TOKEN"]);
+    const env = { NANO_GPT_API_KEY: "n", OPENCODE_API_KEY: "o", DONEBOT_LICENSE_KEY: "l", DONEBOT_CLOUD_AI_TOKEN: "c", DONEBOT_COMPOSIO_BROKER_TOKEN: "b", DEEPSEEK_API_KEY: "d" };
+    expect(boxEnvironment(env, deny, allow)).toEqual({ NANO_GPT_API_KEY: "n", OPENCODE_API_KEY: "o" });
+    expect(boxEnvironment(env, deny)).toEqual({});
+  });
+
+  it("vouches only for the names the engine instance's own environment set, with its own value", () => {
+    expect(instanceEnvNames({ NANO_GPT_API_KEY: "n", OPENCODE_API_KEY: "o", GONE: "g" }, { NANO_GPT_API_KEY: "n", OPENCODE_API_KEY: "server's", PATH: "/usr/bin" }))
+      .toEqual(["NANO_GPT_API_KEY"]);
+  });
+
+  it("passes only the DONEBOT_ names a boxed process reads; an operator's own settings stay on the server", () => {
+    const kept = boxEnvironment({
+      DONEBOT_SIGNIN_SMTP_URL: "smtp://user:pass@mail.example.com", DONEBOT_SIGNIN_EMAILS: "a@example.com", DONEBOT_PHONE_SECRET_PUBLIC_KEY: "k",
+      DONEBOT_TEST_INTERNAL_CAPABILITY_KEY: "k", DONEBOT_PUBLIC_URL: "https://x", DONEBOT_SOMETHING_NEW: "x", DONEBOT_EXTRA_PATH: "/opt/tools/bin",
+      DONEBOT_MCP_TOKEN_BROWSER: "t", DONEBOT_GATE_CONFIG_ab12: "{}", DONEBOT_REMOTE_MCP_CONFIG_cd34: "{}", DONEBOT_HARNESS_URL: "http://127.0.0.1:18899",
+    });
+    expect(Object.keys(kept).sort()).toEqual(["DONEBOT_EXTRA_PATH", "DONEBOT_GATE_CONFIG_ab12", "DONEBOT_HARNESS_URL", "DONEBOT_MCP_TOKEN_BROWSER", "DONEBOT_REMOTE_MCP_CONFIG_cd34"]);
+  });
+
+  it("every DONEBOT_ name the server knows has a decision: passed to a bot's box or kept on the server", () => {
+    const passed = (name: string) => BOX_ENV_DONEBOT_NAMES.has(name) || BOX_ENV_DONEBOT_PREFIXES.includes(name);
+    const undecided = knownOmbNames().filter((name) => !passed(name) && !SERVER_ONLY_OMB.has(name));
+    expect(undecided, "add each to BOX_ENV_DONEBOT_NAMES in env.ts if a bot's engine, hook or MCP proxy reads it, else to SERVER_ONLY_OMB here").toEqual([]);
+    expect([...BOX_ENV_DONEBOT_NAMES].filter((name) => SERVER_ONLY_OMB.has(name))).toEqual([]);
+    for (const name of SERVER_ONLY_OMB) if (!name.endsWith("_")) expect(boxEnvironmentAllows(name), name).toBe(false);
+  });
+
+  it("returns a fresh object, never the caller's", () => {
+    const source = { PATH: "/usr/bin" };
+    const kept = boxEnvironment(source);
+    kept.PATH = "/changed";
+    expect(source.PATH).toBe("/usr/bin");
+  });
+});

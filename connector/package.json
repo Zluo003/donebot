@@ -1,0 +1,10 @@
+{
+  "name": "donebot-connector",
+  "private": true,
+  "type": "module",
+  "description": "Runs a DoneBot Cloud home on a server of its owner's, under DoneBot's control, over one outbound connection.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  }
+}

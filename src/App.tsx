@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, Loader2, Menu } from "lucide-react";
 import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/store";
@@ -110,8 +111,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     };
     const url = new URL(window.location.href);
     const requestedSettings = url.searchParams.get("desktop-settings");
-    const cloud = ["cloud", "cloud-settings", "cloud-add", "cloud-add-howto"].includes(requestedSettings ?? "");
-    if (requestedSettings === "workspaces" || (requestedSettings === "organization" && window.ogb.organization && !remoteClient) ||
+    const cloud = UPSTREAM_SERVICES.cloud && ["cloud", "cloud-settings", "cloud-add", "cloud-add-howto"].includes(requestedSettings ?? "");
+    if (requestedSettings === "workspaces" || (UPSTREAM_SERVICES.cloud && requestedSettings === "organization" && window.ogb.organization && !remoteClient) ||
       (cloud && window.ogb.cloudAccount && !remoteClient)) {
       url.searchParams.delete("desktop-settings");
       window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
@@ -288,13 +289,13 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     state.pluginsOpen;
 
   useEffect(() => {
-    return window.ogb?.onOpenAppSettings?.(section => dispatch((section === "cloud-add" || section === "cloud-add-howto") && window.ogb?.cloudAccount && !remoteClient
+    return window.ogb?.onOpenAppSettings?.(section => dispatch(UPSTREAM_SERVICES.cloud && (section === "cloud-add" || section === "cloud-add-howto") && window.ogb?.cloudAccount && !remoteClient
       ? { type: "openCloudAdd", source: section === "cloud-add" ? "app_menu" : "app_howto" }
-      : section === "cloud" && window.ogb?.cloudAccount && !remoteClient
+      : UPSTREAM_SERVICES.cloud && section === "cloud" && window.ogb?.cloudAccount && !remoteClient
         ? CLOUD_LINK_SETTINGS
-        : section === "cloud-settings" && (window.ogb?.cloudAccount || window.ogb?.cloudPlan) && !remoteClient
+        : UPSTREAM_SERVICES.cloud && section === "cloud-settings" && (window.ogb?.cloudAccount || window.ogb?.cloudPlan) && !remoteClient
           ? { type: "toggleAppSettings", open: true, section: "cloudAccount" }
-          : { type: "toggleAppSettings", open: true, ...(section === "organization" && window.ogb?.organization && !remoteClient ? { section } : {}) }));
+          : { type: "toggleAppSettings", open: true, ...(UPSTREAM_SERVICES.cloud && section === "organization" && window.ogb?.organization && !remoteClient ? { section } : {}) }));
   }, [dispatch]);
 
   useEffect(() => {
@@ -440,9 +441,9 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       </div>
       </div>
       {state.appSettingsOpen && <SettingsModal />}
-      {cloudAddOpened.current && <CloudAddDialog />}
-      <CloudHowTo />
-      <CloudSetup viewer={viewer} welcomeShown={welcomeOnScreen} />
+      {UPSTREAM_SERVICES.cloud && cloudAddOpened.current && <CloudAddDialog />}
+      {UPSTREAM_SERVICES.cloud && <CloudHowTo />}
+      {UPSTREAM_SERVICES.cloud && <CloudSetup viewer={viewer} welcomeShown={welcomeOnScreen} />}
       <WelcomeKeeper viewer={viewer} />
       {state.pluginsOpen && <PluginsPanel />}
       <AppGrantNotice />

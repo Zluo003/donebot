@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, X } from "lucide-react";
@@ -100,7 +101,7 @@ function BotLimitDialog({ reason, created, onClose }: { reason: BotLimitReason; 
               <UpgradeButton usage={usage} upgrade={{ busy: upgrade.busy, note: upgrade.note, onUpgrade: upgrade.start }} className="w-full justify-center" />
             </div>
           ) : !bridge ? (
-            <div className="mt-5 w-full [&>div]:w-full"><LinkButton url={CLOUD_PLAN_URL} label={t("botLimit.openPlan")} className={cn(PRIMARY_BUTTON, "w-full justify-center")} /></div>
+            UPSTREAM_SERVICES.cloud && <div className="mt-5 w-full [&>div]:w-full"><LinkButton url={CLOUD_PLAN_URL} label={t("botLimit.openPlan")} className={cn(PRIMARY_BUTTON, "w-full justify-center")} /></div>
           ) : plan !== null ? (
             <button type="button" className={cn(PRIMARY_BUTTON, "mt-5 w-full justify-center")} onClick={() => { setPlanFailed(false); void bridge.manage().then(onClose, () => setPlanFailed(true)); }}>
               {t("botLimit.openPlan")}<ArrowUpRight size={14} aria-hidden="true" />

@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Gift, Mail } from "lucide-react";
 import { track } from "@/lib/analytics";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { openEmailDraft } from "@/lib/app-links";
 import { BOAT_OFFER, boatClaimMailto, boatOfferRuns } from "@/lib/boat-offer";
 import { brandStatus } from "@/lib/brand";
@@ -38,6 +39,7 @@ function ClaimButton({ onOpened, className }: { onOpened?: () => void; className
 }
 
 export function BoatOfferCard({ onDone }: { onDone: (action: BoatOfferAction) => void }) {
+  if (!UPSTREAM_SERVICES.promotions || !UPSTREAM_SERVICES.boat) return null;
   return <NoticeCard titleId="boat-offer-title" notice="boat-offer" icon={Gift} title={t("boatOffer.title")} onDismiss={() => onDone("close")}>
     <BoatOfferWords />
     <div className="mt-3 flex flex-col gap-2">
@@ -50,7 +52,7 @@ export function BoatOfferCard({ onDone }: { onDone: (action: BoatOfferAction) =>
 
 export function BoatOfferPanel() {
   const titleId = useId();
-  if (!boatOfferRuns(Date.now()) || brandStatus().source === "file") return null;
+  if (!UPSTREAM_SERVICES.promotions || !UPSTREAM_SERVICES.boat || !boatOfferRuns(Date.now()) || brandStatus().source === "file") return null;
   return <section data-boat-offer aria-labelledby={titleId} className="rounded-lg bg-ink/[0.04] p-3">
     <h3 id={titleId} className="flex items-center gap-1.5 text-[13px] font-semibold leading-[18px] text-ink">
       <Gift size={14} aria-hidden="true" className="shrink-0 text-ink-secondary" />{t("boatOffer.title")}

@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";

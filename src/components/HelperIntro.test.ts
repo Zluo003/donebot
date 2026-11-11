@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 // DoneBot's first messages. Simple mode: three short bubbles, a follow-up once it has looked around (written once by
 // the server, as a real message) and chips for only what is still missing. Advanced mode: the one bubble with asks it
 // always had.

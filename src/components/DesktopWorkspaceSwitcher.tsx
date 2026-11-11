@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { useEffect, useState } from "react";
 import { ChevronDown, Cloud, Laptop } from "lucide-react";
 import { track } from "@/lib/analytics";
@@ -33,8 +34,8 @@ export function planSleeps(plan: CloudPlanSnapshot | null): boolean | null {
 /** On My Cloud's page in the app, whether its plan sleeps when idle (planSleeps; null while unknown, and always in a
  * browser); on this computer's page, whether opening My Cloud waits for it to wake. */
 export function useCloudPower(cloudHome: boolean): { sleeps: boolean | null; waking: boolean } {
-  const plan = cloudHome && !window.ogb?.remoteClient?.active ? window.ogb?.cloudPlan : undefined;
-  const account = cloudHome || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
+  const plan = UPSTREAM_SERVICES.cloud && cloudHome && !window.ogb?.remoteClient?.active ? window.ogb?.cloudPlan : undefined;
+  const account = !UPSTREAM_SERVICES.cloud || cloudHome || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const [sleeps, setSleeps] = useState<boolean | null>(null);
   const [waking, setWaking] = useState(false);
   useEffect(() => {

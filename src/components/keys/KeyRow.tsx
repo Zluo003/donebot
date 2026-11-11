@@ -1,3 +1,4 @@
+import { doneBotKeyVisible } from "@/donebot/services";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Check, CircleAlert, ExternalLink, Eye, EyeOff, Loader2, TriangleAlert } from "lucide-react";
 import { useStore } from "@/state/store";
@@ -335,6 +336,8 @@ export function KeyRow({
       </span>
     </div>
   );
+
+  if (!doneBotKeyVisible(id)) return null;
 
   const warning = target.warningKey && fieldShown ? t(target.warningKey) : null;
   const note = target.noteKey && fieldShown && !pointer ? t(target.noteKey) : null;

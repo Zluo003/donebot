@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import type { ManagedDesktopState, ManagedMessageCode } from "../../electron/managed-desktop.mjs";
 import { activeLocale, t } from "@/lib/i18n";
@@ -32,7 +33,7 @@ export function connectionMessage(connection: Pick<ManagedDesktopState, "message
 
 /** Security: only the trusted desktop bridge can enroll this computer or hold its token. */
 export function OrganizationSettings() {
-  const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.organization;
+  const bridge = !UPSTREAM_SERVICES.cloud || window.ogb?.remoteClient?.active ? undefined : window.ogb?.organization;
   const [connection, setConnection] = useState<ManagedDesktopState | null>(null);
   const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
@@ -92,6 +93,7 @@ export function OrganizationSettings() {
     }
   };
 
+  if (!UPSTREAM_SERVICES.cloud) return null;
   if (!bridge) return <p className="text-[13px] text-ink-secondary">{t("organization.desktopOnly")}</p>;
   const enrolled = connection?.status === "connected" || connection?.status === "reauth-required" || connection?.status === "unavailable" || connection?.status === "license-expired";
   const licenseExpired = connection?.status === "license-expired" || connection?.notice === "license-expired";

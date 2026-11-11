@@ -1,3 +1,4 @@
+import { doneBotPlaceChoices } from "@/donebot/services";
 // The rail at the window's left edge once a person has two places or more: one tile per Cloud, team's Cloud or server,
 // the place on screen marked, ⋯ for the rest past eight, ＋ last. A Cloud's tile has a small cloud at its corner, a server of
 // the person's own a server and a workspace of this computer's own with a name of its own a laptop, so each reads at a
@@ -389,7 +390,8 @@ export const markingClicked = (places: RailPlace[], clicked: string | null): Rai
 /** `chrome`: the window's own rail (ChromeRail), drawn whatever the window's width, whose sheets ask main for the whole
  * window while open. Without it, a rail drawn on a page from a list main gave that page: wide windows only. */
 export function PlacesRail({ chrome = false }: { chrome?: boolean }) {
-  const state = usePlaces();
+  const rail = usePlaces();
+  const state = { ...rail, add: doneBotPlaceChoices(rail.add) };
   const calm = !useAdvancedMode();
   const { capabilities } = useDesktopCapabilities();
   const besideFramed = useBesideFramed();

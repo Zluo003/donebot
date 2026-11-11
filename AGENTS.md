@@ -13,6 +13,7 @@
 
 ## 统一网关与跨项目协作
 
+- 原版促销、赞助推荐、原版云服务购买/升级、Boat 接入、原版移动客户端下载和原版邮件订阅在 DoneBot 前端默认屏蔽，统一由 `src/donebot/services.ts` 管理。未来接入自有服务时不得自动恢复原版服务。保留本地功能、自有服务器连接及 DoneBot 网关。
 - 统一网关地址：https://donebot.cn。
 - 网关部署代码所在项目：`/Users/zluo/Dev/donebot-api`。
 - 为完成前端与统一网关接入，必要时已获授权同时修改本项目和 `/Users/zluo/Dev/donebot-api` 的代码。修改网关项目之前须读取并遵循其适用的 `AGENTS.md`；此授权不放宽上述 OpenMausBot 原版代码的修改限制。

@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { reportModelgoOffer } from "@/lib/modelgo-offer";
 import { MODELGO_URL } from "../../shared/modelgo";
 import { LinkButton, NoticeCard, NotNowButton, PRIMARY_BUTTON } from "./NoticeCard";
@@ -12,6 +13,7 @@ export type ModelgoCardAction = "get_key" | "not_now" | "close";
 const CardMark = ({ className }: IconProps) => <ModelgoMark size={22} className={className} />;
 
 export function ModelgoOfferCard({ onDone }: { onDone: (action: ModelgoCardAction) => void }) {
+  if (!UPSTREAM_SERVICES.promotions) return null;
   return <NoticeCard titleId="modelgo-offer-title" notice="modelgo-offer" icon={CardMark} title={t("modelgoOffer.title")} onDismiss={() => onDone("close")}>
     <p className="mt-1 text-[13px] leading-[18px] text-ink-secondary">{t("modelgoOffer.line")}</p>
     <p data-modelgo-sponsor className="mt-1 text-[11px] leading-4 text-ink-tertiary">{t("modelgoOffer.sponsor")}</p>
@@ -26,7 +28,8 @@ const GET_KEY_LINK = "inline-flex shrink-0 items-center gap-1 text-[12px] font-m
 
 /** The first run's row for ModelGo, among the other ways to connect an AI; `children` is its key field, when the server has the provider. */
 export function ModelgoOption({ open, onToggle, children }: { open: boolean; onToggle: () => void; children?: ReactNode }) {
-  useEffect(() => { reportModelgoOffer("shown", "onboarding"); }, []);
+  useEffect(() => { if (UPSTREAM_SERVICES.promotions) reportModelgoOffer("shown", "onboarding"); }, []);
+  if (!UPSTREAM_SERVICES.promotions) return null;
   const name = <>
     <span className="flex size-[18px] shrink-0 items-center justify-center"><ModelgoMark size={18} /></span>
     <span className="min-w-0 flex-1">

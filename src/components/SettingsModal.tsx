@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES, doneBotKeyVisible } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import { Archive, Cloud, Gauge, CloudDownload, Coins, Download, FlaskConical, KeyRound, LockKeyhole, Monitor, Palette, ScrollText, Search, Settings, Sparkles, TabletSmartphone, Terminal, User, Users, X, Building2, Zap, BookOpen, ImagePlus } from "lucide-react";
 import { useStore, type AppSettingsSection } from "@/state/store";
@@ -173,12 +174,12 @@ function simplePageMatches(page: SimpleSettingsPage, query: string): boolean {
 
 export function sectionMatches(section: (typeof SECTIONS)[number], query: string): boolean {
   if (!query) return true;
-  if (section.id === "connections" && KEY_CATALOG.some((entry) => keyMatches(entry, query))) return true;
+  if (section.id === "connections" && KEY_CATALOG.some((entry) => doneBotKeyVisible(entry.id) && keyMatches(entry, query))) return true;
   return [t(section.labelKey), ...section.keywords].some((part) => part.toLowerCase().includes(query));
 }
 
 export function keySearchResults(query: string): KeyEntry[] {
-  return query ? KEY_CATALOG.filter((entry) => keyMatches(entry, query)).slice(0, 8) : [];
+  return query ? KEY_CATALOG.filter((entry) => doneBotKeyVisible(entry.id) && keyMatches(entry, query)).slice(0, 8) : [];
 }
 
 export const openKeyResult = (entry: KeyEntry) => entry.uses ? openKeySettings(entry.uses, entry.id) : openKeySettings(entry.id);
@@ -192,7 +193,7 @@ function SettingsDialog() {
   const { state, dispatch } = useStore();
   const advanced = useAdvancedMode();
   const remoteActive = window.ogb?.remoteClient?.active === true;
-  const requested = state.appSettingsSection;
+  const requested = !UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection) ? "general" : state.appSettingsSection;
   const section: AppSettingsSection =
     advanced && requested === "remote" && window.ogb?.environments
       ? "desktopWorkspaces"
@@ -213,8 +214,8 @@ function SettingsDialog() {
     : entry);
   const baseSections = sectionsHere.filter((entry) => !remoteActive || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
     .filter((entry) => entry.id !== "desktopWorkspaces" || Boolean(window.ogb?.environments))
-    .filter((entry) => entry.id !== "organization" || Boolean(window.ogb?.organization))
-    .filter((entry) => entry.id !== "cloudAccount" || Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true)))
+    .filter((entry) => entry.id !== "organization" || (UPSTREAM_SERVICES.cloud && Boolean(window.ogb?.organization)))
+    .filter((entry) => entry.id !== "cloudAccount" || (UPSTREAM_SERVICES.cloud && Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true))))
     .filter((entry) => entry.id !== "workspaces" || workspacesAvailable(state.config))
     .filter((entry) => entry.id !== "people" || (!window.ogb && state.config?.cloudHome !== true))
     .filter((entry) => entry.id !== "activity" || (!window.ogb && ownerOrAdmin === true))
@@ -347,9 +348,9 @@ function SettingsDialog() {
       case "desktopWorkspaces":
         return <><ConnectedWorkspacesSettings />{remoteAccess.client}</>;
       case "organization":
-        return window.ogb?.organization && !remoteActive ? <OrganizationSettings /> : null;
+        return UPSTREAM_SERVICES.cloud && window.ogb?.organization && !remoteActive ? <OrganizationSettings /> : null;
       case "cloudAccount":
-        return (window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true)) && !remoteActive
+        return UPSTREAM_SERVICES.cloud && (window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true)) && !remoteActive
           ? <CloudAccountSettings linkRequest={state.appSettingsCloudLink} cloudHome={state.config?.cloudHome === true} teamHome={state.config?.team}
             onConnectPhone={() => dispatch(phonePairingSettingsAction())} onAddCloud={advanced ? () => dispatch({ type: "openCloudAdd", source: "app_settings" }) : undefined}
             onSignIn={() => dispatch({ type: "openCloudAdd", source: "app_settings", signIn: true })} />

@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import type { CloudBackend } from "../../shared/wire";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/state/store";
@@ -17,15 +18,15 @@ export function CloudBackendPicker({
   return (
     <div className="mt-3 rounded-lg bg-inset p-3">
       <div className="text-[12px] font-medium text-ink">{compact ? t("botAccess.cloud.provider") : t("botAccess.cloud.backend")}</div>
-      <div className="mt-0.5 text-[12px] text-ink-secondary">
+      {(UPSTREAM_SERVICES.boat || value === "vps") && <div className="mt-0.5 text-[12px] text-ink-secondary">
         {compact
           ? value === "vps" ? t("botAccess.cloud.vpsDescription") : t("botAccess.cloud.hostedDescription")
           : value === "vps"
           ? t("botAccess.cloud.vpsAutoDescription")
           : t("botAccess.cloud.hostedBackendDescription")}
-      </div>
+      </div>}
       <div className="mt-2 flex overflow-hidden rounded-lg border border-hairline/40">
-        {(["box", "vps"] as const).map((backend, i) => (
+        {(["box", "vps"] as const).filter(backend => backend !== "box" || UPSTREAM_SERVICES.boat).map((backend, i) => (
           <button
             key={backend}
             onClick={() => onChange(backend)}

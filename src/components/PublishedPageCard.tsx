@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { useState } from "react";
 import { ArrowUpRight, Check, Copy, Globe, Loader2, X } from "lucide-react";
 import type { PublishedPageCard as Card } from "../../shared/published-page";
@@ -27,7 +28,7 @@ export function PublishedPageCard({ message }: { message: Message }) {
   const [failed, setFailed] = useState(false);
   const openPage = usePageOpener();
   if (!card) return null;
-  const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
+  const bridge = !UPSTREAM_SERVICES.cloud || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const unpublish = async () => {
     if (!card.pageId) return;
     setBusy(true);

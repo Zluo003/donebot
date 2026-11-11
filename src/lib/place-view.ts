@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
 import { cloudPlanView } from "@/lib/cloud-plan";
@@ -94,7 +95,7 @@ export function placeHasIssue(view: PlaceView): boolean {
 }
 
 export function useCloudPlanPaid(): boolean {
-  const bridge = typeof window === "undefined" || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
+  const bridge = !UPSTREAM_SERVICES.cloud || typeof window === "undefined" || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const [account, setAccount] = useState<CloudAccountState | null>(null);
   useEffect(() => {
     if (!bridge) return;
@@ -126,13 +127,16 @@ export function openPlaceAction(
     case "change-routine": openBotSettings(dispatch, "routines", { botId: target.botId }); return true;
     case "sign-in": appSettings("engines"); return true;
     case "manage-computers": appSettings("computer"); return true;
-    case "add-boat-key": dispatch(openKeySettings("box")); return true;
+    case "add-boat-key":
+      if (!UPSTREAM_SERVICES.boat) return false;
+      dispatch(openKeySettings("box")); return true;
     case "open-vm-settings":
       window.sessionStorage?.setItem("donebot.settings.section", "computer");
       appSettings("computer");
       return true;
     case "open-team-map": dispatch({ type: "showTeamMap" }); return true;
     case "see-plan": {
+      if (!UPSTREAM_SERVICES.cloud) return false;
       const desktop = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
       if (desktop) { void desktop.openDashboard().catch(() => {}); return true; }
       if (window.ogb?.cloudPlan) { void window.ogb.cloudPlan.manage().catch(() => {}); return true; }
@@ -140,6 +144,7 @@ export function openPlaceAction(
       return true;
     }
     case "open-my-cloud": {
+      if (!UPSTREAM_SERVICES.cloud) return false;
       const desktop = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
       if (desktop) void desktop.connectHome().catch(() => {});
       else appSettings("cloudAccount");

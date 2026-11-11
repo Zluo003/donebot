@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { QRCodeSVG } from "qrcode.react";
@@ -17,7 +18,8 @@ export interface PhoneAppConnect {
   onSelect: () => void;
 }
 
-export function PhoneAppDialog({ open, onClose, connect = [] }: { open: boolean; onClose: () => void; connect?: PhoneAppConnect[] }) {
+export function PhoneAppDialog({ open: requestedOpen, onClose, connect = [] }: { open: boolean; onClose: () => void; connect?: PhoneAppConnect[] }) {
+  const open = UPSTREAM_SERVICES.mobileApps && requestedOpen;
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {

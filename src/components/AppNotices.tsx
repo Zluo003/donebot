@@ -4,6 +4,7 @@ import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import { api, useStore } from "@/state/store";
 import { DONEBOT_ONBOARDING } from "@/donebot/onboarding";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { APP_REPOSITORY } from "@/lib/app-links";
 import { track } from "@/lib/analytics";
 import { boatOfferRuns } from "@/lib/boat-offer";
@@ -73,16 +74,16 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const { state, dispatch } = useStore();
   const remote = window.ogb?.remoteClient?.active === true;
   const local = localDesktopPage();
-  const bridge = !remote && local ? window.ogb?.cloudAccount : undefined;
+  const bridge = UPSTREAM_SERVICES.cloud && !remote && local ? window.ogb?.cloudAccount : undefined;
   const desktop = remote ? undefined : window.ogb?.desktopNotices;
   const desktopState = useDesktopNotices(desktop);
   // Asked once main has restored the Cloud sign-in, which it waits for before answering desktopState.
-  const planBridge = !remote && (bridge || (viewer?.cloudHome && (desktopState || !desktop))) ? window.ogb?.cloudPlan : undefined;
+  const planBridge = UPSTREAM_SERVICES.cloud && !remote && (bridge || (viewer?.cloudHome && (desktopState || !desktop))) ? window.ogb?.cloudPlan : undefined;
   const [account, setAccount] = useState<CloudAccountState | null>(null);
   const plan = useCloudPlanSnapshot(planBridge);
   const [offer, setOffer] = useState<CloudOffer | null | undefined>(undefined);
   const [offerFor, setOfferFor] = useState<string | null>(null);
-  const [organization, setOrganization] = useState<boolean | null>(window.ogb?.organization ? null : false);
+  const [organization, setOrganization] = useState<boolean | null>(UPSTREAM_SERVICES.cloud && window.ogb?.organization ? null : false);
   const [closed, setClosed] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
   const [trialOpen, setTrialOpen] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const [grokShown, setGrokShown] = useState(false);
   const [grokOpen, setGrokOpen] = useState(false);
   const [grokLanded, setGrokLanded] = useState(false);
-  const consentHere = (local || viewer?.cloudHome === true) && brandStatus().source !== "file";
+  const consentHere = UPSTREAM_SERVICES.updatesEmail && (local || viewer?.cloudHome === true) && brandStatus().source !== "file";
   const consent = useUpdatesConsent(consentHere ? updatesConsentBridge() : undefined);
   const [consentDone, setConsentDone] = useState(false);
   const updater = useUpdaterState();
@@ -104,7 +105,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const mausBot = useMausBotWelcomeDue(viewer);
   // Bots in two places: this computer's page only, where main knows what lives here.
   const two = useTwoPlaces();
-  const twoFact = !local || two.suggest === null ? false : two.suggest === undefined ? null : true;
+  const twoFact = !local || two.suggest === null || (!UPSTREAM_SERVICES.cloud && two.suggest?.kind === "cloud") ? false : two.suggest === undefined ? null : true;
   // Phones whose older app lost its way in: this computer's own page only, never a Cloud, a server's page or client mode.
   const linkPhones = useRetiredLinkPhones(!remote && local);
   useEffect(() => {
@@ -115,7 +116,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
     return () => { active = false; unsubscribe(); };
   }, [bridge]);
   useEffect(() => {
-    const org = window.ogb?.organization;
+    const org = UPSTREAM_SERVICES.cloud ? window.ogb?.organization : undefined;
     if (!org) return;
     let active = true;
     const read = (next: { status: string; organization?: unknown }) => { if (active) setOrganization(next.status !== "signed-out" && Boolean(next.organization)); };
@@ -161,15 +162,15 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const advancedBack = backDue && advanced;
   const simpleDue = SIMPLE_ONLY ? newLookDue : advancedBack || !promptSeen;
   const simpleBlocked = useOtherDialogOpen(simpleDue) || Boolean(state.liveCall && state.liveCall.status !== "ended");
-  const boatHere = boatOfferRuns(now()) && brandStatus().source !== "file";
+  const boatHere = UPSTREAM_SERVICES.promotions && UPSTREAM_SERVICES.boat && boatOfferRuns(now()) && brandStatus().source !== "file";
   const modelgoHere = modelgoOfferable(state.config?.managedPolicy);
 
   const trial = plan?.trial;
   const key = trial ? trialKey(trial) : null;
   const setupRecord = record && (intent.pending || intent.sent) ? { ...record, hintsSeen: [...record.hintsSeen, CLOUD_INTENT_GIVEN] } : record;
-  const setupHere = cloudSignInDue(viewer, state, engineReady)
+  const setupHere = UPSTREAM_SERVICES.cloud && (cloudSignInDue(viewer, state, engineReady)
     || ["waiting", "shown"].includes(cloudSetupStage({ viewer, connected: state.connected, enginesKnown: state.instances.length > 0,
-      engineReady: state.instances.some(engineReady), onboarding: setupRecord, planned: Boolean(jobRoutine(state.routines, intent.sent)) }));
+      engineReady: state.instances.some(engineReady), onboarding: setupRecord, planned: Boolean(jobRoutine(state.routines, intent.sent)) })));
   const waits = cornerPopupWaits(state, updater, { quiet, idle: true, viewer, duringFirstChat: true }) || Boolean(state.cloudAdd) || state.cloudHowTo || setupHere;
   const kind = view ? cloudNoticeKind(view, account) : null;
   const introDue = (): boolean | null => {
@@ -225,7 +226,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
       : whatsNewDue === null || whatsNewState === "loading" || !viewer || afterWelcome === null || mausBotFirst || moving === null || whatsNewBlocked ? null : true,
     [UPDATES_CONSENT_NOTICE]: consentNow,
     [TWO_PLACES_NOTICE]: twoFact,
-    [PRODUCT_HUNT_NOTICE]: !cards || moving || firstChat === true || brandStatus().source === "file" || now() >= PRODUCT_HUNT_UNTIL ? false
+    [PRODUCT_HUNT_NOTICE]: !UPSTREAM_SERVICES.promotions || !cards || moving || firstChat === true || brandStatus().source === "file" || now() >= PRODUCT_HUNT_UNTIL ? false
       : organization === null || moving === null || firstChat === null ? null : !organization,
     [CLOUD_INTRO]: moving ? false : moving === null ? null : introDue(),
     [CLOUD_TRIAL_NOTICE]: planBridge && plan === null ? null : Boolean(key && (trialDue || trialOpen === key)),
@@ -234,7 +235,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
     [MODELGO_OFFER_NOTICE]: modelgoNow,
     [BOAT_OFFER_NOTICE]: !boatHere || moving || afterWelcome === true || !usedBefore(state.bots) || desktopState?.seen.includes(BOAT_OFFER_NOTICE) ? false
       : organization === null || moving === null || afterWelcome === null || mausBotFirst || (desktop && !desktopState) ? null : !organization,
-    [STAR_NOTICE]: !bridge || moving || brandStatus().source === "file" || !usedBefore(state.bots) ? false : moving === null ? null : true,
+    [STAR_NOTICE]: !UPSTREAM_SERVICES.promotions || !bridge || moving || brandStatus().source === "file" || !usedBefore(state.bots) ? false : moving === null ? null : true,
   }, id => id === CLOUD_INTRO ? stage === "done" && !introOpen
     : id === STAR_NOTICE || id === PRODUCT_HUNT_NOTICE || id === BOAT_OFFER_NOTICE || id === MODELGO_OFFER_NOTICE ? noticeSeen(record, id) : false, launch, closed) : null;
 

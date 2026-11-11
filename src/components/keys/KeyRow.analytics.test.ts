@@ -1,3 +1,5 @@
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

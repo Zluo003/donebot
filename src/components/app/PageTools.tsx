@@ -1,4 +1,5 @@
 // A bot's page in the chat, artifact-style: its version stepper, Point, Share, Open in new tab and Full screen.
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { createContext, useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Check, ChevronLeft, ChevronRight, Copy, Crosshair, Download, Globe, Loader2, Maximize2, Pin, PinOff, Share2, Trash2, X } from "lucide-react";
@@ -277,7 +278,7 @@ export function PageNotes({ version, point, share, save, room, className }: Pick
     rows.push(
       <div key="refused" role="alert" className="flex items-center gap-2 rounded-2xl bg-inset px-3 py-2 text-[13px] text-ink-secondary">
         <span dir="auto" className="min-w-0 flex-1">{state.text}</span>
-        {state.card?.upgrade && window.ogb?.cloudAccount && !window.ogb.remoteClient?.active && (
+        {UPSTREAM_SERVICES.cloud && state.card?.upgrade && window.ogb?.cloudAccount && !window.ogb.remoteClient?.active && (
           <button type="button" className={ASK_PRIMARY_BUTTON} onClick={() => dispatch({ type: "openCloudAdd", source: "app_pages" })}>{t("chat.page.morePages")}</button>
         )}
       </div>,

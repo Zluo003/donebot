@@ -17,12 +17,13 @@ import {
 } from "@/lib/usage-meter";
 import type { LocaleKey } from "@/locales";
 import { useStore } from "@/state/store";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 
 const TEAM_TIERS: readonly string[] = ["team", "business"];
 export type UpgradeSource = "app_usage" | "app_settings" | "app_room";
 
 export function usageBridge(cloudHome: boolean): CloudPlanBridge | undefined {
-  if (window.ogb?.remoteClient?.active === true) return undefined;
+  if (!UPSTREAM_SERVICES.cloud || window.ogb?.remoteClient?.active === true) return undefined;
   return localDesktopPage() ? (window.ogb?.cloudAccount ? window.ogb?.cloudPlan : undefined) : cloudHome ? window.ogb?.cloudPlan : undefined;
 }
 
@@ -241,7 +242,7 @@ export function CloudUsageSettings() {
 
 export function UpgradeButton({ usage, upgrade, className }: { usage: CloudUsage; upgrade: UpgradeUi; className?: string }) {
   const path = upgradePath(usage), target = nextPlan(usage);
-  if (path === "top") return null;
+  if (!UPSTREAM_SERVICES.cloud || path === "top") return null;
   return (
     <button type="button" className={cn("ui-button ui-button-primary gap-1.5", className)} disabled={upgrade.busy !== null} onClick={() => upgrade.onUpgrade()}>
       {upgrade.busy === "preview" && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}

@@ -1,3 +1,4 @@
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import { Check, LogOut, Plus, UserRound, X } from "lucide-react";
 import type { AccountsView, AccountSwitchResult, RailOpenResult } from "../../electron/cloud-account.mjs";
@@ -34,8 +35,8 @@ export function switchNote(result: Pick<RailOpenResult | AccountSwitchResult, "o
 
 /** Who is signed in on this device, on this app's own page; on any other page, only whether main offers the sheet. */
 export function useAccounts(): AccountsAccess & { sheet: { email: string | null; note: string | null } | null; closeSheet(): void } {
-  const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.accounts;
-  const remote = window.ogb?.accountSheet;
+  const bridge = !UPSTREAM_SERVICES.cloud || window.ogb?.remoteClient?.active ? undefined : window.ogb?.accounts;
+  const remote = UPSTREAM_SERVICES.cloud ? window.ogb?.accountSheet : undefined;
   const own = window.ogb?.app?.ownPage === true && Boolean(bridge);
   const places = usePlaces();
   const [view, setView] = useState<AccountsView | null>(null);
@@ -74,6 +75,7 @@ export function cloudRowLabel(view: AccountsView | null): string {
  * in its ＋; with no rail beside this page (nothing to list but This computer, or the person hid it) it is here. On another page,
  * one row that opens the sheet, with no address. Signed out: nothing, as Settings has the sign-in. */
 export function accountMenuItems({ view, openSheet, noRail, signOut, add }: AccountsAccess): SidebarMenuItem[] {
+  if (!UPSTREAM_SERVICES.cloud) return [];
   if (openSheet) return [{ key: "accounts-sheet", label: t("accounts.manage"), icon: <UserRound size={18} />, onSelect: openSheet }];
   const active = view?.active;
   if (!active) return [];

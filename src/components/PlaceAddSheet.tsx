@@ -1,3 +1,4 @@
+import { doneBotPlaceChoices } from "@/donebot/services";
 // ＋ at the end of the rail: one sheet of choices. A new workspace on this computer (named here, then main opens it), a new
 // organization on the Team plan the person pays for (when they run one), buy a Cloud (the buying sheet: another Cloud right
 // here, or the first one on this computer's own sheet), or connect to a server of the person's own.
@@ -247,6 +248,7 @@ export function NewLocalFromMenu() {
 }
 
 export function PlaceAddSheet({ choices, places = [], connect = null, onClose, onAccount }: { choices: RailAddChoices; places?: readonly RailPlace[]; connect?: { name: string } | null; onClose: () => void; onAccount?: () => void }) {
+  choices = doneBotPlaceChoices(choices);
   const server = choices.link, organization = choices.organization === true, account = choices.account === true && Boolean(onAccount), local = choices.local === true;
   const several = [local, organization, choices.cloud, server, account].filter(Boolean).length > 1;
   const [view, setView] = useState<"choose" | "local" | "cloud" | "server" | "organization">(connect ? "server" : several ? "choose" : local ? "local" : organization ? "organization" : choices.cloud ? "cloud" : "server");

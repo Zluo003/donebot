@@ -1,3 +1,5 @@
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 import { afterEach, expect, it, vi } from "vitest";
 import { accountMenuItems, cloudRowLabel, switchNote } from "./AccountMenu";
 

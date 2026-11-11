@@ -1,3 +1,5 @@
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 import { createElement, type EffectCallback } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

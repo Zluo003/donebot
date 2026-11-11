@@ -1,3 +1,5 @@
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
@@ -9,6 +11,7 @@ import type { CloudOffer, CloudTrial } from "../../electron/cloud-home.mjs";
 import { withTourFinished } from "@/lib/guided-tour";
 import { setLocale } from "@/lib/i18n";
 import { DONEBOT_ONBOARDING } from "@/donebot/onboarding";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { EMPTY_ONBOARDING, LOCAL_VIEWER, markWelcomeFinished, MET_CHIEF_HINT, type WelcomeViewer } from "@/lib/onboarding";
 import { launchDialogShown, markLaunchDialog } from "@/lib/launch-dialogs";
 import { createDesktopPrefs, registerDesktopPrefs } from "../../electron/desktop-prefs.mjs";
@@ -168,6 +171,17 @@ beforeEach(() => {
   vi.stubGlobal("document", { activeElement: null, body: null, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); setLocale("en"); });
+
+it("suppresses upstream offers on a returning DoneBot install without asking cloud services for account, plan or prices", async () => {
+  for (const key of Object.keys(UPSTREAM_SERVICES) as Array<keyof typeof UPSTREAM_SERVICES>) UPSTREAM_SERVICES[key] = false;
+  returning(); desk.saved = { seen: [] };
+  for (const id of [BOAT_OFFER_NOTICE, MODELGO_OFFER_NOTICE, PRODUCT_HUNT_NOTICE, STAR_NOTICE]) storage.delete(id);
+  expect(await launch()).toBe("");
+  expect(bridges.cloud.state).not.toHaveBeenCalled();
+  expect(bridges.cloud.offer).not.toHaveBeenCalled();
+  expect(bridges.plan.state).not.toHaveBeenCalled();
+  expect(vi.mocked(track).mock.calls.some(([name]) => ["boat_offer", "modelgo_offer", "cloud_card_shown"].includes(name))).toBe(false);
+});
 
 describe("the card after the update", () => {
   it("offers the free trial to someone signed out who has used the app before, in the Admin's numbers, with Start free trial and Show me how", async () => {

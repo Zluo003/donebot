@@ -3,9 +3,10 @@ import type { HelperToolContext } from "../routes/helper-tools.ts";
 import { PASS } from "../routes/table.ts";
 import { mediaKindSchema, type MediaJob } from "./media-store.ts";
 import type { DoneBotMediaService, MediaContext } from "./media.ts";
+import { DONEBOT_MEDIA_MODELS } from "./media-registry.ts";
 import { mediaReplyContext } from "./media-replies.ts";
 
-const submitSchema = z.object({ kind: mediaKindSchema, model: z.string().min(1).max(256), parameters: z.record(z.string(), z.unknown()),
+const submitSchema = z.object({ kind: mediaKindSchema, model: z.string().min(1).max(256).optional(), parameters: z.record(z.string(), z.unknown()),
   operation: z.enum(["generate", "edit", "extend"]).optional(), variation_key: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/).optional() }).strict();
 const jobSchema = z.object({ job_id: z.string().uuid() }).strict();
 const capabilitySchema = z.object({ model: z.string().min(1).max(256).optional(), kind: z.enum(["llm", "image", "video", "music", "tts"]).optional() }).strict();
@@ -38,7 +39,7 @@ export function createDoneBotMediaRoutes(service: DoneBotMediaService, contextFo
       }
       if (action === "generate") {
         const input = submitSchema.parse(body);
-        const job = await service.submit(context, { kind: input.kind, model: input.model, parameters: input.parameters, operation: input.operation, variationKey: input.variation_key });
+        const job = await service.submit(context, { kind: input.kind, model: input.model ?? DONEBOT_MEDIA_MODELS[input.kind], parameters: input.parameters, operation: input.operation, variationKey: input.variation_key });
         return ctx.json(ctx.res, 202, { job: publicMediaJob(job), reply_context: mediaReplyContext(job, action) });
       }
       const { job_id: id } = jobSchema.parse(body);

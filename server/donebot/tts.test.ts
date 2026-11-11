@@ -2,9 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DoneBotGatewayModel } from "../../shared/donebot.ts";
 import type { AppConfig } from "../config.ts";
 import { bindDoneBotVoice, describeVoice, listVoices, providerConfigured, speak, streamVoice, verifyKey, voiceReady } from "../tts/index.ts";
+import { doneBotClientSpeechModel } from "./media-registry.ts";
 import { createDoneBotVoice } from "./tts.ts";
 
-const model: DoneBotGatewayModel = { id: "gpt-4o-mini-tts", display_name: "Fixture voice", media_types: ["audio"], platforms: ["openai"], interfaces: ["openai.audio.speech"], media_parameters: { protocol: { adapter: "apimart.speech.v1" }, formats: ["pcm", "wav"], voices: ["alloy", "shimmer", "gateway-new-voice"] } };
+const model: DoneBotGatewayModel = { id: "gpt-4o-mini-tts", display_name: "Fixture voice", media_types: ["audio"], platforms: ["openai"], interfaces: ["openai.audio.speech"] };
 const receiptId = "fixture-receipt-1";
 const pcm = (body: ConstructorParameters<typeof Response>[0] = new Uint8Array([0, 0, 1, 0])) => new Response(body, { headers: { "content-type": "audio/pcm", "X-DoneBot-Receipt-ID": receiptId } });
 const fixture = (response: () => Response = pcm) => {
@@ -20,6 +21,12 @@ const consume = async (body: ReadableStream<Uint8Array>) => { const chunks: Uint
 afterEach(() => { bindDoneBotVoice(undefined); vi.unstubAllGlobals(); });
 
 describe("DoneBot streaming speech", () => {
+  it("uses local speech parameters when gateway metadata is missing or contradictory", () => {
+    expect(doneBotClientSpeechModel(model)?.media_parameters?.voices).toContain("alloy");
+    expect(doneBotClientSpeechModel({ ...model, media_parameters: { voices: ["unknown"] } })).toEqual(doneBotClientSpeechModel(model));
+    expect(doneBotClientSpeechModel({ ...model, id: "unknown" })).toBeUndefined();
+    expect(doneBotClientSpeechModel({ ...model, interfaces: [] })).toBeUndefined();
+  });
   it("ignores a retained supplier default while rejecting an explicitly unavailable voice", async () => {
     const f = fixture();
     bindDoneBotVoice(f.service);
@@ -102,7 +109,7 @@ describe("DoneBot streaming speech", () => {
     const cfg = { tts: { provider, voice: "alloy", key: "fixture-key", fishKey: "fixture-key", geminiKey: "fixture-key", baseUrl: "https://direct-provider.invalid" }, openai: { key: "fixture-key" }, xai: { key: "fixture-key" } };
     expect(providerConfigured(cfg)).toBe(true);
     expect(describeVoice(cfg)).toMatchObject({ provider: "donebot", model: model.id, streaming: true, ready: true });
-    expect(await listVoices(cfg)).toEqual([{ id: "alloy", label: "alloy" }, { id: "shimmer", label: "shimmer" }, { id: "gateway-new-voice", label: "gateway-new-voice" }]);
+    expect(await listVoices(cfg)).toEqual(["alloy", "echo", "fable", "onyx", "nova", "shimmer"].map(id => ({ id, label: id })));
     expect((await speak(cfg, "Fixture")).mime).toBe("audio/wav");
     expect(await consume((await streamVoice(cfg, "Fixture")).body)).toHaveLength(4);
     expect(await verifyKey("elevenlabs", "fixture-key")).toMatchObject({ ok: false });

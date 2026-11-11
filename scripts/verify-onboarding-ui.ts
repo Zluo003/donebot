@@ -68,16 +68,29 @@ await evaluate("localStorage.clear(); sessionStorage.clear(); localStorage.setIt
 await textVisible("Meet DoneBot");
 await evaluate("document.documentElement.dataset.reducedMotion = 'true'; true");
 await screenshot("welcome");
-// Two screens, no form: the first asks nothing and shows no steps, Back or Skip.
 assert.equal(await evaluate("document.querySelectorAll('[data-welcome] input').length"), 0, "no field on the first screen");
+assert.equal(await evaluate(`(async () => {
+  const logo = document.querySelector('[data-welcome] [role="img"][aria-label="DoneBot"]');
+  if (!logo) return false;
+  const image = getComputedStyle(logo).maskImage;
+  if (!image.startsWith('url(')) return false;
+  const url = image.slice(4, -1).replace(/^['"]|['"]$/g, '');
+  const response = await fetch(url);
+  return response.ok && (await response.text()).includes('>DoneBot</title>');
+})()`), true, "the welcome uses the DoneBot logo");
 for (const gone of ["Step 1", "Back", "Skip", "Your name"]) assert.equal((await snapshot()).includes(gone), false, gone);
-await click("Next");
-await textVisible("Introducing your Chief of Staff");
-// A reload on the second screen comes back to it.
 await evaluate("setTimeout(() => location.reload(), 0); true");
-await textVisible("Introducing your Chief of Staff");
-await screenshot("chief");
-console.log("PASS the first run is two screens, and a reload keeps the second");
+await textVisible("Meet DoneBot");
+const defaultBotIds = await evaluate("fetch('/api/bots').then(r => r.json()).then(data => data.bots.filter(bot => bot.defaultBot).map(bot => bot.id))");
+await evaluate(`(() => {
+  window.onboardingGuidesSeen = [];
+  new MutationObserver(() => {
+    for (const selector of ['[data-chief-intro]', '[data-grok-move-popup]']) {
+      if (document.querySelector(selector)) window.onboardingGuidesSeen.push(selector);
+    }
+  }).observe(document.body, {childList:true, subtree:true});
+  return true;
+})()`);
 
 // The completion write failing never keeps the person out of the chat.
 await evaluate(`(() => {
@@ -91,8 +104,9 @@ await evaluate(`(() => {
   };
   return true;
 })()`);
-await click("Create Chief of Staff");
-await poll(() => evaluate("document.querySelectorAll('[data-welcome]').length"), 0, "Create lands in the chat");
+await click("Next");
+await poll(() => evaluate("document.querySelectorAll('[data-welcome]').length"), 0, "Next opens the Chief's chat directly");
+await poll(() => evaluate("fetch('/api/bots').then(r => r.json()).then(data => data.bots.some(bot => bot.defaultBot && bot.welcomed === true))"), true, "the original bot update queue persists the introduction");
 // The welcome lands in the chat with the Chief (the server's first bot): its first messages, no AI asked.
 const first = await evaluate("fetch('/api/bots').then(r => r.json()).then(data => data.bots.find(bot => bot.chiefOfStaff && !bot.hidden))");
 assert.ok(first?.name, "the Chief");
@@ -104,7 +118,10 @@ await textVisible("I looked around");
 const followups = await evaluate(`fetch('/api/threads/${first.threadId}/messages?limit=20').then(r => r.json()).then(data => data.messages.filter(message => message.helperFollowup).length)`);
 assert.equal(followups, 1, "its follow-up is written once, as a message the model reads");
 assert.equal((await config()).profile.email, "", "the welcome saves no email");
-console.log("PASS Create lands in the Chief's chat with its first messages, though the save failed");
+await delay(6500);
+assert.deepEqual(await evaluate("window.onboardingGuidesSeen"), [], "neither the Chief introduction nor the Grok migration popup appears");
+assert.deepEqual(await evaluate("fetch('/api/bots').then(r => r.json()).then(data => data.bots.filter(bot => bot.defaultBot).map(bot => bot.id))"), defaultBotIds, "the existing default bot is reused");
+console.log("PASS DoneBot logo, automatic Chief setup and first messages, no introduction or migration popup, even when completion persistence fails");
 
 const starter = await evaluate("fetch('/api/bots').then(r => r.json()).then(data => data.bots.find(bot => bot.name === 'Pepper'))");
 assert.ok(starter?.modelSelection?.instanceId && starter.modelSelection.model, "starter has a model without opening the picker");

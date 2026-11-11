@@ -9,8 +9,9 @@ import type { RequestAuth } from "../request-auth.ts";
 import { allowsTool } from "../../shared/tool-scope.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import type { Store } from "../store.ts";
+import { doneBotClientMediaCatalog } from "./media-registry.ts";
 import { modelCapabilities } from "./capabilities.ts";
-import { doneBotMediaModel } from "./catalog.ts";
+import { doneBotMediaModel, doneBotModelCapabilities } from "./catalog.ts";
 import type { DoneBotGateway } from "./gateway.ts";
 import { createMediaApproval } from "./media-approval.ts";
 import { mediaReferenceMime } from "./media-assets.ts";
@@ -42,13 +43,8 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
     receipt: (id, scope, signal) => donebot.receipt(id, scope, signal),
     ...(deps.fetchArtifact ? { fetchArtifact: deps.fetchArtifact } : {}),
     conversationExists: (botId, threadId) => threadId.startsWith("avatar-") && botId === "donebot-avatar" || Boolean(store.bot(botId) && (store.botByThread(threadId) || store.groupByThread(threadId))),
-    resolveModel: async (id, kind) => doneBotMediaModel(donebot.models(), id, kind),
-    capabilities: async query => {
-      const models = (donebot.models()?.models ?? []).filter(model => (!query.model || query.model === model.id) &&
-        (!query.kind || model.media_types.includes(query.kind === "llm" ? "text" : query.kind === "tts" ? "audio" : query.kind)))
-        .map(model => ({ ...modelCapabilities(model), display_name: model.display_name, ...(model.pricing ? { pricing: model.pricing } : {}) }));
-      return query.model ? models : models.filter(model => model.availability.usable);
-    },
+    resolveModel: async (id, kind) => doneBotMediaModel(doneBotClientMediaCatalog(donebot.models()), id, kind),
+    capabilities: async query => doneBotModelCapabilities(doneBotClientMediaCatalog(donebot.models()), query),
     authorize: (context, input) => {
       if (context.turnId.startsWith("avatar:")) return Promise.resolve();
       const bot = store.bot(context.botId);
@@ -56,21 +52,21 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       if (!bot || !allowsTool(bot.toolScope, { kind: "mcp", server: "agents", name: `generate_${kind}` })) throw Object.assign(new Error("This media operation is outside the bot's tool selection."), { status: 403 });
       return donebotMediaApproval.authorize(context, input);
     },
-    resolveReference: async (context, path) => {
+    resolveReference: async (context, path, maxBytes) => {
       if (!context.active()) throw new Error("This media turn has ended.");
       const messages = store.messagesFor(context.threadId);
       const attachment = messages.some(message => message.attachments?.some(file => file.path === path));
       const generated = /^donebot-([a-f0-9-]{36})-\d+\.[a-z0-9]+$/.exec(path.split(/[\\/]/).at(-1) ?? "");
       if (generated) {
         const found = attachment ? await donebotMedia.artifact(generated[1]!, path) : null;
-        if (!found || found.job.threadId !== context.threadId || found.artifact.bytes > 32 * 1024 * 1024) throw new Error("No usable generated reference exists in this conversation.");
+        if (!found || found.job.threadId !== context.threadId || found.artifact.bytes > maxBytes) throw new Error("No usable generated reference exists in this conversation.");
         const handle = await openMediaArtifact(found.artifact, join(deps.dataDir, "donebot", "artifacts"));
         try { return { bytes: await handle.readFile(), mime: found.artifact.mime, name: found.artifact.name }; }
         finally { await handle.close(); }
       }
       const attached = attachment || messages.some(message => Boolean(message.text && messageAttachmentName(message.text, path)));
       const roots = deps.messageFileRootsForThread(context.botId, context.threadId).filter(root => root !== deps.attachmentsDir);
-      const file = await openMessageFile(path, attached ? [...roots, deps.attachmentsDir] : roots);
+      const file = await openMessageFile(path, attached ? [...roots, deps.attachmentsDir] : roots, maxBytes);
       try {
         const mime = mediaReferenceMime(file.mime, file.name);
         if (!/^(image|audio|video)\//.test(mime)) throw new Error("Reference must be image, audio or video.");
@@ -135,7 +131,7 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
     generate: async (prompt, signal) => {
       const id = randomUUID();
       const context = { botId: "donebot-avatar", threadId: `avatar-${id}`, turnId: `avatar:${id}`, active: () => !signal.aborted };
-      const catalog = donebot.models();
+      const catalog = doneBotClientMediaCatalog(donebot.models());
       const configured = catalog?.defaults.image;
       const model = catalog?.models.find(candidate => candidate.id === configured && modelCapabilities(candidate).availability.usable)
         ?? catalog?.models.find(candidate => candidate.media_types.includes("image") && modelCapabilities(candidate).availability.usable);

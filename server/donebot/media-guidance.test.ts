@@ -10,64 +10,58 @@ const input = (): CompletionTransportInput => ({ model: "gemini-4-argon", stream
   tools: DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => ({ type: "function", function: { name: `agents_${tool.name}`, description: tool.description, parameters: tool.inputSchema } })),
 });
 
-describe("DoneBot client-side media model selection", () => {
-  it("exposes media capability discovery and the three generation tools", () => {
+describe("DoneBot fixed local media contracts", () => {
+  it("exposes direct generation without discovery or a model argument, preserving other tools and chat history", () => {
     const turn = input();
-    turn.tools.push(
-      { type: "function", function: { name: "agents_media_center", description: "Old center", parameters: {} } },
-      { type: "function", function: { name: "agents_model_capabilities", description: "Old catalog", parameters: {} } },
-      { type: "function", function: { name: "agents_generate_music", description: "Old audio tool", parameters: {} } },
-      { type: "function", function: { name: "other_generate_image", description: "Unrelated", parameters: {} } },
-    );
+    turn.tools.push({ type: "function", function: { name: "agents_media_center", description: "Legacy", parameters: {} } },
+      { type: "function", function: { name: "workspace_read", description: "Read", parameters: {} } });
+    const original = structuredClone({ messages: turn.messages, tools: turn.tools });
     const guided = guideDoneBotMedia(turn, FAKE_DONEBOT_CATALOG);
     expect(guided.tools.map(tool => tool.function.name)).toEqual([
-      "agents_media_model_capabilities", "agents_generate_image", "agents_generate_video", "agents_generate_audio", "agents_media_job_status", "agents_media_stop_waiting", "other_generate_image",
+      "agents_generate_image", "agents_generate_video", "agents_generate_audio", "agents_media_job_status", "agents_media_stop_waiting", "workspace_read",
     ]);
     expect(guided.model).toBe(turn.model);
     expect(guided.messages.slice(1)).toEqual(turn.messages);
-    expect(guided.messages[0]?.content).toContain("The model choice and request construction happen in this client");
-    expect(guided.messages[0]?.content).toContain("existing voice tools for streaming text-to-speech");
-    expect(JSON.stringify(guided.tools)).not.toContain("preferred_model");
-    expect(JSON.stringify(guided.tools)).toContain("media_model_capabilities");
-  });
-
-  it("requires explicit public models and native request parameter bodies", () => {
-    const turn = input(), original = structuredClone({ messages: turn.messages, tools: turn.tools });
-    const guided = guideDoneBotMedia(turn, FAKE_DONEBOT_CATALOG);
-    expect(guided.model).toBe(turn.model);
-    expect(guided.messages[0]?.content).toContain("choose a locally supported public model");
-    expect(guided.messages[0]?.content).toContain("same conversation");
-    for (const name of ["agents_generate_image", "agents_generate_video", "agents_generate_audio"]) {
-      const tool = guided.tools.find(candidate => candidate.function.name === name)!;
-      expect(tool.function.parameters.required).toEqual(["model", "parameters"]);
-      expect(tool.function.parameters.properties).toHaveProperty("model");
-      expect(tool.function.parameters.properties).toHaveProperty("parameters");
-    }
-    expect(JSON.stringify(guided.tools[0]?.function.parameters)).toContain('"enum":["image","video","audio"]');
     expect({ messages: turn.messages, tools: turn.tools }).toEqual(original);
+    for (const kind of ["image", "video", "audio"]) {
+      const tool = guided.tools.find(tool => tool.function.name === `agents_generate_${kind}`)!;
+      expect(tool.function.parameters).toMatchObject({ required: ["parameters"] });
+      expect(tool.function.parameters.properties).not.toHaveProperty("model");
+    }
+    expect(guided.messages[0]?.content).toContain("Submit directly");
+    expect(guided.messages[0]?.content).toContain("existing voice tools");
+    const image = guided.tools[0]!.function;
+    expect(image.description).toContain("seedream-5-5");
+    expect(image.parameters).toMatchObject({ properties: { parameters: { additionalProperties: false,
+      properties: { layer_decomposition_options: { properties: { max_images: { maximum: 100 } } } } } } });
   });
 
-  it("does not expose catalog model names through prompts or media schemas", () => {
+  it("uses local media rules even when gateway media metadata is absent or contradictory", () => {
     const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
-    catalog.models.push({ id: "unknown-image", display_name: "Unknown", media_types: ["image"], interfaces: ["openai.images"], platforms: [] });
-    const guided = JSON.stringify(guideDoneBotMedia(input(), catalog));
-    expect(guided).not.toContain("gpt-image-2.5-flare");
-    expect(guided).not.toContain("unknown-image");
+    for (const model of catalog.models) model.media_parameters = { protocol: { adapter: "unsupported" }, resolutions: ["4K"] };
+    const guided = guideDoneBotMedia(input(), catalog);
+    expect(guided.tools.some(tool => tool.function.name === "agents_generate_image")).toBe(true);
+    expect(JSON.stringify(guided.tools)).not.toContain('"enum":["4K"]');
+    expect(JSON.stringify(guided.tools)).not.toContain("gpt-image-2.5-flare");
+    expect(JSON.stringify(guided.tools)).not.toContain("seedance-2-0");
+    const music = guided.tools.find(tool => tool.function.name === "agents_generate_audio")!;
+    expect(music.function.parameters).toMatchObject({ properties: { parameters: { required: ["instrumental"], properties: {
+      version: { enum: ["v6"] }, custom: { enum: [true] }, prompt: { maxLength: 5000 }, title: { maxLength: 80 }, style: { maxLength: 1000 }, vocal_gender: { enum: ["Male", "Female"] },
+    } } } });
+    const musicSchema = (music.function.parameters.properties as any).parameters.properties;
+    for (const field of ["persona_id", "custom_model_id", "audio_url", "nsfw_check"]) expect(musicSchema).not.toHaveProperty(field);
+    const video = guided.tools.find(tool => tool.function.name === "agents_generate_video")!;
+    for (const constraint of ["200 MiB", "407696..8295044", "24..60 FPS", "combined video <=30s", "combined audio <=30s", "portrait authorization"]) expect(video.function.description).toContain(constraint);
   });
 
-  it("overrides stale failure claims without removing conversation history", () => {
-    const turn = input();
-    turn.messages = [
-      { role: "assistant", content: "This conversation cannot generate media; open a new chat and configure a provider." },
-      { role: "user", content: "Continue my image task here." },
-    ];
-    const guided = guideDoneBotMedia(turn, FAKE_DONEBOT_CATALOG);
-    expect(guided.messages.slice(1)).toEqual(turn.messages);
-    expect(guided.messages[0]?.content).toContain("supersede older assistant claims");
-    expect(guided.model).toBe(turn.model);
+  it("omits a disabled model's tool and keeps job controls available after sign-out", () => {
+    const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
+    catalog.models = catalog.models.filter(model => model.id !== "seedream-5-5");
+    expect(guideDoneBotMedia(input(), catalog).tools.map(tool => tool.function.name)).not.toContain("agents_generate_image");
+    expect(guideDoneBotMedia(input(), null).tools.map(tool => tool.function.name)).toEqual(["agents_media_job_status", "agents_media_stop_waiting"]);
   });
 
-  it.each(["messages", "gemini", "responses", "chat"] as const)("sends intent tools and guidance through native %s", async protocol => {
+  it.each(["messages", "gemini", "responses", "chat"] as const)("sends native parameter schemas over %s without an image model argument", async protocol => {
     let body: Record<string, any> = {};
     await createDoneBotCompletion(async (_path, init) => {
       body = JSON.parse(init.body as string);
@@ -75,14 +69,13 @@ describe("DoneBot client-side media model selection", () => {
         : protocol === "gemini" ? { candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }] }
           : protocol === "responses" ? { output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }] }
             : { choices: [{ message: { content: "ok" }, finish_reason: "stop" }] };
-      return protocol === "responses"
-        ? new Response(`data: ${JSON.stringify({ type: "response.completed", response: value })}\n\n`, { headers: { "content-type": "text/event-stream" } })
-        : new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
+      return protocol === "responses" ? new Response(`data: ${JSON.stringify({ type: "response.completed", response: value })}\n\n`, { headers: { "content-type": "text/event-stream" } }) : Response.json(value);
     }, () => protocol)(guideDoneBotMedia(input(), FAKE_DONEBOT_CATALOG));
     const tools = protocol === "gemini" ? body.tools[0].functionDeclarations : body.tools;
-    const tool = protocol === "chat" ? tools[0].function : tools[0];
-    expect((tool.input_schema ?? tool.parametersJsonSchema ?? tool.parameters).properties).toHaveProperty("kind");
-    expect(JSON.stringify(body)).toContain("choose a locally supported public model");
-    expect(JSON.stringify(body)).not.toContain("gpt-image-2.5-flare");
+    const generation = tools.map((tool: any) => protocol === "chat" ? tool.function : tool).find((tool: any) => tool.name === "agents_generate_image");
+    const schema = generation.input_schema ?? generation.parametersJsonSchema ?? generation.parameters;
+    expect(schema.properties).not.toHaveProperty("model");
+    expect(schema.properties.parameters.properties).toHaveProperty("prompt");
+    expect(JSON.stringify(body)).not.toContain("agents_media_model_capabilities");
   });
 });

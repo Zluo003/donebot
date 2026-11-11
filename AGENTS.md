@@ -16,6 +16,9 @@
 - 统一网关地址：https://donebot.cn。
 - 网关部署代码所在项目：`/Users/zluo/Dev/donebot-api`。
 - 为完成前端与统一网关接入，必要时已获授权同时修改本项目和 `/Users/zluo/Dev/donebot-api` 的代码。修改网关项目之前须读取并遵循其适用的 `AGENTS.md`；此授权不放宽上述 OpenMausBot 原版代码的修改限制。
+- 媒体模型能力、原生参数、默认值和限制由 DoneBot 客户端登记；图片固定 Seedream 5.5，视频固定 Seedance 2.5，音乐固定 Suno v6。Suno v6 仅提供纯音乐和带歌词歌曲生成，不开放歌词单独生成、翻唱、续写及参考编辑。本轮暂不优化 TTS。客户端到网关必须异步提交媒体任务，后台查询并回传原会话；TTS 沿用朗读流式接口。
+- Seedance 2.5 有参考素材时默认全能参考模式（omni_reference_task_type=reference），单张图片也不自动视为首帧；无参考素材时使用文生视频。仅在用户明确要求时切换首帧、首尾帧、编辑或延长模式。
+- donebot-api 基于 sub2api，只负责账号、鉴权、路由转发、计费、任务及回执等基础功能；不得接受语义需求后替客户端选模型、查询能力、规划或组装媒体请求。网关原生参数解析用于安全及计费，不替代客户端能力登记。
 - 用户可按需提供临时测试账号和密码。账号、密码及其他测试凭据不得写入长期记忆或项目持久指令文件；需要时使用当前会话中提供的凭据，未提供时再向用户索取。
 
 Before claiming a server or conversation change works, follow

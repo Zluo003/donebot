@@ -228,7 +228,7 @@ describe("DoneBot persistent paid media operations", () => {
     const invalidLayers = [
       { z_index: 0, bounding_box: { absolute: [100, 0, 50, 10] } },
       { z_index: 1, bounding_box: { normalized: [0, 0, 1001, 1000] } },
-      { z_index: 17 },
+      { z_index: 100 },
       { z_index: 3, description: "x".repeat(2049) },
     ];
     const f = await fixture({ resolveModel: async (id, kind) => ({ id, kind, adapter: "apimart.images.v1" }),
@@ -491,6 +491,22 @@ describe("DoneBot persistent paid media operations", () => {
     expect(send.mock.calls.map(([path]) => path)).toEqual(kind === "video" ? [post, poll, poll + "/content"] : [post, poll]);
     expect((await f.service.status(context, job.id)).artifacts[0]?.mime).toBe(mime);
     expect(f.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists and publishes every output of a 100-image Seedream 5.5 layer task", async () => {
+    const urls = Array.from({ length: 100 }, (_, i) => `https://artifact.invalid/layer-${i}.png`);
+    const send = vi.fn(async (_path: string, init: RequestInit) => init.method === "POST"
+      ? json({ data: [{ task_id: "layers-task" }] })
+      : json({ data: { status: "completed", result: { images: [{ url: urls, layer_decomposition: true, layers: urls.map((_, z_index) => ({ z_index })) }] } } }));
+    const f = await fixture({ fetchGateway: send, resolveModel: async (id, kind) => ({ id, kind, adapter: "apimart.images.v1" }) });
+    const job = await f.service.submit(context, { ...input, model: "seedream-5-5", parameters: { layer_decomposition: true } });
+    await submitted(f.service, job.id); await f.service.tick();
+    const completed = await f.service.status(context, job.id);
+    expect(completed.status).toBe("completed");
+    expect(completed.artifacts).toHaveLength(100);
+    expect(completed.artifacts[99]?.layer?.z_index).toBe(99);
+    expect(f.publish).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(1);
   });
 });
 

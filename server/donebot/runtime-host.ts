@@ -45,7 +45,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     enabled, gateway, driver, policy,
     fetchArtifact: fixtureOrigin ? (url: string, signal: AbortSignal) => {
       const parsed = new URL(url);
-      return parsed.origin === fixtureOrigin && parsed.pathname === "/fixture-audio.mp3" && !parsed.search && !parsed.hash
+      return parsed.origin === fixtureOrigin && ["/fixture-audio.mp3", "/fixture-image.png"].includes(parsed.pathname) && !parsed.search && !parsed.hash
         ? fetch(url, { signal, redirect: "error", credentials: "omit" }) : publicArtifactResponse(url, signal);
     } : undefined,
     routes: enabled ? [createDoneBotAccountRoutes(gateway)] : [],

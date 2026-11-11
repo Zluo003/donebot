@@ -17,7 +17,7 @@ node scripts/generate-locale.mjs --check
 pnpm test:packaged-server
 ```
 
-2026-11-11 的专项运行结果为 23 个文件、427 项通过；Electron 网关测试 7 项通过。
+此前 2026-11-11 的专项运行结果为 23 个文件、427 项通过；Electron 网关测试 7 项通过。
 其他检查通过。这里记录的是相关专项及打包检查，不代表再次执行了原项目的全部测试。
 
 最终原版回归批次为 14 个文件、577 项通过：
@@ -68,6 +68,42 @@ DONEBOT_FIXTURE_2FA=1 node --experimental-strip-types scripts/verify-donebot-aut
 
 ## 端到端覆盖
 
+媒体选型回归（隔离服务器、合成 Gemini 响应与 Seedream 异步任务）：
+
+```sh
+pnpm exec vitest run server/donebot-media-selection.e2e.test.ts --maxWorkers=1
+```
+
+验证客户端固定图片 `seedream-5-5`、视频 `seedance-2-5`、音乐 `suno`（v6）。
+正常生成工具不接受 model 参数，客户端注入固定 ID，并在首次 LLM 请求中提供原生参数
+schema。网关只提供开放模型 ID 与价格，不提供媒体能力；能力查询工具不进入正常
+LLM 工具集，不要求先查目录或读第二轮参数。参考编辑使用 Seedream generation 的
+`image_urls`；图层拆分支持 `max_images=2..100` 与可选 OCR。
+
+合成 Gemini 在首次工具调用直接提交 Seedream；第二次相同调用复用本地任务，付费
+POST 总数为1。聊天结束时任务仍在 processing，由后台查询 `/v1/tasks/{id}`；
+完成后投递原会话 PNG 附件。记录保存在
+`.omb-scratch/verify-evidence/donebot-media-selection/result.json`，包含 LLM 请求数量、
+提交体及隔离服务器日志路径。首次固定模型接入的客户端专项为21个文件、353项通过，构建、服务端类型检查和 lint 通过。
+隔离检查中，脚本化 LLM 共3次请求、能力查询0次、
+生图提交1次。这证明调用链和任务去重，不是实际 Gemini 延迟或线上付费生图验收。
+
+客户端检查参数、参考图格式/字节数及引用数量；参考媒体的像素、编解码、帧率、
+时长与上游人像授权仍由上游校验，不能把登记的限制当作已完成全本地解码校验。
+完整限制、官方来源和客户端开放范围见
+[媒体能力与输入限制](donebot-media-capabilities.md)。Suno v6 仅开放纯音乐和带歌词
+歌曲，固定 custom=true/version=v6/auto_lyrics=false；不开放单独歌词、翻唱或续写。
+参考视频通过模型策略允许到 200 MiB；网关已有显式上传配置仍需单独核对。
+本轮没有改原版聊天调度、记忆、MAX_STEPS 或重复调用保护；不能据此承诺任何
+LLM 都不会再次出现别的工具空转。
+
+网关配置、已移除 Intent API、5.5 输入参考图和图层计费约定见
+`/Users/zluo/Dev/donebot-api/docs/donebot/v4/media-intent-api.md`。
+生产启用前须在网关配置5.5上游账号、输出两档及每张输入参考图价格，并开放固定
+媒体模型。视频公开 ID `seedance-2-5` 映射至同模型上游
+`doubao-seedance-2-5-260628`。客户端会忽略其它图片、视频和音乐模型，网关不会自动
+删除旧账号/价格或历史任务；停用旧模型由管理员配置。
+
 第一条用例通过原版 control 工具创建 Bot、设置模型、发言及等待，确认 Messages、
 Responses、Gemini 和 Chat Completions 的原生文本协议能调用工作区工具及原 agents 工具；
 图片生成和同会话编辑、视频、音乐均只提交一次生成请求，结果通过会话附件投递。
@@ -83,3 +119,22 @@ Responses、Gemini 和 Chat Completions 的原生文本协议能调用工作区�
 
 线上公开设置在当前环境连接超时，尚未验证真实登录、安全验证码或付费生成，
 也未执行生产部署。重新联网后需在另建的隔离应用环境中完成线上验收。
+
+## 输入限制及 Suno 两种模式回归
+
+2026-11-11 按官方文档补齐三种媒体模型的登记后，运行：
+
+```sh
+pnpm exec vitest run server/donebot/ server/donebot.e2e.test.ts server/donebot-media-selection.e2e.test.ts --maxWorkers=1
+pnpm build
+pnpm lint
+```
+
+结果：21 个文件、355 项测试通过；构建、前后端类型检查和 lint 通过。隔离流程检查
+33 MiB 会话工作目录视频引用的读取和上传、纯音乐与带歌词歌曲各一次异步提交，
+并等待各自的新消息附件，验证歌词原文和 vocal_gender 未被转发层改写。媒体选型
+fixture 仍为首轮直接提交、能力查询 0 次、图片付费 POST 1 次。
+引用上传与两种歌曲提交体、隔离服务器日志路径保存在
+`.omb-scratch/verify-evidence/donebot-model-limits/result.json`。
+网关 config/service/handler 的 Asset、DoneBotStorage 及 APIMartSunoNative 专项测试通过，
+证明默认上传容量和显式旧限制保留、歌曲原生字段透传。未部署或进行线上付费生成。

@@ -3,6 +3,7 @@ import type { DoneBotGatewayModel } from "../../shared/donebot.ts";
 import type { Audio, Voice } from "../tts/elevenlabs.ts";
 import type { DoneBotVoice, VoiceStream } from "../tts/index.ts";
 import type { DoneBotGateway, DoneBotScope } from "./gateway.ts";
+import { doneBotClientSpeechModel } from "./media-registry.ts";
 
 // https://developers.openai.com/api/docs/guides/text-to-speech: PCM is 24 kHz, mono, signed 16-bit little-endian.
 const SAMPLE_RATE = 24_000;
@@ -29,14 +30,7 @@ function wave(bytes: Uint8Array): Audio {
 }
 
 export function createDoneBotVoice(deps: Dependencies): DoneBotVoice {
-  const model = () => {
-    const value = deps.resolveModel();
-    const formats = value?.media_parameters?.formats;
-    const adapter = (value?.media_parameters?.protocol as { adapter?: unknown } | undefined)?.adapter;
-    if (!value || !value.media_types.includes("audio") ||
-        !value.interfaces.includes("openai.audio.speech") || adapter !== "apimart.speech.v1" || !Array.isArray(formats) || !formats.includes("pcm")) return undefined;
-    return value;
-  };
+  const model = () => doneBotClientSpeechModel(deps.resolveModel());
   const voices = (): Voice[] => {
     const configured = model()?.media_parameters?.voices;
     return Array.isArray(configured) ? configured.filter((voice): voice is string => typeof voice === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(voice)).map((id) => ({ id, label: id })) : [];

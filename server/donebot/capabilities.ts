@@ -1,6 +1,7 @@
 import type { DoneBotGatewayModel, DoneBotModelKind, DoneBotProtocol } from "../../shared/donebot.ts";
 import { MAX_MEDIA_REFERENCE_BYTES, MAX_MEDIA_REFERENCE_FILES } from "./media-assets.ts";
-import { MESSAGE_FILE_MAX_BYTES } from "../message-file.ts";
+import { SEEDREAM55_SOURCE, seedream55, seedream55ParameterRules, SEEDREAM55_FIELDS, SEEDREAM55_RATIOS } from "./seedream-capabilities.ts";
+import { SUNO_FIELDS, SUNO_FIXED_PARAMETERS, SUNO_FORMATS, SUNO_LIMITS, SUNO_VARIETIES, sunoParameterRules, sunoV6 } from "./suno-capabilities.ts";
 import { seedance, seedanceParameterRules, SEEDANCE_FIELDS, SEEDANCE_RATIOS, type SeedanceReferenceConstraints } from "./seedance-capabilities.ts";
 
 type Modality = "text" | "image" | "audio" | "video";
@@ -24,21 +25,25 @@ export interface NativeModel {
     resolutions?: string[];
     aspectRatios?: string[];
     formats?: string[];
-    referenceImage?: { formats: string[]; maxMegabytes: number; minPixels: number; maxPixels: number; maxRatio: number; minEdgeExclusive?: number };
+    referenceImage?: { formats: string[]; maxMegabytes: number; maxBytes?: number; minPixels?: number; maxPixels: number; maxRatio?: number; minEdgeExclusive?: number };
     referenceMedia?: SeedanceReferenceConstraints;
     videoOutput?: { fps: number; audioChannels: number; defaultResolution: string; defaultRatio: string; defaultFormat: string; defaultDuration?: number; movEncoding?: string; highResolutionHevc10Bit: string[] };
     prompt?: { languages: string[]; recommendedMax: { chineseCharacters: number; englishWords: number }; referenceAddressing: string };
     layerDecomposition?: {
       referenceCount: number;
-      referenceImage: { formats: string[]; maxMegabytes: number; minPixels: number; maxPixels: number; maxRatio: number };
+      referenceImage: NonNullable<NonNullable<NativeModel["media"]>["referenceImage"]>;
       baseImages: number;
-      maxLayers: number;
+      maxLayers?: number;
+      maxImages?: { min: number; max: number; default: number; includesBase: boolean };
       layerFormat: string;
       sizes: string[];
       defaultSize: string;
       metadata: string[];
-      partialSuccess: boolean;
+      partialSuccess?: boolean;
+      textRecognition?: { optional: boolean; default: boolean; promptMaySuppress: boolean };
     };
+    musicGeneration?: { modes: string[]; fixedParameters: Record<string, unknown>; maxUnicodeCharacters: Record<string, number>; vocalGenders: string[]; weights: { min: number; max: number }; varieties: string[]; maxModePriceMultiplier: number; targetDurationOnly: boolean };
+    draft?: { previewResolution: string; finalResolution: string; taskTtlDays: number; ttlEffectiveAt: string; separatelyBilled: boolean; inheritedFields: string[]; overridableFields: string[] };
     promptOptimization?: { field: string; modes: string[]; default: string };
     duration?: { min?: number; max: number; automatic: boolean };
     voices?: string[];
@@ -158,6 +163,7 @@ const MODELS: Readonly<Record<string, NativeModel>> = {
   "seedance-2-0-fast": seedance("doubao-seedance-2-0-fast-260128", ["480p", "720p"]),
   "seedance-2-0-mini": seedance("doubao-seedance-2-0-mini-260615", ["480p", "720p"]),
   "seedance-2-5": seedance("doubao-seedance-2-5-260628", ["480p", "720p", "1080p"], true),
+  "seedream-5-5": seedream55,
   "seedream-5-0-flash": { officialId: "doubao-seedream-5-0-flash-260915", kind: "image", tools: false, input: ["text", "image"], output: ["image"], streaming: false,
     verifiedAt: "2026-11-07", sources: [`${VOLC}image-generation-api?lang=zh`, `${VOLC}seedream-5-0-pro?lang=zh`, `${VOLC}seedream-5-0-pro-editing-guide?lang=zh`],
     media: { operations: ["generate", "reference_edit", "coordinate_edit", "layer_decomposition"], maxReferences: { image: 10, video: 0, audio: 0 }, mask: "unverified",
@@ -172,11 +178,7 @@ const MODELS: Readonly<Record<string, NativeModel>> = {
         "Omitting prompt automatically decomposes all major elements. A natural-language prompt selects specific elements; <bbox> markers can precisely locate the elements to extract.",
         "For subject plus environment, select the complete subject as one transparent foreground layer and keep the remaining environment together in the base. Target one base plus one foreground, rather than extracting background as another foreground layer. Exact output count is not guaranteed by a separate parameter.",
         "Coordinate edits use prompt <point> or <bbox> markers normalized to 0..999; layer bounding_box.normalized response coordinates use 0..1000."] } },
-  "suno": { officialId: "Suno v6 / v6-wild / v6-mini", kind: "music", tools: false, input: ["text", "audio", "image", "video"], output: ["audio"], streaming: false,
-    verifiedAt: "2026-11-07", sources: ["https://help.suno.com/en/articles/13924801", "https://help.suno.com/en/articles/13924929", "https://help.suno.com/en/articles/13924481", "https://help.suno.com/en/articles/2415873"],
-    media: { operations: ["generate", "lyrics", "instrumental", "reference", "extend", "cover"], versions: ["v6", "v6-wild", "v6-mini"], duration: { max: 480, automatic: false },
-      notes: ["Native Suno product supports richer references and editing; the DoneBot APIMart adapter currently exposes primary generation only.",
-        "Custom mode accepts supplied lyrics or instrumental generation. Native v6 supports up to 8 minutes; the current adapter's duration control is a 10..360-second target, not an exact-length guarantee."] } },
+  "suno": sunoV6,
   "gpt-4o-mini-tts": { officialId: "gpt-4o-mini-tts", kind: "audio", tools: false, input: ["text"], output: ["audio"], contextWindow: 2000, streaming: true,
     verifiedAt: VERIFIED, sources: [`${OPENAI}models/gpt-4o-mini-tts`, `${OPENAI}guides/text-to-speech`],
     media: { operations: ["speech"], formats: ["mp3", "opus", "aac", "flac", "wav", "pcm"],
@@ -197,6 +199,7 @@ const mediaAdapters: Readonly<Record<string, string>> = {
   "gpt-image-2.5-sunburst": "donebot.images.async.v1",
   "gpt-image-2.6-flare": "donebot.images.async.v1",
   "gpt-image-2.6-sunburst": "donebot.images.async.v1",
+  "seedream-5-5": "apimart.images.v1",
   "seedream-5-0-flash": "apimart.images.v1",
   "seedance-2-0": "seedance.videos.v1",
   "seedance-2-0-fast": "seedance.videos.v1",
@@ -208,7 +211,6 @@ const mediaAdapters: Readonly<Record<string, string>> = {
 const expectedMediaInterface: Record<string, string> = { image: "openai.images", video: "openai.videos", music: "openai.music", audio: "openai.audio.speech" };
 const gptImageFields = ["model", "prompt", "images", "n", "size", "quality", "background", "output_format", "output_compression", "moderation", "response_format", "user", "safety_identifier"];
 const seedreamFields = ["model", "prompt", "image_urls", "n", "size", "resolution", "layer_decomposition", "background", "output_format", "watermark", "optimize_prompt_options"];
-const sunoFields = ["model", "prompt", "version", "custom_model_id", "custom", "instrumental", "title", "style", "negative_tags", "persona_id", "max_mode", "duration", "audio_format", "variety", "style_weight", "weirdness_constraint", "audio_weight", "auto_lyrics", "nsfw_check"];
 
 function parameterRules(native: NativeModel, adapter: unknown) {
   if (adapter === "donebot.images.async.v1") return {
@@ -224,6 +226,7 @@ function parameterRules(native: NativeModel, adapter: unknown) {
         "GIF size=auto or positive WIDTHxHEIGHT with both edges divisible by 16; the static minimum pixel count does not apply (512x512 is a documented GIF example). The provider enforces the selected model's frame/size/n pixel budget and requires GIF preview access. GIF has no streaming, partial images, masks or output_compression. Transparent output is limited to PNG/WebP.",
         "For static 2.6 images, DoneBot keeps the 2.5 pixel and edge limits as product policy; the 2.6 native registration only claims the documented alignment and ratio."] : [])],
   };
+  if (adapter === "apimart.images.v1" && native.officialId === "seedream-5-5") return seedream55ParameterRules;
   if (adapter === "apimart.images.v1") return {
     fields: seedreamFields.filter(x => x !== "model"), required: [],
     references: "generate operation: image_urls:[{local_path:'/allowed/reference.png'}]; up to 10 images for ordinary generation, exactly one for layer decomposition.",
@@ -244,22 +247,7 @@ function parameterRules(native: NativeModel, adapter: unknown) {
     ],
   };
   if (adapter === "seedance.videos.v1") return seedanceParameterRules(native);
-  if (adapter === "apimart.music.v1") return {
-    fields: sunoFields.filter(x => x !== "model"), required: [], references: "Primary music generation currently accepts text only; reference, cover and extension endpoints are unavailable.",
-    rules: ["Provide version=v6/v6-wild/v6-mini from catalog, or custom_model_id (cannot mix with version/persona_id).",
-      "For supplied lyrics, use custom=true, instrumental=false, auto_lyrics=false and put the exact lyrics in prompt, including any supplied section labels. Keep arrangement and voice descriptions in style; do not replace lyrics with a topic description or silently rewrite the person's lyrics. There is no separate lyrics-generation tool in this client.",
-      "For instrumental music, use custom=true, instrumental=true, auto_lyrics=false. Omit prompt and describe instrumentation, mood and arrangement in style; use negative_tags to exclude vocals, choir or humming if requested.",
-      "custom=false interprets prompt as inspiration and ignores title, style, negative_tags, auto_lyrics and persona_id; it does not treat prompt as supplied lyrics. auto_lyrics=true rewrites input lyrics and must stay false when lyrics are supplied or Suno lyric creation is not requested.",
-      "Prompt required except custom=true and instrumental=true. Prompt limit: 3000 Unicode characters normally; 5000 in custom mode. Custom title<=80, style<=1000. variety=off/normal/high/extra/max has no fixed default.",
-      "duration=10..360 integer target seconds and max_mode require custom=true. Actual length comes from the returned audio. audio_format=mp3/m4a/wav; omitted format is provider-selected. Weights=0..1. max_mode defaults to false; enabling it doubles the ordinary request price. Current prices and available versions come from the gateway catalog.",
-      "A generation may return multiple music[] entries; retrieve every audio_url and present them as versions of the same request, not separately submitted jobs. Do not submit again to retrieve another returned version. Inspect actual audio format/duration; returned lyrics matching prompt alone do not prove the sung words match or that an instrumental contains no voice."],
-    examples: [
-      { purpose: "Instrumental with no lyric creation", operation: "generate", parameters: { version: "v6", custom: true, instrumental: true, auto_lyrics: false,
-        title: "Instrumental example", style: "Gentle acoustic piano and warm strings, no vocals, no humming", negative_tags: "vocals, choir, humming", duration: 45, audio_format: "mp3", max_mode: false } },
-      { purpose: "Use supplied lyrics verbatim; replace the sample prompt with the person's lyrics", operation: "generate", parameters: { version: "v6", custom: true, instrumental: false, auto_lyrics: false,
-        prompt: "[Verse]\n清晨的风推开窗\n一束光落在肩上\n\n[Chorus]\n一步一步把今天点亮\n让小小愿望慢慢生长", title: "Supplied lyrics example", style: "Mandarin acoustic pop, warm clear lead vocal, guitar and piano", duration: 60, audio_format: "mp3", max_mode: false } },
-    ],
-  };
+  if (adapter === "apimart.music.v1") return sunoParameterRules;
   return undefined;
 }
 
@@ -270,9 +258,10 @@ function registeredModelCapabilities(model: DoneBotGatewayModel) {
   const supported = Boolean(matched && (native?.kind === "text" ? true : typeof adapter === "string" && mediaAdapters[model.id] === adapter));
   const clientInput = native?.input.filter(modality => native.kind === "text" ? modality === "text" || modality === "image" : native.kind !== "music" || modality === "text") ?? [];
   const operations = native?.kind === "text" ? ["conversation", ...(model.capabilities?.tool_calling === true ? ["tool_calling"] : [])] : native?.kind === "music" ? ["generate", "custom_lyrics", "instrumental"] : native?.media?.operations.filter(x => !["mask_edit", "markup_edit"].includes(x)) ?? [];
-  const fixedParameters: Record<string, unknown> | undefined = native?.kind === "video" ? { generate_audio: true } : native?.media?.complexity ? { complexity: "high" } : undefined;
+  const fixedParameters: Record<string, unknown> | undefined = native?.kind === "music" ? SUNO_FIXED_PARAMETERS : native?.kind === "video" ? { generate_audio: true } : native?.media?.complexity ? { complexity: "high" } : undefined;
+  const referenceBytes = native?.media?.referenceMedia ? native.media.referenceMedia.video.maxMegabytes * 1024 * 1024 : native?.media?.referenceImage?.maxBytes ?? MAX_MEDIA_REFERENCE_BYTES;
   return { model: model.id, native: native ?? null,
-    gateway: { capabilities: model.capabilities ?? {}, parameters: model.media_parameters ?? {}, ...(adapter === "apimart.images.v1" ? { adapterSources: [APIMART_SEEDREAM] } : adapter === "apimart.music.v1" ? { adapterSources: [APIMART_SUNO] } : {}), ...(native?.media?.mask === true ? { maskEditing: false, restriction: "DoneBot gateway forbids GPT Image mask edits.", responseFormatCompatibility: ["url", "b64_json"] } : {}) },
+    gateway: { capabilities: model.capabilities ?? {}, parameters: model.media_parameters ?? {}, ...(adapter === "apimart.images.v1" ? { adapterSources: [model.id === "seedream-5-5" ? SEEDREAM55_SOURCE : APIMART_SEEDREAM] } : adapter === "apimart.music.v1" ? { adapterSources: [APIMART_SUNO] } : {}), ...(native?.media?.mask === true ? { maskEditing: false, restriction: "DoneBot gateway forbids GPT Image mask edits.", responseFormatCompatibility: ["url", "b64_json"] } : {}) },
     client: { implemented: supported, input: clientInput, operations: supported ? operations : [],
       delivery: native?.kind === "text" || native?.kind === "audio" ? "streaming" : "async", referenceTransport: "gateway_asset_url",
       imageEditEndpoint: native?.kind === "image" && adapter === "donebot.images.async.v1", videoEditAndExtend: supported && native?.kind === "video" && native.media?.operations.includes("edit"),
@@ -283,10 +272,12 @@ function registeredModelCapabilities(model: DoneBotGatewayModel) {
         staticSizePolicy: { ...gptImage25Size } } : {}),
       ...(native?.kind === "video" ? { defaultMode: "multimodal_reference", modeSwitch: "Only when explicitly requested by the person.",
         outputFormats: native.media!.formats!.filter(format => !strings(model.media_parameters?.formats)?.length || strings(model.media_parameters?.formats)!.includes(format)),
+        unavailableNativeFeatures: [...(native.media?.draft ? ["draft"] : []), ...(native.media?.builtInTools ?? [])],
         referenceValidation: { local: ["file_type", "file_size", "reference_count", "roles", "parameter_values"], provider: ["dimensions", "aspect_ratio", "total_pixels", "codecs", "fps", "per_file_duration", "summed_duration", "portrait_authorization"] } } : {}),
-      referenceLimits: { maxFiles: native?.media?.referenceMedia?.maxTotalFiles ?? MAX_MEDIA_REFERENCE_FILES, maxBytesPerFile: MAX_MEDIA_REFERENCE_BYTES,
-        ...(native?.kind === "video" ? { conversationFileMaxBytes: MESSAGE_FILE_MAX_BYTES, generatedArtifactMaxBytes: MAX_MEDIA_REFERENCE_BYTES,
-          restriction: "The readable-file limit and per-type native byte limits both apply. Native 200 MB video support does not increase this client's readable-file limit." } : {}) },
+      ...(native?.officialId === "seedream-5-5" ? { referenceValidation: { local: ["file_type", "file_size", "reference_count", "parameter_values"], provider: ["total_pixels", "decoded_format"] } } : {}),
+      referenceLimits: { maxFiles: native?.media?.referenceMedia?.maxTotalFiles ?? native?.media?.maxReferences?.image ?? MAX_MEDIA_REFERENCE_FILES, maxBytesPerFile: referenceBytes,
+        ...(native?.kind === "video" ? { conversationFileMaxBytes: referenceBytes, generatedArtifactMaxBytes: referenceBytes,
+          restriction: "Per-type model limits and the gateway's independently configured upload policy both apply. Chat attachment upload limits are separate; larger allowed files can be read from the conversation workspace." } : {}) },
       textAudioVideoInput: false, reasoningOverride: false, longDecoding: false,
       ...(native?.outputLimits ? { maxOutputPerRequest: native.outputLimits.streamingRequest } : {}),
       ...(native ? { parameterRules: parameterRules(native, supported ? adapter : undefined) } : {}),
@@ -426,6 +417,47 @@ function validateSeedream(p: Record<string, unknown>): void {
   }
 }
 
+function validateSeedream55(p: Record<string, unknown>): void {
+  knownFields(p, SEEDREAM55_FIELDS);
+  optionalText(p.prompt, "prompt");
+  const count = referenceList(p.image_urls, 10), layer = p.layer_decomposition === true;
+  if (layer && count !== 1) fail("Layer decomposition requires exactly one image.");
+  if (!layer) requiredText(p.prompt, "prompt");
+  if (p.n !== undefined && p.n !== 1) fail("Seedream 5.5 n must be 1.");
+  if (layer && p.background !== undefined) fail("Layer decomposition cannot include background.");
+  choice(p.background, ["auto", "transparent", "opaque"], "background");
+  choice(p.output_format, ["png", "jpeg"], "output_format");
+  if (p.background === "transparent" && p.output_format === "jpeg") fail("Transparent output requires PNG.");
+  const tiers = ["auto", "1K", "1.5K", "2K"];
+  const size = p.size ?? (layer ? p.resolution : undefined);
+  if (layer) choice(size, tiers, "layer size");
+  else {
+    choice(p.resolution, tiers.slice(1), "resolution");
+    const ratio = typeof size === "string" ? size.replaceAll("x", ":") : "";
+    if (!SEEDREAM55_RATIOS.includes(ratio)) {
+      const pixels = typeof size === "string" ? /^(\d+)x(\d+)$/.exec(size) : null;
+      if (pixels) {
+        const w = Number(pixels[1]), h = Number(pixels[2]), area = w*h;
+        if (!Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w <= 0 || h <= 0 || area < 921_600 || area > 4_624_220 || w/h < 1/16 || w/h > 16) fail("Seedream pixel area or aspect ratio exceeds supported limits.");
+        if (p.resolution !== undefined) fail("Exact pixel size cannot include resolution.");
+      } else choice(size, tiers, "size");
+    }
+  }
+  if (p.layer_decomposition_options !== undefined) {
+    const options = record(p.layer_decomposition_options);
+    if (!layer || !options) fail("layer_decomposition_options requires layer_decomposition=true and an object.");
+    knownFields(options, ["max_images", "text_recognition"]);
+    integer(options.max_images, 2, 100, "max_images");
+    if (options.text_recognition !== undefined && typeof options.text_recognition !== "boolean") fail("text_recognition must be boolean.");
+  }
+  if (p.optimize_prompt_options !== undefined) {
+    const options = record(p.optimize_prompt_options);
+    if (!options) fail("optimize_prompt_options must be an object.");
+    knownFields(options, ["mode"]);
+    choice(options.mode, ["standard"], "optimize_prompt_options.mode");
+  }
+}
+
 function validateSeedance(native: NativeModel, p: Record<string, unknown>): void {
   knownFields(p, SEEDANCE_FIELDS);
   if (p.generate_audio !== undefined && p.generate_audio !== true) fail("DoneBot requires generate_audio=true.");
@@ -462,6 +494,7 @@ function validateSeedance(native: NativeModel, p: Record<string, unknown>): void
   integer(p.execution_expires_after, 3600, 259200, "execution_expires_after");
   integer(p.priority, 0, 9, "priority");
   optionalText(p.safety_identifier, "safety_identifier", 64);
+  if (typeof p.safety_identifier === "string" && !/^[ -~]*$/.test(p.safety_identifier)) fail("safety_identifier must be an ASCII identifier.");
   if (p.output_format !== undefined && !native.media?.explicitTaskTypes) fail("output_format selection is only documented for Seedance 2.5; Seedance 2.0 outputs MP4.");
   choice(p.output_format, native.media?.formats ?? [], "output_format");
   if (p.omni_reference_task_type !== undefined && !native.media?.explicitTaskTypes) fail("omni_reference_task_type is a Seedance 2.5 parameter.");
@@ -473,20 +506,23 @@ function validateSeedance(native: NativeModel, p: Record<string, unknown>): void
 }
 
 function validateSuno(p: Record<string, unknown>): void {
-  knownFields(p, sunoFields);
-  if (p.auto_lyrics !== false) fail("DoneBot Suno generation requires auto_lyrics=false; automatic lyric creation is unavailable.");
-  if (p.custom_model_id !== undefined) {
-    requiredText(p.custom_model_id, "custom_model_id");
-    if (p.version !== undefined || p.persona_id !== undefined) fail("custom_model_id cannot mix with version or persona_id.");
-  } else { requiredText(p.version, "version"); choice(p.version, ["v6", "v6-wild", "v6-mini"], "version"); }
-  if (p.custom !== true || p.instrumental !== true) requiredText(p.prompt, "prompt");
-  if (typeof p.prompt === "string" && Array.from(p.prompt).length > (p.custom === true ? 5000 : 3000)) fail("Suno prompt exceeds the gateway character limit.");
-  if (p.duration !== undefined) { if (p.custom !== true) fail("duration requires Suno custom mode."); integer(p.duration, 10, 360, "duration"); }
-  if (p.max_mode === true && p.custom !== true) fail("max_mode requires custom mode.");
-  for (const name of ["prompt", "title", "style", "negative_tags", "persona_id"]) optionalText(p[name], name);
-  if (p.custom === true) { optionalText(p.title, "title", 80); optionalText(p.style, "style", 1000); }
-  choice(p.audio_format, ["mp3", "m4a", "wav"], "audio_format");
-  choice(p.variety, ["off", "normal", "high", "extra", "max"], "variety");
+  knownFields(p, SUNO_FIELDS);
+  if (p.auto_lyrics !== false) fail("DoneBot Suno generation requires auto_lyrics=false; automatic lyric rewriting is unavailable.");
+  if (p.version !== "v6") fail("DoneBot music generation uses Suno v6 only.");
+  if (p.custom !== true) fail("DoneBot music generation requires custom mode.");
+  if (typeof p.instrumental !== "boolean") fail("Choose instrumental=true for pure music or false for songs with lyrics.");
+  if (p.instrumental) {
+    if (p.prompt !== undefined) fail("Instrumental music omits prompt; put the arrangement in style.");
+    if (p.vocal_gender !== undefined) fail("vocal_gender is only available for songs with lyrics.");
+  } else requiredText(p.prompt, "prompt (complete lyrics)");
+  optionalText(p.prompt, "prompt", SUNO_LIMITS.lyrics);
+  optionalText(p.title, "title", SUNO_LIMITS.title);
+  optionalText(p.style, "style", SUNO_LIMITS.style);
+  optionalText(p.negative_tags, "negative_tags");
+  integer(p.duration, SUNO_LIMITS.duration.min, SUNO_LIMITS.duration.max, "duration");
+  choice(p.audio_format, SUNO_FORMATS, "audio_format");
+  choice(p.variety, SUNO_VARIETIES, "variety");
+  choice(p.vocal_gender, ["Male", "Female", "m", "f", "male", "female"], "vocal_gender");
   for (const name of ["style_weight", "weirdness_constraint", "audio_weight"]) {
     const value = p[name];
     if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) fail(`${name} must be between 0 and 1.`);
@@ -505,6 +541,7 @@ export function validateMediaParameters(model: DoneBotGatewayModel, parameters: 
   if (operation === "extend" && native.kind !== "video") fail("Only video tasks can be extended.");
   gatewayChoices(model, parameters);
   if (native.kind === "image" && native.media?.mask === true) validateGptImage(native, parameters, operation);
+  else if (native.officialId === "seedream-5-5") validateSeedream55(parameters);
   else if (native.kind === "image") validateSeedream(parameters);
   else if (native.kind === "video") validateSeedance(native, parameters);
   else if (native.kind === "music") validateSuno(parameters);

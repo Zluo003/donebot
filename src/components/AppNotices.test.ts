@@ -8,6 +8,7 @@ import type { CloudAccountState, CloudPlanSnapshot } from "../../electron/cloud-
 import type { CloudOffer, CloudTrial } from "../../electron/cloud-home.mjs";
 import { withTourFinished } from "@/lib/guided-tour";
 import { setLocale } from "@/lib/i18n";
+import { DONEBOT_ONBOARDING } from "@/donebot/onboarding";
 import { EMPTY_ONBOARDING, LOCAL_VIEWER, markWelcomeFinished, MET_CHIEF_HINT, type WelcomeViewer } from "@/lib/onboarding";
 import { launchDialogShown, markLaunchDialog } from "@/lib/launch-dialogs";
 import { createDesktopPrefs, registerDesktopPrefs } from "../../electron/desktop-prefs.mjs";
@@ -140,6 +141,7 @@ const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; stora
 const hints = () => f.state.config.onboarding.hintsSeen as string[];
 
 beforeEach(() => {
+  DONEBOT_ONBOARDING.showGrokMovePrompt = false;
   vi.clearAllMocks(); vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   storage = new Map(); f.values = []; f.index = 0; f.effects = []; f.updater = null; f.brand = "default"; f.dispatch = vi.fn(); now = NOW; desk = desktopMachine();
   setLocale("en"); viewer = LOCAL_VIEWER; account = signedOut; snapshot = { status: "none" }; offer = TRIAL_OFFER;
@@ -515,7 +517,7 @@ describe("Boat's credit offer", () => {
     const draft = new URL(vi.mocked(window.ogb!.openExternal!).mock.calls[0]![0]);
     expect(`${draft.protocol}${draft.pathname}`).toBe("mailto:support@ascii.dev");
     expect(draft.searchParams.get("subject")).toBe("DoneBot introduced me: $50 Boat credit");
-    expect(draft.searchParams.get("body")!.replace(/\r\n/g, "\n")).toBe("Hi Boat team,\n\nMausBot introduced me to Boat. I'm on the $___ plan.\nMy Boat account email: ___\n\nThanks!");
+    expect(draft.searchParams.get("body")!.replace(/\r\n/g, "\n")).toBe("Hi Boat team,\n\nDoneBot introduced me to Boat. I'm on the $___ plan.\nMy Boat account email: ___\n\nThanks!");
     expect(vi.mocked(api).mock.calls.map(([path]) => path), "only the dismissal is saved").toEqual(["/api/config"]);
     expect(boatEvents()).toContainEqual({ action: "claim", place: "card" });
     await endedForGood();
@@ -974,11 +976,22 @@ describe("the Move from Grok Bot popup", () => {
   };
 
   beforeEach(() => {
+    DONEBOT_ONBOARDING.showGrokMovePrompt = true;
     modal = false;
     storage.delete(GROK_MOVE_NOTICE);
     vi.stubGlobal("document", { activeElement: null, body: null, documentElement: { dataset: {} }, getElementById: () => null,
       querySelector: (selector: string) => selector === "[data-grok-move-popup]" ? { querySelectorAll: () => [] } : null,
       querySelectorAll: () => modal ? [{ closest: () => null, checkVisibility: () => true }] : [] });
+  });
+
+  it("stays disabled in DoneBot across launches without inspecting another application's data", async () => {
+    DONEBOT_ONBOARDING.showGrokMovePrompt = false;
+    returning();
+    expect(await launch()).not.toContain(TITLE);
+    expect(await relaunch()).not.toContain(TITLE);
+    expect(events()).toEqual([]);
+    expect(reads()).toEqual([]);
+    expect(storage.has(GROK_MOVE_NOTICE)).toBe(false);
   });
 
   it("someone already here sees it at their next launch, a modal with the two marks, and it reads nothing on this computer", async () => {
@@ -1486,6 +1499,7 @@ describe("ModelGo's sponsor card", () => {
   });
 
   it("a notice to act on keeps its place: the move popup or a trial's notice comes first, and the card follows it once closed", async () => {
+    DONEBOT_ONBOARDING.showGrokMovePrompt = true;
     storage.delete(GROK_MOVE_NOTICE); returning();
     vi.stubGlobal("document", { activeElement: null, body: null, documentElement: { dataset: {} }, getElementById: () => null,
       querySelector: (selector: string) => selector === "[data-grok-move-popup]" ? { querySelectorAll: () => [] } : null, querySelectorAll: () => [] });
@@ -1609,6 +1623,7 @@ describe("Update DoneBot on your phone", () => {
   });
 
   it("is a notice to act on: ahead of the sponsor's card, which follows once it is closed, and behind the Grok Bot popup", async () => {
+    DONEBOT_ONBOARDING.showGrokMovePrompt = true;
     storage.delete(MODELGO_OFFER_NOTICE);
     expect(await launch()).toContain(TITLE);
     press("Not now"); await flush();

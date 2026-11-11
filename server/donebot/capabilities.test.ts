@@ -53,7 +53,7 @@ describe("DoneBot local model registration", () => {
       expect(result.native!.sources.length).toBeGreaterThan(0);
       for (const source of result.native!.sources) {
         expect(new URL(source).protocol).toBe("https:");
-        expect(["developers.openai.com", "platform.claude.com", "docs.cloud.google.com", "api-docs.deepseek.com", "docs.z.ai", "docs.volcengine.com", "help.suno.com"]).toContain(new URL(source).hostname);
+        expect(["developers.openai.com", "platform.claude.com", "docs.cloud.google.com", "api-docs.deepseek.com", "docs.z.ai", "docs.volcengine.com", "help.suno.com", "docs.apimart.ai"]).toContain(new URL(source).hostname);
       }
     }
     for (const id of ["gateway-new-text", "toString", "__proto__"]) {
@@ -169,10 +169,10 @@ describe("DoneBot local model registration", () => {
     expect(() => validateMediaParameters(entry, { prompt: "fixture", response_format: "url" }, "generate")).not.toThrow();
   });
 
-  it("separates Suno native editing and 480 seconds from primary gateway generation", () => {
+  it("registers only the connected Suno v6 generation contract and target duration", () => {
     const entry = media("suno");
     entry.media_parameters = { ...entry.media_parameters, duration_seconds: { min: 10, max: 360, step: 1, requires_custom: true } };
-    expect(modelCapabilities(entry)).toMatchObject({ native: { media: { duration: { max: 480 }, operations: expect.arrayContaining(["cover", "extend"]) } }, client: { input: ["text"], operations: ["generate", "custom_lyrics", "instrumental"] } });
+    expect(modelCapabilities(entry)).toMatchObject({ native: { media: { duration: { min: 10, max: 360 }, versions: ["v6"], operations: ["generate", "custom_lyrics", "instrumental"] } }, client: { input: ["text"], operations: ["generate", "custom_lyrics", "instrumental"] } });
     expect(() => validateMediaParameters(entry, { version: "v6", custom: true, instrumental: true, duration: 480 }, "generate")).toThrow("gateway model limits");
   });
 
@@ -348,10 +348,14 @@ describe("DoneBot media parameters", () => {
     expect(native.referenceMedia!.video.durationSeconds.editMin).toBe(newer ? 4 : undefined);
     expect(native.formats).toEqual(newer ? ["mp4", "mov"] : ["mp4"]);
     expect(native.audioOnlyReference).toBe(newer);
-    expect(native).not.toHaveProperty("builtInTools");
-    expect(JSON.stringify(result)).not.toMatch(/draft|web_search/);
+    expect(native.builtInTools).toEqual(["web_search"]);
+    expect(result.client.unavailableNativeFeatures).toContain("web_search");
+    if (newer) {
+      expect(native.draft).toMatchObject({ previewResolution: "480p", finalResolution: "1080p", taskTtlDays: 14, separatelyBilled: true });
+      expect(result.client.unavailableNativeFeatures).toContain("draft");
+    }
     expect(result.client).toMatchObject({ fixedParameters: { generate_audio: true }, defaultMode: "multimodal_reference",
-      referenceLimits: { maxFiles: newer ? 50 : 15, conversationFileMaxBytes: 25 * 1024 * 1024 },
+      referenceLimits: { maxFiles: newer ? 50 : 15, conversationFileMaxBytes: 200 * 1024 * 1024, maxBytesPerFile: 200 * 1024 * 1024 },
       referenceValidation: { provider: expect.arrayContaining(["dimensions", "per_file_duration", "summed_duration"]) } });
     const rules = result.client.parameterRules!;
     expect(rules.references).toContain("reference_image");
@@ -375,16 +379,28 @@ describe("DoneBot media parameters", () => {
     expect(() => validate("seedance-2-5", { content: [prompt], resolution: "720p", draft: true })).toThrow("no verified draft");
   });
 
-  it("accepts Suno custom lyrics/instrumentals and rejects unsupported media input or invalid controls", () => {
-    expect(() => validate("suno", { version: "v6", custom: true, prompt: "Synthetic lyrics", title: "Fixture", style: "ambient", duration: 360, audio_format: "wav", audio_weight: 0.5, auto_lyrics: false })).not.toThrow();
-    expect(() => validate("suno", { version: "v6-mini", custom: true, instrumental: true, auto_lyrics: false })).not.toThrow();
-    expect(() => validate("suno", { version: "v6", custom: true, prompt: "Synthetic lyrics", auto_lyrics: true })).toThrow("auto_lyrics=false");
-    expect(() => validate("suno", { version: "v6", custom: true, prompt: "Synthetic lyrics" })).toThrow("auto_lyrics=false");
-    expect(() => validate("suno", { version: "v6", custom_model_id: "fixture", prompt: "fixture", auto_lyrics: false })).toThrow("cannot mix");
-    expect(() => validate("suno", { version: "v6", prompt: "fixture", duration: 30, auto_lyrics: false })).toThrow("custom mode");
-    expect(() => validate("suno", { version: "v6", prompt: "😀".repeat(3001), auto_lyrics: false })).toThrow("character limit");
-    expect(() => validate("suno", { version: "v6", prompt: "fixture", audio_weight: 1.1, auto_lyrics: false })).toThrow("between 0 and 1");
-    expect(() => validate("suno", { version: "v6", prompt: "fixture", audio_url: "https://assets.example.test/ref.mp3", auto_lyrics: false })).toThrow("no verified audio_url");
+  it("accepts only instrumental and lyric-song modes with complete native generation controls", () => {
+    const fixed = { version: "v6", custom: true, auto_lyrics: false };
+    const song = { ...fixed, instrumental: false, prompt: "Synthetic lyrics", style: "ambient" };
+    expect(() => validate("suno", { ...song, title: "Fixture", duration: 360, audio_format: "wav", vocal_gender: "Female", audio_weight: 0.5 })).not.toThrow();
+    expect(() => validate("suno", { ...fixed, instrumental: true, style: "piano" })).not.toThrow();
+    for (const parameters of [
+      { ...song, version: "v6-mini" }, { ...song, custom: false }, { ...song, auto_lyrics: true },
+      { ...song, auto_lyrics: undefined }, { ...song, instrumental: undefined }, { ...song, prompt: "" },
+      { ...song, custom_model_id: "fixture" }, { ...song, persona_id: "fixture" },
+      { ...song, instrumental: true }, { ...fixed, instrumental: true, vocal_gender: "Female" },
+      { ...song, duration: 9 }, { ...song, duration: 361 }, { ...song, duration: 10.5 },
+      { ...song, audio_weight: 1.1 }, { ...song, style_weight: -0.01 }, { ...song, weirdness_constraint: NaN },
+      { ...song, vocal_gender: "Other" }, { ...song, audio_format: "flac" }, { ...song, variety: "automatic" },
+      { ...song, audio_url: "https://assets.example.test/ref.mp3" }, { ...song, nsfw_check: true },
+    ]) expect(() => validate("suno", parameters)).toThrow();
+    for (const vocal_gender of ["Male", "Female", "m", "f", "male", "female"]) expect(() => validate("suno", { ...song, vocal_gender })).not.toThrow();
+  });
+
+  it("counts Suno text as Unicode characters and enforces exact documented boundaries", () => {
+    const song = { version: "v6", custom: true, auto_lyrics: false, instrumental: false, prompt: "😀".repeat(5000), title: "🎵".repeat(80), style: "🎹".repeat(1000) };
+    expect(() => validate("suno", { ...song, duration: 10, style_weight: 0, audio_weight: 1, max_mode: true })).not.toThrow();
+    for (const field of ["prompt", "title", "style"] as const) expect(() => validate("suno", { ...song, [field]: song[field] + "x" })).toThrow("Unicode characters");
   });
 
   it("rejects forged model selection, malformed booleans, unknown fields and non-HTTPS references", () => {

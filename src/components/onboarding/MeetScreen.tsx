@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUp, Check, Plus } from "lucide-react";
-import { BotAvatar, MausAvatar } from "@/components/Avatar";
+import doneBotMark from "../../../branding/donebot/donebot-mark-black.svg";
 import { engineReady } from "@/components/EngineLibrary";
 import { usePrefersReducedMotion } from "@/components/mascot-clock";
 import { brand, productName } from "@/lib/brand";
 import { cn } from "@/lib/cn";
-import { DEFAULT_BOT_NAME, myDefaultBot, useViewerEmail } from "@/lib/default-bot";
 import { activeLocale, t } from "@/lib/i18n";
 import { aiChoices, aiWorks } from "@/lib/onboarding";
 import { useStore } from "@/state/store";
@@ -13,7 +12,7 @@ import { ConnectAiDialog } from "./ConnectAi";
 import { PILL, SignInPill, useSignInPill } from "./SignInPill";
 import { useWelcomeAi } from "./welcome-ai";
 
-const MASCOT_SIZE = 72;
+const LOGO_SIZE = 72;
 const PLACEHOLDER_MS = 700;
 const GRAPHEME_MS = 35;
 
@@ -35,9 +34,8 @@ function useDemoSentence(reduced: boolean): { text: string; typing: boolean; wai
   return { text: parts.slice(0, Math.max(0, shown)).join(""), typing: shown >= 0 && shown < parts.length, waiting: shown < 0 };
 }
 
-function DemoComposer({ reduced, onTyping }: { reduced: boolean; onTyping: (typing: boolean) => void }) {
+function DemoComposer({ reduced }: { reduced: boolean }) {
   const { text, typing, waiting } = useDemoSentence(reduced);
-  useEffect(() => onTyping(typing), [typing, onTyping]);
   return (
     <div aria-hidden="true" data-demo-composer=""
       className="absolute left-1/2 top-[calc(50%-14px)] flex min-h-[76px] w-[348px] max-w-[calc(100%-32px)] -translate-x-1/2 select-none flex-col gap-2.5 rounded-[22px] border-[0.5px] border-ink/10 bg-composer px-2 pb-2 pt-3 text-left [:root[data-skin=daylight]_&]:shadow-[0_2px_8px_-1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.03)]">
@@ -58,7 +56,6 @@ function DemoComposer({ reduced, onTyping }: { reduced: boolean; onTyping: (typi
 export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => void }) {
   const { state } = useStore();
   const reduced = usePrefersReducedMotion();
-  const maus = myDefaultBot(state.bots, useViewerEmail());
   // An AI counts once it answered a test message (or cannot be sent one); OpenCode's free model never does.
   const tested = useWelcomeAi(state.instances, !hosted);
   const ready = aiWorks(tested);
@@ -70,10 +67,8 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
   const { recommended } = aiChoices(state.instances.filter((instance) => instance.install && !engineReady(instance)));
   const pill = useSignInPill(recommended);
   const [dialog, setDialog] = useState(false);
-  const [typing, setTyping] = useState(false);
 
   const logo = brand().logo;
-  const face = typing ? "listening" : "idle";
   const failure = pill.error ?? (tested?.state === "failed" ? tested.error ?? t("onboarding.engines.noAnswer", { name: tested.instance.displayName }) : null);
   const signingIn = asking && !ready;
   return (
@@ -81,16 +76,14 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
       <h1 id="welcome-title" className="absolute left-1/2 top-[calc(50%-264px)] w-max max-w-[min(560px,calc(100%-32px))] -translate-x-1/2 text-[28px] font-normal leading-[34px] tracking-[-0.02em] text-ink">
         {t("onboarding.meet.title", { app: productName() })}
       </h1>
-      <span className="absolute left-1/2 top-[calc(50%-75px)] flex -translate-x-1/2 -translate-y-1/2" style={{ width: MASCOT_SIZE, height: MASCOT_SIZE }}>
+      <span className="absolute left-1/2 top-[calc(50%-75px)] flex -translate-x-1/2 -translate-y-1/2" style={{ width: LOGO_SIZE, height: LOGO_SIZE }}>
         {logo ? (
-          <img src={logo} alt="" width={MASCOT_SIZE} height={MASCOT_SIZE} className="size-full object-contain" />
-        ) : maus ? (
-          <BotAvatar bot={maus} size={MASCOT_SIZE} state={face} animated={!reduced} />
+          <img src={logo} alt={productName()} width={LOGO_SIZE} height={LOGO_SIZE} className="size-full object-contain" />
         ) : (
-          <MausAvatar color="chrome" size={MASCOT_SIZE} state={face} animated={!reduced} label={DEFAULT_BOT_NAME} />
+          <span role="img" aria-label={productName()} className="size-full bg-ink" style={{ mask: `url("${doneBotMark}") center / contain no-repeat` }} />
         )}
       </span>
-      <DemoComposer reduced={reduced} onTyping={setTyping} />
+      <DemoComposer reduced={reduced} />
       {hosted && (
         <p className="absolute left-1/2 top-[calc(50%+86px)] w-[420px] max-w-[calc(100%-32px)] -translate-x-1/2 text-[13px] leading-[18px] text-ink-secondary">
           {t("onboarding.hosted.intro")}

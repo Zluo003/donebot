@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-// The first run: two screens, then the chat. Meeting the app (and connecting an AI when none works), then the Chief of
-// Staff over the app; what it saves, where it lands, and what a reload or a replay does.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +8,7 @@ import { WHATS_NEW_NOTICE } from "@/lib/notices";
 import { EMPTY_ONBOARDING, MET_CHIEF_HINT, WELCOME_VERSION } from "@/lib/onboarding";
 import { saveWelcomeDraft } from "@/lib/welcome-draft";
 import type { InstanceInfo } from "@/state/store";
+import doneBotMark from "../../../branding/donebot/donebot-mark-black.svg";
 
 const f = vi.hoisted(() => ({ state: {} as Record<string, unknown>, dispatch: vi.fn(), api: vi.fn(), landed: vi.fn(), onDone: vi.fn(),
   checks: [] as string[] }));
@@ -25,7 +24,6 @@ vi.mock("@/components/EngineSetup", async (original) => {
 vi.mock("@/lib/default-bot", async (original) => ({ ...(await original<typeof import("@/lib/default-bot")>()), useViewerEmail: () => null }));
 vi.mock("@/lib/mausbot-landing", () => ({ FLIGHT_MS: 700, landInSidebar: (input: { botId: string; commit: () => void }) => { f.landed(input.botId); input.commit(); } }));
 const { WelcomeFlow } = await import("./WelcomeFlow");
-const { CHIEF_FADE_MS, CHIEF_GUARD_MS } = await import("./ChiefIntro");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const claude = (ready: boolean, aiTest?: InstanceInfo["aiTest"]): InstanceInfo => ({
@@ -56,12 +54,6 @@ const key = async (name: string) => {
 };
 const show = async (extra: Record<string, unknown> = {}) => {
   await act(async () => { root.render([createElement(Watch, { key: "w" }), createElement(WelcomeFlow, { key: "f", onDone: f.onDone, ...extra })]); });
-};
-/** Next, the first screen's 100 ms fade, and the Chief dialog's input guard. */
-const toChief = async (label = "Next") => {
-  await press(label);
-  await tick(100);
-  await tick(CHIEF_GUARD_MS);
 };
 const saved = () => f.api.mock.calls.filter(([path, init]) => path === "/api/config" && init?.method === "PUT").map(([, init]) => JSON.parse(init.body));
 const memoryStorage = () => {
@@ -98,26 +90,19 @@ afterEach(async () => {
 });
 
 describe("a new install's first run", () => {
-  it("is two screens with an AI already working: Next, then Create, and it lands in the Chief's chat", async () => {
+  it("shows the DoneBot logo and opens the Chief's chat directly from Next", async () => {
     await show();
     expect(host.querySelector("h1")?.textContent).toBe("Meet DoneBot");
+    expect(host.querySelector('[role="img"][aria-label="DoneBot"]')?.getAttribute("style")).toContain(doneBotMark);
     expect(host.querySelector("[data-demo-composer]")?.textContent, "reduced motion shows the whole sentence").toContain("Hand off any task to your team of bots");
     for (const gone of ["Step 1", "Back", "Skip", "Your name", "Connect an AI", "Set up later"]) expect(text()).not.toContain(gone);
     expect(button("Next")!.disabled).toBe(false);
 
     await press("Next");
-    expect(host.querySelector("[data-welcome]")?.getAttribute("data-welcome"), "the first screen fades out first").toBe("meet");
-    await tick(100);
-    expect(host.querySelector("[role=dialog]")?.textContent).toContain("Introducing your Chief of Staff");
-    expect(host.querySelector("[data-welcome]")!.className).toContain("ui-scrim");
-    expect(chiefStep, "the app behind it is the empty shell").toBe(true);
-    expect(button("Choose an existing bot"), "no bots of the person's own yet").toBeUndefined();
-
-    await tick(CHIEF_GUARD_MS);
-    await press("Create Chief of Staff");
-    expect(f.landed).toHaveBeenCalledWith("maus");
+    expect(host.querySelector("[data-chief-intro]")).toBeNull();
+    expect(button("Create Chief of Staff")).toBeUndefined();
+    expect(chiefStep).toBe(false);
     expect(f.dispatch).toHaveBeenCalledWith({ type: "updateBot", botId: "maus", patch: { welcomed: true } });
-    await tick(CHIEF_FADE_MS);
     expect(f.onDone).toHaveBeenCalledExactlyOnceWith("maus");
     expect(introStaged("maus"), "its first messages arrive one at a time").toBe(true);
     await act(async () => {});
@@ -131,10 +116,24 @@ describe("a new install's first run", () => {
     expect(host.querySelector("[data-sign-in]")).toBeNull();
   });
 
-  it("comes back to the second screen after a reload there", async () => {
+  it("resumes an older Chief-step draft at the welcome without showing the Chief dialog", async () => {
     saveWelcomeDraft({ beat: "chief" });
     await show();
-    expect(text()).toContain("Introducing your Chief of Staff");
+    expect(text()).toContain("Meet DoneBot");
+    expect(host.querySelector("[data-chief-intro]")).toBeNull();
+    await press("Next");
+    expect(f.onDone).toHaveBeenCalledExactlyOnceWith("maus");
+  });
+
+  it("uses the existing default bot as Chief and restores it to the sidebar once", async () => {
+    f.state = { ...f.state, bots: [{ ...maus, chiefOfStaff: false, sidebarHidden: true }] };
+    await show();
+    await press("Next");
+    await press("Next");
+    expect(f.dispatch.mock.calls.filter(([action]) => action.type === "updateBot")).toEqual([[{
+      type: "updateBot", botId: "maus", patch: { welcomed: true, chiefOfStaff: true, sidebarHidden: false },
+    }]]);
+    expect(f.onDone).toHaveBeenCalledExactlyOnceWith("maus");
   });
 });
 
@@ -146,6 +145,7 @@ describe("the Chief step", () => {
     expect(text()).not.toContain("Introducing your Chief of Staff");
     expect(f.onDone).toHaveBeenCalledExactlyOnceWith(null);
     expect(chiefStep).toBe(false);
+    expect(f.dispatch.mock.calls.filter(([action]) => action.type === "updateBot")).toEqual([]);
   };
 
   it("is skipped once DoneBot has met the person", async () => {
@@ -169,9 +169,7 @@ describe("What's new", () => {
     const seen = vi.fn(async () => {});
     vi.stubGlobal("ogb", { remoteClient: { active: false }, cloudAccount: { offer: vi.fn() }, desktopNotices: { seen } });
     await show();
-    await toChief();
-    await press("Create Chief of Staff");
-    await tick(CHIEF_FADE_MS);
+    await press("Next");
     await act(async () => {});
     expect(seen).not.toHaveBeenCalled();
     expect(saved()[0].onboarding.hintsSeen).toEqual([MET_CHIEF_HINT]);
@@ -188,8 +186,9 @@ describe("with no AI working yet", () => {
     expect(button("Sign in with Claude")).toBeDefined();
     expect(button("Other ways to connect")).toBeDefined();
     expect(host.querySelector("[data-engine-setup]"), "no setup card on the screen itself").toBeNull();
-    await toChief("Set up later");
-    expect(text()).toContain("Introducing your Chief of Staff");
+    await press("Set up later");
+    expect(host.querySelector("[data-chief-intro]")).toBeNull();
+    expect(f.onDone).toHaveBeenCalledExactlyOnceWith("maus");
   });
 
   it("opens every other way in the Connect an AI dialog, where OpenCode's free model is only a backup", async () => {
@@ -249,7 +248,8 @@ describe("with no AI working yet", () => {
     await act(async () => { host.querySelector("[data-connect-ai]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     await key("Escape");
     await tick(100);
-    expect(text()).toContain("Introducing your Chief of Staff");
+    expect(host.querySelector("[data-chief-intro]")).toBeNull();
+    expect(f.onDone).toHaveBeenCalledExactlyOnceWith("maus");
   });
 });
 
@@ -265,9 +265,7 @@ describe("other first runs", () => {
   it("a replay from Settings records nothing about a first chat", async () => {
     f.state = { ...f.state, config: { onboarding: { ...EMPTY_ONBOARDING, completedAt: "2026-09-01T00:00:00.000Z", version: WELCOME_VERSION } } };
     await show({ replay: true });
-    await toChief();
-    await press("Create Chief of Staff");
-    await tick(CHIEF_FADE_MS);
+    await press("Next");
     await act(async () => {});
     expect(saved()[0].onboarding).not.toHaveProperty("hintsSeen");
     expect(introStaged("maus"), "a replay lands in a chat that may be long under way").toBe(false);

@@ -1,25 +1,25 @@
 import type { ToolCallContext, ToolCallResult } from "../drivers/agents-call.ts";
 import type { Json } from "../drivers/agents-client.ts";
 import { MEDIA_REPLY_STYLE, MEDIA_PROGRESS_RULES } from "./media-replies.ts";
+import { doneBotFixedMediaModel } from "./media-registry.ts";
 
 type MediaIntent = "image" | "video" | "audio";
-const MEDIA_TOOL_RULES = `${MEDIA_REPLY_STYLE} ${MEDIA_PROGRESS_RULES} Read media_model_capabilities for the requested media kind, choose a locally supported public model that fits the task, and build its registered native request body. Pass reference files as {local_path:'/allowed/file'} only in the model's native reference fields; DoneBot uploads them to the gateway. Submit the exact public model ID and native parameters. The DoneBot API forwards and bills the request; it does not choose a model or translate a generic intent. A generation is saved as a persistent job and returns immediately. Acknowledge it once and wait for the completion receipt in this same conversation. Do not poll or resubmit queued, pending or uncertain jobs. Successful artifacts are attached to the original conversation. Repeating the same request in this turn reuses the existing operation; use variation_key only for a distinct generation explicitly requested by the person.`;
+const MEDIA_TOOL_RULES = `${MEDIA_REPLY_STYLE} ${MEDIA_PROGRESS_RULES} The client fixes the media model and provides its native parameter schema. Submit directly without model selection or capability queries. Pass reference files as {local_path:'/allowed/file'} in native reference fields. The saved asynchronous job returns immediately; acknowledge once and wait for completion in this conversation. Do not poll or resubmit a pending or uncertain job. Repeating this turn's same request reuses its job; variation_key is only for a distinct generation explicitly requested by the person.`;
 
 function generationTool(kind: MediaIntent) {
-  const operations = kind === "image" ? ["generate", "edit"]
+  const operations = kind === "image" ? ["generate"]
     : kind === "video" ? ["generate", "edit", "extend"] : ["generate"];
   return {
     name: `generate_${kind}`,
-    description: `Generate ${kind === "audio" ? "standalone audio or music" : kind} through the signed-in DoneBot account. Streaming text-to-speech remains available through the existing voice tools. ${MEDIA_TOOL_RULES}`,
+    description: `Generate ${kind === "audio" ? "instrumental music or songs with lyrics" : kind} with ${doneBotFixedMediaModel(kind)} through the signed-in DoneBot account. ${MEDIA_TOOL_RULES}`,
     inputSchema: {
       type: "object", additionalProperties: false,
       properties: {
-        model: { type: "string", minLength: 1, maxLength: 256, description: "The exact public model ID selected from media_model_capabilities for this task." },
-        operation: { type: "string", enum: operations, description: "Image/video operation. For video, also build the matching native task fields described in the selected model's capability rules." },
-        parameters: { type: "object", additionalProperties: true, description: "The selected model's native generation request fields, excluding model. Include the complete prompt/content and supported output controls. Put local_path reference objects at the native reference URL positions." },
+        operation: { type: "string", enum: operations, description: "Images, including reference edits and layer decomposition, use generate. Video edit/extend also use the matching native task fields." },
+        parameters: { type: "object", additionalProperties: true, description: "Only the selected model's verified native generation request fields, excluding model. Do not add reason or other tool metadata. Include the complete prompt/content and supported output controls. Put local_path reference objects at the native reference URL positions." },
         variation_key: { type: "string", maxLength: 80, pattern: "^[A-Za-z0-9_-]{1,80}$", description: "Only for another distinct generation explicitly requested in this turn. Reuse the same value when checking or retrying the same operation." },
       },
-      required: ["model", "parameters"],
+      required: ["parameters"],
     },
   };
 }
@@ -27,7 +27,7 @@ function generationTool(kind: MediaIntent) {
 export const DONEBOT_MEDIA_TOOL_DEFINITIONS = [
   {
     name: "media_model_capabilities",
-    description: `Read the current DoneBot gateway catalog and the client's verified native media request contracts. Call this before choosing a model or constructing a media request. A kind-only query returns all locally supported public models and their parameters, limits, examples and availability; an exact model can be requested for a focused result. This is a local read and never submits or charges a generation. ${MEDIA_REPLY_STYLE}`,
+    description: `Inspect the client's registered media contract when explicitly needed. Generation tools already contain their fixed model and native parameter schema; capability lookup is unnecessary before submission. This local read never submits or charges a generation. ${MEDIA_REPLY_STYLE}`,
     inputSchema: { type: "object", additionalProperties: false,
       properties: { kind: { type: "string", enum: ["image", "video", "audio"] }, model: { type: "string", minLength: 1, maxLength: 256 } }, required: ["kind"] },
   },
@@ -56,7 +56,7 @@ export async function callDoneBotMediaTool(name: string, args: Json, context: To
   const body = action === "capabilities"
     ? { ...(kind ? { kind: kind === "audio" ? "music" : kind } : {}), ...(model ? { model } : {}) }
     : generationKind
-      ? { kind: generationKind === "audio" ? "music" : generationKind, ...input }
+      ? { kind: generationKind === "audio" ? "music" : generationKind, ...input, model: doneBotFixedMediaModel(generationKind as MediaIntent) }
       : input;
   const { ok, body: response } = await context.client.apiResponse(`/api/internal/donebot/media/${action}`, { method: "POST", body: JSON.stringify(body) });
   return ok ? { text: JSON.stringify(response) } : { text: String(response.error ?? "DoneBot media request failed."), isError: true };

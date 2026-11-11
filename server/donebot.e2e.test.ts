@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
@@ -58,8 +58,7 @@ it("signs in to a loopback gateway, preserves native protocols and platform tool
     expect(messages.some((message: any) => message.tool?.name?.includes("list_bots") && message.tool?.ok === true)).toBe(true);
     evidence.agentsTool = "list_bots";
     gateway.setPlan([
-      { name: "media_model_capabilities", arguments: { kind: "image" } },
-      { name: "generate_image", arguments: { model: "gpt-image-2.6-flare", parameters: { prompt: "Synthetic offline fixture image", size: "1024x1024" } } },
+      { name: "generate_image", arguments: { parameters: { prompt: "Synthetic offline fixture image", size: "1024x1024" } } },
     ]);
     await successful("PATCH", `/api/bots/${bot.id}`, { toolScope: { allow: ["mcp:agents:generate_image"] } });
     await control("send", "--bot", bot.id, "--text", "Generate the synthetic offline fixture image.");
@@ -68,9 +67,9 @@ it("signs in to a loopback gateway, preserves native protocols and platform tool
       const lines = (await successful("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`)).messages;
       return lines.some((message: any) => message.attachments?.some((attachment: any) => attachment.mime === "image/png"));
     }, { timeout: 20_000 }).toBe(true);
-    const imagePosts = gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/generations/async");
+    const imagePosts = gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/generations");
     expect(imagePosts).toHaveLength(1);
-    expect(imagePosts[0]!.body).toMatchObject({ model: "gpt-image-2.6-flare", prompt: "Synthetic offline fixture image", size: "1024x1024" });
+    expect(imagePosts[0]!.body).toMatchObject({ model: "seedream-5-5", prompt: "Synthetic offline fixture image", size: "1024x1024" });
     evidence.asyncMedia = "one task; image attachment published";
     const generatedLines = (await successful("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`)).messages;
     const generatedMessage = generatedLines.find((message: any) => message.attachments?.some((attachment: any) => attachment.mime === "image/png"));
@@ -129,33 +128,45 @@ it("signs in to a loopback gateway, preserves native protocols and platform tool
     } finally { mediaStore.close(); }
     evidence.generatedArtifactAccess = "200 full content; 206 bounded/open/suffix ranges; 416 unsatisfiable; malformed full fallback; cross-conversation and other-account refusals";
     for (const variation of ["first", "second"]) {
-      gateway.setPlan([{ name: "generate_image", arguments: { model: "gpt-image-2.6-flare", operation: "edit", parameters: {
-        prompt: `Synthetic ${variation} reference edit`, size: "1024x1024", images: [{ image_url: { local_path: generatedPath } }],
+      gateway.setPlan([{ name: "generate_image", arguments: { operation: "generate", parameters: {
+        prompt: `Synthetic ${variation} reference edit`, size: "1024x1024", image_urls: [{ local_path: generatedPath }],
       } } }]);
       await control("send", "--bot", bot.id, "--text", `Edit the generated fixture image: ${variation}.`);
       expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("settled");
-      await expect.poll(() => gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/edits/async").length, { timeout: 20_000 }).toBe(variation === "first" ? 1 : 2);
+      await expect.poll(() => gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/generations" && Boolean(request.body.image_urls)).length, { timeout: 20_000 }).toBe(variation === "first" ? 1 : 2);
     }
     const uploads = gateway.requests.filter(request => request.path === "/v1/assets" && request.method === "POST");
     expect(uploads).toHaveLength(1);
     expect(uploads[0]!.body).toMatchObject({ mime: "image/png", bytes: expect.any(Number) });
     expect(gateway.requests.some(request => /^\/v1\/assets\/ast_[A-Za-z0-9]+$/.test(request.path) && request.method === "GET")).toBe(true);
-    const mediaEdits = gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/edits/async");
+    const mediaEdits = gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/generations" && Boolean(request.body.image_urls));
     expect(mediaEdits).toHaveLength(2);
-    expect(mediaEdits.every(request => (request.body.images as any[])?.[0]?.image_url === "https://assets.example.test/fixture-reference.png")).toBe(true);
+    expect(mediaEdits.every(request => (request.body.image_urls as any[])?.[0] === "https://assets.example.test/fixture-reference.png")).toBe(true);
     evidence.generatedReference = "same-conversation artifact; one upload; refreshed cached asset URL";
+    const videoReference = join(cwd, "synthetic-reference.mp4");
+    await writeFile(videoReference, new Uint8Array(33 * 1024 * 1024));
     for (const media of [
-      { tool: "generate_video", kind: "video", model: "seedance-2-5", mime: "video/mp4", path: "/v1/videos", parameters: { content: [{ type: "text", text: "Synthetic video" }], resolution: "720p", duration: 5 } },
-      { tool: "generate_audio", kind: "music", model: "suno", mime: "audio/mpeg", path: "/v1/music/generations", parameters: { prompt: "Synthetic instrumental music", version: "v6", auto_lyrics: false, instrumental: true } },
+      { tool: "generate_video", kind: "video", model: "seedance-2-5", mime: "video/mp4", path: "/v1/videos", parameters: {
+        content: [{ type: "text", text: "Synthetic video" }, { type: "video_url", video_url: { url: { local_path: videoReference } }, role: "reference_video" }], resolution: "720p", duration: 5 } },
+      { tool: "generate_audio", kind: "music", model: "suno", mime: "audio/mpeg", path: "/v1/music/generations", parameters: { style: "Synthetic instrumental piano", instrumental: true } },
+      { tool: "generate_audio", kind: "music", model: "suno", mime: "audio/mpeg", path: "/v1/music/generations", parameters: {
+        instrumental: false, prompt: "[Verse]\n保留这些歌词，不改写\n[Chorus]\n走向明天", style: "Mandarin acoustic pop", vocal_gender: "Female", duration: 60 } },
     ]) {
-      gateway.setPlan([{ name: media.tool, arguments: { model: media.model, parameters: media.parameters } }]);
+      const beforePosts = gateway.requests.filter(request => request.path === media.path && request.method === "POST").length;
+      const beforeMessages = new Set((await successful("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`)).messages.map((message: any) => message.id));
+      gateway.setPlan([{ name: media.tool, arguments: { parameters: media.parameters } }]);
       await successful("PATCH", `/api/bots/${bot.id}`, { toolScope: { allow: [`mcp:agents:${media.tool}`] } });
       await control("send", "--bot", bot.id, "--text", `Generate synthetic ${media.kind}.`);
       expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("settled");
-      await expect.poll(async () => (await successful("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`)).messages.some((message: any) => message.attachments?.some((file: any) => file.mime === media.mime)), { timeout: 20_000 }).toBe(true);
-      expect(gateway.requests.filter(request => request.path === media.path && request.method === "POST")).toHaveLength(1);
+      await expect.poll(async () => (await successful("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`)).messages.some((message: any) => !beforeMessages.has(message.id) && message.attachments?.some((file: any) => file.mime === media.mime)), { timeout: 20_000 }).toBe(true);
+      const posts = gateway.requests.filter(request => request.path === media.path && request.method === "POST");
+      expect(posts).toHaveLength(beforePosts + 1);
+      if (media.kind === "video") expect(posts.at(-1)!.body).toMatchObject({ model: "seedance-2-5", omni_reference_task_type: "reference" });
+      if (media.kind === "music") expect(posts.at(-1)!.body).toEqual({ model: "suno", version: "v6", custom: true, auto_lyrics: false, audio_format: "mp3", ...media.parameters });
     }
-    evidence.videoAndMusic = "one native POST each; artifacts delivered in original conversation";
+    expect(gateway.requests.some(request => request.path === "/v1/assets" && request.body.mime === "video/mp4" && request.body.bytes === 33 * 1024 * 1024)).toBe(true);
+    evidence.videoAndMusic = "33 MiB video reference uploaded; one video, one instrumental and one lyric-song POST; native lyrics preserved and artifacts delivered in original conversation";
+    evidence.mediaRequests = gateway.requests.filter(request => request.method === "POST" && ["/v1/videos", "/v1/music/generations", "/v1/assets"].includes(request.path)).map(({ path, body }) => ({ path, body }));
     const voice = await fetch(fixture.info.url + "/api/tts/speak", { method: "POST", headers: { origin: fixture.info.url, "content-type": "application/json" }, body: JSON.stringify({ text: "Synthetic voice fixture.", voiceId: "alloy" }) });
     expect(voice.status).toBe(200);
     expect(voice.headers.get("content-type")).toBe("audio/wav");
@@ -183,6 +194,9 @@ it("signs in to a loopback gateway, preserves native protocols and platform tool
     await control("wait", "--bot", bot.id, "--timeout", "5").catch(() => {});
     expect(gateway.requests.filter((request) => request.path.startsWith("/v1/") || request.path.startsWith("/v1beta/")).length).toBe(before);
     evidence.loggedOutBlocked = true;
+    const evidenceDir = join(process.cwd(), ".omb-scratch", "verify-evidence", "donebot-model-limits");
+    await mkdir(evidenceDir, { recursive: true });
+    await writeFile(join(evidenceDir, "result.json"), JSON.stringify(evidence, null, 2) + "\n");
     console.info(JSON.stringify({ donebotVerification: evidence }));
   } catch (error) {
     console.info(JSON.stringify({ donebotVerificationFailure: evidence, gatewayRequests: gateway.requests.map(({ path, method }) => ({ path, method })),

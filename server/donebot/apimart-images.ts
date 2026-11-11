@@ -19,6 +19,7 @@ export const apimartImages: MediaAdapter = {
         const layer = row.layer_decomposition === true && raw ? mediaLayer({ ...raw,
           size: raw.size ?? (Array.isArray(row.sizes) ? row.sizes[index] : undefined),
           output_format: raw.output_format ?? (Array.isArray(row.output_formats) ? row.output_formats[index] : undefined),
+          background: raw.background ?? (Array.isArray(row.backgrounds) ? row.backgrounds[index] : undefined),
         }) : undefined;
         return { url, ...(layer ? { layer } : {}) };
       });

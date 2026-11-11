@@ -1,13 +1,12 @@
 # Welcome flow and guided tour
 
-The first run is two screens, then the chat (Oct 27 2026): "Meet DoneBot"
-(a composer typing one sentence and Next; with no AI working, the same pill
-signs one in, with "Other ways to connect · Set up later" under it), then
-"Introducing your Chief of Staff" over an empty app (Create Chief of Staff, and
-Choose an existing bot where the person has bots). The Chief step shows only
-for a DoneBot not yet introduced where no other bot is the Chief. It lands in
-the Chief's chat, where DoneBot's three lines, its follow-up (written once by
-the server, `POST /api/bots/:id/helper-followup`) and chips offer only what is
+The first run shows "Meet DoneBot" with the DoneBot logo, a composer typing
+one sentence and Next. With no AI working, the same pill signs one in, with
+"Other ways to connect · Set up later" under it. Next reuses the existing
+default bot and Chief setup, then opens its chat directly without the Chief
+introduction dialog. Existing Chiefs are preserved. DoneBot's three lines,
+its follow-up (written once by the server, `POST /api/bots/:id/helper-followup`)
+and chips offer only what is
 still missing. The app tour starts only from Settings → Replay app tour.
 
 Launch the isolated full-app fixture following [Chat UI](chat-ui.md):
@@ -27,12 +26,13 @@ first-run onboarding through the fixture-only `?onboarding=1` entry. It uses
 the real renderer and fake-engine server. No provider login, real phone
 pairing, native permissions or user workspace is involved.
 
-Assertions cover the two screens: no field, step count, Back or Skip on the
-first; a reload on the second coming back to it; Create landing in the Chief's
+Assertions cover the DoneBot logo, no field, step count, Back or Skip on the
+welcome, reload persistence, and Next landing directly in the Chief's
 chat with its first messages and one saved follow-up even when the completion
 save fails, and the next browser without this one's mark seeing the welcome
-again, without the Chief step DoneBot already had, and saving it (with
-`met-chief-v1`); no app tour after the welcome or a reload; automatic
+again and saving it (with `met-chief-v1`). The existing default bot is reused,
+and neither the Chief introduction nor Grok Bot migration popup appears.
+There is no app tour after the welcome or a reload. Other assertions cover automatic
 starter-model selection and a successful first composer message without opening
 the model picker; every app tour step from Settings, persistence after reload,
 Settings replay, skipping while Next is saving, closing a welcome replay while
@@ -79,7 +79,7 @@ What each first-run surface depends on, and how it was checked:
 
 | Who opens the app | What they get | Checked by |
 |---|---|---|
-| Desktop app, own server (full bridge, `remoteClient` present) | The two-screen first run, decided without a new request | `src/components/onboarding/WelcomeGate.test.ts`, `src/components/onboarding/WelcomeFlow.test.ts` |
+| Desktop app, own server (full bridge, `remoteClient` present) | The welcome followed directly by the Chief's chat, decided without a new request | `src/components/onboarding/WelcomeGate.test.ts`, `src/components/onboarding/WelcomeFlow.test.ts` |
 | Hosted workspace opened inside the desktop app (reduced bridge, no `remoteClient`) | Treated like a browser: the server is asked | `src/components/onboarding/WelcomeGate.test.ts` |
 | Packaged desktop with the organization bridge | An optional "Using DoneBot at work?" row under Other ways in Connect an AI; a signed-in Company engine counts as ready | `src/components/onboarding/beats/OrganisationRow.test.ts`, `src/components/onboarding/ConnectAi.test.ts` (fake bridge) |
 | Browser, admin of a hosted workspace | The first screen only, with the shared-workspace line, then the chat | `src/components/onboarding/WelcomeGate.test.ts`, `src/components/onboarding/WelcomeFlow.test.ts`, `src/lib/onboarding.test.ts` |

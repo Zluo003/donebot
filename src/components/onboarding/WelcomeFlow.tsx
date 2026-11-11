@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { setEmailGateDone, track } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
-import { chiefStepFits, myDefaultBot, setChiefStepOpen, useViewerEmail } from "@/lib/default-bot";
+import { chiefFor, chiefStepFits, createChiefPatch, myDefaultBot, setChiefStepOpen, stageIntro, useViewerEmail } from "@/lib/default-bot";
+import { DONEBOT_ONBOARDING } from "@/donebot/onboarding";
 import { beatsFor, completionPatch, firstRunPatch, markWelcomeFinished, resumeBeat, showWelcome, type BeatId } from "@/lib/onboarding";
 import { clearWelcomeDraft, readWelcomeDraft, saveWelcomeDraft } from "@/lib/welcome-draft";
 import { api, useStore } from "@/state/store";
@@ -66,7 +67,7 @@ export function WelcomeFlow({
   // A first run keeps its screen in this browser, so a reload resumes it; a replay starts over. A hosted place's
   // browser may hold another person's draft.
   const keepsDraft = !replay && !embedded && !hosted;
-  const beats = beatsFor({ hosted });
+  const beats = beatsFor({ hosted }).filter(beat => beat !== "chief" || DONEBOT_ONBOARDING.showChiefIntro);
   const [beat, setBeat] = useState<BeatId>(() => resumeBeat(beats, initialBeat ?? (keepsDraft ? readWelcomeDraft()?.beat : undefined)));
   const root = useRef<HTMLDivElement>(null);
   const finishing = useRef(false);
@@ -106,18 +107,23 @@ export function WelcomeFlow({
 
   // The first screen fades away before the Chief step comes up; a timer moves on, since a hidden window runs no
   // animation to its end.
-  const toChief = beats.includes("chief") && chiefStepFits(state.bots, maus);
+  const toChief = !hosted && chiefStepFits(state.bots, maus);
   const leaving = useRef(false);
   const next = useCallback(() => {
     if (finishing.current || leaving.current) return;
     if (!toChief) return void finish("completed", null);
+    if (!DONEBOT_ONBOARDING.showChiefIntro && maus) {
+      if (!replay) stageIntro(maus.id);
+      dispatch({ type: "updateBot", botId: maus.id, patch: createChiefPatch(maus, chiefFor(state.bots, maus)) });
+      return void finish("completed", maus.id);
+    }
     leaving.current = true;
     root.current?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: LEAVE_MS, easing: "ease-in", fill: "forwards" });
     setTimeout(() => {
       root.current?.getAnimations().forEach((animation) => animation.cancel());
       setBeat("chief");
     }, LEAVE_MS);
-  }, [toChief, finish]);
+  }, [toChief, finish, maus, state.bots, replay, dispatch]);
 
   const chief = beat === "chief";
   useEffect(() => {

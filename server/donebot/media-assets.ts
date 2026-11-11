@@ -8,6 +8,7 @@ import { mediaScopeKey, type MediaScope } from "./media-store.ts";
 export interface MediaReferenceFile { bytes: Uint8Array; mime: string; name: string }
 export interface MediaReferencePolicy {
   maxFiles: number;
+  maxBytesPerFile?: number;
   validateFile?: (file: MediaReferenceFile) => void;
 }
 export const MAX_MEDIA_REFERENCE_FILES = 32;
@@ -24,7 +25,7 @@ export interface MediaAssetDeps {
   dbPath: string;
   scope: () => MediaScope | null | Promise<MediaScope | null>;
   fetchGateway: (path: string, init: RequestInit, expectedScope: MediaScope) => Promise<Response>;
-  resolveReference?: (context: MediaContext, path: string) => Promise<MediaReferenceFile>;
+  resolveReference?: (context: MediaContext, path: string, maxBytes: number) => Promise<MediaReferenceFile>;
   maxReferenceBytes?: number;
 }
 
@@ -89,7 +90,8 @@ export class MediaAssetCache {
 
   async prepare(context: MediaContext, scope: MediaScope, parameters: Record<string, unknown>, expected?: Record<string, unknown>, policy?: MediaReferencePolicy): Promise<{ parameters: Record<string, unknown>; fingerprint: Record<string, unknown> }> {
     let references = 0;
-    const visit = async (value: unknown, field: string, isReference: boolean, depth: number, previous?: unknown): Promise<{ value: unknown; fingerprint: unknown }> => {
+    const maxBytes = Math.min(this.deps.maxReferenceBytes ?? Infinity, policy?.maxBytesPerFile ?? MAX_MEDIA_REFERENCE_BYTES);
+    const visit = async (value: unknown, field: string, isReference: boolean, depth: number, previous?: unknown, modality?: string): Promise<{ value: unknown; fingerprint: unknown }> => {
       if (depth > 24) throw new Error("Media reference parameters are too deeply nested.");
       const data = record(value);
       if (data && "local_path" in data) {
@@ -100,9 +102,10 @@ export class MediaAssetCache {
         if (!this.deps.resolveReference) throw new Error("Local reference media is unavailable in this context.");
         if (++references > (policy?.maxFiles ?? MAX_MEDIA_REFERENCE_FILES)) throw new Error("Too many reference media files.");
         if (!context.active()) throw new Error("This turn ended before uploading reference media.");
-        const file = await this.deps.resolveReference(context, data.local_path);
+        const file = await this.deps.resolveReference(context, data.local_path, maxBytes);
         if (!context.active()) throw new Error("This turn ended before uploading reference media.");
-        if (!file.bytes.byteLength || file.bytes.byteLength > (this.deps.maxReferenceBytes ?? MAX_MEDIA_REFERENCE_BYTES) || !/^(image|video|audio)\/[a-zA-Z0-9.+-]+$/.test(file.mime)) throw new Error("Reference media has an unsupported type or size.");
+        if (!file.bytes.byteLength || file.bytes.byteLength > maxBytes || !/^(image|video|audio)\/[a-zA-Z0-9.+-]+$/.test(file.mime)) throw new Error("Reference media has an unsupported type or size.");
+        if (modality && !file.mime.startsWith(`${modality}/`)) throw new Error(`The reference file does not match its native ${modality} field.`);
         if (intentReference && !file.mime.startsWith(`${data.type}/`)) throw new Error(`The reference file does not match its declared ${data.type} type.`);
         policy?.validateFile?.(file);
         const hash = createHash("sha256").update(file.bytes).digest("hex");
@@ -122,14 +125,15 @@ export class MediaAssetCache {
       }
       if (Array.isArray(value)) {
         const entries = [];
-        for (const [index, part] of value.entries()) entries.push(await visit(part, field, isReference, depth + 1, Array.isArray(previous) ? previous[index] : undefined));
+        for (const [index, part] of value.entries()) entries.push(await visit(part, field, isReference, depth + 1, Array.isArray(previous) ? previous[index] : undefined, modality));
         return { value: entries.map(entry => entry.value), fingerprint: entries.map(entry => entry.fingerprint) };
       }
       if (data) {
         const valueEntries: [string, unknown][] = [];
         const fingerprintEntries: [string, unknown][] = [];
         for (const [key, part] of Object.entries(data)) {
-          const entry = await visit(part, key, isReference || referenceFields.has(key), depth + 1, record(previous)?.[key]);
+          const nativeModality = /^(image|video|audio)(?:_urls?|s)?$/.exec(key)?.[1] ?? modality;
+          const entry = await visit(part, key, isReference || referenceFields.has(key), depth + 1, record(previous)?.[key], nativeModality);
           valueEntries.push([key, entry.value]);
           fingerprintEntries.push([key, entry.fingerprint]);
         }

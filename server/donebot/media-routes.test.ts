@@ -78,33 +78,33 @@ describe("DoneBot media capability routes", () => {
     const product = availableTools(catalogProfileFromEnv({ DONEBOT_IMAGE_GENERATION: "1", DONEBOT_MEDIA: "1" }));
     for (const tools of [upstream, product]) expect(tools.filter(tool => tool.name === "generate_image")).toHaveLength(1);
     expect(upstream.find(tool => tool.name === "generate_image")?.inputSchema).toMatchObject({ required: ["prompt"] });
-    expect(product.find(tool => tool.name === "generate_image")?.inputSchema).toMatchObject({ required: ["model", "parameters"], properties: { parameters: { type: "object" } } });
-    expect(product.find(tool => tool.name === "generate_image")?.inputSchema.properties).toHaveProperty("model");
-    expect(fullInputSchema("generate_image", true)).toMatchObject({ required: ["model", "parameters"] });
+    expect(product.find(tool => tool.name === "generate_image")?.inputSchema).toMatchObject({ required: ["parameters"], properties: { parameters: { type: "object" } } });
+    expect(product.find(tool => tool.name === "generate_image")?.inputSchema.properties).not.toHaveProperty("model");
+    expect(fullInputSchema("generate_image", true)).toMatchObject({ required: ["parameters"] });
     expect(fullInputSchema("generate_image")).toMatchObject({ required: ["prompt"] });
-    expect(fullInputSchema("generate_audio", true)).toMatchObject({ required: ["model", "parameters"] });
+    expect(fullInputSchema("generate_audio", true)).toMatchObject({ required: ["parameters"] });
   });
 
   it("dispatches native image requests only in the DoneBot product context", async () => {
     const apiResponse = vi.fn(async (_path: string, _init?: RequestInit) => ({ ok: true, status: 202, body: { text: "fixture" } }));
     const ctx: ToolCallContext = { botId: trusted.botId, threadId: trusted.threadId, depth: 0, externalRuntime: false,
       sharedComputers: false, client: { api: async () => ({}), apiResponse } };
-    await callTool("generate_image", { model: "gpt-image-2.6-flare", parameters: { prompt: "fixture", size: "1024x1024" } }, { ...ctx, donebotMedia: true });
+    await callTool("generate_image", { parameters: { prompt: "fixture", size: "1024x1024" } }, { ...ctx, donebotMedia: true });
     expect(apiResponse.mock.calls[0]?.[0]).toBe("/api/internal/donebot/media/generate");
-    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "image", model: "gpt-image-2.6-flare", parameters: { prompt: "fixture", size: "1024x1024" } });
+    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "image", model: "seedream-5-5", parameters: { prompt: "fixture", size: "1024x1024" } });
     await callTool("generate_image", { prompt: "fixture", aspect: "1:1" }, ctx);
     expect(apiResponse.mock.calls[1]?.[0]).toBe("/api/internal/images/generate");
   });
 
   it("maps standalone audio requests to the music adapter kind", async () => {
     const apiResponse = vi.fn(async (_path: string, _init?: RequestInit) => ({ ok: true, status: 202, body: {} }));
-    const input = { model: "suno", parameters: { version: "v6", custom: true, instrumental: true, auto_lyrics: false, style: "Gentle piano" } };
+    const input = { parameters: { version: "v6", custom: true, instrumental: true, auto_lyrics: false, style: "Gentle piano" } };
     await callTool("generate_audio", input, { botId: trusted.botId, threadId: trusted.threadId, depth: 0, externalRuntime: false,
       sharedComputers: false, donebotMedia: true, client: { api: async () => ({}), apiResponse } });
     expect(apiResponse).toHaveBeenCalledTimes(1);
     expect(apiResponse.mock.calls[0]?.[0]).toBe("/api/internal/donebot/media/generate");
-    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "music", ...input });
-    expect(fullInputSchema("generate_audio", true)).toMatchObject({ required: ["model", "parameters"] });
+    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "music", model: "suno", ...input });
+    expect(fullInputSchema("generate_audio", true)).toMatchObject({ required: ["parameters"] });
   });
 
   const pending: MediaJob = {

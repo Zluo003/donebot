@@ -23,10 +23,22 @@ async function fixture(mimeForPath = (_path: string) => "image/png") {
   });
   const cache = new MediaAssetCache({ dbPath, scope: () => current, fetchGateway: send, resolveReference: async (_context, path) => ({ bytes, mime: mimeForPath(path), name: "fixture.png" }) }); caches.push(cache);
   const prepare = () => cache.prepare(context, current, { prompt: "Fixture https://example.invalid/in-prompt", image_urls: [{ local_path: "/fixture.png" }] });
-  return { cache, send, prepare, dbPath, setBytes: (value: string) => { bytes = Buffer.from(value); }, setStatus: (status: number) => { lookupStatus = status; }, setScope: (value: MediaScope) => { current = value; } };
+  return { cache, send, prepare, dbPath, setBytes: (value: string | Uint8Array) => { bytes = Buffer.from(value); }, setStatus: (status: number) => { lookupStatus = status; }, setScope: (value: MediaScope) => { current = value; } };
 }
 
 describe("DoneBot gateway reference uploads", () => {
+  it("uploads a valid video above 32 MiB using the model policy and refuses mismatched native fields", async () => {
+    const f = await fixture(() => "video/mp4");
+    f.setBytes(new Uint8Array(33 * 1024 * 1024));
+    const policy = seedanceReferencePolicy(nativeModel("seedance-2-5")!);
+    const parameters = { content: [{ type: "video_url", video_url: { url: { local_path: "/fixture.mp4" } }, role: "reference_video" }] };
+    await expect(f.cache.prepare(context, scope, parameters)).rejects.toThrow("size");
+    await expect(f.cache.prepare(context, scope, parameters, undefined, policy)).resolves.toMatchObject({ parameters: { content: [{ video_url: { url: expect.stringContaining("https://") } }] } });
+    expect(f.send.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(1);
+    await expect(f.cache.prepare(context, scope, { image_urls: [{ local_path: "/fixture.mp4" }] }, undefined, policy)).rejects.toThrow("native image field");
+    expect(f.send.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(1);
+  });
+
   it("prepares all 50 Seedance 2.5 references through scoped cache lookups without raising other models' limits", async () => {
     const f = await fixture(path => path.endsWith(".mp4") ? "video/mp4" : path.endsWith(".mp3") ? "audio/mpeg" : "image/png");
     const parameters = { image_urls: Array.from({ length: 30 }, () => ({ local_path: "/fixture.png" })),

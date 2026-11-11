@@ -13,6 +13,7 @@ export const FAKE_DONEBOT_CATALOG: DoneBotCatalog = {
   gateway_contract_version: 4, catalog_scope_id: "fixture-scope", catalog_version: "fixture-v1", defaults: { text: textModels[0]!, audio: "gpt-4o-mini-tts" },
   models: [
     ...textModels.map((id): DoneBotGatewayModel => ({ id, display_name: id, media_types: ["text"], platforms: [id.startsWith("claude") ? "anthropic" : id.startsWith("gemini") ? "gemini" : "openai"], interfaces: [id.startsWith("claude") ? "anthropic.messages" : id.startsWith("gemini") ? "gemini.generate_content" : id.startsWith("gpt") ? "openai.responses" : "openai.chat_completions"], capabilities: { tool_calling: true } })),
+    { id: "seedream-5-5", display_name: "Seedream 5.5", media_types: ["image"], interfaces: ["openai.images"], platforms: [] },
     mediaModel("gpt-image-2.5-flare", "image", "donebot.images.async.v1", { sizes: ["1024x1024"], qualities: ["auto", "low", "medium", "high"], formats: ["png", "jpeg", "webp"] }),
     ...["gpt-image-2.6-flare", "gpt-image-2.6-sunburst"].map(id => mediaModel(id, "image", "donebot.images.async.v1", { qualities: ["auto", "low", "medium", "high", "xhigh", "max"], formats: ["png", "jpeg", "webp", "gif"] })),
     mediaModel("gpt-4o-mini-tts", "audio", "apimart.speech.v1", { voices: ["alloy", "shimmer"], formats: ["pcm", "wav"] }),
@@ -40,7 +41,8 @@ export interface FakeDoneBotGateway {
 }
 const read = async (request: IncomingMessage): Promise<Row> => {
   const chunks: Buffer[] = []; let size = 0;
-  for await (const part of request) { const bytes = Buffer.from(part); size += bytes.length; if (size > 2_000_000) throw new Error("Fixture request exceeded limit"); chunks.push(bytes); }
+  const limit = request.headers["content-type"]?.startsWith("multipart/form-data") ? 201 * 1024 * 1024 : 2_000_000;
+  for await (const part of request) { const bytes = Buffer.from(part); size += bytes.length; if (size > limit) throw new Error("Fixture request exceeded limit"); chunks.push(bytes); }
   if (request.headers["content-type"]?.startsWith("multipart/form-data")) {
     const form = await new Request("http://127.0.0.1/fixture-upload", { method: "POST", headers: { "content-type": request.headers["content-type"] }, body: Uint8Array.from(Buffer.concat(chunks)) }).formData();
     const file = form.get("file");
@@ -51,7 +53,7 @@ const read = async (request: IncomingMessage): Promise<Row> => {
 const send = (response: ServerResponse, value: unknown, status = 200) => { response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
 const stream = (response: ServerResponse, events: Row[]) => { response.writeHead(200, { "content-type": "text/event-stream" }); response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")); };
 
-export async function startFakeDoneBotGateway(): Promise<FakeDoneBotGateway> {
+export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DONEBOT_CATALOG): Promise<FakeDoneBotGateway> {
   let authSettings: Row = { registration_enabled: true }, requires2fa = false;
   let templateDocuments: unknown[] | null = [];
   const requests: FakeDoneBotRequest[] = [];
@@ -72,6 +74,12 @@ export async function startFakeDoneBotGateway(): Promise<FakeDoneBotGateway> {
     const logged = { ...body, ...(body.password ? { password: "[fixture password omitted]" } : {}), ...(body.new_password ? { new_password: "[fixture password omitted]" } : {}) };
     const recorded: FakeDoneBotRequest = { path, method: request.method!, body: logged, authenticated, ...(typeof request.headers["x-donebot-installation"] === "string" ? { installation: request.headers["x-donebot-installation"] } : {}) };
     requests.push(recorded);
+    if (path === "/fixture-image.png" && request.method === "GET") {
+      const bytes = Buffer.from(png, "base64");
+      response.writeHead(200, { "content-type": "image/png", "content-length": String(bytes.byteLength) });
+      response.end(bytes);
+      return;
+    }
     if (path === "/fixture-audio.mp3" && request.method === "GET") {
       const bytes = Buffer.from("Synthetic audio artifact.");
       response.writeHead(200, { "content-type": "audio/mpeg", "content-length": String(bytes.byteLength) });
@@ -86,7 +94,7 @@ export async function startFakeDoneBotGateway(): Promise<FakeDoneBotGateway> {
     if (path === "/api/v1/auth/send-verify-code" || path === "/api/v1/auth/forgot-password") return send(response, { code: 0, data: { countdown: 60, expires_in: 900 } });
     if (path === "/api/v1/auth/reset-password") return body.email_code === "123456" ? send(response, { code: 0, data: { message: "Synthetic password updated." } }) : send(response, { reason: "INVALID_RESET_CODE" }, 400);
     if (path === "/api/v1/donebot/installations/claim") return login ? send(response, { credential: "fixture-installation-key" }) : send(response, {}, 401);
-    if (path === "/api/v1/donebot/models") return login ? send(response, FAKE_DONEBOT_CATALOG) : send(response, {}, 401);
+    if (path === "/api/v1/donebot/models") return login ? send(response, catalog) : send(response, {}, 401);
     if (path === "/api/v1/donebot/templates" || path.startsWith("/api/v1/donebot/templates/")) {
       if (!login) return send(response, {}, 401);
       if (!templateDocuments) return send(response, {}, 503);
@@ -148,6 +156,18 @@ export async function startFakeDoneBotGateway(): Promise<FakeDoneBotGateway> {
           : task.status === "failed" ? { http_status: 422, error: { code: "provider_rejected", request_id: "fixture-task-request", message: "Synthetic provider rejected the requested image format." } }
             : task.status === "uncertain" ? { http_status: 502, error: { type: "upstream_error", code: "dispatch_unknown", request_id: "fixture-native-image-request",
               message: "Synthetic provider connection closed after dispatch; completion is unconfirmed. https://private-provider.invalid/generate?token=fixture-secret api_key=fixture-private-key" } } : {}) });
+    }
+    if (path === "/v1/images/generations" && request.method === "POST") {
+      const taskId = `fixture-seedream-task-${++mediaTaskCount}`;
+      createMediaTask(taskId, "image", "image/png");
+      return send(response, { data: [{ task_id: taskId, status: "pending" }] }, 202);
+    }
+    const seedreamTask = /^\/v1\/tasks\/(fixture-seedream-task-\d+)$/.exec(path);
+    if (seedreamTask && request.method === "GET") {
+      const task = mediaTasks.get(seedreamTask[1]!);
+      if (!task) return send(response, {}, 404);
+      return send(response, { data: { id: task.taskId, status: task.status,
+        ...(task.status === "completed" ? { result: { images: [{ url: [`${origin}/fixture-image.png`] }] } } : {}) } });
     }
     if (["/v1/videos", "/v1/videos/edits", "/v1/videos/extensions"].includes(path) && request.method === "POST") {
       const taskId = `fixture-video-task-${++mediaTaskCount}`;

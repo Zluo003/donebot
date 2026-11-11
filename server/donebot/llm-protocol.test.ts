@@ -62,6 +62,19 @@ describe("DoneBot native LLM transports", () => {
     expect(replayed.contents[1]!.parts).toEqual([{ functionResponse: { name: "read", id: "provider-id", response: { result: "first receipt" } } }, { functionResponse: { name: "list", response: { result: "second receipt" } } }]);
   });
 
+  it.each([false, true])("preserves the media model in Gemini tool arguments and replay (stream=%s)", async stream => {
+    const args = { model: "seedream-5-0-flash", operation: "generate", parameters: { prompt: "Synthetic tiger", size: "2K", output_format: "png" } };
+    const payload = { candidates: [{ content: { parts: [{ functionCall: { name: "agents_generate_image", args } }] }, finishReason: "STOP" }] };
+    const result = await createDoneBotCompletion(async () => stream ? sse([payload]) : json(payload), () => "gemini")(
+      input({ model: "gemini-3.8-flash", stream }),
+    );
+    expect(JSON.parse(result.toolCalls[0]!.function.arguments)).toEqual(args);
+    const assistant: OpenAIChatMessage = { role: "assistant", content: null, tool_calls: result.toolCalls };
+    const replayed = geminiRequest(input({ model: "gemini-3.8-flash", messages: [assistant], replay: () => result.nativeOutput }));
+    expect(replayed.contents[0]!.parts[0]).toEqual({ functionCall: { name: "agents_generate_image", args } });
+    expect(args.model).toBe("seedream-5-0-flash");
+  });
+
   it("uses Responses for helpers and requests encrypted reasoning for stateless tool continuation", async () => {
     const output = [{ type: "reasoning", id: "reasoning-1", encrypted_content: "opaque-reasoning", summary: [] }, { type: "message", id: "msg-1", role: "assistant", phase: "final_answer", content: [{ type: "output_text", text: "Fixture result" }] }];
     const request = vi.fn(async (_path: string, _init: RequestInit) => sse([{ type: "response.completed", response: { output, usage: { input_tokens: 5, output_tokens: 8 } } }]));

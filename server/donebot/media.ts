@@ -56,7 +56,7 @@ export interface DoneBotMediaDeps {
   now?: () => number;
   pollMs?: number;
   maxArtifactBytes?: number;
-  resolveReference?: (context: MediaContext, path: string) => Promise<MediaReferenceFile>;
+  resolveReference?: (context: MediaContext, path: string, maxBytes: number) => Promise<MediaReferenceFile>;
   maxReferenceBytes?: number;
 }
 
@@ -427,7 +427,8 @@ export class DoneBotMediaService {
           error: `The gateway cannot establish whether the provider completed this task. Do not resubmit automatically.${diagnostic ? ` ${mediaDiagnosticText(diagnostic)}` : ""}` });
         await this.publishPendingNotice(job);
       }
-      else this.save(job, { status: "running", nextPollAt: this.now() + (this.deps.pollMs ?? 3000), attempts: 0, error: undefined, diagnostic: undefined });
+      else this.save(job, { status: "running", nextPollAt: this.now() + (this.deps.pollMs ??
+        (job.model === "seedream-5-5" && this.now() - job.createdAt >= 30_000 ? 7500 : 3000)), attempts: 0, error: undefined, diagnostic: undefined });
     } catch (error) {
       if (!this.closed) await this.retryResult(this.store.get(job.id) ?? job, error);
     }
@@ -463,7 +464,8 @@ export class DoneBotMediaService {
     const adapter = job.adapter;
     if (!adapter) throw new Error("The completed media task has no adapter.");
     const outputs = job.kind === "video" ? [null] : results(body, adapter);
-    if (!outputs.length || outputs.length > 32) throw new Error("Media task returned no usable artifacts.");
+    const maxOutputs = job.model === "seedream-5-5" && job.parameters?.layer_decomposition === true ? 100 : 32;
+    if (!outputs.length || outputs.length > maxOutputs) throw new Error("Media task returned no usable artifacts.");
     for (let index = artifacts.length; index < outputs.length; index++) {
       if (!await this.sameScope(job.scope)) return;
       let response: Response;

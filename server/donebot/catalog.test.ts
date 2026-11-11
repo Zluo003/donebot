@@ -42,7 +42,7 @@ describe("DoneBot media discovery and wrong-model recovery", () => {
       expect((error as Error).message).toContain("correct the request in this same conversation");
       expect((error as Error).message).toContain("Do not repeat the mismatched model query");
     }
-    expect(doneBotModelCapabilities(FAKE_DONEBOT_CATALOG, { kind: "image" })).toHaveLength(3);
+    expect(doneBotModelCapabilities(FAKE_DONEBOT_CATALOG, { kind: "image" })).toHaveLength(4);
     expect(doneBotModelCapabilities(FAKE_DONEBOT_CATALOG, { model: "gpt-image-2.5-flare", kind: "image" }))
       .toEqual([expect.objectContaining({ model: "gpt-image-2.5-flare", native: expect.any(Object) })]);
   });

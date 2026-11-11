@@ -28,7 +28,7 @@ describe("DoneBot media discovery and wrong-model recovery", () => {
       expect(error).toMatchObject({ status: 400 });
       expect((error as Error).message).toContain("gpt-image-2.5-flare");
       expect((error as Error).message).toContain("No paid generation was submitted");
-      expect((error as Error).message).toContain("Do not request third-party model API keys");
+      expect((error as Error).message).toContain("Do not request provider API keys to repair it");
     }
   });
 

@@ -28,12 +28,26 @@ describe("DoneBot fixed local media contracts", () => {
       expect(tool.function.parameters).toMatchObject({ required: ["parameters"] });
       expect(tool.function.parameters.properties).not.toHaveProperty("model");
     }
-    expect(guided.messages[0]?.content).toContain("Submit directly");
+    expect(guided.messages[0]?.content).toContain("submit directly");
     expect(guided.messages[0]?.content).toContain("existing voice tools");
     const image = guided.tools[0]!.function;
     expect(image.description).toContain("seedream-5-5");
     expect(image.parameters).toMatchObject({ properties: { parameters: { additionalProperties: false,
       properties: { layer_decomposition_options: { properties: { max_images: { maximum: 100 } } } } } } });
+  });
+
+  it.each([FAKE_DONEBOT_CATALOG, null])("preserves external media tools, CLI execution and saved instructions with catalog %j", catalog => {
+    const turn = input();
+    const external = ["dreamina_generate_image", "studio_generate_video", "studio_generate_music", "workspace_run", "agents_propose_profile"]
+      .map(name => ({ type: "function" as const, function: { name, description: "External fixture tool", parameters: { type: "object" } } }));
+    turn.tools.push(...external);
+    turn.messages.unshift({ role: "system", content: "For this bot, default image generation to Dreamina CLI; keep video on DoneBot." });
+    const guided = guideDoneBotMedia(turn, catalog);
+    for (const tool of external) expect(guided.tools).toContainEqual(tool);
+    expect(guided.messages.slice(1)).toEqual(turn.messages);
+    expect(guided.messages[0]?.content).toContain("the user's explicit choice for this request, the saved preference for this bot and media kind, then the built-in DoneBot gateway");
+    expect(guided.messages[0]?.content).toContain("use propose_profile");
+    expect(guided.messages[0]?.content).toContain("Do not silently switch providers");
   });
 
   it("uses local media rules even when gateway media metadata is absent or contradictory", () => {

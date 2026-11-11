@@ -35,7 +35,7 @@ vi.mock("./DesktopCapabilities", async () => {
   const { initialDesktopCapabilities } = await import("@/lib/desktop");
   return { useDesktopCapabilities: () => ({ capabilities: initialDesktopCapabilities() }), windowFramed: () => false };
 });
-vi.mock("@/lib/thread-preferences", () => ({ useShowThreads: () => fixture.advanced }));
+vi.mock("@/lib/thread-preferences", () => ({ useShowThreadsChoice: () => true, useShowThreads: () => fixture.advanced }));
 vi.mock("@/lib/interface-mode", () => ({ useAdvancedMode: () => fixture.advanced, setAdvancedMode: () => {} }));
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => fixture.admin }));
 vi.mock("@/state/store", async (importOriginal) => {
@@ -142,7 +142,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("Simple's sidebar before anyone drags", () => {
   it("looks as it did: the same sections and rows, nothing marked, each row ready to drag", () => {
-    expect(sections()).toEqual([BOTS_SECTION_ID, CHANNELS_SECTION_ID, userSectionId("Work")]);
+    expect(sections()).toEqual([CHANNELS_SECTION_ID, BOTS_SECTION_ID, userSectionId("Work")]);
     expect(listed()).toEqual(["atlas", "bea", "cleo", "dodo", "echo"]);
     for (const props of rows()) {
       expect(props.botDrop).toBeNull();
@@ -225,7 +225,7 @@ describe("dragging a bot", () => {
     expect(row("atlas").botDrop).toBe("group");
     row("atlas").botDrag!.row("atlas").onDrop(at() as never);
     expect(actions()).toEqual([]);
-    expect(sections()).toEqual([BOTS_SECTION_ID, CHANNELS_SECTION_ID, userSectionId("Work"), userSectionId(NEW_DEPARTMENT)]);
+    expect(sections()).toEqual([CHANNELS_SECTION_ID, BOTS_SECTION_ID, userSectionId("Work"), userSectionId(NEW_DEPARTMENT)]);
     const naming = header(NEW_DEPARTMENT).naming!;
     expect(naming.value).toBe("New department");
     expect(naming.label).toBe("New department name");
@@ -307,7 +307,7 @@ describe("dragging a bot", () => {
     fixture.state = { ...fixture.state, bots: fixture.state.bots.map((candidate) => ({ ...candidate, section: "Work" })) };
     expect(sections()).not.toContain(BOTS_SECTION_ID);
     drag("dodo");
-    expect(sections()[0]).toBe(BOTS_SECTION_ID);
+    expect(sections()).toContain(BOTS_SECTION_ID);
     section(BOTS_SECTION_ID).onDragOver(at() as never);
     expect(render().some((node) => node.props["data-bot-drop-slot"] !== undefined)).toBe(true);
     section(BOTS_SECTION_ID).onDrop(at() as never);
@@ -412,24 +412,22 @@ describe("who may drag a bot: whoever the bot menu offers Move to department", (
 describe("a department's menu in Simple", () => {
   const openMenu = (name: string) => {
     const button = { getBoundingClientRect: () => ({ right: 280, bottom: 300 }), focus: vi.fn(), isConnected: true } as unknown as HTMLButtonElement;
-    header(name).onMenu!(button);
+    header(name).onContextMenu!({ preventDefault() {}, clientX: 24, clientY: 304, currentTarget: { querySelector: () => button } } as never);
     return render().find((node) => node.type === TeamMenuItems)!.props as unknown as Parameters<typeof TeamMenuItems>[0];
   };
 
-  it("renames it in place", async () => {
+  it("opens the shared department rename dialog", () => {
     openMenu("Work").onRename();
-    expect(render().some((node) => node.type === TeamDialog)).toBe(false);
-    const naming = header("Work").naming!;
-    expect([naming.value, naming.label]).toEqual(["Work", "Rename Work department"]);
-    naming.onCommit("Clients");
-    await vi.waitFor(() => expect(actions()).toEqual([{ type: "sections", sections: ["Clients"] }]));
-    expect(fixture.requests).toEqual([{ path: "/api/sidebar-sections?section=Work", method: "PATCH", body: { name: "Clients" } }]);
+    const dialog = render().find((node) => node.type === TeamDialog)!;
+    expect(dialog.props.section).toBe("Work");
+    expect(dialog.props.rename).toBe(true);
+    expect(header("Work").naming).toBeUndefined();
   });
 
-  it("deletes it saying the bots stay, out of any department", () => {
+  it("deletes only the department and preserves its conversations", () => {
     openMenu("Work").onDelete();
     const dialog = render().find((node) => node.type === ConfirmDialog && node.props.open === true)!;
-    expect(dialog.props.body).toBe("Its bots and group chats stay, with their conversations, outside any department. The department and its shared instructions are deleted. This cannot be undone.");
+    expect(dialog.props.body).toBe("Bots and group chats move to General with their conversations intact. The department and its shared instructions are deleted. This cannot be undone.");
   });
 
   it("keeps Advanced's rename dialog", () => {

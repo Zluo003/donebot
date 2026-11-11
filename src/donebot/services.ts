@@ -6,6 +6,7 @@ export const UPSTREAM_SERVICES = {
   boat: false,
   mobileApps: false,
   updatesEmail: false,
+  liveCalls: false,
 };
 
 export function doneBotKeyVisible(id: string): boolean {

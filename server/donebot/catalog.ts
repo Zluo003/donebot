@@ -53,7 +53,7 @@ function unavailableMediaModel(catalog: DoneBotCatalog | null, id: string, kind:
   const native = nativeModel(id);
   throw Object.assign(new Error(`The selected ${kind} model ${JSON.stringify(id)} is unavailable for this operation.${native && native.kind !== kind ? ` It is registered for ${native.kind}, not ${kind} generation.` : ""} ${generation ? "No paid generation was submitted." : "This capability lookup did not submit generation."} ${available.length
     ? `Available verified ${kind} models: ${available.join(", ")}. Use the generation tool's registered parameter schema and correct the request in this same conversation. Do not repeat the mismatched model query. A new conversation, changing the chat model or enabling a gateway channel is not required.`
-    : `No verified ${kind} model is currently available in this account; report this specific limitation.`} This error does not establish missing provider credentials. Do not request third-party model API keys or substitute a local mockup.`), { status: 400 });
+    : `No verified ${kind} model is currently available in this account; report this specific limitation.`} This gateway error does not establish missing provider credentials. Do not request provider API keys to repair it or substitute a local mockup. A user-selected external media tool uses its own contract and authentication.`), { status: 400 });
 }
 
 export function doneBotMediaModel(catalog: DoneBotCatalog | null, id: string, kind: MediaKind): MediaResolvedModel {

@@ -110,14 +110,17 @@ export function SidebarFooterNav({
   rail = false,
   collapsed = false,
   onToggleCollapsed,
+  advancedLayout,
 }: {
   density: SidebarDensity;
   rail?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  advancedLayout?: boolean;
 }) {
   const { state, dispatch } = useStore();
-  const advanced = useAdvancedMode();
+  const interfaceAdvanced = useAdvancedMode();
+  const advanced = advancedLayout ?? interfaceAdvanced;
   const webPanels = useWebPanels();
   const iconsOnly = density === "icons";
   const toolsLayout = useSidebarToolsLayout();

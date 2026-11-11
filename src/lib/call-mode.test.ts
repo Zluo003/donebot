@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/donebot/services", async (original) => {
+  const actual = await original<typeof import("@/donebot/services")>();
+  return { ...actual, UPSTREAM_SERVICES: { ...actual.UPSTREAM_SERVICES, liveCalls: true } };
+});
+
 import { CALL_MODE_KEY, CALL_MODES, callModeHint, effectiveCallMode, liveDisclosure, parseCallMode } from "./call-mode";
 import { t } from "./i18n";
 import { localeChoices, locales } from "@/locales";

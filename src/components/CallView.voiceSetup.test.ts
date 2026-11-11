@@ -263,17 +263,18 @@ describe("setting up a voice from the call button", () => {
     ]);
   });
 
-  it("starts the Live call, not voice set-up, where the device can't take turns", () => {
+  it("keeps the call unavailable where the device can't take turns", () => {
     fixture.dictation = { available: false, reasonCode: "remote-server" };
     const getUserMedia = vi.fn(() => new Promise<MediaStream>(() => {}));
     configureLiveMedia({ getUserMedia });
     click(find(render(), "data-call-button"));
-    expect(getUserMedia).toHaveBeenCalledTimes(1);
-    expect(liveMedia()).toMatchObject({ phase: "starting", botId: "pepper", threadId: "t" });
-    expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "codex", mode: "live" });
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(liveMedia().phase).toBe("idle");
+    expect(fixture.track).not.toHaveBeenCalled();
     const after = render();
     expect(after.html).not.toContain("Set up voice");
-    expect(after.html).not.toContain("Call unavailable");
+    expect(after.html).toContain("Call unavailable");
+    expect(after.html).not.toContain("Use Live instead");
     expect(after.html).not.toContain("Choose This computer");
     expect(fixture.dialog).toBeNull();
   });

@@ -1,5 +1,6 @@
 // Its data channel may only send session.close; everything else about the call runs on the harness.
 import { useSyncExternalStore } from "react";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import type { LiveCallState, LiveEndReason } from "../../shared/wire";
 import { api, ApiError } from "@/state/store";
 import { openExternalLink } from "./app-links";
@@ -178,6 +179,7 @@ function liveClient(capabilities: DesktopCapabilities): "desktop" | "web" {
 }
 
 export async function startLiveCall(target: { botId: string; threadId: string }): Promise<void> {
+  if (!UPSTREAM_SERVICES.liveCalls) return;
   if (isLiveCallRunning(state.phase)) return;
   release();
   const mine = ++generation;

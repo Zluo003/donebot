@@ -8,6 +8,11 @@ import { createElement, useReducer, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/donebot/services", async (original) => {
+  const actual = await original<typeof import("@/donebot/services")>();
+  return { ...actual, UPSTREAM_SERVICES: { ...actual.UPSTREAM_SERVICES, liveCalls: true } };
+});
 import type { AppState, Bot, Group } from "@/state/store";
 
 type Desktop = { capabilities: DesktopCapabilities; ready: boolean };

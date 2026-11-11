@@ -37,6 +37,8 @@ export function BotContextMenu({
   onNewTaskFolder,
   onRename,
   onNewSection,
+  advancedLayout,
+  showThreads: layoutShowThreads,
 }: {
   menu: MenuState | null;
   onClose: () => void;
@@ -48,9 +50,12 @@ export function BotContextMenu({
   onRename?: (botId: string) => void;
   /** Simple: "New department…" names a department in the sidebar, with this bot in it. */
   onNewSection?: (botId: string) => void;
+  advancedLayout?: boolean;
+  showThreads?: boolean;
 }) {
   const motion = useHeldMenuMotion(menu);
-  const simpleMenu = !useAdvancedMode();
+  const interfaceAdvanced = useAdvancedMode();
+  const simpleMenu = !(advancedLayout ?? interfaceAdvanced);
   const moreRef = useRef<HTMLButtonElement>(null);
   const moveRef = useRef<HTMLButtonElement>(null);
   const flyoutRef = useRef<HTMLDivElement>(null);
@@ -68,7 +73,8 @@ export function BotContextMenu({
   const more = moreIntent.current;
   const shown = motion.value;
   const { state, dispatch } = useStore();
-  const showThreads = useShowThreads();
+  const modeShowThreads = useShowThreads();
+  const showThreads = layoutShowThreads ?? modeShowThreads;
   const admin = useOwnerOrAdmin();
   const member = admin === false;
   const mayMove = useMayMoveBots();

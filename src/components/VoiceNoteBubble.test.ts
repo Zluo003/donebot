@@ -2,6 +2,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/donebot/services", async (original) => {
+  const actual = await original<typeof import("@/donebot/services")>();
+  return { ...actual, UPSTREAM_SERVICES: { ...actual.UPSTREAM_SERVICES, liveCalls: true } };
+});
+
 const fixture = vi.hoisted(() => {
   vi.stubGlobal("window", {});
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });

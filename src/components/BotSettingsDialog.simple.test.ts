@@ -677,16 +677,16 @@ describe("the Bot settings page", () => {
     expect(patch).toHaveBeenCalledExactlyOnceWith({ soul: description, description: first });
   });
 
-  it("holds Instructions, Before it acts, Backup AIs, Call mode, Reply style, Notifications, Apps, Job and Hide, with every title on one edge", () => {
+  it("holds Instructions, Before it acts, Backup AIs, Reply style, Notifications, Apps, Job and Hide, with every title on one edge", () => {
     const rendered = settingsPage(makeBot({ defaultBot: {} }));
-    const order = ['data-panel-edit="soul"', 'data-panel-row="approval"', 'data-panel-row="backups"', 'data-panel-row="call-mode"', 'data-panel-row="reply-style"',
+    const order = ['data-panel-edit="soul"', 'data-panel-row="approval"', 'data-panel-row="backups"', 'data-panel-row="reply-style"',
       'data-panel-row="notifications"', 'data-panel-page="apps"', 'data-panel-row="job"', 'data-panel-row="default-bot-hide"']
       .map((marker) => rendered.html.indexOf(marker));
     expect(order.every((index) => index > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(switches(rendered.html)).toBe(2);
     expect(rendered.html).toContain('aria-label="Let apps talk to this bot"');
-    expect(rendered.html.match(/pl-\[38px\]/g)).toHaveLength(5);
+    expect(rendered.html.match(/pl-\[38px\]/g)).toHaveLength(4);
     for (const gone of ['data-panel-row="always-allow"', 'data-panel-row="slack"', 'data-panel-page="visibility"']) expect(rendered.html, gone).not.toContain(gone);
   });
 
@@ -836,13 +836,13 @@ describe("the Bot settings page", () => {
     expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "updateTask", botId: "scout", threadId: "thread-scout", patch: { approvalMode: "ask" } });
   });
 
-  it("chooses the call mode, Take turns or Live", () => {
-    setCallMode("turns");
+  it("hides the call mode setting while only taking turns is available", () => {
+    setCallMode("live");
     try {
-      const calls = segment(settingsPage(makeBot()), "data-call-mode");
-      expect(calls.options.map((option) => [option.value, option.label])).toEqual([["turns", "Take turns"], ["live", "Live"]]);
-      calls.onChange("live");
-      expect(callMode()).toBe("live");
+      const rendered = settingsPage(makeBot());
+      expect(rendered.html).not.toContain('data-call-mode');
+      expect(rendered.html).not.toContain('data-panel-row="call-mode"');
+      expect(callMode()).toBe("turns");
     } finally {
       setCallMode("turns");
     }

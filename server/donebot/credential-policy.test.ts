@@ -34,9 +34,35 @@ describe("DoneBot managed model credentials", () => {
     expect(doneBotCredentialRefusal("list_bots", { credential_id: "openaiApiKey" })).toBeUndefined();
   });
 
-  it.each(["Gemini speech API key", "OpenAI API key", "ElevenLabs token", "Fish Audio key", "Suno API key", "fal.ai API key", "语音合成密钥"])("refuses model credentials disguised as a custom %s card", label => {
-    expect(doneBotCredentialRefusal("request_credential", { label, delivery: "file" })).toContain("custom secrets");
+  it.each(["Gemini speech API key", "OpenAI API key", "ElevenLabs token", "Fish Audio key", "Suno API key", "fal.ai API key", "语音合成密钥"])("allows a custom %s card for an external tool while reserving built-in settings", label => {
+    expect(doneBotCredentialRefusal("request_credential", { label, reason: "Authenticate the user's selected external media tool", delivery: "file" })).toBeUndefined();
     expect(doneBotCredentialRefusal("request_credential", { credentialId: "geminiTtsKey" })).toContain("signed-in DoneBot account");
-    expect(doneBotCredentialRefusal("request_credential", { label: "API token", reason: "Use Google AI Studio for media generation" })).toBeDefined();
+    expect(doneBotCredentialRefusal("request_credential", { label: "API token", reason: "Use Google AI Studio for media generation" })).toBeUndefined();
+  });
+
+  it.each(["ref", "file"])("forwards an external media secret's %s request to the existing secure card mechanism", async delivery => {
+    const api = vi.fn(), apiResponse = vi.fn(async (_path: string, _init?: { body?: string }) => ({ ok: true, status: 201, body: { id: "fixture-card" } }));
+    const context: ToolCallContext = { botId: "fixture", threadId: "fixture", depth: 0, externalRuntime: false, sharedComputers: false,
+      donebotMedia: true, client: { api, apiResponse } };
+    const args = { label: "Suno API key", reason: "The user chose an external music tool", delivery };
+    expect((await callTool("request_credential", args, context)).isError).not.toBe(true);
+    expect(api).not.toHaveBeenCalled();
+    expect(apiResponse).toHaveBeenCalledOnce();
+    expect(JSON.parse(apiResponse.mock.calls[0]![1]!.body!)).toMatchObject(args);
+  });
+
+  it.each([
+    { label: "OpenAI API key" },
+    { label: "Gemini token", reason: "Connect a third-party chat completions endpoint" },
+    { label: "External API token", reason: "Use another LLM through an MCP server" },
+    { label: "第三方密钥", reason: "配置聊天模型" },
+    { label: "Suno API key", reason: "Also configure an external LLM" },
+  ])("refuses external LLM credentials, including custom cards: %j", async args => {
+    const api = vi.fn(), apiResponse = vi.fn();
+    const context: ToolCallContext = { botId: "fixture", threadId: "fixture", depth: 0, externalRuntime: false, sharedComputers: false,
+      donebotMedia: true, client: { api, apiResponse } };
+    expect(await callTool("request_credential", { ...args, delivery: "ref" }, context)).toMatchObject({ isError: true, text: expect.stringContaining("LLM access must") });
+    expect(api).not.toHaveBeenCalled();
+    expect(apiResponse).not.toHaveBeenCalled();
   });
 });

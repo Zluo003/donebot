@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/donebot/services", async (original) => {
+  const actual = await original<typeof import("@/donebot/services")>();
+  return { ...actual, UPSTREAM_SERVICES: { ...actual.UPSTREAM_SERVICES, liveCalls: true } };
+});
 import { currentCall } from "./call";
 import {
   applyCaption, checkLiveSignIn, configureLiveMedia, dismissStartPrompt, endNotice, handleLiveCallKey, hangUpLiveCall, isLiveCallRunning, liveCallShortcut,

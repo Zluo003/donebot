@@ -52,7 +52,8 @@ function chunkPinnedCircles<T>(items: readonly T[], columns: number): T[][] {
 }
 
 export function PinnedCircleThreadPanel(props: BotRowProps) {
-  const showThreads = useShowThreads();
+  const modeShowThreads = useShowThreads();
+  const showThreads = props.showThreads ?? modeShowThreads;
   const { bot, query, dispatch } = props;
   const visible = useVisibleMessages(bot);
   const last = lastNonReceipt(visible);
@@ -177,7 +178,8 @@ export const PinnedBotCircle = memo(function PinnedBotCircle({
   ...props
 }: BotRowProps & PinnedCircleDragProps & { threadPanelHost?: HTMLElement | null }) {
   const { bot, selected, mascotMotion, pendingQueued, reveal, density, query, dispatch, onMenu } = props;
-  const showThreads = useShowThreads();
+  const modeShowThreads = useShowThreads();
+  const showThreads = props.showThreads ?? modeShowThreads;
   const visible = useVisibleMessages(bot);
   const [threadsOpen, setThreadsOpen] = useSearchDisclosure(`bot:${bot.id}`, showThreads ? query : "", searchMatchesThreads(query, bot.tasks, bot.projects));
   // nonce, not the thread id: a second jump to the same thread opens it again

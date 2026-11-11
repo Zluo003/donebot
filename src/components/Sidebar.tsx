@@ -1,13 +1,14 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, LayoutTemplate, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, Plus, Search, SquarePen, TextQuote, Trash2, Users, X } from "lucide-react";
-import { api, useStore, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
+import { api, useStore, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Bot, type BotProject, type Group, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel, sidebarMessage } from "@/lib/live-activity";
 import { SidebarWorkingStep } from "./SidebarWorkingStep";
+import { botRowProps, type BotRowProps } from "./sidebar-bot-row";
+export { botRowProps, type BotRowProps } from "./sidebar-bot-row";
 import { openBotRow } from "@/state/thread-navigation";
-import { llmThreadTitlesEnabled } from "@/lib/feature-flags";
 
 import { BotAvatar } from "./Avatar";
 import { BotEngineMark, BotModelBadge, botTooltip } from "./BotModelBadge"; import { SidebarBotRole } from "./BotRole";
@@ -17,7 +18,7 @@ import { searchMatchesThreads, useSearchDisclosure } from "@/lib/search-disclosu
 import { useHeldMenuMotion, useMenuMotion } from "./MenuMotion";
 import { lastNonReceipt } from "@/lib/receipts";
 import { botPreview, groupPreview } from "./sidebar-preview";
-import { activeLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import type { LocaleKey } from "@/locales";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -59,8 +60,8 @@ import {
   userSectionName,
   withPrimaryTile,
 } from "@/lib/sidebar-layout";
-import { stepKey, type BotDropPlace } from "@/lib/sidebar-bot-drop";
-import { BotDropLine, botRowDropClass, useSidebarBotDrag, type BotRowDrag } from "./SidebarBotDrag";
+import { stepKey } from "@/lib/sidebar-bot-drop";
+import { BotDropLine, botRowDropClass, useSidebarBotDrag } from "./SidebarBotDrag";
 import { useSidebarSections } from "./SidebarSections";
 import { departmentNames, moveBotsToSection } from "./bot-sections";
 import { sidebarSectionAttention } from "@/lib/sidebar-attention";
@@ -84,7 +85,7 @@ import { SidebarResizeHandle, useSidebarWidth } from "./SidebarResizeHandle";
 import { PHONE_TOP_BUTTON, SIMPLE_CORNER_BUTTON, SIMPLE_ROW_FOCUS, SIMPLE_TOP_BUTTON, SidebarSearchPill, SidebarSearchToggle } from "./SidebarSimpleTop";
 import { isSidebarToggle } from "@/lib/keyboard-shortcuts";
 import { SidebarRailSeparator, SimpleRailFooter } from "./SidebarSimpleRail";
-import { useShowThreads } from "@/lib/thread-preferences";
+import { useShowThreads, useShowThreadsChoice } from "@/lib/thread-preferences";
 import { useBotUnread } from "./unread-notice";
 import { attentionHasRunningWork, attentionJumpAction, attentionUnpinAction, crossBotAttentionThreads, crossBotPinnedThreads, runningRoutineRun, SidebarBotActivity, sidebarBotActivityTasks, sidebarBotStatus } from "./SidebarBotActivity";
 import { SidebarNoBots, SidebarTileGrid } from "./SidebarTiles";
@@ -142,14 +143,17 @@ export function GroupListItem({
   density,
   query = "",
   onMenu,
+  advancedLayout,
 }: {
   group: Group;
   density: SidebarDensity;
   query?: string;
   onMenu: (menu: { groupId: string; x: number; y: number }) => void;
+  advancedLayout?: boolean;
 }) {
   const { state, dispatch } = useStore();
-  const advanced = useAdvancedMode();
+  const interfaceAdvanced = useAdvancedMode();
+  const advanced = advancedLayout ?? interfaceAdvanced;
   const selected = state.activeView === "chat" && state.selectedId === group.id;
   const [threadsOpen, setThreadsOpen] = useSearchDisclosure(`group:${group.id}`, query ?? "", searchMatchesThreads(query ?? "", group.tasks), selected);
   const wasSelected = useRef(selected);
@@ -644,60 +648,17 @@ export function BotThreadList({ bot, selected, query, pendingQueued, reveal, loc
   );
 }
 
-export interface BotRowProps {
-  bot: Bot;
-  selected: boolean;
-  deleting: boolean;
-  mascotMotion: AppState["mascotMotion"];
-  reveal: AppState["revealThread"];
-  pendingQueued: AppState["pendingQueued"];
-  instances: InstanceInfo[];
-  liveCall: AppState["liveCall"];
-  locale: string;
-  generatedTitles: boolean;
-  density: SidebarDensity;
-  query: string;
-  dispatch: Dispatch<Action>;
-  onMenu: (menu: MenuState) => void;
-  renameRequest?: number;
-  botDrag?: BotRowDrag;
-  botDrop?: BotDropPlace | null;
-  botDragging?: boolean;
-}
-
-export function botRowProps(
-  state: AppState,
-  dispatch: Dispatch<Action>,
-  bot: Bot,
-  layout: Pick<BotRowProps, "density" | "query" | "onMenu" | "renameRequest" | "botDrag" | "botDrop" | "botDragging">,
-): BotRowProps {
-  const selected = state.activeView === "chat" && state.selectedId === bot.id;
-  const reveal = state.revealThread;
-  return {
-    ...layout,
-    bot,
-    selected,
-    deleting: state.deletingBots[bot.id] === true,
-    mascotMotion: selected && state.mascotMotion?.botId === bot.id ? state.mascotMotion : null,
-    reveal: reveal && (bot.threadId === reveal.threadId || bot.tasks?.some((task) => task.threadId === reveal.threadId)) ? reveal : null,
-    pendingQueued: state.pendingQueued,
-    instances: state.instances,
-    liveCall: state.liveCall,
-    locale: activeLocale(),
-    generatedTitles: llmThreadTitlesEnabled(state.config),
-    dispatch,
-  };
-}
-
 export function useVisibleMessages(bot: Bot): Message[] {
   const { messages, activeLeafId } = bot;
   return useMemo(() => visibleMessages({ messages, activeLeafId }), [messages, activeLeafId]);
 }
 
 export const BotListItem = memo(function BotListItem(props: BotRowProps) {
-  const advanced = useAdvancedMode();
+  const interfaceAdvanced = useAdvancedMode();
+  const advanced = props.advancedLayout ?? interfaceAdvanced;
   const { bot, selected, deleting, mascotMotion, reveal, pendingQueued, instances, liveCall, density, query, dispatch, onMenu, renameRequest, botDrag: drag, botDrop: drop, botDragging: dragging } = props;
-  const showThreads = useShowThreads();
+  const modeShowThreads = useShowThreads();
+  const showThreads = props.showThreads ?? modeShowThreads;
   const liveMedia = useLiveMedia();
   const remoteClient = typeof window !== "undefined" && window.ogb?.remoteClient?.active === true;
   const [renaming, setRenaming] = useState(false);
@@ -930,7 +891,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
   const teamPeople = useTeamPeople();
   const cloudOwner = useCloudOwner(state.config?.cloudHome === true);
   const endHowTo = useCallback(() => endCloudHowTo(dispatch), [dispatch]);
-  const showThreads = useShowThreads();
+  const chosenShowThreads = useShowThreadsChoice();
   const remoteClient = window.ogb?.remoteClient?.active === true;
   const { capabilities } = useDesktopCapabilities();
   const phone = useMediaQuery(PHONE_LAYOUT, false);
@@ -967,7 +928,9 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
   const deletingRoom = deletingRoomId ? state.groups.find((g) => g.id === deletingRoomId) : undefined;
   const [plusOpen, setPlusOpen] = useState(false);
   const plusMotion = useMenuMotion(plusOpen);
-  const advanced = useAdvancedMode();
+  const interfaceAdvanced = useAdvancedMode();
+  const advanced = interfaceAdvanced || !phone;
+  const showThreads = advanced && chosenShowThreads;
   const attentionPinned = useAttentionPinned();
   const inboxSupport = useInboxSupport();
   const [newRoom, setNewRoom] = useState(false);
@@ -1138,7 +1101,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
   const attention = crossBotAttentionThreads(state.bots, state.pendingQueued, undefined, state.groups);
   const pinnedThreads = crossBotPinnedThreads(state.bots, state.groups, state.pendingQueued);
   const pendingBotUndo = teamFeedback?.restoreBot;
-  const botRow = (bot: Bot) => botRowProps(state, dispatch, bot, { density, query: q, onMenu: setMenu, renameRequest: renameRequest?.botId === bot.id ? renameRequest.nonce : 0, ...drops.row(bot.id) });
+  const botRow = (bot: Bot) => botRowProps(state, dispatch, bot, { density, query: q, onMenu: setMenu, advancedLayout: advanced, showThreads, renameRequest: renameRequest?.botId === bot.id ? renameRequest.nonce : 0, ...drops.row(bot.id) });
   const railSearch = () => {
     if (collapseToIcons) return openCommandPalette();
     setSearchOpen(true);
@@ -1467,6 +1430,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
                         density={density}
                         query={q}
                         onMenu={setRoomMenu}
+                        advancedLayout={advanced}
                       />
                     ))}
                     {id === PINNED_SECTION_ID ? (
@@ -1515,12 +1479,14 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
       {rail ? <SimpleRailFooter
         owner={cloudOwner}
         archived={archivedEntry}
-      /> : phone ? <SidebarPhoneBar query={query} onQuery={setQuery} /> : <SidebarFooter density={density} simple={simpleDesk} owner={cloudOwner} archived={archivedEntry} toolsCollapsed={sectionCollapsed(TOOLS_SECTION_ID)} onToggleTools={layoutInteractive ? () => toggleSection(TOOLS_SECTION_ID) : undefined} />}
+      /> : phone ? <SidebarPhoneBar query={query} onQuery={setQuery} /> : <SidebarFooter density={density} simple={simpleDesk} advancedLayout={advanced} owner={cloudOwner} archived={archivedEntry} toolsCollapsed={sectionCollapsed(TOOLS_SECTION_ID)} onToggleTools={layoutInteractive ? () => toggleSection(TOOLS_SECTION_ID) : undefined} />}
       </GlassBar>
       </GlassScrollFrame>
 
       <BotContextMenu
           menu={menu}
+          advancedLayout={advanced}
+          showThreads={showThreads}
           onClose={() => setMenu(null)}
           onArchive={requestArchive}
           onDelete={(bot) => setConfirm({ kind: "delete", bot })}
@@ -1621,6 +1587,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
       {newChatOpen && createPortal(
         <SidebarNewChatPanel
           anchor={sidebarRef.current}
+          showThreads={showThreads}
           style={windowNoDragStyle}
           onClose={() => setNewChatOpen(false)}
           onNewBot={teamSettingsAllowed === false ? undefined : () => { setNewChatOpen(false); dispatch({ type: "newBot" }); }}

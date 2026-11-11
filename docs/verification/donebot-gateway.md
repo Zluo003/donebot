@@ -1,5 +1,29 @@
 # DoneBot 统一网关验证
 
+## 默认网关与第三方媒体渠道
+
+LLM 始终通过 DoneBot 网关。图片、视频、音频生成可使用用户指定的 CLI、MCP 或
+技能；优先级为本次指定、该 Bot 已保存的对应媒体偏好、内置网关。内置模型 schema
+只约束网关工具，不约束第三方。指定渠道缺失、未登录或失败时报告真实状态，不自动
+切换渠道或重复生成。
+
+Bot 默认渠道复用 `propose_profile` 保存到长期指令；明确要求所有 Bot 共用的偏好
+复用 `memory_update action=prefer`。一次性选择不覆盖默认。第三方媒体需要密钥时
+使用原版自定义安全凭据卡（MCP 使用 ref，CLI 使用 file），不写入内置模型配置，
+不把 DoneBot 登录凭据交给第三方。LLM 密钥及模型直连配置继续拒绝。
+
+```sh
+pnpm exec vitest run server/donebot/media-providers.e2e.test.ts server/donebot/credential-policy.test.ts server/donebot/media-guidance.test.ts --maxWorkers=1
+```
+
+端到端用例启动隔离应用、loopback 假网关和媒体 MCP，通过脚本化 LLM 依次保存
+图片默认渠道、在新会话执行模拟媒体 CLI、一次性指定 MCP，并触发外部服务失败。
+验证长期指令进入新会话、CLI 生成 PNG、MCP 收到原生参数、默认偏好不被一次性
+选择覆盖、网关媒体提交数为 0。另有原网关用例验证 Seedream 异步提交及回传。
+这些检查证明工具接线及持久化，不证明真实 LLM 每次都会正确理解自然语言，
+也不涉及实际即梦登录或线上收费生成。证据位于
+`.omb-scratch/verify-evidence/donebot-media-providers/result.json`。
+
 ## Suno 可选时长回归
 
 2026-11-11 对照官方 Suno generation 文档及本机只读失败记录，确认客户端提交
@@ -119,7 +143,7 @@ LLM 都不会再次出现别的工具空转。
 第一条用例通过原版 control 工具创建 Bot、设置模型、发言及等待，确认 Messages、
 Responses、Gemini 和 Chat Completions 的原生文本协议能调用工作区工具及原 agents 工具；
 图片生成和同会话编辑、视频、音乐均只提交一次生成请求，结果通过会话附件投递。
-同时验证回执、范围下载、跨账号与跨会话拒绝、语音转 WAV、禁止模型密钥绕过，
+同时验证回执、范围下载、跨账号与跨会话拒绝、语音转 WAV、禁止内置模型密钥绕过，
 以及退出后不再发送模型请求。
 
 第二条用例先为两个线程固定不同于 Bot 默认值的模型，再并发发送消息，变更 Bot

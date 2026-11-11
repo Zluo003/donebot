@@ -4,6 +4,11 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/donebot/services", async (original) => {
+  const actual = await original<typeof import("@/donebot/services")>();
+  return { ...actual, UPSTREAM_SERVICES: { ...actual.UPSTREAM_SERVICES, liveCalls: true } };
+});
+
 import { endCall } from "@/lib/call";
 import { configureLiveMedia, resetLiveMedia, startLiveCall } from "@/lib/live-call-media";
 import { StoreProvider, type Bot } from "@/state/store";

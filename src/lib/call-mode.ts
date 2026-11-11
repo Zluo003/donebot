@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { LocaleKey } from "@/locales";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { desktopCapabilitiesNow } from "./desktop";
 import { t } from "./i18n";
 
@@ -8,7 +9,7 @@ export const CALL_MODE_KEY = "donebot.callMode.v1";
 
 export const CALL_MODES: ReadonlyArray<{ id: CallMode; label: LocaleKey }> = [
   { id: "turns", label: "call.mode.turns" },
-  { id: "live", label: "call.mode.live" },
+  ...(UPSTREAM_SERVICES.liveCalls ? [{ id: "live" as const, label: "call.mode.live" as const }] : []),
 ];
 
 export function liveDisclosure({ cloudHome = false, azure = false }: { cloudHome?: boolean; azure?: boolean } = {}): string {
@@ -22,11 +23,12 @@ export function callModeHint(mode: CallMode, where: { cloudHome?: boolean } = {}
 }
 
 export function effectiveCallMode(stored: CallMode, { turnsHere, canLive }: { turnsHere: boolean; canLive: boolean }): CallMode {
+  if (!UPSTREAM_SERVICES.liveCalls) return "turns";
   return canLive && !turnsHere ? "live" : stored;
 }
 
 export function parseCallMode(value: string | null): CallMode {
-  return value === "live" ? "live" : "turns";
+  return value === "live" && UPSTREAM_SERVICES.liveCalls ? "live" : "turns";
 }
 
 function readStored(): CallMode {
@@ -45,6 +47,7 @@ export function callMode(): CallMode {
 }
 
 export function setCallMode(next: CallMode): void {
+  next = parseCallMode(next);
   if (next === current) return;
   current = next;
   try {

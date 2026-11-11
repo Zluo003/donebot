@@ -4,7 +4,7 @@ import { MEDIA_REPLY_STYLE, MEDIA_PROGRESS_RULES } from "./media-replies.ts";
 import { doneBotFixedMediaModel } from "./media-registry.ts";
 
 type MediaIntent = "image" | "video" | "audio";
-const MEDIA_TOOL_RULES = `${MEDIA_REPLY_STYLE} ${MEDIA_PROGRESS_RULES} The client fixes the media model and provides its native parameter schema. Submit directly without model selection or capability queries. Pass reference files as {local_path:'/allowed/file'} in native reference fields. The saved asynchronous job returns immediately; acknowledge once and wait for completion in this conversation. Do not poll or resubmit a pending or uncertain job. Repeating this turn's same request reuses its job; variation_key is only for a distinct generation explicitly requested by the person.`;
+const MEDIA_TOOL_RULES = `${MEDIA_REPLY_STYLE} ${MEDIA_PROGRESS_RULES} Use this gateway tool by default unless the user selects another provider for this request or has saved a different provider for this media kind; use that provider's CLI, MCP or skill instead. For the gateway, the client fixes the media model and provides its native parameter schema. Submit directly without model selection or capability queries. Pass reference files as {local_path:'/allowed/file'} in native reference fields. The saved asynchronous job returns immediately; acknowledge once and wait for completion in this conversation. Do not poll or resubmit a pending or uncertain job. Repeating this turn's same request reuses its job; variation_key is only for a distinct generation explicitly requested by the person.`;
 
 function generationTool(kind: MediaIntent) {
   const operations = kind === "image" ? ["generate"]

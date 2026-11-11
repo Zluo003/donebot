@@ -42,6 +42,7 @@ export function SidebarNewChatPanel({
   onNewBot,
   onNewGroup,
   style,
+  showThreads: layoutShowThreads,
 }: {
   anchor: HTMLElement | null;
   onClose: () => void;
@@ -49,9 +50,11 @@ export function SidebarNewChatPanel({
   onNewBot?: () => void;
   onNewGroup: () => void;
   style?: CSSProperties;
+  showThreads?: boolean;
 }) {
   const { state, dispatch } = useStore();
-  const showThreads = useShowThreads();
+  const modeShowThreads = useShowThreads();
+  const showThreads = layoutShowThreads ?? modeShowThreads;
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(onNewBot ? 2 : 1);
   const [place, setPlace] = useState(() => newChatPanelPlacement(null, typeof window === "undefined" ? 0 : window.innerWidth));

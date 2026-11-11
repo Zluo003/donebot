@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-// The real mode and thread preferences: a browser put back on Advanced mode at boot sees its thread folders in the
-// sidebar again; Simple mode keeps one conversation per bot there.
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -71,11 +69,11 @@ describe("thread folders after Advanced mode comes back", () => {
     expect(document.querySelector('[data-sidebar-thread-row="loose"]')).not.toBeNull();
   });
 
-  it("hides them in Simple mode and shows them again when switched back", async () => {
+  it("keeps desktop folders available when switching between Simple and Advanced", async () => {
     flushSync(() => setAdvancedMode(false));
     await draw();
-    expect(folder()).toBeNull();
-    expect(expand()).toBeNull();
+    expect(readAdvancedMode()).toBe(false);
+    expect(folder()?.textContent).toContain("Taxes");
     flushSync(() => setAdvancedMode(true));
     await draw();
     expect(folder()?.textContent).toContain("Taxes");

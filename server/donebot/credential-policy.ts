@@ -4,18 +4,20 @@ const MANAGED_CREDENTIALS: ReadonlySet<string> = new Set([
   ...PROVIDER_CREDENTIAL_TARGETS, "xaiApiKey", "opencodeGoApiKey", "openaiImageApiKey", "ttsKey", "geminiTtsKey", "fishAudioKey",
 ]);
 
-export const DONEBOT_MODEL_CREDENTIAL_RULE = "DoneBot model and media services use the signed-in DoneBot account exclusively through https://donebot.cn. Do not request third-party model API keys, including as custom secrets. Generate images, videos and standalone audio only with DoneBot media tools; streaming speech uses DoneBot's existing voice channel. Do not bypass these services with direct supplier APIs, external media MCP servers, browser generators or installed media CLIs. The DoneBot client selects a registered public media model and builds its native request; the gateway only forwards and bills it. Report only the actual tool error; do not infer missing gateway configuration or substitute a local mockup for requested generated media. Local editing or format conversion of existing files is still allowed.";
+export const DONEBOT_MODEL_CREDENTIAL_RULE = "LLM access must use the signed-in DoneBot account through https://donebot.cn; do not connect third-party LLMs through API keys, custom secrets, CLIs or MCP. Built-in media and speech also use this account; do not request provider keys to configure or repair them. The external-provider exception is for image, video and audio generation, including music. User-selected media tools use their own authentication. For a required external media secret, use request_credential with a custom label, a reason identifying the media purpose, and delivery (ref for MCP, file for commands), not a built-in credential_id. Never pass the DoneBot credential to an external tool or ask for secrets in chat. Report actual errors and verified results.";
 
-const MODEL_SERVICE = /\b(?:openai|anthropic|openrouter|opencode|gemini|xai|x\.ai|elevenlabs|fish\s*audio|replicate|fal\.ai|apimart|suno|midjourney|deepseek|mistral|groq|cerebras|greenference|google\s*ai\s*studio|image\s*generation|text[ -]to[ -]speech|tts)\b|生图|视频生成|音乐生成|语音合成/i;
-const SECRET = /\b(?:api[ _-]?key|key|token|credential|secret)\b|密钥|秘钥|凭据/i;
+const MODEL_SERVICE = /\b(?:openai|anthropic|openrouter|opencode|gemini|xai|x\.ai|elevenlabs|fish\s*audio|replicate|fal\.ai|apimart|suno|midjourney|deepseek|mistral|groq|cerebras|greenference|google\s*ai\s*studio|tts)\b|语音合成/i;
+const LLM_PURPOSE = /\b(?:llms?|language[ -]models?|chat[ -]completions?|responses[ -]api|text[ -]generation|reasoning[ -]models?|chatbot)\b|大模型|语言模型|推理模型|聊天模型|对话模型|文本生成/i;
+const MEDIA_PURPOSE = /\b(?:image|video|audio|music|media|seedream|seedance|suno|dreamina|midjourney)\b|即梦|生图|绘图|图片|图像|视频|音频|音乐/i;
 
 export function doneBotCredentialRefusal(name: string, args: Record<string, unknown>): string | undefined {
   if (name !== "request_credential") return undefined;
   const id = args.credential_id ?? args.credentialId;
   if (typeof id === "string" && MANAGED_CREDENTIALS.has(id)) return DONEBOT_MODEL_CREDENTIAL_RULE;
-  if (id !== undefined) return undefined;
+  if (id !== undefined && id !== "") return undefined;
   const description = [args.label, args.reason, args.placeholder].filter((value): value is string => typeof value === "string").join(" ");
-  return MODEL_SERVICE.test(description) && SECRET.test(description) ? DONEBOT_MODEL_CREDENTIAL_RULE : undefined;
+  if (LLM_PURPOSE.test(description) || (MODEL_SERVICE.test(description) && !MEDIA_PURPOSE.test(description))) return DONEBOT_MODEL_CREDENTIAL_RULE;
+  return undefined;
 }
 
 export function doneBotCredentialTool<T extends { name: string; description: string; inputSchema: unknown }>(tool: T): T {

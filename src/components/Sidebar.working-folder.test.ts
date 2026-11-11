@@ -54,7 +54,8 @@ afterEach(() => {
 });
 
 describe("working folder through the rendered sidebar", () => {
-  it("opens the dialog from the bot action menu and submits a new thread with its chosen path", () => {
+  it.each([false, true])("opens the working-folder dialog and submits the selected path with Advanced %s", (advanced) => {
+    access.advanced = advanced;
     render();
     openMenu();
     expect(menuItem("New thread")).toBeDefined();
@@ -83,11 +84,5 @@ describe("working folder through the rendered sidebar", () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("keeps new-thread folder creation out of Simple mode", () => {
-    access.advanced = false;
-    render();
-    openMenu();
-    expect(menuItem("New thread")).toBeDefined();
-    expect(menuItem("New thread in a working folder…")).toBeUndefined();
-  });
+
 });

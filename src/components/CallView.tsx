@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AudioLines, Check, ChevronDown, Loader2, Phone, PhoneOff, X } from "lucide-react";
 
 import { useShowThreads } from "@/lib/thread-preferences";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { openBot, useStore, visibleMessages, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { useMenuMotion } from "./MenuMotion";
@@ -93,7 +94,7 @@ export function CallTargetButton({
   const showThreads = useShowThreads();
   const { capabilities, ready: capabilitiesReady } = useDesktopCapabilities();
   const media = useLiveMedia();
-  const liveThreadId = liveCapable ? threadId : undefined;
+  const liveThreadId = UPSTREAM_SERVICES.liveCalls && liveCapable ? threadId : undefined;
   const canLive = liveThreadId !== undefined;
   // Check Live first: startCall also marks the target as on a call.
   const liveRunning = isLiveCallRunning(media.phase);
@@ -138,7 +139,7 @@ export function CallTargetButton({
   const keyId = useId();
   const elsewhereName = liveElsewhere ? state.bots.find((candidate) => candidate.id === media.botId)?.name : undefined;
   const composer = placement === "composer";
-  const round = Boolean(fill) || Boolean(inverse) || placement === "panel";
+  const round = !UPSTREAM_SERVICES.liveCalls || Boolean(fill) || Boolean(inverse) || placement === "panel";
   const label = active
     ? t("call.hangUpOn", { name: targetName })
     : liveElsewhere

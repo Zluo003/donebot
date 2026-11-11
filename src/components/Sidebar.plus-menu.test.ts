@@ -32,7 +32,7 @@ vi.mock("./DesktopCapabilities", async () => {
   const { initialDesktopCapabilities } = await import("@/lib/desktop");
   return { useDesktopCapabilities: () => ({ capabilities: initialDesktopCapabilities() }), windowFramed: () => false };
 });
-vi.mock("@/lib/thread-preferences", () => ({ useShowThreads: () => true }));
+vi.mock("@/lib/thread-preferences", () => ({ useShowThreadsChoice: () => true, useShowThreads: () => true }));
 vi.mock("@/lib/interface-mode", () => ({ useAdvancedMode: () => false, setAdvancedMode: () => {} }));
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
@@ -62,15 +62,15 @@ function plusMenu(admin: boolean | null) {
   fixture.values = [];
   fixture.admin = admin;
   render().find((node) => node.type === "button" && String(node.props["aria-label"]).startsWith("New"))!.props.onClick!();
-  return render().filter((node) => node.props.role === "menuitem").map((node) => words(node.props.children));
+  return render().filter((node) => node.props.role === "menuitem").map((node) => words(node.props.children).trim());
 }
 
 describe("the sidebar's + menu", () => {
   it("offers a new bot and templates to someone who can make one, and while that isn't known yet", () => {
-    for (const admin of [true, null]) expect(plusMenu(admin)).toEqual(["New bot", "New group chat", "Templates"]);
+    for (const admin of [true, null]) expect(plusMenu(admin)).toEqual(["New chat", "New Bot", "New group chat", "Create department", "Templates"]);
   });
 
   it("offers neither to a User, who keeps New group chat", () => {
-    expect(plusMenu(false)).toEqual(["New group chat"]);
+    expect(plusMenu(false)).toEqual(["New chat", "New group chat"]);
   });
 });

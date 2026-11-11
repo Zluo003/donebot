@@ -78,7 +78,6 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
     dispatch({ type: "updateBot", botId: bot.id, patch: { approvalMode: mode, applyToAllThreads: true } });
   };
 
-  // As the call button: where this device cannot listen in turns, a call is always Live.
   const turnsHere = !ready || listensHere(capabilities, state.config);
   const callMode = effectiveCallMode(storedCallMode, { turnsHere, canLive: true });
   const turnsHelp = turnsHere ? null : callCapabilityHelp(capabilities, Boolean(speechBridge()?.speechStart), fishListeningReady(state.config));
@@ -193,7 +192,7 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
 
       <BackupAis bot={bot} onChange={(fallback) => patch({ fallback })} />
 
-      <Card anchor="call">
+      {CALL_MODES.length > 1 && <Card anchor="call">
         <ColRow data-panel-row="call-mode">
           <div className="flex items-center gap-2.5">
             <RowIcon icon={AudioLines} />
@@ -203,7 +202,7 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
             <Segmented attr="data-call-mode" label={t("call.mode.menu")} value={callMode} onChange={setCallMode} options={callOptions} />
           </div>
         </ColRow>
-      </Card>
+      </Card>}
 
       <Card anchor="replies">
         <ColRow data-panel-row="reply-style">

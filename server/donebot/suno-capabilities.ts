@@ -29,7 +29,7 @@ export const sunoParameterRules = {
     "Set instrumental=true for pure music: omit prompt, describe instrumentation, mood and arrangement in style; use negative_tags to exclude vocals, choir or humming if requested.",
     "Set instrumental=false for songs and put complete lyrics in prompt, including section labels. Preserve supplied lyrics verbatim. When asked to write a song without supplied lyrics, compose the lyrics in the same LLM response before calling generation; do not submit a topic as lyrics or call a lyrics service.",
     "Lyrics <=5000 Unicode characters, title<=80, style<=1000. Keep arrangement and vocal descriptions in style. vocal_gender=Male/Female is optional for songs; omit vocal controls for instrumental music.",
-    "duration=10..360 integer target seconds; actual length comes from the result. audio_format=mp3(client default)/m4a/wav. variety=off/normal/high/extra/max, no fixed default. style_weight/weirdness_constraint/audio_weight=0..1. max_mode defaults to false; true doubles the ordinary request tariff.",
+    "duration is optional: omit unless a target length is requested; when supplied it is an integer 10..360 target seconds, and actual length comes from the result. audio_format=mp3(client default)/m4a/wav. variety=off/normal/high/extra/max, no fixed default. style_weight/weirdness_constraint/audio_weight=0..1. max_mode defaults to false; true doubles the ordinary request tariff.",
     "Submit once asynchronously and collect every returned music[] variant. Do not poll or submit again to retrieve another variant. Inspect actual format/duration; returned lyrics alone do not prove the sung words match or that an instrumental has no voice."],
 };
 
@@ -42,7 +42,7 @@ export const sunoParameterSchema = {
     negative_tags: { type: "string" }, vocal_gender: { type: "string", enum: ["Male", "Female"], description: "Optional for songs; omit for instrumental music." },
     version: { type: "string", enum: ["v6"] }, custom: { type: "boolean", enum: [true] }, auto_lyrics: { type: "boolean", enum: [false] },
     max_mode: { type: "boolean", description: "Default false. Enabling doubles the request tariff." },
-    duration: { type: "integer", minimum: SUNO_LIMITS.duration.min, maximum: SUNO_LIMITS.duration.max, description: "Target seconds; actual output length can differ." },
+    duration: { type: "integer", minimum: SUNO_LIMITS.duration.min, maximum: SUNO_LIMITS.duration.max, description: "Optional target seconds; omit unless requested. Actual output length can differ." },
     audio_format: { type: "string", enum: SUNO_FORMATS }, variety: { type: "string", enum: SUNO_VARIETIES },
     style_weight: { type: "number", minimum: 0, maximum: 1 }, weirdness_constraint: { type: "number", minimum: 0, maximum: 1 }, audio_weight: { type: "number", minimum: 0, maximum: 1 },
   }, required: ["instrumental"],

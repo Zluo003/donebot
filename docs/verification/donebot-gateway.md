@@ -1,5 +1,17 @@
 # DoneBot 统一网关验证
 
+## Suno 可选时长回归
+
+2026-11-11 对照官方 Suno generation 文档及本机只读失败记录，确认客户端提交
+`custom=true/version=v6/auto_lyrics=false` 的歌曲请求未指定 `duration`，符合文档。
+网关旧校验错误地要求自定义模式必须指定时长，已在 donebot-api 修正。客户端明确
+登记时长可选，不为了通过错误校验而补固定时长。
+
+donebot-api 的 `TestDoneBotSunoCustomModesWithoutDurationReachNativeMusicEndpoint`
+串联真实目录校验和原生转发，验证歌曲及纯音乐均不补时长，原生字段保留，提交为
+`/v1/music/generations`、查询为 `/v1/music/tasks/{id}`。另覆盖音乐日志端点识别及
+明确未转发请求的上游端点留空。这些检查使用合成上游，不产生真实音乐费用。
+
 所有账号、密码、token、验证码、模型响应及生成产物使用合成 fixture。
 服务由原版 `launchVerificationServer` 启动，使用临时 HOME、数据目录、独立端口；
 fake gateway 仅监听 IPv4 loopback。不要把命令中的 fixture URL 替换成用户正在使用的应用。

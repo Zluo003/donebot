@@ -6,6 +6,7 @@ export const DONEBOT_ORIGIN = "https://donebot.cn";
 export const DONEBOT_INSTANCE_ID = "donebot";
 
 export interface DoneBotCredential {
+	mode?: "installation";
   accessToken: string;
   refreshToken?: string;
   expiresAt: number;
@@ -278,6 +279,7 @@ export class DoneBotGateway {
 
   private async validSession(): Promise<DoneBotCredential> {
     if (!this.session) throw new DoneBotGatewayError(401, "login_required", "Sign in to DoneBot to use models.");
+    if (this.session.mode === "installation") return this.session;
     if (this.session.expiresAt <= Date.now() + 30_000 && this.session.refreshToken) {
       if (!this.refreshFlight) {
         const old = this.session;
@@ -304,8 +306,8 @@ export class DoneBotGateway {
   async refreshCatalog(): Promise<DoneBotCatalog> {
     const session = await this.validSession();
     const epoch = this.epoch;
-    const res = await this.fetcher(this.origin + "/api/v1/donebot/models", { redirect: "error", credentials: "omit",
-      headers: { authorization: `Bearer ${session.accessToken}`, "X-DoneBot-Installation": session.installationId,
+    const res = await this.fetcher(this.origin + (session.mode === "installation" ? "/v1/donebot/runtime/models" : "/api/v1/donebot/models"), { redirect: "error", credentials: "omit",
+      headers: { authorization: `Bearer ${session.mode === "installation" ? session.credential : session.accessToken}`, "X-DoneBot-Installation": session.installationId,
         ...(this.etag ? { "If-None-Match": this.etag } : {}) }, signal: AbortSignal.timeout(30_000) });
     if (epoch !== this.epoch) throw new DoneBotGatewayError(409, "account_changed", "DoneBot account changed.");
     if (res.status === 304 && this.currentCatalog) return this.currentCatalog;
@@ -325,8 +327,8 @@ export class DoneBotGateway {
     if (expected && (expected.accountId !== s.user.id || expected.installationId !== s.installationId)) {
       throw new DoneBotGatewayError(409, "account_changed", "DoneBot account changed.");
     }
-    const res = await this.fetcher(this.origin + "/api/v1/donebot/" + path, { redirect: "error", credentials: "omit",
-      headers: { authorization: `Bearer ${s.accessToken}`, "X-DoneBot-Installation": s.installationId }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
+    const res = await this.fetcher(this.origin + (s.mode === "installation" ? "/v1/donebot/runtime/" : "/api/v1/donebot/") + path, { redirect: "error", credentials: "omit",
+      headers: { authorization: `Bearer ${s.mode === "installation" ? s.credential : s.accessToken}`, "X-DoneBot-Installation": s.installationId }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
     if (!res.ok) throw new DoneBotGatewayError(res.status, "account_unavailable", "DoneBot account information could not be loaded.");
     let result: unknown;
     if (maxBytes && res.body) {

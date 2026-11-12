@@ -1,5 +1,17 @@
 import type { RailAddChoices } from "../../electron/cloud-rail.mjs";
 
+export const DONEBOT_CLOUD_URL = "https://donebot.cn/cloud";
+
+export function rememberDoneBotCloud(response: Response): void {
+  if (response.headers.get("x-donebot-cloud") === "1") {
+    try { sessionStorage.setItem("donebot.cloud-browser", "1"); } catch {}
+  }
+}
+
+export function isDoneBotCloudBrowser(): boolean {
+  try { return sessionStorage.getItem("donebot.cloud-browser") === "1"; } catch { return false; }
+}
+
 export const UPSTREAM_SERVICES = {
   promotions: false,
   cloud: false,

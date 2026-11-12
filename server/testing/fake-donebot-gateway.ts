@@ -53,7 +53,7 @@ const read = async (request: IncomingMessage): Promise<Row> => {
 const send = (response: ServerResponse, value: unknown, status = 200) => { response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
 const stream = (response: ServerResponse, events: Row[]) => { response.writeHead(200, { "content-type": "text/event-stream" }); response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")); };
 
-export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DONEBOT_CATALOG): Promise<FakeDoneBotGateway> {
+export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DONEBOT_CATALOG, installationKeys = new Map<string, string>()): Promise<FakeDoneBotGateway> {
   let authSettings: Row = { registration_enabled: true }, requires2fa = false;
   let templateDocuments: unknown[] | null = [];
   const requests: FakeDoneBotRequest[] = [];
@@ -68,11 +68,14 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
   const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2Cj8AAAAASUVORK5CYII=";
   let origin = "";
   const server = createServer((request, response) => { void (async () => {
-    const path = new URL(request.url!, "http://127.0.0.1").pathname, body = await read(request);
-    const authenticated = request.headers.authorization === "Bearer fixture-installation-key";
-    const login = request.headers.authorization === "Bearer fixture-access-token";
+    const originalPath = new URL(request.url!, "http://127.0.0.1").pathname, body = await read(request);
+    const runtimeRead = originalPath.startsWith("/v1/donebot/runtime/");
+    const path = runtimeRead ? originalPath.replace("/v1/donebot/runtime/", "/api/v1/donebot/") : originalPath;
+    const installation = installationKeys.get(String(request.headers.authorization).replace(/^Bearer /, ""));
+    const authenticated = request.headers.authorization === "Bearer fixture-installation-key" || installation !== undefined;
+    const login = request.headers.authorization === "Bearer fixture-access-token" || runtimeRead && installation !== undefined && installation === request.headers["x-donebot-installation"];
     const logged = { ...body, ...(body.password ? { password: "[fixture password omitted]" } : {}), ...(body.new_password ? { new_password: "[fixture password omitted]" } : {}) };
-    const recorded: FakeDoneBotRequest = { path, method: request.method!, body: logged, authenticated, ...(typeof request.headers["x-donebot-installation"] === "string" ? { installation: request.headers["x-donebot-installation"] } : {}) };
+    const recorded: FakeDoneBotRequest = { path: originalPath, method: request.method!, body: logged, authenticated, ...(installation ? { installation } : typeof request.headers["x-donebot-installation"] === "string" ? { installation: request.headers["x-donebot-installation"] } : {}) };
     requests.push(recorded);
     if (path === "/fixture-image.png" && request.method === "GET") {
       const bytes = Buffer.from(png, "base64");

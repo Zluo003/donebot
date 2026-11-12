@@ -150,6 +150,7 @@ import {
 } from "./container-computer.ts";
 import { containerComputerMcp } from "./local-vm-box.ts";
 import { attachForTurn, saveBotAttachment } from "./bot-attachment.ts";
+import { withCloudDesktopFile } from "./cloud-desktop.ts";
 import {
   cacheUntilConfigChanges,
   ensureDirs,
@@ -11672,7 +11673,7 @@ async function localVmPayload(target: LocalVmTarget, auth: RequestAuth) {
     ...localVmViewerStatus(status, auth),
     stop_reason: localVmStopReason(target.key, status),
     commands: setupCommands(status.runtime, process.platform, target),
-    idle_timeout_ms: localVmIdleMs(),
+    idle_timeout_ms: status.idle_timeout_ms ?? localVmIdleMs(),
     mode: localVmMode(cfg),
     max_instances: localVmMaxInstances(cfg),
   };
@@ -13276,19 +13277,19 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         try {
           const vm = await attachmentVmForTurn(internalCapability);
           const outcome = await attachForTurn(internalCapability, MAX_ATTACHED_FILES_PER_TURN, {
-            save: () => {
+            save: () => withCloudDesktopFile(vm, requestedPath, async (local) => {
               return saveBotAttachment({
-                path: requestedPath,
+                path: local?.path ?? requestedPath,
                 name: requestedName,
                 // The attachment store is not a source: only the bot's own files are.
-                roots: messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR),
-                ...(vm ? { guest: { root: VM_WORKSPACE_GUEST, host: vm.workspaceDir } } : {}),
+                roots: local ? [local.root] : messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR),
+                ...(vm && !local ? { guest: { root: VM_WORKSPACE_GUEST, host: vm.workspaceDir } } : {}),
                 // Saved outside those folders this turn, never from the data dir, which holds every bot's memory and the app's state.
-                ...(internalCapability.deliversSavedFiles && internalCapability.turnStartedAt !== undefined
+                ...(!vm && internalCapability.deliversSavedFiles && internalCapability.turnStartedAt !== undefined
                   ? { savedThisTurn: { since: internalCapability.turnStartedAt, refuse: [DATA_DIR] } }
                   : {}),
               });
-            },
+            }),
             stillLive: () => internalCapabilityIsActive({ ...internalCapability, ...(vm ? { localVmTarget: vm } : {}) }) &&
               connectorThread(from.id, threadId) !== null,
             publish: (saved) => {

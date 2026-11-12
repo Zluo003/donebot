@@ -17,6 +17,7 @@ const CONTROL_LEASE = /^[A-Za-z0-9_-]{16,120}$/;
 /** Providers resolve a managed loopback endpoint, never a browser-supplied URL. */
 export interface DesktopConnection {
   port: number;
+  socketPath?: string;
   password: string | null;
   live?: () => boolean;
   touch?: () => void;
@@ -101,7 +102,7 @@ export function createDesktopViewer(deps: {
     const live = () => deps.live(auth) && deps.target(match[1])?.key === target.key && (connection.live?.() ?? true);
     if (!live()) return json(res, 401, { error: "Viewer access expired" });
     if (!holds()) return json(res, 409, { error: "Take control of this computer first" });
-    if (!Number.isInteger(connection.port) || connection.port < 1 || connection.port > 65535) {
+    if (!connection.socketPath && (!Number.isInteger(connection.port) || connection.port < 1 || connection.port > 65535)) {
       return json(res, 409, { error: "The desktop viewer is not available." });
     }
     if (!match[2]) return json(res, 200, { password: connection.password });
@@ -113,7 +114,7 @@ export function createDesktopViewer(deps: {
     }
     // Fixed host and path, port from an inspected managed container. Never forward cookies, bearer tokens, query parameters or forwarded headers.
     const upstream = request({
-      hostname: "127.0.0.1", port: connection.port, path: "/websockify",
+      ...(connection.socketPath ? { socketPath: connection.socketPath } : { hostname: "127.0.0.1", port: connection.port }), agent: false, path: "/websockify",
       headers: { Upgrade: "websocket", Connection: "Upgrade", "Sec-WebSocket-Key": key, "Sec-WebSocket-Version": "13" },
     });
     const { socket } = upgrade;

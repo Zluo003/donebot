@@ -49,6 +49,7 @@ interface Status {
   workspace_guest_path: string;
   viewer_url: string;
   idle_timeout_ms: number;
+  cloud_managed?: boolean;
   stop_reason?: "idle" | null;
   mode: "shared" | "per-bot" | "pool";
   max_instances: number;
@@ -1272,7 +1273,7 @@ export function LocalComputerSection() {
             <button
               key={mode}
               type="button"
-              disabled={!status || policyPending}
+              disabled={!status || policyPending || status.cloud_managed === true}
               onClick={() => void savePolicy(mode, status?.max_instances ?? 2)}
               className={cn(
                 "flex-1 px-3 py-2 text-[13px] disabled:opacity-50",
@@ -1302,7 +1303,7 @@ export function LocalComputerSection() {
         )}
         <LocalVmIdleTimeoutSetting
           minutes={status ? Math.round(status.idle_timeout_ms / 60_000) : DEFAULT_LOCAL_VM_IDLE_TIMEOUT_MINUTES}
-          disabled={!status || policyPending}
+          disabled={!status || policyPending || status.cloud_managed === true}
           onSave={saveIdleTimeout}
         />
         {policyPending && <div className="mt-2 flex items-center gap-1.5 text-[12px] text-ink-secondary"><Loader2 size={12} className="animate-spin" /> {t("vm.saving")}</div>}

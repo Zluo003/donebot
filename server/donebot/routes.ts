@@ -23,6 +23,7 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
       if (method === "GET" && path === "/api/donebot/account") return json(res, 200, await gateway.account());
       if (method === "GET" && path === "/api/donebot/catalog") return json(res, 200, await gateway.refreshCatalog());
       if (method !== "POST") return PASS;
+      if (process.env.DONEBOT_CLOUD_CREDENTIAL_FILE) return json(res, 403, { error: "请在 DoneBot Cloud 控制台管理此账号。" });
       const body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) throw new DoneBotGatewayError(400, "invalid_input", "Expected an account JSON object.");
       if (path === "/api/donebot/verification") return json(res, 200, await gateway.sendVerification(text(body, "email", 320).trim(), proofs(body)));

@@ -75,6 +75,8 @@ import { loadingLine } from "@/lib/app-loading";
 import { useAiSwitchKeeper } from "@/lib/ai-switch";
 import { useChiefStepOpen } from "@/lib/default-bot";
 import { useSessionEnded } from "@/lib/session-ended";
+import { isDoneBotCloudBrowser } from "@/donebot/services";
+import { DoneBotCloudSessionEnded } from "@/donebot/CloudSession";
 import { DoneBotAccountGate } from "@/donebot/Account";
 import { PairPage } from "./pair/PairPage";
 import { WebPanelPage } from "@/components/WebPanelPage";
@@ -495,6 +497,6 @@ function Application() {
 
 export default function App() {
   const ended = useSessionEnded();
-  if (ended) return <PairPage initialCode={null} reason={t("pair.sessionEnded")} />;
+  if (ended) return isDoneBotCloudBrowser() ? <DoneBotCloudSessionEnded /> : <PairPage initialCode={null} reason={t("pair.sessionEnded")} />;
   return <WorkspaceBackupRecovery><Application /></WorkspaceBackupRecovery>;
 }

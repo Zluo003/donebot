@@ -281,7 +281,9 @@ export async function launchVerificationServer(
   /** Programmatic web UI qualification against the fixture's static server. */
   staticDir?: string,
   donebotFixtureOrigin?: string,
+  donebotCloudCredential?: { installationId: string; credential: string; user: { id: string; email: string } },
 ): Promise<VerificationServer> {
+  if (donebotCloudCredential && !donebotFixtureOrigin) throw new ControlOmbError("Cloud credential verification requires an isolated gateway");
   if (donebotFixtureOrigin && !/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(donebotFixtureOrigin)) throw new ControlOmbError("DoneBot verification requires an explicit loopback gateway");
   if (boatFixtureApi) {
     if (!/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(boatFixtureApi)) {
@@ -367,6 +369,11 @@ export async function launchVerificationServer(
   if (boatFixtureApi) childEnv.DONEBOT_BOAT_API = boatFixtureApi;
   if (staticDir) childEnv.DONEBOT_STATIC_DIR = staticDir;
   if (donebotFixtureOrigin) Object.assign(childEnv, { DONEBOT_UPSTREAM_FIXTURE: "0", DONEBOT_FIXTURE_ORIGIN: donebotFixtureOrigin });
+  if (donebotCloudCredential) {
+    const path = join(dataDir, "fixture-cloud-gateway.json");
+    writeFileSync(path, JSON.stringify(donebotCloudCredential), { mode: 0o600 });
+    childEnv.DONEBOT_CLOUD_CREDENTIAL_FILE = path;
+  }
   const child = spawn(process.execPath, verificationServerArgs(childEnv), {
     cwd: ROOT,
     env: childEnv,

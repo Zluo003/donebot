@@ -17,6 +17,8 @@ import { TEAM_LEFT_REFUSAL } from "../shared/cloud-hints";
 import { HomeScreen, SignedOutAtHome } from "./components/HomeScreen";
 import { PageBoundary } from "./components/PageBoundary";
 import { endedBeforeReload, forgetEndedSession } from "./lib/session-ended";
+import { isDoneBotCloudBrowser } from "./donebot/services";
+import { DoneBotCloudSessionEnded } from "./donebot/CloudSession";
 import "./styles.css";
 
 // Before first paint; settleInterfaceMode must run before applySkin writes omb-skin.
@@ -52,6 +54,7 @@ async function chooseRoot(): Promise<React.ReactNode> {
   const session = await readSessionState();
   if (session.kind === "unauthenticated") {
     await pageLanguage;
+    if (isDoneBotCloudBrowser()) return <DoneBotCloudSessionEnded />;
     if (session.error === TEAM_LEFT_REFUSAL) return <TeamLeftPage team={await teamName()} />;
     const pair = <PairPage initialCode={null} reason={endedBeforeReload() ? t("pair.sessionEnded") : session.error} />;
     return home ? <SignedOutAtHome bridge={home} fallback={pair} /> : pair;

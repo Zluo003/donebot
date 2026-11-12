@@ -8,6 +8,8 @@ import { WindowFrameBar } from "@/components/WindowFrameBar";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
 import { useDesktopCapabilities } from "@/components/DesktopCapabilities";
 import { DoneBotSignIn } from "./SignIn";
+import { DONEBOT_CLOUD_URL, isDoneBotCloudBrowser } from "./services";
+import { openExternalLink } from "@/lib/app-links";
 
 const buttonClass = "ui-button inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "请求失败，请稍后重试。";
@@ -56,12 +58,16 @@ export function DoneBotAccountSettings() {
   };
   return <div data-donebot-account className="flex flex-col gap-4">
     <Card title="DoneBot 账号" subtitle="模型服务由 DoneBot 统一提供。">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-[14px] text-ink"><span className="min-w-0 break-all">{email ?? "已登录"}</span><button type="button" disabled={busy} onClick={() => void logout()} className={buttonClass}><LogOut size={14} />退出登录</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-[14px] text-ink"><span className="min-w-0 break-all">{email ?? "已登录"}</span>{!isDoneBotCloudBrowser() && <button type="button" disabled={busy} onClick={() => void logout()} className={buttonClass}><LogOut size={14} />退出登录</button>}</div>
       {balance !== null && <p className="mt-3 text-[13px] text-ink-secondary">可用余额（CNY）：{balance.toLocaleString(undefined, { maximumFractionDigits: 4 })}</p>}
       <p className="mt-3 text-[13px] text-ink-secondary">{concurrency === null ? "账号并发尚未同步，媒体任务将等待配置。" : `账号总并发：${concurrency}；图片、视频和音乐共用并发：${doneBotMediaConcurrency(concurrency)}。`}</p>
       {concurrency === 1 && <p className="mt-2 text-[13px] text-ink-secondary">当前仅 1 个并发，媒体执行时无法为其他模型保留并发。</p>}
       <p className="mt-2 text-[13px] text-ink-secondary">文本、语音和媒体共用账号并发，图片、视频和音乐任务在并发用满时自动排队。</p>
       {!state.config?.donebot?.persistent && <p className="mt-3 text-[13px] text-ink-secondary">当前设备未启用凭据持久保存，重启后需要重新登录。</p>}
+    </Card>
+    <Card title="DoneBot Cloud" subtitle="使用同一个 DoneBot 账号，管理你的专属云实例。">
+      <p className="text-[13px] text-ink-secondary">按月预付，Cloud 月费从账号余额扣除。余额不足时不续期，到期及保留期结束后自动删除实例与数据。</p>
+      <button type="button" className={`${buttonClass} mt-3`} onClick={() => void openExternalLink(DONEBOT_CLOUD_URL).catch(error => setError(errorText(error)))}>管理 Cloud</button>
     </Card>
     <Card title="可用模型" subtitle="账号可使用的模型将自动同步。">
       <button type="button" disabled={busy} onClick={() => void refresh()} className={buttonClass}><RefreshCw size={14} className={busy ? "animate-spin" : ""} />刷新模型</button>

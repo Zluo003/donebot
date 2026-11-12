@@ -321,7 +321,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
         return json(res, 200, {
           ...localVmViewerStatus(status, auth),
           commands: setupCommands(status.runtime, process.platform, SHARED_LOCAL_VM_TARGET),
-          idle_timeout_ms: localVmIdleMs(),
+          idle_timeout_ms: status.idle_timeout_ms ?? localVmIdleMs(),
           mode: localVmMode(cfg),
           max_instances: localVmMaxInstances(cfg),
         });

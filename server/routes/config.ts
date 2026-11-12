@@ -44,6 +44,7 @@ import * as tts from "../tts/index.ts";
 import * as vps from "../vps-computer.ts";
 import { refusalBody, userError, userErrorFields } from "../user-errors.ts";
 import type { ServerErrorBody } from "../../shared/server-text.ts";
+import { cloudDesktopSocket } from "../cloud-desktop.ts";
 import type { Postiz } from "../postiz/service.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
@@ -132,6 +133,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       if (modelRefusal) return json(res, 403, { error: modelRefusal });
       if (hostedModels && ["instances", "anthropic", "openai", "openrouter", "openaiCompat", "xai", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "opencodeGo"].some(key => Object.hasOwn(body, key))) return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });
       const patch = parseConfigPatchForPerson(body);
+      if (cloudDesktopSocket() && patch.localVm && Object.entries(patch.localVm).some(([key, value]) => key !== "mode" || value !== "shared")) {
+        return json(res, 409, { error: "Cloud provides one private desktop per user; its limits and idle policy are managed by the Cloud node." });
+      }
       if (patch.profile && ownProfile) {
         // The address is the verified claim's; a profile names no other.
         const { email: _email, ...own } = patch.profile;

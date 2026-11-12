@@ -1,5 +1,6 @@
 import { t } from "./i18n";
 import { serverErrorText } from "./server-error";
+import { rememberDoneBotCloud } from "@/donebot/services";
 
 export interface EnvironmentDescriptor {
   environmentId: string;
@@ -49,6 +50,7 @@ export async function readSessionState(fetchImpl: typeof fetch = fetch): Promise
     return { kind: "unreachable", error: error instanceof Error ? error.message : String(error) };
   }
   const body: unknown = await res.json().catch(() => ({}));
+  rememberDoneBotCloud(res);
   const record = Object(body) as Record<string, unknown>;
   if (res.status === 401 || res.status === 403) {
     return { kind: "unauthenticated", error: typeof record.error === "string" ? record.error : `${res.status}` };

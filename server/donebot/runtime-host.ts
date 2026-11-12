@@ -5,6 +5,7 @@ import type { Store } from "../store.ts";
 import { doneBotProtocol, doneBotTextModels } from "./catalog.ts";
 import { DoneBotGateway } from "./gateway.ts";
 import { createDoneBotCredentialStore, type DoneBotPrivatePort } from "./credential-store.ts";
+import { cloudCredentialStore } from "./cloud-credential.ts";
 import { DoneBotInstallationIdentity } from "./installation-identity.ts";
 import { createDoneBotLlmDriver } from "./llm-driver.ts";
 import { createDoneBotHelpers } from "./helpers.ts";
@@ -18,7 +19,9 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
   const enabled = !(fixture && process.env.DONEBOT_UPSTREAM_FIXTURE === "1");
   const fixtureOrigin = fixture ? process.env.DONEBOT_FIXTURE_ORIGIN : undefined;
   const identity = new DoneBotInstallationIdentity(join(dataDir, "donebot", "installation-identities.json"));
-  const gateway = new DoneBotGateway(createDoneBotCredentialStore((process as NodeJS.Process & { parentPort?: DoneBotPrivatePort }).parentPort, join(dataDir, "donebot", "session-id")), {
+  const cloudCredential = process.env.DONEBOT_CLOUD_CREDENTIAL_FILE;
+  if (cloudCredential && cloudCredential !== "/run/donebot/gateway.json" && !fixture) throw new Error("Invalid Cloud installation credential path.");
+  const gateway = new DoneBotGateway(cloudCredential ? cloudCredentialStore(cloudCredential) : createDoneBotCredentialStore((process as NodeJS.Process & { parentPort?: DoneBotPrivatePort }).parentPort, join(dataDir, "donebot", "session-id")), {
     resolveInstallation: (accountId, previous) => identity.resolve(accountId, previous),
     ...(fixtureOrigin ? { testOrigin: fixtureOrigin } : {}),
   });

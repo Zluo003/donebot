@@ -2,6 +2,7 @@ import { viewerTargetId } from "../shared/desktop-viewer.ts";
 import type { ContainerComputerStatus, LocalVmTarget } from "./container-computer.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import { desktopViewerUrl, type DesktopTarget } from "./routes/desktop-viewer.ts";
+import { cloudDesktopSocket } from "./cloud-desktop.ts";
 
 /** Native owner windows keep the existing direct viewer and cookie isolation. */
 export function localVmViewerStatus<T extends { target_key: string; viewer_url: string }>(status: T, auth: RequestAuth): T {
@@ -25,6 +26,7 @@ export function localDesktopTarget(target: LocalVmTarget, deps: {
       }
       return {
         port: status.viewer_port ?? 0,
+        ...(cloudDesktopSocket() ? { socketPath: cloudDesktopSocket()! } : {}),
         password: new URLSearchParams(new URL(status.viewer_url).hash.slice(1)).get("password"),
         touch: () => deps.touch(target),
       };

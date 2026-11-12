@@ -34,6 +34,7 @@ import {
   type HostUser,
 } from "./container-isolation.ts";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { cloudDesktopCall, cloudDesktopExec, cloudDesktopSocket, cloudDesktopStatus, cloudDesktopTarget } from "./cloud-desktop.ts";
 
 const run = promisify(execFile);
 const SCREENSHOT_STATUS_TTL_MS = 10_000;
@@ -122,6 +123,7 @@ export function poolLocalVmTarget(seat: number): LocalVmTarget {
 
 /** Only provisioning creates this durable directory; idle shutdown keeps it. */
 export function localVmWorkspaceExists(target: LocalVmTarget): boolean {
+  if (cloudDesktopSocket()) return target.key === "shared";
   try {
     return lstatSync(target.workspaceDir, { throwIfNoEntry: false })?.isDirectory() === true;
   } catch {
@@ -246,6 +248,10 @@ export async function containerRuntimeStatus(
   runner: CommandRunner = sh,
   platform: NodeJS.Platform = process.platform,
 ): Promise<ContainerRuntimeStatus> {
+  if (runner === sh && cloudDesktopSocket()) {
+    const status = await cloudDesktopCall<ContainerComputerStatus>("/status");
+    return { runtime: status.runtime, available: status.available, daemonUp: status.daemonUp };
+  }
   // Podman is the supported Windows VM lane and owns the pinned image; Docker-first would pick an unrelated image store.
   const candidates: Runtime[] = platform === "win32"
     ? ["podman", "docker"]
@@ -280,6 +286,8 @@ export async function containerRuntimeStatus(
 }
 
 export interface ContainerComputerStatus {
+  cloud_managed?: boolean;
+  idle_timeout_ms?: number;
   platform: NodeJS.Platform;
   runtime: Runtime | null;
   available: Runtime[];
@@ -497,6 +505,7 @@ export async function containerComputerStatus(
   target: LocalVmTarget = SHARED_LOCAL_VM_TARGET,
   options: { probeDesktop?: boolean } = {},
 ): Promise<ContainerComputerStatus> {
+  if (runner === sh && cloudDesktopSocket()) return cloudDesktopStatus(target);
   const status = emptyStatus(platform, target);
   const host = currentHostUser(platform);
   const runtimeStatus = await containerRuntimeStatus(runner, platform);
@@ -874,6 +883,11 @@ export async function containerComputerAction(
   target: LocalVmTarget = SHARED_LOCAL_VM_TARGET,
   resources: DesktopResources = DEFAULT_DESKTOP_RESOURCES,
 ): Promise<ContainerComputerStatus> {
+  if (runner === sh && cloudDesktopSocket()) {
+    cloudDesktopTarget(target);
+    await cloudDesktopCall("/action", { action });
+    return cloudDesktopStatus(target);
+  }
   if (runner === sh && platform === process.platform) screenshotStatusCache.delete(target.key);
   const before = await containerComputerStatus(runner, platform, target);
   const runtime = before.runtime;
@@ -932,6 +946,7 @@ export async function containerComputerExists(
   target: LocalVmTarget,
   runner: CommandRunner = sh,
 ): Promise<boolean> {
+  if (runner === sh && cloudDesktopSocket()) return target.key === "shared" && (await cloudDesktopStatus(target)).container !== "missing";
   try {
     await runner(runtime, ["inspect", target.containerName], 8_000);
     return true;
@@ -964,6 +979,12 @@ export async function containerComputerFrame(
   platform: NodeJS.Platform = process.platform,
   target: LocalVmTarget = SHARED_LOCAL_VM_TARGET,
 ): Promise<{ png: string; format: "png" | "jpeg" }> {
+  if (runner === sh && cloudDesktopSocket()) {
+    cloudDesktopTarget(target);
+    const frame = await cloudDesktopCall<{ png: string; format: "png" | "jpeg" }>("/frame");
+    if (!wholeScreenshot(Buffer.from(frame.png, "base64")).ok) throw Object.assign(new Error("Cloud desktop returned an incomplete screenshot"), { status: 502 });
+    return frame;
+  }
   const cacheable = runner === sh && platform === process.platform;
   const now = Date.now();
   const cached = screenshotStatusCache.get(target.key);
@@ -1072,6 +1093,7 @@ export async function containerExec(
   command: string,
   options: { timeoutSeconds?: number; runtime?: Runtime; exec?: ContainerExecRunner } = {},
 ): Promise<ContainerExecResult> {
+  if (!options.exec && cloudDesktopSocket()) return cloudDesktopExec(target, command, options.timeoutSeconds);
   if (!command.trim()) throw Object.assign(new Error("command is required"), { status: 400 });
   if (command.length > 20_000) throw Object.assign(new Error("command is too long"), { status: 400 });
   if (options.timeoutSeconds !== undefined && !Number.isFinite(options.timeoutSeconds)) {
@@ -1109,6 +1131,13 @@ export function containerComputerMcp(
   control?: { url: string; token: string },
   target: LocalVmTarget = SHARED_LOCAL_VM_TARGET,
 ): ContainerMcpLaunch {
+  if (cloudDesktopSocket()) {
+    cloudDesktopTarget(target);
+    return { command: process.execPath, args: [containerMcpPath, "cloud", target.containerName, CUA_SOCKET], env: {
+      ELECTRON_RUN_AS_NODE: "1", DONEBOT_CLOUD_DESKTOP_SOCKET: cloudDesktopSocket()!,
+      ...(control ? { DONEBOT_CONTROL_URL: control.url, DONEBOT_CONTROL_TOKEN: control.token } : {}),
+    } };
+  }
   return {
     command: process.execPath,
     args: [containerMcpPath, runtime, target.containerName, CUA_SOCKET],
@@ -1125,6 +1154,7 @@ export function setupCommands(
   platform: NodeJS.Platform = process.platform,
   target: LocalVmTarget = SHARED_LOCAL_VM_TARGET,
 ) {
+  if (cloudDesktopSocket()) return { install: null, runtimeStart: null, pull: null, run: null, start: null, stop: null, remove: null, view: "/desktop-viewer#target=local%2Fshared" };
   const install =
     platform === "darwin"
       ? "brew install podman; podman machine init; podman machine start"

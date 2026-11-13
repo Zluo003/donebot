@@ -5226,6 +5226,8 @@
   "computer.mac.permission.relaunch": "Relaunch {app}",
   "computer.mac.permission.driverDetail": "Driver detail",
   "computer.phase.vmUnavailable": "The private desktop isn't available for this bot",
+  "computer.privateDesktopDisabled": "Private desktops are disabled. Choose another work location below.",
+  "computer.privateDesktopDisabledLabel": "Private desktop (disabled)",
   "computer.phase.error": "Couldn't reach the bot's screen",
   "computer.resizeAria": "Resize panel",
   "computer.botSettings": "Bot settings",

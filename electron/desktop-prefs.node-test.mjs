@@ -7,6 +7,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { createDesktopPrefs, createDesktopText, DESKTOP_NOTICES, DESKTOP_PORTS, jsonFile, registerDesktopPrefs } from "./desktop-prefs.mjs";
 import { ONBOARDING_CLOUD_HINT, onboardingHints, WELCOME_VERSION } from "./onboarding-record.mjs";
+import { createWorkspaceNavigation } from "./workspace-navigation.mjs";
 
 const require = createRequire(import.meta.url);
 const environments = require("./environments.cjs");
@@ -355,9 +356,13 @@ test("production wiring: main answers this computer's page, My Cloud's own page 
   options.onShown("de", {}); options.onShown("de", contents); options.onShown("en", contents);
   assert.deepEqual(calls.slice(6), [["shown", "de"], "relabel", "talk relabel", ["shown", "en"]], "only the window's own page leads main's words, and only a change redraws them");
   const navigate = main.slice(main.indexOf("function navigateMainWindow(url, keepingRecovery = false) {"), main.indexOf("\n}\n", main.indexOf("function navigateMainWindow(url, keepingRecovery = false) {")) + 3);
-  const load = vm.runInNewContext(`${navigate}; navigateMainWindow`, { homeWindow: { cancel: () => {} }, mainWindow: { isDestroyed: () => false, loadURL: async url => { if (url.endsWith("fail")) throw new Error("ERR_CONNECTION_REFUSED"); } } });
+  const navigationContext = { homeWindow: { cancel: () => {} }, mainWindow: { isDestroyed: () => false, webContents: { getURL: () => LOCAL }, loadURL: async url => { if (url.endsWith("fail")) throw new Error("ERR_CONNECTION_REFUSED"); } } };
+  navigationContext.workspaceNavigation = createWorkspaceNavigation({ window: () => navigationContext.mainWindow,
+    local: () => ({ id: "local", origin: LOCAL }), saved: () => ({ activeId: "local", environments: [] }), restore: () => assert.fail("the visible workspace remains local") });
+  const load = vm.runInNewContext(`${navigate}; navigateMainWindow`, navigationContext);
   assert.equal(await load(`${LOCAL}/ok`), true); assert.equal(await load(`${LOCAL}/fail`), false, "a failed load answers false, never throws");
-  assert.equal(await vm.runInNewContext(`${navigate}; navigateMainWindow`, { homeWindow: { cancel: () => {} }, mainWindow: null })(`${LOCAL}/`), false, "no window");
+  navigationContext.mainWindow = null;
+  assert.equal(await load(`${LOCAL}/`), false, "no window");
 });
 
 test("the window's rail of places is shown until the person hides it, and the choice survives a restart", () => {

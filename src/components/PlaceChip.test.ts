@@ -10,6 +10,10 @@ vi.mock("./MenuMotion", async (importOriginal) => ({
   ...await importOriginal<typeof import("./MenuMotion")>(),
   useMenuMotion: () => ({ shown: fixture.menuOpen, closing: false, className: "", exitProps: {} }),
 }));
+vi.mock("@/donebot/services", async original => {
+  const services = await original<typeof import("@/donebot/services")>();
+  return { ...services, DONEBOT_PRIVATE_DESKTOP_ENABLED: true };
+});
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return {

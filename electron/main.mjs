@@ -115,6 +115,7 @@ import { createTeamProfileSeeds } from "./team-profile-seed.mjs";
 import { createHomePlaces } from "./home-places.mjs"; import { openStartPlace } from "./start-place.mjs"; import { createDesktopRing, installAccounts } from "./accounts-main.mjs"; import { createAddedCloudNotice, installCloudRail, railPlaces } from "./cloud-rail.mjs"; import { createPlaceInboxWatch } from "./place-inbox-watch.mjs"; import { homeLook, otherOwnClouds, withoutOldCloudHome } from "./cloud-list.mjs"; import { installPlaceLook } from "./place-look.mjs"; import { CHROME_RAIL_PATH, createChromeRail } from "./chrome-rail.mjs";
 import { createWindowStateFile } from "./window-state-file.mjs";
 import { createEnvironmentsFile, ENVIRONMENTS_SAVE_FAILED } from "./environments-file.mjs";
+import { createWorkspaceNavigation } from "./workspace-navigation.mjs";
 import { createOrgLibrary } from "./org-library.mjs";
 import { createCompanyBackups } from "./company-backups.mjs";
 import { createCompanyBackupSchedule } from "./company-backup-schedule.mjs";
@@ -1547,10 +1548,18 @@ async function workspaceMenuAction(action) {
   }
 }
 
+const workspaceNavigation = createWorkspaceNavigation({
+  window: () => mainWindow,
+  local: () => ({ origin: rendererOrigin(), id: environmentsState.environments.find(entry => entry.kind === "local" && entry.dataDir === runningDataDir)?.id ?? LOCAL_ID }),
+  saved: () => environmentsState,
+  restore: id => persistEnvironments(withActive(environmentsState, id)),
+  log: slog,
+});
+
 function navigateMainWindow(url, keepingRecovery = false) {
   if (!keepingRecovery) homeWindow.cancel();
   if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(false);
-  return mainWindow.loadURL(url).then(() => true, () => false);
+  return workspaceNavigation(url);
 }
 
 let rememberedHome = null;
@@ -2199,7 +2208,7 @@ function createWindow({ deferNavigation = false } = {}) {
   if (desktopRemoteAccess) {
     win.loadURL(serverReady ? `http://127.0.0.1:${SERVER_PORT}` : buildErrorPage({ allPortsOccupied: serverStartConflictOnly, logDir: LOG_DIR }, nativeText));
   } else if (remote) {
-    void win.loadURL(remote.origin).catch(() => {});
+    void navigateMainWindow(remote.origin, true);
   } else if (app.isPackaged) {
     win.loadURL(serverReady ? `http://127.0.0.1:${SERVER_PORT}` : buildErrorPage({ allPortsOccupied: serverStartConflictOnly, logDir: LOG_DIR }, nativeText));
   } else {

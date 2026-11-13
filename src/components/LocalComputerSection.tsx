@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
+import { DONEBOT_PRIVATE_DESKTOP_ENABLED, UPSTREAM_SERVICES } from "@/donebot/services";
 import { waitForLocalVmReady } from "@/lib/local-vm-readiness";
 import type { LocaleKey } from "@/locales";
 import {
@@ -815,7 +816,7 @@ export function LocalComputerSection() {
   }, []);
 
   useEffect(() => {
-    if (cloudHome) return;
+    if (cloudHome || !DONEBOT_PRIVATE_DESKTOP_ENABLED) return;
     let active = true;
     let timer: number | undefined;
     let controller: AbortController | undefined;
@@ -844,7 +845,7 @@ export function LocalComputerSection() {
   }, [cloudHome, refresh, refreshKey]);
 
   useEffect(() => {
-    if (status?.mode !== "per-bot") {
+    if (!DONEBOT_PRIVATE_DESKTOP_ENABLED || status?.mode !== "per-bot") {
       setInventory([]);
       setInventoryLoading(false);
       setInventoryError(null);
@@ -866,6 +867,7 @@ export function LocalComputerSection() {
   }, [inventoryRefreshKey, refreshInventory, status?.mode]);
 
   useEffect(() => {
+    if (!UPSTREAM_SERVICES.boat) return;
     const controller = new AbortController();
     setCloudLoading(true);
     void refreshCloudInventory(controller.signal)
@@ -1147,7 +1149,7 @@ export function LocalComputerSection() {
   return (
     <>
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">{announcement}</p>
-      <CloudComputersCard
+      {UPSTREAM_SERVICES.boat && <CloudComputersCard
         instances={cloudInventory}
         configured={cloudConfigured}
         loading={cloudLoading}
@@ -1157,7 +1159,7 @@ export function LocalComputerSection() {
         onRefresh={() => setCloudRefreshKey((key) => key + 1)}
         onSleep={(instance) => void actOnCloudComputer("sleep", instance)}
         onDelete={(instance) => void actOnCloudComputer("delete", instance)}
-      />
+      />}
 
       <VpsComputersCard
         instances={vpsInventory}
@@ -1173,7 +1175,7 @@ export function LocalComputerSection() {
 
       <MacLocalControl />
 
-      {!cloudHome && <>
+      {!cloudHome && DONEBOT_PRIVATE_DESKTOP_ENABLED && <>
       <Card
         title={t("vm.main.title")}
         subtitle={perBot

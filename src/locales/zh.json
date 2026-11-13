@@ -4770,6 +4770,8 @@
   "computer.mac.permission.relaunch": "重新启动 {app}",
   "computer.mac.permission.driverDetail": "驱动详情",
   "computer.phase.vmUnavailable": "此机器人无法使用私有桌面",
+  "computer.privateDesktopDisabled": "私有桌面已禁用，请在下方选择其他工作位置。",
+  "computer.privateDesktopDisabledLabel": "私有桌面（已禁用）",
   "computer.phase.error": "无法连接到机器人的屏幕",
   "computer.resizeAria": "调整面板大小",
   "computer.botSettings": "机器人设置",

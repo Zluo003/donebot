@@ -3,7 +3,7 @@ import { KeyRound, Monitor } from "lucide-react";
 
 import { writeComputerPanelView, type ComputerPanelView } from "@/lib/computer-panel-view";
 import { t } from "@/lib/i18n";
-import type { Place } from "@/lib/place";
+import { placeOffered, type Place } from "@/lib/place";
 import { placeHasIssue, worksOnSimpleLabel } from "@/lib/place-view";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { api, useStore, type Bot } from "@/state/store";
@@ -69,8 +69,7 @@ function usePlaceChoices(bot: Bot) {
     ...(placeViews.local.policy ? [choice("local")] : []),
     ...(placeViews.browser.policy || current === "browser" ? [choice("browser")] : []),
     ...(placeViews.cloud.policy ? [choice("cloud")] : []),
-    // Offered as in the Screen panel and the composer, so a bot can be kept on the private desktop from here too.
-    ...(placeViews.vm.policy || current === "vm" ? [choice("vm")] : []),
+    ...(placeOffered("vm", state.config) && (placeViews.vm.policy || current === "vm") ? [choice("vm")] : []),
     ...(current === "off" ? [{ value: current, label: OFF_LABEL(), disabled: true }] : []),
   ];
   const liveSurface = bot.tasks?.find((task) => task.threadId === bot.threadId)?.surface;

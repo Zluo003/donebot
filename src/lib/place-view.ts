@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { UPSTREAM_SERVICES } from "@/donebot/services";
+import { DONEBOT_PRIVATE_DESKTOP_ENABLED, UPSTREAM_SERVICES } from "@/donebot/services";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
 import { cloudPlanView } from "@/lib/cloud-plan";
@@ -76,12 +76,20 @@ export function placeFacts(input: {
 }
 
 export function placeViewFor(facts: PlaceFacts): PlaceView {
-  return placeView(facts, { translate: placeTranslate, locale: activeLocale() });
+  return doneBotPlaceView(placeView(facts, { translate: placeTranslate, locale: activeLocale() }));
 }
 
 export function placeRowViewFor(row: PlaceRow, seat: PlaceSeat, worksOnLabel?: string): PlaceView {
   const read = row.state === "cc-needs-key" && seat.plan && seat.server !== "my-cloud" ? { ...row, state: "cc-on-my-cloud" as const } : row;
-  return placeRowView(read, { server: seat.server, role: seat.role, mode: seat.mode, worksOnLabel, translate: placeTranslate, locale: activeLocale() });
+  return doneBotPlaceView(placeRowView(read, { server: seat.server, role: seat.role, mode: seat.mode, worksOnLabel, translate: placeTranslate, locale: activeLocale() }));
+}
+
+function doneBotPlaceView(view: PlaceView): PlaceView {
+  if (DONEBOT_PRIVATE_DESKTOP_ENABLED) return view;
+  if (view.state === "vm" || view.state === "vm-cannot") {
+    return { ...view, short: t("computer.privateDesktopDisabledLabel"), line: t("computer.privateDesktopDisabled"), action: null };
+  }
+  return view.state === "auto" ? { ...view, line: t("place.autoDetail") } : view;
 }
 
 export function placeBlocked(view: PlaceView): boolean {
@@ -131,6 +139,7 @@ export function openPlaceAction(
       if (!UPSTREAM_SERVICES.boat) return false;
       dispatch(openKeySettings("box")); return true;
     case "open-vm-settings":
+      if (!DONEBOT_PRIVATE_DESKTOP_ENABLED) return false;
       window.sessionStorage?.setItem("donebot.settings.section", "computer");
       appSettings("computer");
       return true;
@@ -174,6 +183,7 @@ export const SIMPLE_PLACE_LABEL = {
 } as const satisfies Record<string, LocaleKey>;
 
 export function worksOnSimpleLabel(computer: Bot["computer"], platform: DesktopCapabilities["host"]["platform"]): string {
+  if (computer === "vm" && !DONEBOT_PRIVATE_DESKTOP_ENABLED) return t("computer.privateDesktopDisabledLabel");
   if (computer === "local") return t(platform === "darwin" ? "computer.simple.dest.thisMac" : "computer.simple.dest.thisPc");
   return t(SIMPLE_PLACE_LABEL[computer ?? "auto"]);
 }

@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Action, AppState, Bot, InstanceInfo } from "@/state/store";
 
 const fixture = vi.hoisted(() => ({
+  privateDesktopEnabled: true,
+  requests: [] as string[],
   held: false,
   /** Whether a take with a lease gets it: false plays a hold someone else already has. */
   owned: true,
@@ -16,6 +18,10 @@ const fixture = vi.hoisted(() => ({
   posts: [] as string[],
   beacons: [] as Array<{ url: string; body: Record<string, unknown>; keepalive: boolean }>,
   live: null as null | { target: string; expanded: boolean; onUnreachable: () => void },
+}));
+vi.mock("@/donebot/services", async original => ({
+  ...await original<typeof import("@/donebot/services")>(),
+  get DONEBOT_PRIVATE_DESKTOP_ENABLED() { return fixture.privateDesktopEnabled; },
 }));
 vi.mock("./DesktopCapabilities", async (importOriginal) => ({
   ...await importOriginal<typeof import("./DesktopCapabilities")>(),
@@ -49,6 +55,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: async (path: string, init?: RequestInit) => {
     const route = path.split("?")[0]!;
+    fixture.requests.push(route);
     if (init?.method === "POST") fixture.posts.push(route);
     if (route === "/api/bots/scout/computer/control") {
       if (init?.method !== "POST") return { held: fixture.held, helpReason: null };
@@ -149,6 +156,8 @@ beforeEach(() => {
     setItem: (key: string, value: string) => void saved.set(key, value),
     removeItem: (key: string) => void saved.delete(key),
   });
+  fixture.privateDesktopEnabled = true;
+  fixture.requests = [];
   fixture.held = false;
   fixture.owned = true;
   fixture.refuse = false;
@@ -182,6 +191,20 @@ afterEach(() => {
 function pressEscape() {
   (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
 }
+
+describe("disabled private desktops", () => {
+  it("keeps a saved VM selection visible as disabled without starting or controlling its runtime", async () => {
+    fixture.privateDesktopEnabled = false;
+    await open(makeBot({ computer: "vm" }));
+    expect(document.body.textContent).toContain("Private desktops are disabled");
+    expect(button("Take control")).toBeUndefined();
+    expect(button("Full screen")).toBeUndefined();
+    expect(liveDesktop()).toBeNull();
+    expect(fixture.requests.some(path => path.includes("local-computer") || path.endsWith("computer/control"))).toBe(false);
+    expect(fixture.posts).toEqual([]);
+    expect(fixture.controls).toEqual([]);
+  });
+});
 
 describe("taking control of a Local VM", () => {
   it("turns the panel's own picture into the live desktop at once; no window or tab opens", async () => {

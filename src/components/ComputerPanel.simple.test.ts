@@ -85,6 +85,15 @@ vi.mock("./MacLocalControl", () => ({ MacLocalControl: () => null }));
 vi.mock("./CloudBackendPicker", () => ({ CloudBackendPicker: () => null }));
 vi.mock("./LocalComputerAutoWarning", () => ({ LocalComputerAutoWarning: () => null }));
 vi.mock("./bot-settings/RoutinesSection", () => ({ RoutinesSection: () => null }));
+vi.mock("@/donebot/services", async original => {
+  const services = await original<typeof import("@/donebot/services")>();
+  return {
+    ...services,
+    DONEBOT_PRIVATE_DESKTOP_ENABLED: true,
+    UPSTREAM_SERVICES: { ...services.UPSTREAM_SERVICES, boat: true },
+    doneBotKeyVisible: (id: string) => id === "box" || services.doneBotKeyVisible(id),
+  };
+});
 vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: (...args: unknown[]) => fixture.api(...args),

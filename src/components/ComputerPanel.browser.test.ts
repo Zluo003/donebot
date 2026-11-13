@@ -81,9 +81,9 @@ describe("Computer panel Works on", () => {
     try { return render(config); } finally { fixture.view.current = "browser"; }
   };
 
-  it("lists this computer and a private desktop on a desktop or self-hosted server", () => {
+  it("lists this computer without a private desktop on a desktop or self-hosted server", () => {
     const markup = computerTab({});
-    expect(places(markup)).toEqual(["Auto", "Cloud desktop", "Private desktop", "This computer", "Browser", "Off"]);
+    expect(places(markup)).toEqual(["Auto", "Cloud desktop", "This computer", "Browser", "Off"]);
     expect(markup).toContain("Choose where this bot works.</p>");
   });
 

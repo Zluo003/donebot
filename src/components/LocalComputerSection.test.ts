@@ -5,6 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
 
 const storeFixture = vi.hoisted(() => ({ config: null as unknown }));
+vi.mock("@/donebot/services", async original => {
+  const services = await original<typeof import("@/donebot/services")>();
+  return { ...services, DONEBOT_PRIVATE_DESKTOP_ENABLED: true, UPSTREAM_SERVICES: { ...services.UPSTREAM_SERVICES, boat: true } };
+});
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({ state: { ...original.initialState, config: storeFixture.config }, dispatch: vi.fn() }) };

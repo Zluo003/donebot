@@ -4971,6 +4971,8 @@
   "computer.mac.permission.relaunch": "重新啟動 {app}",
   "computer.mac.permission.driverDetail": "驅動程式詳細資訊",
   "computer.phase.vmUnavailable": "這個機器人無法使用私人桌面",
+  "computer.privateDesktopDisabled": "私人桌面已停用，請在下方選擇其他執行位置。",
+  "computer.privateDesktopDisabledLabel": "私人桌面（已停用）",
   "computer.phase.error": "無法連線到機器人的畫面",
   "computer.resizeAria": "調整面板大小",
   "computer.botSettings": "機器人設定",

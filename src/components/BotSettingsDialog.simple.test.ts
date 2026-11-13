@@ -106,6 +106,10 @@ vi.mock("./bot-settings/useBotApps", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./bot-settings/useBotApps")>()),
   useBotApps: () => fixture.apps,
 }));
+vi.mock("@/donebot/services", async original => {
+  const services = await original<typeof import("@/donebot/services")>();
+  return { ...services, DONEBOT_PRIVATE_DESKTOP_ENABLED: true };
+});
 vi.mock("@/state/store", async (importOriginal) => {
   const store = await importOriginal<typeof import("@/state/store")>();
   return {

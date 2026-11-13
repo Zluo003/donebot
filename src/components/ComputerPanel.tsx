@@ -9,6 +9,7 @@ import { CalendarClock, ChevronRight, Columns2, Globe, Hand, Loader2, Maximize2,
 import { api, ApiError, currentTaskBot, useStore, type Bot, type ConfigStatus } from "@/state/store";
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
+import { DONEBOT_PRIVATE_DESKTOP_ENABLED } from "@/donebot/services";
 import { ComputerFilesPane } from "./ComputerFilesPane";
 import { effectivePlace, isComputerPlace, personPin, placeLabelKey, placeOffered } from "@/lib/place";
 import type { CloudBackend } from "../../shared/wire";
@@ -74,6 +75,7 @@ type Phase =
   | "ready"
   | "vm"
   | "vm-unavailable"
+  | "vm-disabled"
   | "vps-unconfigured"
   | "vps-incompatible"
   | "vps-stopped"
@@ -137,6 +139,7 @@ export function ComputerPanel({
   const surfaceReady = livePlace !== "auto" || autoSurfaceCurrent;
   const bot = { ...threadBot, computer: livePlace === "auto"
     ? autoSurfaceCurrent ? autoSurface.surface : undefined : livePlace };
+  const privateDesktopDisabled = bot.computer === "vm" && !DONEBOT_PRIVATE_DESKTOP_ENABLED;
   const viewerConnectionKey = `${bot.id}:${bot.threadId}:${bot.computer}:${bot.cloudBackend ?? "box"}`;
   const viewerConnection = useRef(viewerConnectionKey);
   viewerConnection.current = viewerConnectionKey;
@@ -147,7 +150,7 @@ export function ComputerPanel({
     `/api/bots/${profileBot.id}/${suffix}?threadId=${encodeURIComponent(profileBot.threadId)}`,
   [profileBot.id, profileBot.threadId]);
   const canManageCloud = profileBot.computer === "cloud" && livePlace === "cloud";
-  const canManageVm = profileBot.computer === "vm" && livePlace === "vm";
+  const canManageVm = DONEBOT_PRIVATE_DESKTOP_ENABLED && profileBot.computer === "vm" && livePlace === "vm";
   const { capabilities, ready: capabilitiesReady } = useDesktopCapabilities();
   const localAvailable = capabilities.localComputer.available;
   const isLinux = capabilities.host.platform === "linux";
@@ -156,7 +159,8 @@ export function ComputerPanel({
   const [localAutoWarningTarget, setLocalAutoWarningTarget] = useState<string | null>(null);
   const localDisabledReason = localComputerDisabledReason({ capabilities, providerSupportsLocal });
   const placeSeat = usePlaceSeat(state.config, capabilities);
-  const [phase, setPhase] = useState<Phase>("checking");
+  const [storedPhase, setPhase] = useState<Phase>("checking");
+  const phase: Phase = privateDesktopDisabled ? "vm-disabled" : storedPhase;
   const [persistedComputerSelection, setPersistedComputerSelection] = useState<{
     botId: string;
     computer: Bot["computer"];
@@ -413,6 +417,10 @@ export function ComputerPanel({
       return;
     }
     if (bot.computer === "vm") {
+      if (!DONEBOT_PRIVATE_DESKTOP_ENABLED) {
+        setPhase("vm-disabled");
+        return;
+      }
       if (!vmSupported) {
         setError(new LocalizedPanelError("computer.err.vmEngine"));
         setPhase("vm-unavailable");
@@ -804,6 +812,7 @@ export function ComputerPanel({
   const signInHelp = control.help ?? null;
   const signInAsker = signInHelp ? state.bots.find((candidate) => candidate.id === signInHelp.botId)?.name ?? bot.name : bot.name;
   useEffect(() => {
+    if (privateDesktopDisabled) return;
     let alive = true;
     api(`/api/bots/${bot.id}/computer/control`)
       .then((raw) => {
@@ -822,7 +831,7 @@ export function ComputerPanel({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bot.id]);
+  }, [bot.id, privateDesktopDisabled]);
 
   const setNativeBrowserControl = useCallback(async (): Promise<boolean> => true, []);
 
@@ -960,6 +969,7 @@ export function ComputerPanel({
   };
 
   const runVmAction = async (action: "vm-start" | "vm-create" | "vm-recreate" | "vm-delete") => {
+    if (!DONEBOT_PRIVATE_DESKTOP_ENABLED) return;
     if (
       (action === "vm-recreate" || action === "vm-delete") &&
       !window.confirm(
@@ -1039,6 +1049,7 @@ export function ComputerPanel({
   };
 
   const openVmSettings = () => {
+    if (!DONEBOT_PRIVATE_DESKTOP_ENABLED) return;
     window.sessionStorage.setItem("donebot.settings.section", "computer");
     dispatch({ type: "toggleAppSettings", open: true });
   };
@@ -1178,6 +1189,7 @@ export function ComputerPanel({
     "vps-stopped": t("computer.phase.vpsStopped"),
     "local-unavailable": localDisabledReason ?? t("computer.phase.localUnavailable"),
     "vm-unavailable": t("computer.phase.vmUnavailable"),
+    "vm-disabled": t("computer.privateDesktopDisabled"),
     browser: viewOf("browser").line,
     off: viewOf("off").line,
     error: bot.computer === "cloud" && (cloudRefused || placeBlocked(cloudView)) ? cloudView.line : t("computer.phase.error"),

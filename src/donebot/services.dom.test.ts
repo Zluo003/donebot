@@ -30,6 +30,8 @@ const { DoneBotCloudDialog } = await import("@/donebot/CloudDialog");
 const { useCloudOffer } = await import("@/lib/use-cloud-offer");
 const { IntroChips } = await import("@/components/HelperSetup");
 const { openPlaceAction } = await import("@/lib/place-view");
+const { LocalComputerSection } = await import("@/components/LocalComputerSection");
+const { worksOnChoices } = await import("@/components/WorksOnGrid");
 
 let host: HTMLDivElement, root: Root;
 let calls: ReturnType<typeof vi.fn>;
@@ -118,9 +120,31 @@ it("omits cloud onboarding chips and refuses stale upstream service actions", as
   expect(host.querySelector('[data-helper-step="cloud"]')).toBeNull();
   expect(host.querySelector('[data-helper-step="phone"]')).toBeTruthy();
   fixture.dispatch.mockClear();
-  for (const action of ["add-boat-key", "see-plan", "open-my-cloud"] as const) {
+  for (const action of ["add-boat-key", "see-plan", "open-my-cloud", "open-vm-settings"] as const) {
     expect(openPlaceAction(action, { botId: "fixture" }, fixture.dispatch)).toBe(false);
   }
   expect(fixture.dispatch).not.toHaveBeenCalled();
   expect(calls).not.toHaveBeenCalled();
+});
+
+it("hides private desktop installation and stops polling its runtime while preserving self-hosted VPS management", async () => {
+  const requests: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (path: string) => {
+    requests.push(path);
+    return new Response(JSON.stringify({ instances: [], configured: false, available: true, vpsAliases: [] }), { status: 200 });
+  }));
+  await render([createElement(LocalComputerSection)]);
+  expect(host.textContent).not.toMatch(/Private desktops|Setup|Cloud desktops|Boat/);
+  expect(requests).toContain("/api/computers/vps");
+  expect(requests.some(path => path.startsWith("/api/local-computer") || path === "/api/computers/boxes")).toBe(false);
+});
+
+it("omits private desktops from work locations on both local and Cloud workspaces", () => {
+  const capabilities = { host: { platform: "darwin" }, localComputer: {} } as DesktopCapabilities;
+  for (const cloudHome of [false, true]) {
+    const modes = worksOnChoices({ cloudHome }, capabilities).map(([mode]) => mode);
+    expect(modes).not.toContain("vm");
+    expect(modes).toEqual(expect.arrayContaining([null, "cloud", "browser", "off"]));
+    expect(modes.includes("local")).toBe(!cloudHome);
+  }
 });

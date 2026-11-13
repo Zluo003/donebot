@@ -222,3 +222,12 @@ fixture 仍为首轮直接提交、能力查询 0 次、图片付费 POST 1 次�
 `.omb-scratch/verify-evidence/donebot-model-limits/result.json`。
 网关 config/service/handler 的 Asset、DoneBotStorage 及 APIMartSunoNative 专项测试通过，
 证明默认上传容量和显式旧限制保留、歌曲原生字段透传。未部署或进行线上付费生成。
+
+
+## Cloud 模型读取与网络故障（2026-11-13）
+
+Cloud 账号邮箱来自隔离安装文件，模型列表和账号并发需要实际读取网关。模型与账号读取现区分 DNS、连接超时、HTTPS 证书、其他连接失败和代理返回非 JSON；错误只返回固定文案和稳定代码，不回显底层异常、凭据或代理响应，不新增付费请求重试。
+
+`server/donebot-cloud-models.e2e.test.ts` 使用既有隔离启动器、临时 Cloud 安装文件、回环合成网关和专属回环代理。先检查无需用户 JWT 的模型/并发读取，再断开代理连接：身份仍在，两个读取均返回 `gateway_unreachable`；恢复代理后无需重新登录即可重新读取。仅发 GET，检查日志与公开响应没有安装凭据。
+
+`pnpm exec vitest run server/donebot/gateway.test.ts server/donebot/cloud-credential.test.ts server/donebot-cloud-models.e2e.test.ts --maxWorkers=1`：3 文件、22 项通过；服务端类型检查及变更文件 oxlint 通过。这不证明生产节点连通或模型计费成功。同机宿主网关被拒绝需在 Cloud 节点配置受限 HTTPS 例外；客户端错误文案改进不能代替节点规则修复。

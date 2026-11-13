@@ -24,6 +24,33 @@ function fixture(overrides?: (path: string, init?: RequestInit) => Promise<Respo
   return { gateway, vault, requests };
 }
 describe("DoneBot gateway account boundary", () => {
+  it("reports safe DNS, timeout, TLS and connectivity errors for model and account reads", async () => {
+    for (const [cause, code, status] of [["ENOTFOUND", "gateway_dns_failed", 502], ["EAI_AGAIN", "gateway_dns_failed", 502],
+      ["UND_ERR_CONNECT_TIMEOUT", "gateway_timeout", 504], ["CERT_HAS_EXPIRED", "gateway_tls_failed", 502],
+      ["ECONNREFUSED", "gateway_unreachable", 502], ["private-provider-code", "gateway_unreachable", 502]] as const) {
+      let failed = false, attempts = 0;
+      const { gateway } = fixture(path => failed && (path.endsWith("/donebot/models") || path.endsWith("/donebot/account"))
+        ? (attempts++, Promise.reject(new TypeError("private-token-and-url", { cause: { code: cause } }))) : undefined);
+      await gateway.login("owner@example.test", "fixture-password");
+      failed = true;
+      for (const read of [() => gateway.refreshCatalog(), () => gateway.account()]) {
+        await expect(read()).rejects.toMatchObject({ code, status });
+      }
+      expect(attempts).toBe(2);
+      expect(gateway.state().authenticated).toBe(true);
+      try { await gateway.refreshCatalog(); } catch (error) { expect(String(error)).not.toMatch(/private-token|private-provider-code/); }
+    }
+  });
+  it("distinguishes a proxy HTML response from an empty model catalog", async () => {
+    let failed = false;
+    const { gateway } = fixture(path => failed && (path.endsWith("/donebot/models") || path.endsWith("/donebot/account"))
+      ? Promise.resolve(new Response("<html>private-proxy-response</html>", { headers: { "content-type": "text/html" } })) : undefined);
+    await gateway.login("owner@example.test", "fixture-password");
+    failed = true;
+    await expect(gateway.refreshCatalog()).rejects.toMatchObject({ code: "gateway_response_invalid", status: 502 });
+    await expect(gateway.account()).rejects.toMatchObject({ code: "gateway_response_invalid", status: 502 });
+    expect(gateway.models()?.models).toHaveLength(1);
+  });
   it("uses email-code recovery without accepting or persisting an authenticated session", async () => {
     const { gateway, requests, vault } = fixture();
     await gateway.forgotPassword("owner@example.test", { turnstile_token: "fixture-proof" });

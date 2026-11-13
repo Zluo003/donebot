@@ -30,6 +30,17 @@ export class DoneBotGatewayError extends Error {
   constructor(status: number, code: string, message: string) { super(message); this.status = status; this.code = code; }
 }
 
+function readNetworkFailure(error: unknown): DoneBotGatewayError {
+  const failure = error as { name?: unknown; cause?: { code?: unknown } } | null;
+  const code = failure?.cause?.code;
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return new DoneBotGatewayError(502, "gateway_dns_failed", "无法解析 DoneBot 网关地址，请检查云节点的 DNS 和受控出网配置。");
+  if (failure?.name === "TimeoutError" || code === "ETIMEDOUT" || code === "UND_ERR_CONNECT_TIMEOUT") return new DoneBotGatewayError(504, "gateway_timeout", "连接 DoneBot 网关超时，请检查云节点的受控出网和防火墙配置。");
+  if (["CERT_HAS_EXPIRED", "DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "UNABLE_TO_GET_ISSUER_CERT_LOCALLY", "ERR_TLS_CERT_ALTNAME_INVALID"].includes(String(code))) {
+    return new DoneBotGatewayError(502, "gateway_tls_failed", "无法验证 DoneBot 网关的 HTTPS 证书，请检查节点时间、证书和代理配置。");
+  }
+  return new DoneBotGatewayError(502, "gateway_unreachable", "无法连接 DoneBot 网关，请检查云节点的 CLOUD_EGRESS_MODE、DNS 和防火墙配置。");
+}
+
 const nativePath = /^\/v1\/(?:messages(?:\/count_tokens)?|responses|chat\/completions|models|systemone|images\/(?:generations(?:\/async)?|edits(?:\/async)?|tasks\/[A-Za-z0-9_-]+)|tasks\/[A-Za-z0-9_-]+|videos(?:\/(?:edits|extensions|[A-Za-z0-9_-]+(?:\/content)?))?|music\/(?:generations|tasks\/[A-Za-z0-9_-]+)|audio\/speech|assets(?:\/[A-Za-z0-9_-]+)?)$/;
 const geminiPath = /^\/v1beta\/models\/[A-Za-z0-9._-]+:(?:generateContent|streamGenerateContent)$/;
 const cloudID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -325,16 +336,32 @@ export class DoneBotGateway {
     return this.session;
   }
 
+  private async readGateway(path: string, init: RequestInit): Promise<Response> {
+    try { return await this.fetcher(this.origin + path, init); }
+    catch (error) {
+      if (init.signal?.aborted && init.signal.reason?.name !== "TimeoutError") throw error;
+      throw readNetworkFailure(error);
+    }
+  }
+
+  private async readGatewayJson(res: Response): Promise<unknown> {
+    try { return await res.json(); }
+    catch (error) {
+      if (error instanceof SyntaxError) throw new DoneBotGatewayError(502, "gateway_response_invalid", "DoneBot 网关未返回有效 JSON，请检查运行接口和反向代理配置。");
+      throw readNetworkFailure(error);
+    }
+  }
+
   async refreshCatalog(): Promise<DoneBotCatalog> {
     const session = await this.validSession();
     const epoch = this.epoch;
-    const res = await this.fetcher(this.origin + (session.mode === "installation" ? "/v1/donebot/runtime/models" : "/api/v1/donebot/models"), { redirect: "error", credentials: "omit",
+    const res = await this.readGateway(session.mode === "installation" ? "/v1/donebot/runtime/models" : "/api/v1/donebot/models", { redirect: "error", credentials: "omit",
       headers: { authorization: `Bearer ${session.mode === "installation" ? session.credential : session.accessToken}`, "X-DoneBot-Installation": session.installationId,
         ...(this.etag ? { "If-None-Match": this.etag } : {}) }, signal: AbortSignal.timeout(30_000) });
     if (epoch !== this.epoch) throw new DoneBotGatewayError(409, "account_changed", "DoneBot account changed.");
     if (res.status === 304 && this.currentCatalog) return this.currentCatalog;
     if (!res.ok) throw new DoneBotGatewayError(res.status, "catalog_unavailable", "DoneBot model list could not be loaded. Refresh or sign in again.");
-    const next = catalog(await res.json());
+    const next = catalog(await this.readGatewayJson(res));
     this.checkEpoch(epoch);
     this.currentCatalog = next;
     this.etag = res.headers.get("etag");
@@ -349,7 +376,7 @@ export class DoneBotGateway {
     if (expected && (expected.accountId !== s.user.id || expected.installationId !== s.installationId)) {
       throw new DoneBotGatewayError(409, "account_changed", "DoneBot account changed.");
     }
-    const res = await this.fetcher(this.origin + (s.mode === "installation" ? "/v1/donebot/runtime/" : "/api/v1/donebot/") + path, { redirect: "error", credentials: "omit",
+    const res = await this.readGateway((s.mode === "installation" ? "/v1/donebot/runtime/" : "/api/v1/donebot/") + path, { redirect: "error", credentials: "omit",
       headers: { authorization: `Bearer ${s.mode === "installation" ? s.credential : s.accessToken}`, "X-DoneBot-Installation": s.installationId }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
     if (!res.ok) throw new DoneBotGatewayError(res.status, "account_unavailable", "DoneBot account information could not be loaded.");
     let result: unknown;
@@ -367,7 +394,7 @@ export class DoneBotGateway {
         }
       } finally { await reader.cancel().catch(() => {}); }
       result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    } else result = await res.json();
+    } else result = await this.readGatewayJson(res);
     this.checkEpoch(epoch);
     const wrapped = result as { code?: number; data?: unknown };
     return wrapped.code === 0 && "data" in wrapped ? wrapped.data : result;

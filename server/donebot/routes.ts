@@ -1,6 +1,7 @@
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
+import type { DoneBotCloudMutation } from "../../shared/donebot-cloud.ts";
 
 const proofKeys = ["turnstile_token", "captcha_token", "captcha_ticket", "captcha_randstr", "captcha_verify_param", "tencent_ticket", "tencent_randstr", "tencent_captcha_ticket", "tencent_captcha_randstr", "aliyun_captcha_verify_param"];
 function text(body: Record<string, unknown>, key: string, max = 1000): string {
@@ -22,10 +23,20 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
       if (method === "GET" && path === "/api/donebot/settings") return json(res, 200, await gateway.publicSettings());
       if (method === "GET" && path === "/api/donebot/account") return json(res, 200, await gateway.account());
       if (method === "GET" && path === "/api/donebot/catalog") return json(res, 200, await gateway.refreshCatalog());
+      if (method === "GET" && path === "/api/donebot/cloud") return json(res, 200, await gateway.cloudSnapshot());
       if (method !== "POST") return PASS;
       if (process.env.DONEBOT_CLOUD_CREDENTIAL_FILE) return json(res, 403, { error: "请在 DoneBot Cloud 控制台管理此账号。" });
       const body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) throw new DoneBotGatewayError(400, "invalid_input", "Expected an account JSON object.");
+      if (path === "/api/donebot/cloud") {
+        if (Object.keys(body).some(key => !["id", "action", "key", "account_id", "monthly_price"].includes(key))) throw new DoneBotGatewayError(400, "invalid_input", "Invalid Cloud fields.");
+        return json(res, 202, await gateway.cloudMutate({ id: text(body, "id", 36) || undefined, action: text(body, "action", 10) as DoneBotCloudMutation["action"],
+          key: text(body, "key", 100), account_id: text(body, "account_id", 200), monthly_price: text(body, "monthly_price", 100) }));
+      }
+      if (path === "/api/donebot/cloud/connect") {
+        if (Object.keys(body).some(key => !["id", "account_id"].includes(key)) || !text(body, "account_id", 200)) throw new DoneBotGatewayError(400, "invalid_input", "Invalid Cloud connection fields.");
+        return json(res, 200, await gateway.cloudConnect(text(body, "id", 36), text(body, "account_id", 200)));
+      }
       if (path === "/api/donebot/verification") return json(res, 200, await gateway.sendVerification(text(body, "email", 320).trim(), proofs(body)));
       if (path === "/api/donebot/forgot-password") return json(res, 200, await gateway.forgotPassword(text(body, "email", 320).trim(), proofs(body)));
       if (path === "/api/donebot/reset-password") {

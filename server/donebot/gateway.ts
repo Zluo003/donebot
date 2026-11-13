@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DoneBotAccountState, DoneBotCatalog } from "../../shared/donebot.ts";
 import type { DoneBotAuthSettings, DoneBotEmailDelivery } from "../../shared/donebot-auth.ts";
+import type { DoneBotCloudInstance, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudOperation, DoneBotCloudPlan, DoneBotCloudSnapshot } from "../../shared/donebot-cloud.ts";
 
 export const DONEBOT_ORIGIN = "https://donebot.cn";
 export const DONEBOT_INSTANCE_ID = "donebot";
@@ -31,6 +32,27 @@ export class DoneBotGatewayError extends Error {
 
 const nativePath = /^\/v1\/(?:messages(?:\/count_tokens)?|responses|chat\/completions|models|systemone|images\/(?:generations(?:\/async)?|edits(?:\/async)?|tasks\/[A-Za-z0-9_-]+)|tasks\/[A-Za-z0-9_-]+|videos(?:\/(?:edits|extensions|[A-Za-z0-9_-]+(?:\/content)?))?|music\/(?:generations|tasks\/[A-Za-z0-9_-]+)|audio\/speech|assets(?:\/[A-Za-z0-9_-]+)?)$/;
 const geminiPath = /^\/v1beta\/models\/[A-Za-z0-9._-]+:(?:generateContent|streamGenerateContent)$/;
+const cloudID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const cloudInputText = (value: unknown, pattern: RegExp): value is string => typeof value === "string" && pattern.test(value);
+const cloudState = (value: unknown): value is string => cloudInputText(value, /^[a-z_]{1,64}$/);
+const cloudProblem = (value: unknown): string => cloudInputText(value, /^[a-z_]{0,100}$/) ? value : "operation_failed";
+function cloudInvalid(): never { throw new DoneBotGatewayError(502, "cloud_snapshot_invalid", "Cloud 套餐或实例状态无法验证，请刷新。"); }
+function cloudPlan(value: DoneBotCloudPlan): DoneBotCloudPlan {
+  if (!value || typeof value.enabled !== "boolean" || !cloudInputText(value.monthly_price, /^\d{1,20}(?:\.\d{1,6})?$/) ||
+    !Number.isSafeInteger(value.retention_days) || value.retention_days < 0) return cloudInvalid();
+  return { enabled: value.enabled, monthly_price: value.monthly_price, retention_days: value.retention_days };
+}
+function cloudInstance(value: DoneBotCloudInstance): DoneBotCloudInstance {
+  if (!value || !cloudInputText(value.id, cloudID) || !cloudState(value.desired) || !cloudState(value.actual) ||
+    !(value.subscription_state === "" || cloudState(value.subscription_state)) || typeof value.purge_locked !== "boolean" ||
+    value.paid_until !== null && (typeof value.paid_until !== "string" || !Number.isFinite(Date.parse(value.paid_until)))) return cloudInvalid();
+  return { id: value.id, desired: value.desired, actual: value.actual, error: cloudProblem(value.error),
+    paid_until: value.paid_until, subscription_state: value.subscription_state, purge_locked: value.purge_locked };
+}
+function cloudOperation(value: DoneBotCloudOperation): DoneBotCloudOperation {
+  if (!value || !cloudInputText(value.id, cloudID) || !cloudState(value.action) || !cloudState(value.state)) return cloudInvalid();
+  return { id: value.id, action: value.action, state: value.state, error: cloudProblem(value.error) };
+}
 
 export function doneBotRequestUrl(path: string, origin = DONEBOT_ORIGIN): URL {
   const url = new URL(path, origin);
@@ -362,6 +384,95 @@ export class DoneBotGateway {
     const concurrency = (account as { concurrency?: unknown } | null)?.concurrency;
     this.accountSnapshot = typeof concurrency === "number" && Number.isSafeInteger(concurrency) && concurrency > 0 ? { concurrency, at: Date.now() } : null;
     return account;
+  }
+
+  private async cloudRequest(method: "GET" | "POST", path: string, accountId?: string, key?: string): Promise<unknown> {
+    const epoch = this.epoch;
+    if (!this.session) throw new DoneBotGatewayError(401, "login_required", "请先在应用内登录 DoneBot 账号，再刷新 Cloud。");
+    const session = await this.validSession();
+    this.checkEpoch(epoch);
+    if (session.mode === "installation") throw new DoneBotGatewayError(403, "cloud_login_required", "请在本机登录 DoneBot 账号后管理 Cloud，安装凭据不能操作账户扣款。");
+    if (accountId && accountId !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重新确认。");
+    const id = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+    const allowed = method === "GET" ? path === "plan" || path === "instances" || new RegExp(`^instances/${id}/operations$`).test(path)
+      : path === "instances" || new RegExp(`^instances/${id}/(?:start|stop|cancel|desktop-launch)$`).test(path);
+    if (!allowed) throw new DoneBotGatewayError(400, "cloud_path_invalid", "无效的 Cloud 操作。");
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    try {
+      const response = await this.fetcher(`${this.origin}/api/v1/donebot/cloud/${path}`, {
+        method, redirect: "error", credentials: "omit", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
+        headers: { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json", ...(key ? { "Idempotency-Key": key } : {}) },
+        ...(method === "POST" ? { body: "{}" } : {}),
+      });
+      const value = await response.json() as { code?: number; data?: unknown; reason?: string };
+      this.checkEpoch(epoch);
+      if (!response.ok) {
+        const messages: Record<string, string> = {
+          CLOUD_INSUFFICIENT_BALANCE: "账户余额不足，无法开通或续期。", CLOUD_PLAN_DISABLED: "Cloud 暂未开放开通。",
+          CLOUD_DELETING: "实例正在永久删除，暂时无法恢复或重新开通。", CLOUD_NOT_FOUND: "未找到当前账号的云实例，请刷新。",
+          CLOUD_BROWSER_DISABLED: "云实例连接尚未配置，请联系管理员。",
+        };
+        const reason = typeof value.reason === "string" && /^CLOUD_[A-Z_]+$/.test(value.reason) ? value.reason : "cloud_unavailable";
+        throw new DoneBotGatewayError(response.status, reason, messages[reason] ?? (response.status === 401 ? "登录已失效，请重新登录 DoneBot。" : "Cloud 请求未完成，请刷新状态后重试。"));
+      }
+      return value.code === 0 && "data" in value ? value.data : value;
+    } catch (error) {
+      this.checkEpoch(epoch);
+      if (error instanceof DoneBotGatewayError) throw error;
+      throw new DoneBotGatewayError(502, "cloud_unavailable", "Cloud 请求未完成，请刷新状态或使用原确认重试。");
+    } finally { this.controllers.delete(controller); }
+  }
+
+  async cloudSnapshot(): Promise<DoneBotCloudSnapshot> {
+    const epoch = this.epoch;
+    if (!this.session) throw new DoneBotGatewayError(401, "login_required", "请先在应用内登录 DoneBot 账号，再刷新 Cloud。");
+    const session = await this.validSession();
+    this.checkEpoch(epoch);
+    if (session.mode === "installation") throw new DoneBotGatewayError(403, "cloud_login_required", "请在本机登录 DoneBot 账号后管理 Cloud。");
+    const [info, instances, account] = await Promise.all([
+      this.cloudRequest("GET", "plan", session.user.id), this.cloudRequest("GET", "instances", session.user.id), this.account(),
+    ]) as [{ plan: DoneBotCloudPlan; browser_available: boolean }, DoneBotCloudInstance[], { balance_cents?: number | string }];
+    const plan = cloudPlan(info?.plan);
+    if (!Array.isArray(instances) || instances.length > 1) return cloudInvalid();
+    const instance = instances.length ? cloudInstance(instances[0]!) : null;
+    const operations = instance ? await this.cloudRequest("GET", `instances/${instance.id}/operations`, session.user.id) as DoneBotCloudOperation[] : [];
+    if (!Array.isArray(operations)) throw new DoneBotGatewayError(502, "cloud_snapshot_invalid", "Cloud 操作状态无法验证，请刷新。");
+    this.checkEpoch(epoch);
+    const cents = account?.balance_cents;
+    const balance = typeof cents === "number" && Number.isFinite(cents) || cloudInputText(cents, /^-?\d+(?:\.\d+)?$/) && Number.isFinite(Number(cents)) ? cents! : null;
+    return { account_id: session.user.id, email: session.user.email, balance_cents: balance,
+      plan, instance, operations: operations.map(cloudOperation), connection_available: info.browser_available === true };
+  }
+
+  async cloudMutate(input: DoneBotCloudMutation): Promise<DoneBotCloudMutationResult> {
+    if (!input || !["start", "stop", "cancel"].includes(input.action) || !cloudInputText(input.key, /^[A-Za-z0-9_-]{1,100}$/) ||
+      !cloudInputText(input.account_id, /^.{1,200}$/) || !cloudInputText(input.monthly_price, /^\d{1,20}(?:\.\d{1,6})?$/) ||
+      (input.id !== undefined && !cloudInputText(input.id, cloudID)) ||
+      (!input.id && input.action !== "start")) throw new DoneBotGatewayError(400, "cloud_operation_invalid", "无效的 Cloud 操作。");
+    const epoch = this.epoch;
+    if (input.action === "start") {
+      const info = await this.cloudRequest("GET", "plan", input.account_id) as { plan: DoneBotCloudPlan };
+      if (cloudPlan(info?.plan).monthly_price !== input.monthly_price) throw new DoneBotGatewayError(409, "cloud_price_changed", "Cloud 月费已变化，请刷新后重新确认。");
+    }
+    this.checkEpoch(epoch);
+    const result = await this.cloudRequest("POST", input.id ? `instances/${input.id}/${input.action}` : "instances", input.account_id, input.key) as DoneBotCloudMutationResult;
+    return { instance: cloudInstance(result?.instance), operation: cloudOperation(result?.operation) };
+  }
+
+  async cloudConnect(id: string, accountId: string): Promise<{ url: string }> {
+    if (!cloudInputText(id, cloudID) || !cloudInputText(accountId, /^.{1,200}$/)) throw new DoneBotGatewayError(400, "cloud_operation_invalid", "无效的 Cloud 操作。");
+    const value = await this.cloudRequest("POST", `instances/${id}/desktop-launch`, accountId) as { url: string };
+    let valid = false;
+    try {
+      const url = new URL(value.url), address = new URL(url.searchParams.get("address") ?? "");
+      valid = url.protocol === "donebot:" && url.hostname === "pair" && !url.port && !url.pathname && !url.username && !url.password && !url.hash &&
+        [...url.searchParams.keys()].every(key => ["address", "token", "name"].includes(key) && url.searchParams.getAll(key).length === 1) &&
+        address.protocol === "https:" && address.hostname.startsWith(id + ".") && address.pathname === "/" && !address.username && !address.password && !address.search && !address.hash &&
+        /^omb_pair_[A-Za-z0-9_-]{43}$/.test(url.searchParams.get("token") ?? "");
+    } catch { /* Malformed pairing replies fail closed. */ }
+    if (!valid) throw new DoneBotGatewayError(502, "cloud_connection_invalid", "Cloud 连接地址无法验证，请刷新后重试。");
+    return { url: value.url };
   }
   async concurrency(scope: DoneBotScope): Promise<number> {
     const current = this.scope();

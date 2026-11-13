@@ -43,6 +43,7 @@ import { inboxVersion, useInboxLoader, useInboxPanel, useInboxReady } from "@/st
 import { InboxPanel } from "@/components/inbox/InboxPanel";
 import { PlacesRail } from "@/components/PlacesRail";
 import { NewLocalFromMenu } from "@/components/PlaceAddSheet";
+import { DoneBotCloudDialog } from "@/donebot/CloudDialog";
 import { CloudHowTo } from "@/components/CloudHowTo";
 import { DesktopCapabilitiesProvider, useCaptionChrome, useDesktopCapabilities, WindowDragStrip, windowFramed } from "@/components/DesktopCapabilities";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
@@ -113,9 +114,10 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     };
     const url = new URL(window.location.href);
     const requestedSettings = url.searchParams.get("desktop-settings");
-    const cloud = UPSTREAM_SERVICES.cloud && ["cloud", "cloud-settings", "cloud-add", "cloud-add-howto"].includes(requestedSettings ?? "");
+    const cloudAdd = requestedSettings === "cloud-add" || requestedSettings === "cloud-add-howto";
+    const cloud = cloudAdd || UPSTREAM_SERVICES.cloud && ["cloud", "cloud-settings"].includes(requestedSettings ?? "");
     if (requestedSettings === "workspaces" || (UPSTREAM_SERVICES.cloud && requestedSettings === "organization" && window.ogb.organization && !remoteClient) ||
-      (cloud && window.ogb.cloudAccount && !remoteClient)) {
+      (cloud && (cloudAdd || window.ogb.cloudAccount) && !remoteClient)) {
       url.searchParams.delete("desktop-settings");
       window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       if (requestedSettings === "organization") dispatch({ type: "toggleAppSettings", open: true, section: "organization" });
@@ -291,7 +293,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     state.pluginsOpen;
 
   useEffect(() => {
-    return window.ogb?.onOpenAppSettings?.(section => dispatch(UPSTREAM_SERVICES.cloud && (section === "cloud-add" || section === "cloud-add-howto") && window.ogb?.cloudAccount && !remoteClient
+    return window.ogb?.onOpenAppSettings?.(section => dispatch((section === "cloud-add" || section === "cloud-add-howto") && !remoteClient
       ? { type: "openCloudAdd", source: section === "cloud-add" ? "app_menu" : "app_howto" }
       : UPSTREAM_SERVICES.cloud && section === "cloud" && window.ogb?.cloudAccount && !remoteClient
         ? CLOUD_LINK_SETTINGS
@@ -444,6 +446,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       </div>
       {state.appSettingsOpen && <SettingsModal />}
       {UPSTREAM_SERVICES.cloud && cloudAddOpened.current && <CloudAddDialog />}
+      {!UPSTREAM_SERVICES.cloud && state.cloudAdd && <DoneBotCloudDialog onClose={() => dispatch({ type: "closeCloudAdd" })} />}
       {UPSTREAM_SERVICES.cloud && <CloudHowTo />}
       {UPSTREAM_SERVICES.cloud && <CloudSetup viewer={viewer} welcomeShown={welcomeOnScreen} />}
       <WelcomeKeeper viewer={viewer} />

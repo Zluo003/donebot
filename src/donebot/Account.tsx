@@ -8,8 +8,8 @@ import { WindowFrameBar } from "@/components/WindowFrameBar";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
 import { useDesktopCapabilities } from "@/components/DesktopCapabilities";
 import { DoneBotSignIn } from "./SignIn";
-import { DONEBOT_CLOUD_URL, isDoneBotCloudBrowser } from "./services";
-import { openExternalLink } from "@/lib/app-links";
+import { isDoneBotCloudBrowser } from "./services";
+import { DoneBotCloudAccess } from "./CloudAccess";
 
 const buttonClass = "ui-button inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "请求失败，请稍后重试。";
@@ -65,9 +65,8 @@ export function DoneBotAccountSettings() {
       <p className="mt-2 text-[13px] text-ink-secondary">文本、语音和媒体共用账号并发，图片、视频和音乐任务在并发用满时自动排队。</p>
       {!state.config?.donebot?.persistent && <p className="mt-3 text-[13px] text-ink-secondary">当前设备未启用凭据持久保存，重启后需要重新登录。</p>}
     </Card>
-    <Card title="DoneBot Cloud" subtitle="使用同一个 DoneBot 账号，管理你的专属云实例。">
-      <p className="text-[13px] text-ink-secondary">按月预付，Cloud 月费从账号余额扣除。余额不足时不续期，到期及保留期结束后自动删除实例与数据。</p>
-      <button type="button" className={`${buttonClass} mt-3`} onClick={() => void openExternalLink(DONEBOT_CLOUD_URL).catch(error => setError(errorText(error)))}>管理 Cloud</button>
+    <Card title="DoneBot Cloud" subtitle="使用同一个 DoneBot 账号，开通或管理你的专属云实例。">
+      {isDoneBotCloudBrowser() ? <p className="text-[13px] text-ink-secondary">请在本机 DoneBot 客户端管理 Cloud 订阅。</p> : <DoneBotCloudAccess key={state.config?.donebot?.user?.id} heading={false} />}
     </Card>
     <Card title="可用模型" subtitle="账号可使用的模型将自动同步。">
       <button type="button" disabled={busy} onClick={() => void refresh()} className={buttonClass}><RefreshCw size={14} className={busy ? "animate-spin" : ""} />刷新模型</button>

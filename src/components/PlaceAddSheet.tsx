@@ -1,4 +1,5 @@
 import { doneBotPlaceChoices } from "@/donebot/services";
+import { DoneBotCloudAccess } from "@/donebot/CloudAccess";
 // ＋ at the end of the rail: one sheet of choices. A new workspace on this computer (named here, then main opens it), a new
 // organization on the Team plan the person pays for (when they run one), buy a Cloud (the buying sheet: another Cloud right
 // here, or the first one on this computer's own sheet), or connect to a server of the person's own.
@@ -111,6 +112,7 @@ export function OwnServerLink({ onBack, onConnected, connect = null, start = nul
   return <form data-place-add={connect ? "connect-server" : "own-server"} onSubmit={(event) => void submit(event)} className="flex flex-col gap-4 px-[30px] pb-[26px] pt-7">
     {onBack && <div><BackLink label={t("rail.back")} onClick={onBack} /></div>}
     <Heading title={connect ? t("rail.connectTitle", { name: connect.name }) : start?.title ?? t("connect.title")} sub={t(connect ? "connect.signedInLede" : "connect.lede")} />
+    {!connect && !start?.address && <DoneBotCloudAccess />}
     <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink">{t("connect.address")}
       <input data-autofocus={start?.locked ? undefined : true} data-own-server-link value={address} disabled={busy} readOnly={start?.locked === true} onChange={(event) => { if (!start?.locked) typeAddress(event.target.value); }}
         placeholder={t("connect.addressPlaceholder")} autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} aria-invalid={Boolean(shownProblem) || undefined}
@@ -250,8 +252,7 @@ export function NewLocalFromMenu() {
 export function PlaceAddSheet({ choices, places = [], connect = null, onClose, onAccount }: { choices: RailAddChoices; places?: readonly RailPlace[]; connect?: { name: string } | null; onClose: () => void; onAccount?: () => void }) {
   choices = doneBotPlaceChoices(choices);
   const server = choices.link, organization = choices.organization === true, account = choices.account === true && Boolean(onAccount), local = choices.local === true;
-  const several = [local, organization, choices.cloud, server, account].filter(Boolean).length > 1;
-  const [view, setView] = useState<"choose" | "local" | "cloud" | "server" | "organization">(connect ? "server" : several ? "choose" : local ? "local" : organization ? "organization" : choices.cloud ? "cloud" : "server");
+  const [view, setView] = useState<"choose" | "local" | "cloud" | "server" | "organization">(connect ? "server" : "choose");
   const [wide, setWide] = useState(false);
   const workspaces = window.ogb?.workspaces;
   const firstCloud = () => {
@@ -262,6 +263,7 @@ export function PlaceAddSheet({ choices, places = [], connect = null, onClose, o
   return <RailSheet wide={view === "cloud" && wide} focusKey={view} onClose={onClose}>
     {view === "choose" && <div data-place-add="choose" className="flex flex-col gap-5 px-[30px] pb-[26px] pt-7">
       <Heading title={t(local ? "rail.addAny" : "rail.add")} />
+      <DoneBotCloudAccess />
       {local && <Choice kind="local" icon={<Laptop size={19} />} title={t("rail.local")} sub={t("rail.localSub")} onClick={() => setView("local")} />}
       <div className="flex flex-col gap-3 sm:flex-row">
         {organization && <Choice kind="organization" icon={<Building2 size={19} />} title={t("rail.org")} sub={t("rail.orgSub")} onClick={() => setView("organization")} />}
@@ -270,9 +272,9 @@ export function PlaceAddSheet({ choices, places = [], connect = null, onClose, o
         {account && <Choice kind="account" icon={<UserRound size={19} />} title={t("accounts.add")} sub={t("rail.accountSub")} onClick={() => onAccount!()} />}
       </div>
     </div>}
-    {view === "local" && <NewLocalWorkspace places={places} onBack={several ? () => setView("choose") : null} onDone={onClose} />}
-    {view === "server" && <OwnServerLink onBack={several && !connect ? () => setView("choose") : null} onConnected={onClose} connect={connect} />}
-    {view === "cloud" && <AddCloudFlow onClose={onClose} onFirstCloud={firstCloud} onWide={setWide} onBack={several ? () => setView("choose") : null} />}
-    {view === "organization" && <NewOrganization onClose={onClose} onBack={several ? () => setView("choose") : null} />}
+    {view === "local" && <NewLocalWorkspace places={places} onBack={() => setView("choose")} onDone={onClose} />}
+    {view === "server" && <OwnServerLink onBack={!connect ? () => setView("choose") : null} onConnected={onClose} connect={connect} />}
+    {view === "cloud" && <AddCloudFlow onClose={onClose} onFirstCloud={firstCloud} onWide={setWide} onBack={() => setView("choose")} />}
+    {view === "organization" && <NewOrganization onClose={onClose} onBack={() => setView("choose")} />}
   </RailSheet>;
 }

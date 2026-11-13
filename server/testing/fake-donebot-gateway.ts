@@ -3,6 +3,7 @@ import { parsePackageDocument } from "../../shared/package-format.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { DoneBotCatalog, DoneBotGatewayModel } from "../../shared/donebot.ts";
+import { FakeDoneBotCloud } from "./fake-donebot-cloud.ts";
 
 type Row = Record<string, unknown>;
 const row = (value: unknown): Row => value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
@@ -25,13 +26,14 @@ export const FAKE_DONEBOT_CATALOG: DoneBotCatalog = {
 export const FAKE_DONEBOT_GIF_BASE64 = "R0lGODlhAgABAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAFAAAACwAAAAAAgABAAAIBQABAAgIACH5BAEUAAEALAAAAAACAAEAgQAA/wAAAAAAAAAAAAgFAAEACAgAOw==";
 
 export interface FakeDoneBotToolStep { name: string; arguments: Row }
-export interface FakeDoneBotRequest { path: string; method: string; body: Row; authenticated: boolean; installation?: string; receiptId?: string }
+export interface FakeDoneBotRequest { path: string; method: string; body: Row; authenticated: boolean; installation?: string; receiptId?: string; idempotencyKey?: string }
 export interface FakeDoneBotGateway {
   setAuthSettings(settings: Row): void;
   setAuthRequires2fa(required: boolean): void;
   setTemplateDocuments(documents: unknown[] | null): void;
   origin: string;
   requests: FakeDoneBotRequest[];
+  cloud: FakeDoneBotCloud;
   setPlan(steps: FakeDoneBotToolStep[], answer?: string): void;
   setReceiptPlan(status: "completed" | "failed" | "uncertain", steps: FakeDoneBotToolStep[]): void;
   setMediaStatus(status: "processing" | "completed" | "failed" | "uncertain"): void;
@@ -54,6 +56,7 @@ const send = (response: ServerResponse, value: unknown, status = 200) => { respo
 const stream = (response: ServerResponse, events: Row[]) => { response.writeHead(200, { "content-type": "text/event-stream" }); response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")); };
 
 export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DONEBOT_CATALOG, installationKeys = new Map<string, string>()): Promise<FakeDoneBotGateway> {
+  const cloud = new FakeDoneBotCloud();
   let authSettings: Row = { registration_enabled: true }, requires2fa = false;
   let templateDocuments: unknown[] | null = [];
   const requests: FakeDoneBotRequest[] = [];
@@ -75,7 +78,9 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
     const authenticated = request.headers.authorization === "Bearer fixture-installation-key" || installation !== undefined;
     const login = request.headers.authorization === "Bearer fixture-access-token" || runtimeRead && installation !== undefined && installation === request.headers["x-donebot-installation"];
     const logged = { ...body, ...(body.password ? { password: "[fixture password omitted]" } : {}), ...(body.new_password ? { new_password: "[fixture password omitted]" } : {}) };
-    const recorded: FakeDoneBotRequest = { path: originalPath, method: request.method!, body: logged, authenticated, ...(installation ? { installation } : typeof request.headers["x-donebot-installation"] === "string" ? { installation: request.headers["x-donebot-installation"] } : {}) };
+    const recorded: FakeDoneBotRequest = { path: originalPath, method: request.method!, body: logged, authenticated,
+      ...(typeof request.headers["idempotency-key"] === "string" ? { idempotencyKey: request.headers["idempotency-key"] } : {}),
+      ...(installation ? { installation } : typeof request.headers["x-donebot-installation"] === "string" ? { installation: request.headers["x-donebot-installation"] } : {}) };
     requests.push(recorded);
     if (path === "/fixture-image.png" && request.method === "GET") {
       const bytes = Buffer.from(png, "base64");
@@ -119,7 +124,8 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
         ...(mediaReceipt && ["processing", "completed"].includes(mediaReceipt.status) ? { task_id: mediaReceipt.taskId } : {}),
         ...(mediaReceipt?.status === "failed" ? { diagnostic: { http_status: 422, code: "provider_rejected", request_id: "fixture-receipt-request", message: "Synthetic provider rejected the requested image format." } } : {}) });
     }
-    if (path === "/api/v1/donebot/account") return login ? send(response, { balance_cents: 0, frozen_cents: 0, concurrency: 20, currency: "CNY" }) : send(response, {}, 401);
+    if (cloud.handle(path, request, response, request.headers.authorization === "Bearer fixture-access-token")) return;
+    if (path === "/api/v1/donebot/account") return login ? send(response, { balance_cents: cloud.balanceCents, frozen_cents: 0, concurrency: 20, currency: "CNY" }) : send(response, {}, 401);
     if (!authenticated) return send(response, { error: "Fixture installation required" }, 401);
     const receipt = randomUUID(); recorded.receiptId = receipt; response.setHeader("X-DoneBot-Receipt-ID", receipt);
     if (path === "/v1/systemone" && request.method === "POST") {
@@ -230,7 +236,7 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
   })().catch(() => { if (!response.headersSent) send(response, { error: "Fixture gateway failed" }, 500); else response.destroy(); }); });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { origin, requests,
+  return { origin, requests, cloud,
     setAuthSettings(settings) { authSettings = settings; },
     setAuthRequires2fa(required) { requires2fa = required; },
     setTemplateDocuments(documents) { templateDocuments = documents; },

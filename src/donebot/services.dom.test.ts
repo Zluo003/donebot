@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
 
 const fixture = vi.hoisted(() => ({ api: vi.fn(), dispatch: vi.fn() }));
+vi.mock("@/state/api", () => ({ api: fixture.api }));
 vi.mock("@/state/store", async original => {
   const actual = await original<typeof import("@/state/store")>();
   return { ...actual, api: fixture.api, useStore: () => ({ state: { ...actual.initialState,
@@ -25,6 +26,7 @@ const { KeysPage } = await import("@/components/keys/KeysPage");
 const { PhoneAppDialog } = await import("@/components/PhoneAppDialog");
 const { CloudBackendPicker } = await import("@/components/CloudBackendPicker");
 const { PlaceAddSheet } = await import("@/components/PlaceAddSheet");
+const { DoneBotCloudDialog } = await import("@/donebot/CloudDialog");
 const { useCloudOffer } = await import("@/lib/use-cloud-offer");
 const { IntroChips } = await import("@/components/HelperSetup");
 const { openPlaceAction } = await import("@/lib/place-view");
@@ -36,6 +38,8 @@ const render = async (children: ReturnType<typeof createElement>[]) => {
 };
 beforeEach(() => {
   setLocale("en");
+  fixture.api.mockReset().mockResolvedValue({ account_id: "fixture-user", email: "fixture@example.invalid", balance_cents: 5000,
+    plan: { enabled: true, monthly_price: "12.500000", retention_days: 7 }, instance: null, operations: [], connection_available: true });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   calls = vi.fn(async () => null);
   Object.assign(window, { ogb: {
@@ -89,6 +93,23 @@ it("keeps local workspaces and self-hosted server connections available when mai
   expect(connect).toBeTruthy();
   await act(async () => connect!.click());
   expect(document.querySelector('[data-place-add="own-server"]')).toBeTruthy();
+  expect(calls).not.toHaveBeenCalled();
+});
+
+it.each([true, false])("confirms Cloud inside the add sheet without opening a webpage (local=%s)", async local => {
+  await render([createElement(PlaceAddSheet, { choices: { cloud: true, local, link: true, address: true }, onClose: vi.fn() })]);
+  const entry = document.querySelector('[data-donebot-cloud-access]')!;
+  expect(entry.textContent).toContain("12.500000 / 月");
+  const open = [...entry.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "开通 DoneBot Cloud")!;
+  await act(async () => open.click());
+  expect(entry.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("余额不足无法开通或续期");
+  expect(fixture.api.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+  expect(calls).not.toHaveBeenCalled();
+});
+
+it("opens the application's own Cloud dialog without mounting upstream checkout", async () => {
+  await render([createElement(DoneBotCloudDialog, { onClose: vi.fn() })]);
+  expect(document.querySelector('[data-donebot-cloud-access]')?.textContent).toContain("开通 DoneBot Cloud");
   expect(calls).not.toHaveBeenCalled();
 });
 

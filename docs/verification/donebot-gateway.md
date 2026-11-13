@@ -1,5 +1,53 @@
 # DoneBot 统一网关验证
 
+## 应用内 Cloud 开通（2026-11-13）
+
+添加工作区/服务器页面、应用菜单“添加云服务”和账号设置使用同一个自有面板。
+直接展示当前 DoneBot 账号、套餐精确月费、余额、实例和保留期。确认后调用本机
+`/api/donebot/cloud`，不跳转网页、不调用原版购买或外链桥接。
+
+本机自有网关适配仅转接主控已有的 Cloud API，使用已登录 JWT；安装凭据不能
+获取订阅、扣款或配对权限。实例归属仍由主控验证的身份决定，正文 account_id
+仅用于拒绝旧账号确认。登录与安装凭据、节点信息和操作 lease 不进入公开快照。
+开通/停机/取消需确认，网络失败保留原幂等键，不自动重放付费请求。提交前复查
+套餐价格，改变后要求重新确认；这不是主控原子锁价，不能排除检查与提交之间的
+管理员并发改价。实际扣款、余额校验、退款及调度均由主控负责。
+
+已付有效订阅停启不重复收费；取消后重新开通重新扣款并开始新周期，确认框明确
+告知。就绪后“连接 Cloud”取得一次性原生配对链接，复查当前账号和运行状态，
+再调用既有 `workspaces.add("link", ...)`。不向 renderer 暴露登录 JWT。
+
+专项命令（全部使用合成账户与余额）：
+
+```sh
+pnpm exec vitest run server/donebot/cloud.test.ts server/donebot/gateway.test.ts src/donebot/CloudAccess.dom.test.ts src/donebot/services.dom.test.ts src/components/PlaceAddSheet.test.ts src/components/lazy-screens.test.ts server/donebot-cloud.e2e.test.ts --maxWorkers=1
+pnpm exec tsc -p tsconfig.json --noEmit --incremental false
+pnpm exec tsc -p tsconfig.server.json --noEmit --incremental false
+DONEBOT_FIXTURE_CLOUD=1 node --experimental-strip-types scripts/verify-donebot-auth-ui.ts
+```
+
+对应 7 文件共 66 项测试、前后端类型检查、修改文件 oxlint 和临时目录 Vite 生产
+构建通过。构建保留既有 CSS highlight、第三方注释和 chunk 大小提示。
+
+E2E 启动真实隔离 DoneBot 服务，连接回环合成网关：余额不足零扣款、提交后丢失
+响应再用同键重试仅一笔合成扣款、付费期内停启不再扣款、取消续费、错误账号/
+额外归属字段拒绝、退出后无主控请求以及公开状态/日志无凭据。证据和持久日志
+路径在 `.omb-scratch/verify-evidence/donebot-cloud/result.json`。
+
+浏览器用专属 `dbc-native-20261113` session，先在真实登录组件登录合成账号，
+再打开上述 launcher 的 loopback 预览，URL 参数 `surface=cloud-add`、
+`surface=server-connect`、`surface=cloud-menu` 可分别挂载真实入口组件。
+本次检查添加页确认开通、余额 50 → 37.5、运行状态、连接和取消确认。
+原生桌面桥接用临时替身记录：外部浏览器调用 0 次、配对调用 1 次，地址仍在预览页；
+390 × 844 无横向溢出。截图在本机忽略目录：
+
+- `output/playwright/donebot-cloud-native-confirm.png`
+- `output/playwright/donebot-cloud-native-narrow.png`
+
+该记录替代此前的网页跳转方案。浏览器配对桥接为替身，worker/扣款为合成实现，
+不能代替打包 Electron 的原生菜单、实际云实例连接、真实 Linux 隔离或生产余额
+验收。没有连接生产网关或操作已有实例；客户端由用户自行推送、打包发布。
+
 ## 默认网关与第三方媒体渠道
 
 LLM 始终通过 DoneBot 网关。图片、视频、音频生成可使用用户指定的 CLI、MCP 或

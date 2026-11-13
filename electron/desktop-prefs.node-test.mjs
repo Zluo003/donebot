@@ -355,11 +355,9 @@ test("production wiring: main answers this computer's page, My Cloud's own page 
   assert.deepEqual(calls.slice(2), [["language", "pt-br"], "relabel", "talk relabel", ["language", "en"]], "main draws its native surfaces again only when the words change");
   options.onShown("de", {}); options.onShown("de", contents); options.onShown("en", contents);
   assert.deepEqual(calls.slice(6), [["shown", "de"], "relabel", "talk relabel", ["shown", "en"]], "only the window's own page leads main's words, and only a change redraws them");
-  const navigate = main.slice(main.indexOf("function navigateMainWindow(url, keepingRecovery = false) {"), main.indexOf("\n}\n", main.indexOf("function navigateMainWindow(url, keepingRecovery = false) {")) + 3);
-  const navigationContext = { homeWindow: { cancel: () => {} }, mainWindow: { isDestroyed: () => false, webContents: { getURL: () => LOCAL }, loadURL: async url => { if (url.endsWith("fail")) throw new Error("ERR_CONNECTION_REFUSED"); } } };
-  navigationContext.workspaceNavigation = createWorkspaceNavigation({ window: () => navigationContext.mainWindow,
+  const navigationContext = { mainWindow: { isDestroyed: () => false, webContents: { getURL: () => LOCAL }, loadURL: async url => { if (url.endsWith("fail")) throw new Error("ERR_CONNECTION_REFUSED"); } } };
+  const load = createWorkspaceNavigation({ window: () => navigationContext.mainWindow,
     local: () => ({ id: "local", origin: LOCAL }), saved: () => ({ activeId: "local", environments: [] }), restore: () => assert.fail("the visible workspace remains local") });
-  const load = vm.runInNewContext(`${navigate}; navigateMainWindow`, navigationContext);
   assert.equal(await load(`${LOCAL}/ok`), true); assert.equal(await load(`${LOCAL}/fail`), false, "a failed load answers false, never throws");
   navigationContext.mainWindow = null;
   assert.equal(await load(`${LOCAL}/`), false, "no window");

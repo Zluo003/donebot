@@ -1,6 +1,7 @@
-export function createWorkspaceNavigation({ window, local, saved, restore, log = () => {} }) {
+export function createWorkspaceNavigation({ window, local, saved, restore, cancel = () => {}, log = () => {} }) {
   let turn = 0;
-  return async (url) => {
+  return async (url, keepingRecovery = false) => {
+    if (!keepingRecovery) cancel();
     const mine = ++turn;
     const win = window();
     if (!win || win.isDestroyed()) return false;

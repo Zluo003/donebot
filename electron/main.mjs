@@ -115,6 +115,7 @@ import { createTeamProfileSeeds } from "./team-profile-seed.mjs";
 import { createHomePlaces } from "./home-places.mjs"; import { openStartPlace } from "./start-place.mjs"; import { createDesktopRing, installAccounts } from "./accounts-main.mjs"; import { createAddedCloudNotice, installCloudRail, railPlaces } from "./cloud-rail.mjs"; import { createPlaceInboxWatch } from "./place-inbox-watch.mjs"; import { homeLook, otherOwnClouds, withoutOldCloudHome } from "./cloud-list.mjs"; import { installPlaceLook } from "./place-look.mjs"; import { CHROME_RAIL_PATH, createChromeRail } from "./chrome-rail.mjs";
 import { createWindowStateFile } from "./window-state-file.mjs";
 import { createEnvironmentsFile, ENVIRONMENTS_SAVE_FAILED } from "./environments-file.mjs";
+import { createWorkspaceSettings, createClipboardServerConnect } from "./workspace-settings.mjs";
 import { createWorkspaceNavigation } from "./workspace-navigation.mjs";
 import { createOrgLibrary } from "./org-library.mjs";
 import { createCompanyBackups } from "./company-backups.mjs";
@@ -1548,19 +1549,14 @@ async function workspaceMenuAction(action) {
   }
 }
 
-const workspaceNavigation = createWorkspaceNavigation({
+const navigateMainWindow = createWorkspaceNavigation({
+  cancel: () => homeWindow.cancel(),
   window: () => mainWindow,
   local: () => ({ origin: rendererOrigin(), id: environmentsState.environments.find(entry => entry.kind === "local" && entry.dataDir === runningDataDir)?.id ?? LOCAL_ID }),
   saved: () => environmentsState,
   restore: id => persistEnvironments(withActive(environmentsState, id)),
   log: slog,
 });
-
-function navigateMainWindow(url, keepingRecovery = false) {
-  if (!keepingRecovery) homeWindow.cancel();
-  if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(false);
-  return workspaceNavigation(url);
-}
 
 let rememberedHome = null;
 
@@ -1787,25 +1783,9 @@ async function openCloudEntry() {
   return true;
 }
 
-function openWorkspaceSettings(computerId) {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  const id = typeof computerId === "string" ? computerId : null;
-  if (senderIsLocal({ sender: mainWindow.webContents })) {
-    mainWindow.webContents.send("workspaces:open-settings", id);
-  } else {
-    persistEnvironments(withActive(environmentsState, LOCAL_ID));
-    navigateMainWindow(`${rendererOrigin()}/?desktop-settings=workspaces${id ? `&share-computer=${encodeURIComponent(id)}` : ""}`);
-  }
-}
-
-async function addServerFromClipboard() {
-  try {
-    return await connectHostedWorkspace(clipboard.readText());
-  } catch (error) {
-    await dialog.showMessageBox({ type: "info", message: nativeT("native.dialog.connectFailed.title"), detail: `${error.message}\n${nativeT("native.dialog.connectFailed.detail")}` });
-    return false;
-  }
-}
+const openWorkspaceSettings = createWorkspaceSettings({ window: () => mainWindow, isLocal: senderIsLocal,
+  selectLocal: () => persistEnvironments(withActive(environmentsState, LOCAL_ID)), navigate: navigateMainWindow, origin: rendererOrigin });
+const addServerFromClipboard = createClipboardServerConnect({ connect: input => connectHostedWorkspace(input), read: () => clipboard.readText(), dialog, t: nativeT });
 
 const serverConnect = createServerConnect({ fetch: (...args) => session.defaultSession.fetch(...args), t: nativeT, tailnet: () => onTailnet(os.networkInterfaces()),
   ownEnvironmentId: async () => (await (await localServerRequest("/.well-known/donebot/environment")).json())?.environmentId ?? null,

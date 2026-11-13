@@ -1,3 +1,4 @@
+import type { VpsComputerStatus, LocalVmStatus } from "./computer-panel-status";
 import { boatCapableEngine, cloudEngineOf } from "@/lib/remote-desktop";
 import { canWorkOnCloud } from "../../shared/cloud-computer";
 import { viewerTargetId } from "../../shared/desktop-viewer";
@@ -58,15 +59,6 @@ import { cloudRefusal, type PlaceActionId, type PlaceFacts, type PlaceView } fro
 import { t } from "@/lib/i18n";
 import { LocalizedPanelError, panelErrorText } from "@/lib/computer-messages";
 
-interface VpsComputerStatus {
-  configured: boolean;
-  imageMatches: boolean;
-  managed: boolean;
-  container: "running" | "stopped" | "missing";
-  ready: boolean;
-  problem: string | null;
-}
-
 type Phase =
   | "checking"
   | "unconfigured"
@@ -91,26 +83,6 @@ type Phase =
   | "browser"
   | "off"
   | "error";
-
-interface LocalVmStatus {
-  resumable?: boolean;
-  stop_reason?: "idle" | null;
-  mode: "shared" | "per-bot" | "pool";
-  max_instances: number;
-  image: boolean;
-  create_supported: boolean;
-  container: "running" | "stopped" | "missing";
-  imageMatches: boolean;
-  managed: boolean;
-  network: "loopback" | "unsafe" | "unknown";
-  security: "hardened" | "unsafe" | "unknown";
-  persistence: "durable" | "unsafe" | "unknown";
-  desktopReady: boolean;
-  ready: boolean;
-  problem: string | null;
-  viewer_url: string;
-  target_key: string;
-}
 
 const computerControlSnapshotSchema = z.object({
   held: z.boolean().optional().default(false),

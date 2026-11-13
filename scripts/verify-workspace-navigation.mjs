@@ -38,7 +38,7 @@ if (!process.versions.electron) {
   const { default: environments } = await import("../electron/environments.cjs");
   const { withActive, workspaceNavigationAllowed, workspaceSenderAllowed, workspaceMenuTemplate } = environments;
   const source = fs.readFileSync(new URL("../electron/main.mjs", import.meta.url), "utf8");
-  const start = source.indexOf("const workspaceNavigation = createWorkspaceNavigation(");
+  const start = source.indexOf("const navigateMainWindow = createWorkspaceNavigation(");
   const end = source.indexOf("\nlet rememberedHome", start);
   assert.ok(start > 0 && end > start);
   app.setPath("userData", path.join(output, "profile"));

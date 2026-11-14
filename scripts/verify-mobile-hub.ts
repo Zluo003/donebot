@@ -7,14 +7,16 @@ import { pathToFileURL } from "node:url";
 import { mkdir,writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { WebSocket as NativeWebSocket } from "ws";
-import { loadConfig } from "../relay/src/config.ts";
-import { startRelay } from "../relay/src/server.ts";
-import { startRelayManagement } from "../relay/src/management.ts";
 import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
 import { startFakeDoneBotGateway } from "../server/testing/fake-donebot-gateway.ts";
 
 const hub = process.env.DONEBOT_MOBILE_FIXTURE_HUB!;
 if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(hub)) throw new Error("An explicitly launched mobile hub fixture is required");
+const relayRoot = process.env.DONEBOT_MOBILE_RELAY_ROOT;
+if (!relayRoot) throw new Error("DONEBOT_MOBILE_RELAY_ROOT must point to the independent DoneBot-Relay project");
+const { loadConfig } = await import(pathToFileURL(join(relayRoot, "src/config.ts")).href);
+const { startRelay } = await import(pathToFileURL(join(relayRoot, "src/server.ts")).href);
+const { startRelayManagement } = await import(pathToFileURL(join(relayRoot, "src/management.ts")).href);
 const install = "11111111-1111-4111-8111-111111111111";
 const credential = "sk-donebot-" + "a".repeat(64);
 const phone = "22222222-2222-4222-8222-222222222222";
@@ -37,10 +39,10 @@ const proxy = createServer(async (req,res) => {
 });
 let proxiedPhones = 0;
 proxy.on("upgrade", (req, socket, head) => {
-  const path = req.url?.replace(/^\/mobile-relay(?=\/)/, "");
+  const path = req.url;
   if (!path || !["/v1/host", "/v1/host/data", "/v1/phone"].includes(path)) return socket.destroy();
   if (path === "/v1/phone") {
-    assert.equal(req.url, "/mobile-relay/v1/phone");
+    assert.equal(req.url, "/v1/phone");
     assert.equal(req.headers.origin, "capacitor://localhost");
     ++proxiedPhones;
   }
@@ -74,8 +76,8 @@ try {
  const descriptor=await api(`/api/v1/donebot/mobile/workspaces/${install}/connection`,{installationId:phone});
  const out=join(process.cwd(),".omb-scratch","verify-evidence","mobile-hub");await mkdir(out,{recursive:true});
  const bundle=join(out,"mobile-transport.mjs");await build({entryPoints:[join(process.cwd(),"../DoneBot-Mobile/src/core/relay.ts")],outfile:bundle,bundle:true,platform:"node",format:"esm",define:{__FIXTURE__:"false"},logLevel:"silent"});
- assert.deepEqual(descriptor.r,["donebot.cn/mobile-relay"]);
- globalThis.WebSocket=class extends NativeWebSocket {constructor(url:string|URL,protocols?:string|string[]){super(String(url).replace("wss://donebot.cn",`ws://127.0.0.1:${address.port}`),protocols,{origin:"capacitor://localhost"});}} as unknown as typeof WebSocket;
+ assert.deepEqual(descriptor.r,["relay1.donebot.cn"]);
+ globalThis.WebSocket=class extends NativeWebSocket {constructor(url:string|URL,protocols?:string|string[]){super(String(url).replace("wss://relay1.donebot.cn",`ws://127.0.0.1:${address.port}`),protocols,{origin:"capacitor://localhost"});}} as unknown as typeof WebSocket;
  const {RelayConnection}=await import(pathToFileURL(bundle).href);
  connection=await RelayConnection.connect(descriptor);
  assert.equal(proxiedPhones,1);
@@ -93,6 +95,6 @@ try {
  assert.ok(pushes.every(p=>!JSON.stringify(p).includes("Verify the self-hosted")));
  await api("/api/v1/donebot/mobile/session",{installationId:phone},"DELETE");
  await until(async()=>{try{await connection!.request("/api/bots?messages=1");return false;}catch{return true;}});
- await writeFile(join(out,"evidence.json"),JSON.stringify({fixture:fixture.info,bot:bot.id,thread:bot.activeTaskId,wait:settled,messages:messages.messages,pushes,devices,checks:["managed relay policy","same-domain relay proxy","Capacitor WebSocket origin","separate desktop and phone lists","original encrypted transport","real hub persistence","account ownership","original session scope","message outbox","generic notification","logout revocation"]},null,2));
+ await writeFile(join(out,"evidence.json"),JSON.stringify({fixture:fixture.info,bot:bot.id,thread:bot.activeTaskId,wait:settled,messages:messages.messages,pushes,devices,checks:["managed relay policy","independent relay domain and preserved paths","Capacitor WebSocket origin","separate desktop and phone lists","original encrypted transport","real hub persistence","account ownership","original session scope","message outbox","generic notification","logout revocation"]},null,2));
  console.log(JSON.stringify({ok:true,log:fixture.info.logPath,evidence:join(out,"evidence.json")}));
 } finally {connection?.close();await fixture.close();stopManagement();await relay.close();await fake.close();proxy.closeAllConnections();await new Promise<void>(resolve=>proxy.close(()=>resolve()));}

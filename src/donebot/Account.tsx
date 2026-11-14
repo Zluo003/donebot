@@ -60,8 +60,7 @@ export function DoneBotAccountSettings() {
     <Card title="DoneBot 账号" subtitle="模型服务由 DoneBot 统一提供。">
       <div className="flex flex-wrap items-center justify-between gap-3 text-[14px] text-ink"><span className="min-w-0 break-all">{email ?? "已登录"}</span>{!isDoneBotCloudBrowser() && <button type="button" disabled={busy} onClick={() => void logout()} className={buttonClass}><LogOut size={14} />退出登录</button>}</div>
       {balance !== null && <p className="mt-3 text-[13px] text-ink-secondary">可用余额（CNY）：{balance.toLocaleString(undefined, { maximumFractionDigits: 4 })}</p>}
-      <p className="mt-3 text-[13px] text-ink-secondary">{concurrency === null ? "账号并发尚未同步，媒体任务将等待配置。" : `账号总并发：${concurrency}；图片、视频和音乐共用并发：${doneBotMediaConcurrency(concurrency)}。`}</p>
-      {concurrency === 1 && <p className="mt-2 text-[13px] text-ink-secondary">当前仅 1 个并发，媒体执行时无法为其他模型保留并发。</p>}
+      <p className="mt-3 text-[13px] text-ink-secondary">{concurrency === null ? "账号并发尚未同步，媒体任务将等待配置。" : `账号总并发：${doneBotMediaConcurrency(concurrency)}；文本、语音和媒体共同使用全部额度。`}</p>
       <p className="mt-2 text-[13px] text-ink-secondary">文本、语音和媒体共用账号并发，图片、视频和音乐任务在并发用满时自动排队。</p>
       {!state.config?.donebot?.persistent && <p className="mt-3 text-[13px] text-ink-secondary">当前设备未启用凭据持久保存，重启后需要重新登录。</p>}
     </Card>

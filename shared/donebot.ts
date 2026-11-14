@@ -2,7 +2,7 @@ export type DoneBotProtocol = "messages" | "gemini" | "responses" | "chat";
 export type DoneBotModelKind = "text" | "image" | "video" | "music" | "audio";
 
 export function doneBotMediaConcurrency(total: number): number | null {
-  return Number.isSafeInteger(total) && total > 0 ? Math.max(1, Math.floor(total * 0.5)) : null;
+  return Number.isSafeInteger(total) && total > 0 ? total : null;
 }
 
 export interface DoneBotGatewayModel {

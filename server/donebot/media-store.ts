@@ -25,6 +25,7 @@ const jobSchema = z.object({
   referenceFingerprint: z.record(z.string(), z.unknown()).optional(),
   taskId: z.string().optional(), receiptId: z.string().optional(), error: z.string().optional(),
   diagnostic: mediaDiagnosticSchema.optional(),
+  generationEndedAt: z.number().optional(),
   artifacts: z.array(artifactSchema), waitingStopped: z.boolean(), createdAt: z.number(), updatedAt: z.number(),
   publishedAt: z.number().optional(), deliveredAt: z.number().optional(), retrievalNotifiedAt: z.number().optional(), uncertainNotifiedAt: z.number().optional(),
   nextPollAt: z.number(), attempts: z.number().int().nonnegative(),
@@ -88,7 +89,7 @@ export class MediaJobStore {
   activeCount(accountId: string): number {
     return this.db.prepare("SELECT json FROM donebot_media_jobs").all().reduce((count, row) => {
       const job = jobSchema.parse(JSON.parse(String(row.json)));
-      return count + Number(job.scope.accountId === accountId && ["submitting", "submitted", "running", "uncertain"].includes(job.status));
+      return count + Number(job.scope.accountId === accountId && job.generationEndedAt === undefined && ["submitting", "submitted", "running", "uncertain"].includes(job.status));
     }, 0);
   }
 

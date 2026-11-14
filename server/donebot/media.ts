@@ -276,16 +276,18 @@ export class DoneBotMediaService {
       job = this.save(job, { receiptId: response.headers.get("X-DoneBot-Receipt-ID") ?? undefined });
       const body = await responseJson(response);
       if (!response.ok) {
-        if (response.status === 429 && !job.receiptId) {
+        const diagnostic = gatewayMediaDiagnostic(body, response.status, response.headers);
+        if (response.status === 429 && (!job.receiptId || diagnostic?.code === "DONEBOT_MEDIA_CONCURRENCY")) {
           const retry = response.headers.get("retry-after"), seconds = Number(retry);
-          const requestedDelay = retry && !Number.isNaN(seconds) ? seconds * 1000 : retry ? Date.parse(retry) - this.now() : 1000;
-          const delay = Number.isFinite(requestedDelay) ? Math.min(60_000, Math.max(1000, requestedDelay)) : 1000;
-          this.save(job, { status: "queued", nextPollAt: this.now() + delay, attempts: job.attempts + 1, error: "The account has no media slot available yet. This unaccepted operation remains queued." });
+          const backoff = Math.min(30_000, 1000 * 2 ** Math.min(job.attempts, 5));
+          const requestedDelay = retry && !Number.isNaN(seconds) ? seconds * 1000 : retry ? Date.parse(retry) - this.now() : backoff;
+          const delay = Number.isFinite(requestedDelay) ? Math.max(backoff, Math.min(300_000, requestedDelay)) : backoff;
+          this.save(job, { status: "queued", diagnostic, nextPollAt: this.now() + delay, attempts: job.attempts + 1, error: "The account has no slot available yet. This unaccepted operation remains queued and will retry automatically." });
           return;
         }
         const status = response.status >= 500 || [408, 409, 429, 499].includes(response.status) ? "uncertain" : "failed";
         job = this.save(job, { status, nextPollAt: this.now(),
-          diagnostic: gatewayMediaDiagnostic(body, response.status, response.headers), error: `${gatewayMediaError(body, response.status)} Check its receipt before submitting again.` });
+          diagnostic, error: `${gatewayMediaError(body, response.status)} Check its receipt before submitting again.` });
         if (job.status === "failed") await this.publish(job);
         else await this.publishPendingNotice(job);
         return;
@@ -413,6 +415,10 @@ export class DoneBotMediaService {
       }
       const body = await responseJson(response);
       if (!await this.sameScope(job.scope)) return;
+      const generation = body.generation_status ?? object(body.data)?.generation_status;
+      if ((generation === "completed" || generation === "failed") && job.generationEndedAt === undefined) {
+        job = this.save(job, { generationEndedAt: this.now() });
+      }
       const state = taskState(body);
       if (["completed", "success", "succeeded"].includes(state)) await this.complete(job, body);
       else if (["failed", "cancelled", "canceled", "expired"].includes(state)) {

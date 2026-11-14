@@ -45,6 +45,95 @@ async function submitted(service: DoneBotMediaService, id: string) {
 }
 
 describe("DoneBot persistent paid media operations", () => {
+  it("uses all remaining account slots and drains the queue when a model or media task ends", async () => {
+    let now = Date.now(), activeModels = 1, posts = 0, firstEnded = false;
+    const f = await fixture({ now: () => now, concurrency: async () => 3, activeModelCount: () => activeModels,
+      fetchGateway: async (path, init) => init.method === "POST" ? json({ id: `task-${++posts}` }, 202)
+        : json({ status: firstEnded && path.endsWith("task-1") ? "failed" : "processing" }),
+    });
+    const first = await f.service.submit(context, input); await submitted(f.service, first.id);
+    now += 1000;
+    const second = await f.service.submit(context, { ...input, variationKey: "second" }); await submitted(f.service, second.id);
+    now += 1000;
+    const third = await f.service.submit(context, { ...input, variationKey: "third" });
+    await f.service.tick();
+    expect(posts).toBe(2);
+    expect((await f.service.status(context, third.id)).status).toBe("queued");
+    activeModels = 0;
+    await f.service.tick(); await submitted(f.service, third.id);
+    expect(posts).toBe(3);
+    now += 1000;
+    const fourth = await f.service.submit(context, { ...input, variationKey: "fourth" });
+    await f.service.tick();
+    expect((await f.service.status(context, fourth.id)).status).toBe("queued");
+    firstEnded = true; now += 60_000;
+    await f.service.tick(); await submitted(f.service, fourth.id);
+    expect(posts).toBe(4);
+    expect((await f.service.status(context, first.id)).status).toBe("failed");
+    expect(f.service.activeCount(initialScope.accountId)).toBe(3);
+  });
+
+  it("keeps a receipt-bearing admission rejection queued across restart and retries the same operation once capacity returns", async () => {
+    let now = Date.now(), posts = 0;
+    const receipt = vi.fn();
+    const identities: string[] = [];
+    const f = await fixture({ now: () => now, receipt,
+      fetchGateway: async (_path, init) => {
+        if (init.method !== "POST") return json({ status: "completed", result: { data: [{ url: "https://artifact.invalid/fixture.png" }] } });
+        identities.push(new Headers(init.headers).get("Idempotency-Key")!);
+        if (++posts === 1) return Response.json({ code: 429, reason: "DONEBOT_MEDIA_CONCURRENCY" }, {
+          status: 429, headers: { "X-DoneBot-Receipt-ID": "fixture-receipt", "Retry-After": "3" },
+        });
+        return Response.json({ id: "accepted-task" }, { status: 202, headers: { "X-DoneBot-Receipt-ID": "fixture-receipt" } });
+      },
+    });
+    const job = await f.service.submit(context, input);
+    await vi.waitFor(async () => expect(await f.service.status(context, job.id)).toMatchObject({ status: "queued", receiptId: "fixture-receipt", attempts: 1, nextPollAt: now + 3000 }));
+    expect(f.publish).not.toHaveBeenCalled();
+    expect(f.service.activeCount(initialScope.accountId)).toBe(0);
+    await f.service.close(); services.splice(services.indexOf(f.service), 1);
+    const restored = f.open();
+    now += 2999; await restored.tick(); expect(posts).toBe(1);
+    now++; await restored.tick(); await submitted(restored, job.id);
+    await restored.tick();
+    expect((await restored.status(context, job.id)).status).toBe("completed");
+    expect(identities).toEqual([job.operationKey, job.operationKey]);
+    expect(receipt).not.toHaveBeenCalled();
+    expect(f.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not resubmit a receipt-bearing upstream 429", async () => {
+    let now = Date.now(), posts = 0;
+    const f = await fixture({ now: () => now,
+      fetchGateway: async () => { posts++; return Response.json({ error: { code: "rate_limit_exceeded" } }, { status: 429, headers: { "X-DoneBot-Receipt-ID": "upstream-receipt" } }); },
+      receipt: async () => ({ receipt_id: "upstream-receipt", status: "uncertain" }),
+    });
+    const job = await f.service.submit(context, input); await submitted(f.service, job.id);
+    for (let i = 0; i < 3; i++) { now += 60_000; await f.service.tick(); }
+    expect(posts).toBe(1);
+    expect((await f.service.status(context, job.id)).status).toBe("uncertain");
+  });
+
+  it.each(["completed", "failed"])("releases generation capacity while gateway %s output is still settling or refunding", async generation => {
+    let now = Date.now(), posts = 0, ended = false;
+    const f = await fixture({ now: () => now, concurrency: async () => 1,
+      fetchGateway: async (_path, init) => init.method === "POST" ? json({ id: `task-${++posts}` }, 202)
+        : json({ data: { status: "processing", ...(ended ? { generation_status: generation } : {}) } }),
+    });
+    const first = await f.service.submit(context, input); await submitted(f.service, first.id);
+    now += 1000;
+    const second = await f.service.submit(context, { ...input, variationKey: "second" });
+    await f.service.tick(); expect(posts).toBe(1);
+    ended = true; now += 60_000; await f.service.tick(); await submitted(f.service, second.id);
+    expect(posts).toBe(2);
+    expect(await f.service.status(context, first.id)).toMatchObject({ status: "running", generationEndedAt: now });
+    await f.service.close(); services.splice(services.indexOf(f.service), 1);
+    const restored = f.open();
+    expect(restored.activeCount(initialScope.accountId)).toBe(1);
+    expect(await restored.status(context, first.id)).toMatchObject({ generationEndedAt: now });
+    expect(f.publish).not.toHaveBeenCalled();
+  });
+
   it("submits the exact public model selected by the caller", async () => {
     const resolveModel = vi.fn(async (id: string, kind: MediaKind) => ({ id, kind, adapter: "donebot.images.async.v1" }));
     const f = await fixture({ resolveModel, concurrency: async () => 0 });

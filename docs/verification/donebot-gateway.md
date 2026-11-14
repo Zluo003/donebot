@@ -1,5 +1,42 @@
 # DoneBot 统一网关验证
 
+## 媒体并发与结算恢复（2026-11-14）
+
+客户端使用账号完整并发，当前活动的文本、语音与媒体共同计数。网关返回本地准入
+`429/DONEBOT_MEDIA_CONCURRENCY` 时，任务保留在 SQLite 队列，遵循退避与 Retry-After，
+重启后仍用同一幂等键、原参数和回执重试。已受理但结果不明的请求只查询，不重发生成。
+网关在任务查询中确认 `generation_status=completed|failed` 后，本地持久释放生成名额，
+继续等待资源交付或账务收尾。单纯下载失败也不占生成名额。
+
+```sh
+pnpm exec vitest run server/donebot/media.test.ts server/donebot/media-errors.test.ts server/donebot/gateway.test.ts server/donebot/helpers.test.ts --maxWorkers=1
+pnpm exec vitest run server/donebot-media-selection.e2e.test.ts --maxWorkers=1
+pnpm typecheck
+pnpm lint
+```
+
+上述单元批次 4 文件、121 项通过。实际隔离服务与回环合成网关验证了 Seedream 5.5
+异步提交、查询、原会话图片交付和同一任务去重；证据在
+`.omb-scratch/verify-evidence/donebot-media-selection/result.json`。
+队列专项另覆盖全额度、文本释放后自动出队、带回执 429 跨重启重试、上游 429 不重发，
+以及网关结算/退款尚未完成时释放本地生成名额。测试不操作生产任务或余额。
+
+donebot-api 配套集成测试使用临时 PostgreSQL/Redis，验证 24 次竞争中仅 20 次准入、
+生成与资金占用分离、同一回执并发重试仅一次受理及原扣费/退款幂等。结算使用 DoneBot
+分组冻结价格，保留 Seedream 原生面积档位，覆盖长边误算为 4K、删除账号后的恢复与
+超量拦截。代码验证不能证明历史生产预扣已恢复；须发布网关后核对原回执及账本。
+
+网关自动恢复专项通过 `go test -tags unit ./internal/service -run TestDoneBotDispatch -count=1`
+及 `go test -tags integration ./internal/repository -run TestDoneBotDispatch -count=1`。
+覆盖 `uncertain`/过期执行租约恢复原任务查询、持久化结果继续收尾、同步图片保留输出、
+租约续期与旧租约拒写。没有可查询 ID 或完整结果的任务即使超过 30 天，也不会自动
+退款或重发付费 POST；原回执与账本保留待核对。
+
+JEV 的原生 `jev-latest → /v1/systemone` 决策接线已有单元验证，房间路由的网关就绪
+判断也已接入；单 Bot 对话不需要房间选人决策。网关公共目录补充 `typesafe.systemone`，
+不会把 JEV 放入常规聊天模型列表。原版后台收件箱分拣仍有读取原始配置的就绪判断，
+本轮未修改这些原版机制，不能据此宣称所有后台决策入口均已启用。
+
 ## 应用内 Cloud 开通（2026-11-13）
 
 添加工作区/服务器页面、应用菜单“添加云服务”和账号设置使用同一个自有面板。

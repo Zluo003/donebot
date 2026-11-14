@@ -1,3 +1,4 @@
+import { DoneBotMobileAccess } from "../donebot/MobileAccess";
 import { UPSTREAM_SERVICES, doneBotKeyVisible } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import { Archive, Cloud, Gauge, CloudDownload, Coins, Download, FlaskConical, KeyRound, LockKeyhole, Monitor, Palette, ScrollText, Search, Settings, Sparkles, TabletSmartphone, Terminal, User, Users, X, Building2, Zap, BookOpen, ImagePlus } from "lucide-react";
@@ -339,8 +340,8 @@ function SettingsDialog() {
     client: <RemoteComputerSection hideWhenUnavailable legacyOnly />,
     domain: remoteActive || thisComputer ? null : <CustomDomainSettings />,
     // Security: the server decides who may pair (an owner or admin session), not this gate.
-    pairing: thisComputer ? null : <ServerPairingCard cloudHome={state.config?.cloudHome === true} focusRequest={computerPairs ? 0 : phoneFocus} team={state.config?.team?.name} teamPhoneBlocked={state.config?.managedPolicy?.remoteAccess === false ? t("policy.teamRemoteBlocked", { organization: state.config.managedPolicy.organizationName }) : null} simple={!advanced} />,
-    companion: thisComputer ? <PhoneDevicesSection profileEmail={state.config?.profile?.email} focusRequest={phoneFocus} simple={!advanced} /> : null,
+    pairing: thisComputer ? null : state.config?.donebot?.enabled ? <DoneBotMobileAccess /> : <ServerPairingCard cloudHome={state.config?.cloudHome === true} focusRequest={computerPairs ? 0 : phoneFocus} team={state.config?.team?.name} teamPhoneBlocked={state.config?.managedPolicy?.remoteAccess === false ? t("policy.teamRemoteBlocked", { organization: state.config.managedPolicy.organizationName }) : null} simple={!advanced} />,
+    companion: thisComputer ? state.config?.donebot?.enabled ? <DoneBotMobileAccess /> : <PhoneDevicesSection profileEmail={state.config?.profile?.email} focusRequest={phoneFocus} simple={!advanced} /> : null,
   };
 
   const renderSection = (id: AppSettingsSection) => {

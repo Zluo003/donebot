@@ -5,6 +5,8 @@ const MiB = 1024 * 1024;
 
 /** Timers and limits from wire spec §3.9 and §3.10. Only tests change them, through startRelay. */
 export interface Limits {
+  nodeHostsMax?: number;
+  nodeSessionsMax?: number;
   /** Before auth: the one text message must arrive within this and fit in authMessageBytes. */
   authDeadlineMs: number;
   authMessageBytes: number;
@@ -75,6 +77,8 @@ export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({
 });
 
 export interface RelayConfig {
+  mobileOrigins?: readonly string[];
+  management?: { origin: string; token: string };
   node: string;
   host: string;
   port: number;
@@ -99,5 +103,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): RelayConfig {
   }
   const port = Number(env.RELAY_PORT ?? 8080);
   if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error("RELAY_PORT must be a port number");
-  return { node, host: env.RELAY_HOST ?? "127.0.0.1", port, tokenKeys, metricsToken, limits: { ...DEFAULT_LIMITS } };
+  const management = env.RELAY_NODE_TOKEN ? { origin: env.RELAY_GATEWAY_ORIGIN || "https://donebot.cn", token: env.RELAY_NODE_TOKEN } : undefined;
+  if (management && (management.origin !== "https://donebot.cn" || !/^dbr_[A-Za-z0-9_-]{43}$/.test(management.token))) throw new Error("Invalid relay management configuration");
+  return { node, host: env.RELAY_HOST ?? "127.0.0.1", port, tokenKeys, metricsToken, limits: { ...DEFAULT_LIMITS },
+    ...(env.RELAY_MOBILE_CLIENTS === "1" ? { mobileOrigins: ["capacitor://localhost", "https://localhost"] } : {}),
+    ...(management ? { management } : {}) };
 }

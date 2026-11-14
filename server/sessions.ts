@@ -577,6 +577,20 @@ export class SessionRegistry {
     return this.issueAccount({ label: "Hosted workspace", email: input.email, userId: `portal:${input.grant}`, scopes: input.scopes }, "portal");
   }
 
+  /** A verified account hub grants a phone the original client scope for at most 70 seconds. */
+  acceptMobileLease(id: string, tokenHash: string, expiresAt: number): void {
+    this.refusePersonal(["client"]);
+    const now = this.now();
+    if (!/^mobile-[a-f0-9]{64}$/.test(id) || !/^[a-f0-9]{64}$/.test(tokenHash) || expiresAt <= now || expiresAt > now + 70_000) throw new Error("Invalid mobile lease");
+    const old = this.sessions.find(session => session.id === id);
+    if (old && (old.tokenHash !== tokenHash || old.scopes.length !== 1 || old.scopes[0] !== "client" || !old.token)) throw new Error("Mobile session conflict");
+    if (old) { old.expiresAt = expiresAt; return; }
+    const record: SessionRecord = { id, tokenHash, label: "DoneBot iPhone", scopes: ["client"], createdAt: now, lastSeenAt: now, expiresAt, token: true };
+    this.sessions.push(record);
+    try { this.persist(); } catch (error) { this.sessions.pop(); throw error; }
+    for (const listener of this.onIssued) listener(record);
+  }
+
   private issueAccount(input: { label: string; scopes: Scope[]; userId?: string; email?: string }, membershipAuthority?: "portal"): { token: string; session: PublicSession } {
     this.refusePersonal(input.scopes);
     this.prune();

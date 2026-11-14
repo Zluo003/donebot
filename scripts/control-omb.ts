@@ -283,7 +283,9 @@ export async function launchVerificationServer(
   donebotFixtureOrigin?: string,
   donebotCloudCredential?: { installationId: string; credential: string; user: { id: string; email: string } },
   donebotDesktopSocket?: string,
+  donebotMobileRelay?: string,
 ): Promise<VerificationServer> {
+  if (donebotMobileRelay && (!donebotFixtureOrigin || !/^ws:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(donebotMobileRelay))) throw new ControlOmbError("Mobile relay verification requires an owned loopback relay");
   if (donebotDesktopSocket && (!donebotCloudCredential || !/^\/tmp\/dbc-[\w/-]+\.sock$/.test(donebotDesktopSocket))) throw new ControlOmbError("Cloud desktop verification requires an owned fixture socket");
   if (donebotCloudCredential && !donebotFixtureOrigin) throw new ControlOmbError("Cloud credential verification requires an isolated gateway");
   if (donebotFixtureOrigin && !/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(donebotFixtureOrigin)) throw new ControlOmbError("DoneBot verification requires an explicit loopback gateway");
@@ -372,6 +374,7 @@ export async function launchVerificationServer(
   if (boatFixtureApi) childEnv.DONEBOT_BOAT_API = boatFixtureApi;
   if (staticDir) childEnv.DONEBOT_STATIC_DIR = staticDir;
   if (donebotFixtureOrigin) Object.assign(childEnv, { DONEBOT_UPSTREAM_FIXTURE: "0", DONEBOT_FIXTURE_ORIGIN: donebotFixtureOrigin });
+  if (donebotMobileRelay) childEnv.DONEBOT_MOBILE_FIXTURE_RELAY = donebotMobileRelay;
   if (donebotCloudCredential) {
     const path = join(dataDir, "fixture-cloud-gateway.json");
     writeFileSync(path, JSON.stringify(donebotCloudCredential), { mode: 0o600 });

@@ -75,6 +75,11 @@ export class Hosts {
   get size(): number {
     return this.entries.size;
   }
+  get sessionCount(): number {
+    let count = 0;
+    for (const entry of this.entries.values()) count += entry.sessions.size;
+    return count;
+  }
 
   *all(): IterableIterator<HostEntry> {
     yield* this.entries.values();
@@ -141,6 +146,9 @@ export function handleControl(ctx: Context, ws: WebSocket): void {
     if (token === undefined) return void closeWith(ctx, ws, Close.Malformed);
     const verified = checkToken(ctx, token);
     if (!verified.ok) return void closeWith(ctx, ws, Close.TokenInvalid);
+    if (!ctx.hosts.get(verified.claims.hidText)?.control && ctx.hosts.connected >= (ctx.limits.nodeHostsMax ?? Infinity)) {
+      return void closeWith(ctx, ws, Close.Unavailable, JSON.stringify({ retryInMs: 5_000 }));
+    }
 
     const entry = ctx.hosts.entry(verified.claims.hid, verified.claims.hidText);
     const previous = entry.control;

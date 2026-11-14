@@ -21,6 +21,8 @@ const SWEEP_MS = 60_000;
 const CONNECTION_HEADROOM = 1_024;
 
 export interface Relay {
+  setPolicy(policy: RelayPolicy): void;
+  stats(): { hosts: number; sessions: number; sockets: number };
   port: number;
   ctx: Context;
   /** Sockets the relay holds, by route. */
@@ -29,6 +31,7 @@ export interface Relay {
   drain: () => Promise<void>;
   close: () => Promise<void>;
 }
+export interface RelayPolicy { enabled: boolean; maxHosts: number; maxSessions: number; maxSockets: number }
 
 export interface RelayOptions {
   log?: Logger;
@@ -64,6 +67,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
   const ipLimiter = new IpLimiter(limits.ipNewPerMinute, limits.ipOpenMax, now);
   const sockets = new Map<WebSocket, Route>();
   let draining = false;
+  let accepting = !config.management;
 
   const wss = new WebSocketServer({
     noServer: true,
@@ -93,8 +97,8 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
   const onRequest = (req: IncomingMessage, res: ServerResponse) => {
     const headers = { "cache-control": "no-store", "x-content-type-options": "nosniff" };
     if (req.method === "GET" && req.url === "/healthz") {
-      res.writeHead(draining ? 503 : 200, { ...headers, "content-type": "application/json" });
-      return void res.end(JSON.stringify({ ok: !draining, node: config.node }));
+      res.writeHead(draining || !accepting ? 503 : 200, { ...headers, "content-type": "application/json" });
+      return void res.end(JSON.stringify({ ok: !draining && accepting, node: config.node }));
     }
     if (req.method === "GET" && req.url === "/metrics" && config.metricsToken) {
       if (!bearerMatches(req.headers.authorization, config.metricsToken)) {
@@ -125,7 +129,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
       metrics.inc("relay_refused_total", "path");
       return refuse(socket, 404, "Not Found");
     }
-    if (req.headers.origin !== undefined) {
+    if (req.headers.origin !== undefined && !config.mobileOrigins?.includes(req.headers.origin)) {
       metrics.inc("relay_refused_total", "origin");
       return refuse(socket, 403, "Forbidden");
     }
@@ -140,7 +144,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.on("error", () => {});
-      if (draining) {
+      if (draining || !accepting && route !== "data") {
         metrics.inc("relay_refused_total", "draining");
         return closeWith(ctx, ws, Close.Unavailable, JSON.stringify({ retryInMs: limits.restartPhoneRetryMs }));
       }
@@ -222,5 +226,13 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     metrics.close();
   };
 
-  return { port, ctx, sockets: () => sockets, drain, close };
+  const setPolicy = (policy: RelayPolicy) => {
+    accepting = policy.enabled;
+    limits.nodeHostsMax = policy.maxHosts;
+    limits.nodeSessionsMax = policy.maxSessions;
+    limits.socketsMax = policy.maxSockets;
+    server.maxConnections = policy.maxSockets + CONNECTION_HEADROOM;
+  };
+  return { port, ctx, sockets: () => sockets, drain, close, setPolicy,
+    stats: () => ({ hosts: ctx.hosts.connected, sessions: ctx.hosts.sessionCount, sockets: sockets.size }) };
 }

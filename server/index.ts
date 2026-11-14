@@ -551,6 +551,7 @@ import {
 } from "./request-auth.ts";
 import { cookieMaxAgeSeconds, formatPairingCode, pairingRequest, SessionRegistry, type SessionRecord } from "./sessions.ts";
 import { ThreadStarters } from "./thread-starters.ts";
+import { createDoneBotMobileRuntime } from "./host/donebot-mobile.ts";
 import { startPhoneRelay } from "./phone-relay.ts";
 import {
   appendAdminAction,
@@ -4524,6 +4525,7 @@ function pageIfThreadChanged(id: string, threadId: string) {
   sentThreads.set(id, threadId);
   return messagePage(threadId, DEFAULT_PAGE);
 }
+const donebotMobile = createDoneBotMobileRuntime({ dataDir: DATA_DIR, gateway: donebotHost.gateway, sessions, store, handle: (req, res) => handleRequest(req, res), name: () => cfg.computerName || "DoneBot", sourceUrl: import.meta.url });
 store.onChange((change) => {
   if (change.type !== "message" && change.type !== "message.patch" && change.type !== "thread" && change.type !== "sections") forgetVisibility();
   personRooms.forgetDeleted(change);
@@ -4532,6 +4534,7 @@ store.onChange((change) => {
       broadcast({ kind: "sections", sections: store.sections });
       break;
     case "message":
+      donebotMobile.messageChanged(change);
       broadcast({ kind: "message", threadId: change.threadId, message: slimMessage(change.message) });
       break;
     case "message.patch":
@@ -6712,13 +6715,7 @@ bus.subscribe((event: RuntimeEvent) => {
         && (stoppedTurnId === undefined || completedTurnId === undefined || stoppedTurnId === completedTurnId));
       const stopped = event.stopReason === "interrupted" || clientStopped;
       landParkedFiles();
-      if (completedTurnId) {
-        const terminal = store.markTerminalAssistantMessage(event.threadId, completedTurnId);
-        if (terminal) store.patchMessage(event.threadId, terminal.id, { turnSucceeded: event.ok });
-        if (bot && event.ok) store.suggestTaskLink(bot.id, event.threadId, store.activePath(event.threadId)
-          .filter((message) => message.role === "bot" && message.kind === "text" && message.turnId === completedTurnId)
-          .map((message) => message.text ?? "").join("\n"));
-      }
+      donebotMobile.completeTurn(bot, event.threadId, completedTurnId, event.ok);
       if (bot) void replyVoiceNotes.turnSettled({ bot, threadId: event.threadId, turnId: completedTurnId, stoppedByPerson: personStops.stopped(event.threadId, completedTurnId), internal, ...(event.ok ? {} : { ending: { stop: turnStops.read(event.threadId, completedTurnId), cause: turnStops.failureCause(event), interrupted: event.stopReason === "interrupted" } }) });
       const reply = lastReply.get(event.threadId) ?? "";
       if (personStops.stopped(event.threadId, completedTurnId)) pushStoppedTurn(completedTurnId);
@@ -12483,7 +12480,7 @@ const donebotMediaHost = createDoneBotMediaHost({
   canReadThread: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId),
   wrote: markTaskContextExternallyUpdated, fetchArtifact: donebotHost.fetchArtifact,
 });
-ROUTES.unshift(donebotDesktop.route, ...donebotHost.routes, ...(DONEBOT_GATEWAY ? [doneBotModelRoutes, donebotMediaHost.artifactRoute] : []));
+ROUTES.unshift(donebotMobile.route, donebotDesktop.route, ...donebotHost.routes, ...(DONEBOT_GATEWAY ? [doneBotModelRoutes, donebotMediaHost.artifactRoute] : []));
 const internalToolRoutes = createInternalToolRoutes({ donebotMedia: DONEBOT_GATEWAY ? donebotMediaHost.internalRoute : undefined, engineLimits: { instances: () => registry.instances(), configs: () => instanceConfigs(cfg), status: (instanceId) => registry.knownSnapshot(instanceId), load: (accounts) => loadPlanUsage({ accounts }), audienceOf: (threadId) => teamHost.audienceOf(threadId), guestDriven: cloudGuestDriven, dataDir: DATA_DIR }, helpers: { decider, extractor }, notifications: { bot: (id) => store.bot(id), team: sharedMembership, broadcast }, xResearch: { credential: () => researchCredential(cfg.treg?.key), botEnabled: (botId) => store.bot(botId)?.xResearch !== false, cloudHome: CLOUD_HOME !== null, researchOff: () => researchAvailability.refused() } }); const waitRoutes = createWaitRoutes({ waits: botWaits, cloudHome: Boolean(CLOUD_HOME), sleeps: Boolean(CLOUD_HOME) && CLOUD_TEAM === null }); ROUTES.push(createXConnectorRoutes({ credential: () => researchCredential(cfg.treg?.key), included: () => xCredential(), unavailable: () => xResearchStatus().unavailable === true }));
 
 // Live calls: the client holds the WebRTC audio; the key never leaves the harness, which creates the session.
@@ -15434,6 +15431,7 @@ server.listen(PORT, listenHost(server), async () => {
   companyRuntimeReady(); cloudHealth?.speed.ready(); void tailnetShare.start(process.env);
   console.log(`donebot server on http://127.0.0.1:${PORT}`);
   await donebotHost.restore();
+  if (donebotHost.enabled) donebotMobile.start();
   personWaits.boot(); browserSweep.start(); startCloudTeamPolicy({ cloudHome: CLOUD_HOME, dataDir: DATA_DIR, managed: managedPolicy, sessions }); startCloudTeamRoster({ cloudHome: CLOUD_HOME, sessions }); moveFreeze.hold(() => appTriggers.start(), () => void appTriggers.stop()); startCloudHomeConnectedApps({ cloudHome: CLOUD_HOME !== null, dataDir: DATA_DIR, cloudGrant: CLOUD_ENV.DONEBOT_CLOUD_CONNECTED_APPS_GRANT, ownKey: () => composio.connectionMode(cfg) === "self-hosted", apply: (access) => { composio.setManagedBrokerAccess(access); broadcast({ kind: "config", ...configStatus() }); } });
   void afterFirstEngineRead().then(() => { if (builtInBrowserEnabled(cfg)) chromeLauncher.start(); });
   followupsReady = true; engineUpdates.start();
@@ -15503,7 +15501,7 @@ const gracefulShutdown = createGracefulShutdown({
       // Invalidate turn bearers before any cleanup reaches an await: child MCP processes and the listener may outlive it.
       revokeAllInternalCapabilities();
       sharedComputers.close(); deviceLinks.close(); stopCloudTeamPolicy(); stopCloudTeamRoster();
-      phones.close();
+      phones.close(); donebotMobile.stop();
       sharedComputerControl.close();
       browserLive.closeAll();
       desktopViewer.closeAll();

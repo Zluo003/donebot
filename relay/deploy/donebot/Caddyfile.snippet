@@ -1,0 +1,5 @@
+handle_path /mobile-relay/* {
+    reverse_proxy 127.0.0.1:18080 {
+        stream_close_delay 5m
+    }
+}

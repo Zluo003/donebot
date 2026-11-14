@@ -15,6 +15,9 @@ export function handlePhone(ctx: Context, ws: WebSocket): void {
     const admHash = sha256(hello.adm);
     const entry = ctx.hosts.get(hello.hidText);
     if (!ctx.hosts.admitted(entry, admHash) || !entry?.control) return void closeWith(ctx, ws, Close.NotFound);
+    if (ctx.hosts.sessionCount >= (ctx.limits.nodeSessionsMax ?? Infinity)) {
+      return void closeWith(ctx, ws, Close.Unavailable, JSON.stringify({ retryInMs: 5_000 }));
+    }
     if (entry.sessions.size >= ctx.limits.hostSessionsMax || ctx.budgets.over(entry.hidText)) {
       return void closeWith(ctx, ws, Close.Limited);
     }

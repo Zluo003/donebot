@@ -43,7 +43,7 @@ function readNetworkFailure(error: unknown): DoneBotGatewayError {
   return new DoneBotGatewayError(502, "gateway_unreachable", "无法连接 DoneBot 网关，请检查云节点的 CLOUD_EGRESS_MODE、DNS 和防火墙配置。");
 }
 
-const nativePath = /^\/v1\/(?:messages(?:\/count_tokens)?|responses|chat\/completions|models|systemone|images\/(?:generations(?:\/async)?|edits(?:\/async)?|tasks\/[A-Za-z0-9_-]+)|tasks\/[A-Za-z0-9_-]+|videos(?:\/(?:edits|extensions|[A-Za-z0-9_-]+(?:\/content)?))?|music\/(?:generations|tasks\/[A-Za-z0-9_-]+)|audio\/speech|assets(?:\/[A-Za-z0-9_-]+)?)$/;
+const nativePath = /^\/v1\/(?:donebot\/runtime\/mobile\/(?:heartbeat|events)|messages(?:\/count_tokens)?|responses|chat\/completions|models|systemone|images\/(?:generations(?:\/async)?|edits(?:\/async)?|tasks\/[A-Za-z0-9_-]+)|tasks\/[A-Za-z0-9_-]+|videos(?:\/(?:edits|extensions|[A-Za-z0-9_-]+(?:\/content)?))?|music\/(?:generations|tasks\/[A-Za-z0-9_-]+)|audio\/speech|assets(?:\/[A-Za-z0-9_-]+)?)$/;
 const geminiPath = /^\/v1beta\/models\/[A-Za-z0-9._-]+:(?:generateContent|streamGenerateContent)$/;
 const cloudID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const cloudInputText = (value: unknown, pattern: RegExp): value is string => typeof value === "string" && pattern.test(value);
@@ -623,6 +623,7 @@ export class DoneBotGateway {
     const headers = new Headers(init.headers);
     for (const key of ["authorization", "x-api-key", "x-goog-api-key", "cookie", "proxy-authorization"]) headers.delete(key);
     headers.set("authorization", `Bearer ${s.credential}`);
+    headers.set("X-DoneBot-Installation", s.installationId);
     const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
     const modelPost = (init.method ?? "GET").toUpperCase() === "POST" &&
       (["/v1/messages", "/v1/responses", "/v1/chat/completions", "/v1/systemone", "/v1/audio/speech"].includes(url.pathname) || geminiPath.test(url.pathname));

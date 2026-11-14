@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -826,5 +827,22 @@ describe("a member's own phone on a Team Cloud", () => {
     const later = phoneOf(fromAdmin());
     clock = registry.authenticate(later.token)!.expiresAt;
     expect(registry.memberPhones(), "an ended phone is not listed").toEqual([]);
+  });
+});
+
+describe("account-authorized mobile leases", () => {
+  it("keeps original client scope, expiry, and explicit revocation", () => {
+    const token = "omb_sess_synthetic-mobile-token";
+    const hash = createHash("sha256").update(token).digest("hex");
+    const id = "mobile-" + "a".repeat(64);
+    registry.acceptMobileLease(id, hash, clock + 60_000);
+    expect(registry.authenticate(token)?.scopes).toEqual(["client"]);
+    expect(registry.renew(id)).toBe(false);
+    expect(() => registry.acceptMobileLease(id, hash, clock + 70_001)).toThrow();
+    expect(registry.revoke(id)).toBe(true);
+    expect(registry.authenticate(token)).toBeNull();
+    registry.acceptMobileLease(id, hash, clock + 60_000);
+    clock += 60_001;
+    expect(registry.authenticate(token)).toBeNull();
   });
 });

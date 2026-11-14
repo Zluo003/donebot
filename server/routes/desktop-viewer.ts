@@ -7,7 +7,7 @@ import { isSameOrigin, type RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { createUpgrades, type Upgrades } from "./upgrades.ts";
 
-const ROUTE = /^\/api\/desktop-viewer\/(local\/(?:shared|bot-[a-f0-9]{64}|pool-\d+)|vps\/[\w-]+)(\/websockify)?$/;
+const ROUTE = /^\/api\/desktop-viewer\/(donebot\/shared|local\/(?:shared|bot-[a-f0-9]{64}|pool-\d+)|vps\/[\w-]+)(\/websockify)?$/;
 const HANDSHAKE_MS = 10_000;
 const RECHECK_MS = 5_000;
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -19,6 +19,7 @@ export interface DesktopConnection {
   port: number;
   socketPath?: string;
   password: string | null;
+  headers?: Record<string, string>;
   live?: () => boolean;
   touch?: () => void;
   /** Acquired only by WebSockets; release must not close other viewers. */
@@ -71,7 +72,7 @@ export function createDesktopViewer(deps: {
     }
     if (botId === null && threadId !== undefined) return json(res, 400, { error: "threadId needs botId and controlLeaseId" });
     // A saved or constructed socket URL must not bypass the join refusal: a bot's lease does not exclude other users of a shared desktop.
-    if (botId !== null && (match[1] === "local/shared" || match[1].startsWith("local/pool-"))) {
+    if (botId !== null && (match[1] === "donebot/shared" || match[1] === "local/shared" || match[1].startsWith("local/pool-"))) {
       return json(res, 409, { error: "Phone control requires a per-bot Local VM. Select per-bot mode in Settings → Computers." });
     }
     const bound = botId === null ? undefined : deps.lease!(match[1], botId, controlLeaseId!, threadId);
@@ -115,7 +116,7 @@ export function createDesktopViewer(deps: {
     // Fixed host and path, port from an inspected managed container. Never forward cookies, bearer tokens, query parameters or forwarded headers.
     const upstream = request({
       ...(connection.socketPath ? { socketPath: connection.socketPath } : { hostname: "127.0.0.1", port: connection.port }), agent: false, path: "/websockify",
-      headers: { Upgrade: "websocket", Connection: "Upgrade", "Sec-WebSocket-Key": key, "Sec-WebSocket-Version": "13" },
+      headers: { ...connection.headers, Upgrade: "websocket", Connection: "Upgrade", "Sec-WebSocket-Key": key, "Sec-WebSocket-Version": "13" },
     });
     const { socket } = upgrade;
     let peer: Duplex | undefined;

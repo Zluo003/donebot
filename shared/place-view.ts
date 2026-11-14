@@ -84,7 +84,7 @@ export interface PlaceFacts {
   /** Where cloud computers come from here: the plan's, the person's own Boat key, or nowhere. */
   boat: "included" | "own-key" | "none";
   /** The cloud computer's provider: Boat, or the person's own server. */
-  backend?: "box" | "vps";
+  backend?: "donebot" | "box" | "vps";
   engine: {
     name: string;
     model?: string;

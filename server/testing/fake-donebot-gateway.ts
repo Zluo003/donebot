@@ -55,7 +55,7 @@ const read = async (request: IncomingMessage): Promise<Row> => {
 const send = (response: ServerResponse, value: unknown, status = 200) => { response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
 const stream = (response: ServerResponse, events: Row[]) => { response.writeHead(200, { "content-type": "text/event-stream" }); response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")); };
 
-export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DONEBOT_CATALOG, installationKeys = new Map<string, string>()): Promise<FakeDoneBotGateway> {
+export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DONEBOT_CATALOG, installationKeys = new Map<string, string>(), userId = "fixture-user"): Promise<FakeDoneBotGateway> {
   const cloud = new FakeDoneBotCloud();
   let authSettings: Row = { registration_enabled: true }, requires2fa = false;
   let templateDocuments: unknown[] | null = [];
@@ -96,7 +96,7 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
     }
     if (path === "/api/v1/auth/login" && requires2fa) return send(response, { code: 0, data: { requires_2fa: true, temp_token: "fixture-temp-token" } });
     if (path === "/api/v1/auth/login/2fa" && (body.temp_token !== "fixture-temp-token" || body.totp_code !== "123456")) return send(response, {}, 401);
-    if (path === "/api/v1/auth/login" || path === "/api/v1/auth/register" || path === "/api/v1/auth/login/2fa") return send(response, { code: 0, data: { access_token: "fixture-access-token", refresh_token: "fixture-refresh-token", expires_in: 3600, user: { id: "fixture-user", email: "fixture@example.invalid" } } });
+    if (path === "/api/v1/auth/login" || path === "/api/v1/auth/register" || path === "/api/v1/auth/login/2fa") return send(response, { code: 0, data: { access_token: "fixture-access-token", refresh_token: "fixture-refresh-token", expires_in: 3600, user: { id: userId, email: "fixture@example.invalid" } } });
     if (path === "/api/v1/auth/logout") return send(response, {});
     if (path === "/api/v1/settings/public") return send(response, authSettings);
     if (path === "/api/v1/auth/send-verify-code" || path === "/api/v1/auth/forgot-password") return send(response, { code: 0, data: { countdown: 60, expires_in: 900 } });

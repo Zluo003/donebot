@@ -74,6 +74,8 @@ import { avatarImageStatus } from "./avatar-image.ts";
 import { doneBotConfigRefusal, doneBotModelRoutes } from "./donebot/model-policy.ts";
 import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
+import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
+import { effectiveCloudBackend } from "../shared/cloud-backend.ts";
 import { createDoneBotMediaHost } from "./donebot/host.ts";
 import { imageGenerationReady } from "./image-generation.ts";
 import { createImageToolRoutes } from "./routes/image-tools.ts"; import { createMeetingsHost } from "./host/meetings-host.ts"; import { meetingsUnavailablePrompt } from "./meetings/prompt.ts";
@@ -782,7 +784,7 @@ let desktopMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefined;
 let companionMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefined;
 const FALLBACK_PUBLIC_URL = process.env.DONEBOT_PUBLIC_URL?.trim().replace(/\/+$/, "") || null; const tailnetShare = createTailnetShare({ port: PORT, handle: (req, res) => handleRequest(req, res), attach: (listener, handle) => upgrades.attach(listener, handle), log: (line) => console.log(line) });
 const cfg = loadConfig();
-const donebotHost = createDoneBotRuntimeHost(DATA_DIR, () => cfg, import.meta.url);
+const donebotHost = createDoneBotRuntimeHost(DATA_DIR, () => cfg, import.meta.url); const donebotDesktop = createDoneBotDesktopHost(donebotHost.gateway);
 const { gateway: donebot, enabled: DONEBOT_GATEWAY } = donebotHost;
 const hostedModels = DONEBOT_GATEWAY ? donebotHost.policy : hostedModelPolicy(DATA_DIR);
 const providerConfigs = () => hostedModels ? hostedModels.configs() : instanceConfigs(cfg);
@@ -1525,6 +1527,7 @@ const managedPolicy = new ManagedDesktopPolicy({ onChange: () => {
 } });
 onKeyRejectionChange(() => { registry.forgetSnapshots(); broadcast({ kind: "config", ...configStatus() }); });
 function computerPlaceRefusal(kind: ComputerKind): { message: string; code: "cloud_home" | "managed_policy" } | undefined {
+  if (DONEBOT_GATEWAY && kind === "localVm") return { message: "DoneBot 已停用私有桌面。请选择本机、浏览器或 DoneBot 云端桌面。", code: "managed_policy" };
   const cloudHome = CLOUD_HOME ? cloudHomePlaceRefusal(kind === "thisComputer" ? "local" : kind === "localVm" ? "vm" : "cloud") : undefined;
   if (cloudHome) return { message: cloudHome, code: "cloud_home" };
   const managed = managedPolicy.computerRefusal(kind);
@@ -1888,14 +1891,13 @@ function clearFailedAutoPin(botId: string, threadId: string, place: Surface): bo
   store.patchTask(botId, threadId, { surface: undefined, surfaceSource: undefined });
   return true;
 }
-
 async function asPlaceFailure(
-  error: unknown, place: Surface, source: PlaceSource, bot: { id: string; name: string }, backend: "box" | "vps" = "box",
+  error: unknown, place: Surface, source: PlaceSource, bot: { id: string; name: string }, backend: "donebot" | "box" | "vps" = "box",
 ): Promise<unknown> {
   if (error instanceof DirectTurnSetupCancelled || error instanceof ComputerWaitParked || error instanceof PlaceUnavailableError) return error;
   const failure = error instanceof Error ? error : new Error(String(error));
   const cause = failure.message.trim().replace(/[\s.]+$/, "");
-  if (place !== "cloud" || backend === "vps" || (failure as { code?: unknown }).code === "managed_policy") {
+  if (place !== "cloud" || backend === "donebot" || backend === "vps" || (failure as { code?: unknown }).code === "managed_policy") {
     return placeUnavailable(place, {
       state: "place-failed", params: { bot: bot.name, cause: `${cause.charAt(0).toUpperCase()}${cause.slice(1)}.` }, source,
     }, Boolean(CLOUD_HOME));
@@ -2111,9 +2113,9 @@ function claimTurnResource(owner: TurnOwner, resource: string): boolean {
   turnResourceOwners.set(owner.threadId, owner);
   return true;
 }
-
 function releaseTurnResources(owner: TurnOwner | undefined): void {
   if (!owner) return;
+  donebotDesktop.release(owner);
   if (autoVmClaims.get(owner.threadId)?.owner.generation === owner.generation) autoVmClaims.delete(owner.threadId);
   cancelYourComputerAsks(owner.threadId, owner.generation);
   if (settlingResourceOwners.get(owner.threadId) === owner.generation) settlingResourceOwners.delete(owner.threadId);
@@ -2127,8 +2129,8 @@ function releaseTurnResources(owner: TurnOwner | undefined): void {
     teamComputerTurns.delete(owner.threadId);
   }
 }
-
 function releaseTurnComputer(owner: TurnOwner): void {
+  donebotDesktop.release(owner);
   turnResources.release(owner);
   if (turnComputerResources.get(owner.threadId)?.owner.generation === owner.generation) turnComputerResources.delete(owner.threadId);
   if (teamComputerTurns.get(owner.threadId)?.owner.generation === owner.generation) teamComputerTurns.delete(owner.threadId);
@@ -2964,7 +2966,7 @@ function previewSystemPrompt(bot: BotRecord) {
   const previewComputer = teamComputer ? "cloud" : bot.computer;
   const computerPromptKind = resolveComputerPromptKind({
     kind: previewComputer === "vm" ? "vm" : previewComputer === "cloud"
-      ? bot.cloudBackend === "vps" ? "vps" : "box" : previewComputer === "local" ? "local" : null,
+      ? effectiveCloudBackend(bot.cloudBackend, DONEBOT_GATEWAY) : previewComputer === "local" ? "local" : null,
     vmPrivate: localVmMode(cfg) === "per-bot",
   });
   const peers = reachablePeers(store.bots, bot);
@@ -4661,6 +4663,7 @@ const upgrades = createUpgrades();
 const desktopViewer = createDesktopViewer({
   upgrades,
   target: (id) => {
+    if (id === "donebot/shared") return donebotDesktop.viewer();
     if (id.startsWith("vps/")) {
       const botId = id.slice(4);
       if (store.bot(botId)?.cloudBackend !== "vps") return;
@@ -5676,7 +5679,7 @@ const meetingsHost = createMeetingsHost({ cfg, dataDir: DATA_DIR, store, startTu
 });
 
 function inheritedTeamComputer(bot: Pick<BotRecord, "section" | "computer" | "cloudBackend">): TeamComputerRecord | undefined {
-  return teamComputers.forBot(bot);
+  return DONEBOT_GATEWAY ? undefined : teamComputers.forBot(bot);
 }
 
 function teamComputerPrompt(computer: TeamComputerRecord | undefined): string {
@@ -6006,14 +6009,13 @@ function turnSurfacePlan(bot: BotRecord, runOn?: RoutineRunOn, threadId?: string
     browserOn: builtInBrowserEnabled(cfg) && bot.browser !== false && instance?.adapter.capabilities.browserMcp === true,
   });
 }
-
-function turnProvider(bot: BotRecord, runOn?: RoutineRunOn, threadId?: string): RemoteComputerProvider | null {
-  if (runOn === "cloud" || inheritedTeamComputer(bot)) return "box";
+function turnProvider(bot: BotRecord, runOn?: RoutineRunOn, threadId?: string): "donebot" | RemoteComputerProvider | null {
+  if (inheritedTeamComputer(bot)) return "box";
+  if (runOn === "cloud") return effectiveCloudBackend(bot.cloudBackend, DONEBOT_GATEWAY);
   const wants = turnSurfacePlan(bot, runOn, threadId).computer;
   if (wants !== undefined && wants !== "cloud") return null;
-  return bot.cloudBackend === "vps" ? "vps" : wants === "cloud" ? "box" : null;
+  return bot.cloudBackend === "vps" ? "vps" : wants === "cloud" ? effectiveCloudBackend(bot.cloudBackend, DONEBOT_GATEWAY) : null;
 }
-
 /** A query never grants lifecycle authority. */
 function computerPreviewBot(botId: string, url: URL): BotRecord | null {
   const threadId = url.searchParams.get("threadId");
@@ -6041,14 +6043,13 @@ async function computerPreviewSurface(bot: BotRecord, threadId?: string) {
   if (bot.cloudBackend === "vps") return "cloud";
   return plan.browser ? "browser" : "off";
 }
-
 /** Read-only: starting a configured computer waits until a chat tool selects it and the old turn releases its tools. */
 async function selectableComputers(bot: BotRecord) {
   const instance = registry.get(bot.modelSelection.instanceId);
   const caps = instance?.adapter.capabilities;
   const off = bot.computer === "off";
   const toolsLeaveOut = computerToolsRefusal(bot.toolScope, "works-on", bot.name)?.message;
-  const surfaces = (["cloud", "vm", "local", "browser"] as const).filter(surface => !CLOUD_HOME || cloudHomeOffersPlace(surface));
+  const surfaces = (["cloud", "vm", "local", "browser"] as const).filter(surface => (!DONEBOT_GATEWAY || surface !== "vm") && (!CLOUD_HOME || cloudHomeOffersPlace(surface)));
   let ownDesktopAwaitsUpdate = false;
   return withoutHostWhileUpdating(await Promise.all(surfaces.map(async surface => {
     let ready = false;
@@ -6061,7 +6062,8 @@ async function selectableComputers(bot: BotRecord) {
       if (off) reason = "Computer access is Off in this bot's settings.";
       else if (toolsLeaveOut && surface !== "browser") reason = toolsLeaveOut;
       else if (surface === "cloud") {
-        if (bot.cloudBackend === "vps") {
+        if (DONEBOT_GATEWAY && bot.cloudBackend !== "vps") ({ ready, canStart, reason } = await donebotDesktop.selection(caps?.computerMcp === true));
+        else if (bot.cloudBackend === "vps") {
           const status = canWorkOnCloud(cloudEngine(instance)) ? await vps.vpsComputerStatus(vpsConfigForBot(cfg, bot), bot.id) : null;
           ready = status?.ready === true;
           canStart = Boolean(status?.daemonUp && status.managed && status.container === "stopped" &&
@@ -6162,7 +6164,7 @@ function providerTransitionForTurn(
   threadId?: string,
 ): string | null {
   const provider = turnProvider(bot, runOn, threadId);
-  return provider && computerProviderConfigTransitions.has(provider)
+  return provider && provider !== "donebot" && computerProviderConfigTransitions.has(provider)
     ? providerTransitionMessage(provider)
     : null;
 }
@@ -7952,7 +7954,7 @@ async function beginTurn(
       const dwebUrl = process.env.DWEB_URL?.trim();
       if (dwebUrl) integrations.dweb = { url: dwebUrl };
       let teamComputer = computerSkipped || proactive.fence.confines(threadId) || botApiThread(threadId) ? undefined : inheritedTeamComputer(bot);
-      const cloudBackend = teamComputer || opts?.runOn === "cloud" || bot.cloudBackend !== "vps" ? "box" : "vps";
+      const cloudBackend = teamComputer ? "box" : effectiveCloudBackend(bot.cloudBackend, DONEBOT_GATEWAY);
       const mountsComputerMcp = instance.adapter.capabilities.computerMcp === true;
       const mountsLocalComputer = instance.adapter.capabilities.localComputerMcp === true;
       const dispatchTask = store.taskByThread(bot.id, threadId);
@@ -7978,13 +7980,13 @@ async function beginTurn(
         : plan.pinned ? pinSource(plan.pinned, dispatchTask, bot.computer)
         : "works-on";
       if (wants === "cloud" && placeSource) {
-        const unsupported = cloudPlaceRefusal(cloudEngine(instance, bot.modelSelection.model), placeSource, bot.name)
+        const unsupported = cloudPlaceRefusal(cloudEngine(instance, bot.modelSelection.model), placeSource ?? "works-on", bot.name)
           ?? computerToolsRefusal(toolScope, placeSource, bot.name);
         if (unsupported) skipComputer(unsupported);
       }
       let previewCapture: (() => Promise<{ png: string; format: string }>) | null = null;
       let browserCapture: (() => Promise<{ png: string; format: string }>) | null = null;
-      let computerKind: "box" | "vps" | "vm" | "local" | null = null;
+      let computerKind: "donebot" | "box" | "vps" | "vm" | "local" | null = null;
       let autoVpsProblem: string | null = null;
       let autoVpsReachable: boolean | undefined, autoVpsOutdated = false, vmUpdateNote = "";
       /** A capture in flight after another thread owns the shared desktop would picture its work under this bot's name. */
@@ -8172,7 +8174,12 @@ async function beginTurn(
       };
       // An explicit place that cannot be attached fails the turn; it never quietly moves the work elsewhere.
       try {
-        if (wants === "vm") {
+        if (wants === "cloud" && cloudBackend === "donebot") {
+          if (!mountsComputerMcp) throw cloudPlaceRefusal(cloudEngine(instance, bot.modelSelection.model), placeSource ?? "works-on", bot.name) ?? new Error("此模型不支持云桌面工具。");
+          await bindTurnComputer(resourceOwner, "computer:donebot", true);
+          const mounted = await donebotDesktop.mount(resourceOwner, controlIntegration(bot.id, threadId, dispatchClaimId), () => !companyShutdown && directTurnGenerationByThread.get(threadId) === dispatchClaimId && threadBusy(bot.id, threadId));
+          integrations.localComputer = mounted.integration; computerKind = "donebot"; adoptClaimedCapture(mounted.frame);
+        } else if (wants === "vm") {
           if (await attachLocalVm(true)) computerKind = "vm";
         } else if (wants === "local") {
           integrations.localComputer = await mountHostComputer(resourceOwner, bot.id, mountsLocalComputer, surfaceLazyClaimRejection("this computer"), () => placeSource === "auto-pin" && liveApprovalMode(bot, threadId, commsDepth > 0) !== "full", savedSteps.journals(directRequestOwners.get(threadId)));
@@ -9746,7 +9753,7 @@ async function runClaimedGroupMemberTurn(
   let providerDispatched = false;
   let setupStallReason: string | undefined;
   let unregisterSetupStall = () => {};
-  let roomComputerKind: "local" | "vps" | "box" | null = null;
+  let roomComputerKind: "donebot" | "local" | "vps" | "box" | null = null;
   let roomVpsBotId: string | null = null;
   let roomScreenBotId: string | null = null;
   const releaseRoomVmLease = () => {
@@ -10046,7 +10053,12 @@ async function runClaimedGroupMemberTurn(
       roomComputerKind = "local";
     }
     if (!roomTeamComputer && roomPlan.computer === "cloud") {
-      if (turnProvider(readyBot) === "vps") {
+      if (turnProvider(readyBot) === "donebot") {
+        if (!instance.adapter.capabilities.computerMcp) throw new Error("此模型不支持云桌面工具。");
+        await bindTurnComputer(resourceOwner, "computer:donebot", true);
+        const mounted = await donebotDesktop.mount(resourceOwner, controlIntegration(readyBot.id, threadId, internalGeneration), roomSetupIsCurrent);
+        integrations.localComputer = mounted.integration; roomComputerKind = "donebot"; showClaimedScreen(mounted.frame);
+      } else if (turnProvider(readyBot) === "vps") {
         vpsThreadStarted(readyBot.id, threadId);
         roomVpsBotId = readyBot.id;
         const mounted = await mountBotVps(readyBot, resourceOwner, { start: true, onClaimed: showClaimedScreen });
@@ -12471,7 +12483,7 @@ const donebotMediaHost = createDoneBotMediaHost({
   canReadThread: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId),
   wrote: markTaskContextExternallyUpdated, fetchArtifact: donebotHost.fetchArtifact,
 });
-ROUTES.unshift(...donebotHost.routes, ...(DONEBOT_GATEWAY ? [doneBotModelRoutes, donebotMediaHost.artifactRoute] : []));
+ROUTES.unshift(donebotDesktop.route, ...donebotHost.routes, ...(DONEBOT_GATEWAY ? [doneBotModelRoutes, donebotMediaHost.artifactRoute] : []));
 const internalToolRoutes = createInternalToolRoutes({ donebotMedia: DONEBOT_GATEWAY ? donebotMediaHost.internalRoute : undefined, engineLimits: { instances: () => registry.instances(), configs: () => instanceConfigs(cfg), status: (instanceId) => registry.knownSnapshot(instanceId), load: (accounts) => loadPlanUsage({ accounts }), audienceOf: (threadId) => teamHost.audienceOf(threadId), guestDriven: cloudGuestDriven, dataDir: DATA_DIR }, helpers: { decider, extractor }, notifications: { bot: (id) => store.bot(id), team: sharedMembership, broadcast }, xResearch: { credential: () => researchCredential(cfg.treg?.key), botEnabled: (botId) => store.bot(botId)?.xResearch !== false, cloudHome: CLOUD_HOME !== null, researchOff: () => researchAvailability.refused() } }); const waitRoutes = createWaitRoutes({ waits: botWaits, cloudHome: Boolean(CLOUD_HOME), sleeps: Boolean(CLOUD_HOME) && CLOUD_TEAM === null }); ROUTES.push(createXConnectorRoutes({ credential: () => researchCredential(cfg.treg?.key), included: () => xCredential(), unavailable: () => xResearchStatus().unavailable === true }));
 
 // Live calls: the client holds the WebRTC audio; the key never leaves the harness, which creates the session.
@@ -13277,7 +13289,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         try {
           const vm = await attachmentVmForTurn(internalCapability);
           const outcome = await attachForTurn(internalCapability, MAX_ATTACHED_FILES_PER_TURN, {
-            save: () => withCloudDesktopFile(vm, requestedPath, async (local) => {
+            save: () => donebotDesktop.withFile(internalCapability, requestedPath, remote => { const save = async (local?: { path: string; root: string }) => {
               return saveBotAttachment({
                 path: local?.path ?? requestedPath,
                 name: requestedName,
@@ -13289,7 +13301,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
                   ? { savedThisTurn: { since: internalCapability.turnStartedAt, refuse: [DATA_DIR] } }
                   : {}),
               });
-            }),
+            }; return remote ? save(remote) : withCloudDesktopFile(vm, requestedPath, save); }),
             stillLive: () => internalCapabilityIsActive({ ...internalCapability, ...(vm ? { localVmTarget: vm } : {}) }) &&
               connectorThread(from.id, threadId) !== null,
             publish: (saved) => {
@@ -13329,6 +13341,11 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         }
         const body = await readInternalBody();
         try {
+          if (donebotDesktop.has(internalCapability)) {
+            requireActiveInternalCapability();
+            if (botComputerControlSnapshot(internalSender.id).held) return json(res, 409, { error: "云桌面已由用户接管。" });
+            return json(res, 200, await donebotDesktop.exec(internalCapability, typeof body.command === "string" ? body.command : "", typeof body.timeout_seconds === "number" ? body.timeout_seconds : undefined));
+          }
           const vm = await attachmentVmForTurn(internalCapability);
           if (!vm) return json(res, 409, { error: "You have no Local VM desktop in this turn, so there is nowhere to run a command." });
           const runtime = (await containerRuntimeStatus()).runtime;
@@ -15135,6 +15152,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       if (!bot) return json(res, 404, { error: "no such bot" });
       const surface = url.searchParams.has("threadId") ? await computerPreviewSurface(bot, bot.threadId) : "cloud";
       if (surface !== "cloud") return json(res, 200, { surface, configured: false, backend: bot.cloudBackend === "vps" ? "vps" : "box" });
+      if (DONEBOT_GATEWAY && bot.cloudBackend !== "vps") return json(res, 200, { surface, backend: "donebot", ...await donebotDesktop.status() as object });
       const teamComputer = inheritedTeamComputer(bot);
       if (teamComputer) return json(res, 200, { surface, backend: "box", teamComputer: { id: teamComputer.id, name: teamComputer.name }, ...(await boat.boatStatus(cfg, teamComputerOwner(teamComputer.id))) });
       return bot.cloudBackend === "vps"
@@ -15471,9 +15489,9 @@ function noteTurnsCutByShutdown(): void {
 function runtimeHoldsRoot(threadId: string): boolean {
   return coordinator.active().some((n) => !n.parentId && n.threadId === threadId && !ENDED.has(n.status));
 }
-
 const gracefulShutdown = createGracefulShutdown({
   cleanup: [
+    () => donebotDesktop.close(),
     () => donebotMediaHost.close(),
     () => {
       followupsReady = false;

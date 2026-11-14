@@ -37,7 +37,7 @@ export const botDefaultsProfileSchema = z.preprocess(withoutRetiredFields, profi
   mascotExpression: z.string().max(60).nullable().optional(),
   modelSelection: botDefaultModelSchema.optional(),
   computer: z.enum(["cloud", "vm", "local", "browser", "off"]).nullable().optional(),
-  cloudBackend: z.enum(["box", "vps"]).optional(),
+  cloudBackend: z.enum(["donebot", "box", "vps"]).optional(),
   autoStartVps: z.boolean().optional(),
   cwd: z.string().max(4096).nullable().optional(),
   approvalMode: z.enum(["ask", "auto", "full", "custom"]).optional(),

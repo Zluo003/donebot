@@ -50,6 +50,7 @@ Use only mapped, tested commands:
 - [Work summaries and engine hooks](digests.md)
 - [OpenAI-compatible structured tools](openai-tools.md)
 - [DoneBot unified gateway, account flows and media](donebot-gateway.md)
+- [DoneBot self-hosted cloud desktop](donebot-desktop.md)
 - [Per-bot tool selection and local-model checks](tool-selection.md)
 - [OpenCode model variants through ACP](opencode-variants.md)
 - [Bot setup, model scope, and file continuity](bot-continuity.md)

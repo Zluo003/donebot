@@ -16,6 +16,8 @@ export const SPAWNED_PROXIES = {
   permission: resolveProxy("permission-proxy"),
   containerMcp: resolveProxy("container-mcp"),
   cloudDesktopStdio: resolveProxy("cloud-desktop-stdio"),
+  donebotDesktopMcp: resolveProxy("donebot-desktop-mcp"),
+  donebotDesktopStdio: resolveProxy("donebot-desktop-stdio"),
   vpsContainerMcp: resolveProxy("vps-container-mcp"),
   agents: resolveProxy("drivers/agents-proxy"),
   dweb: resolveProxy("drivers/dweb-proxy"),

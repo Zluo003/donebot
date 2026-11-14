@@ -141,9 +141,9 @@ describe("claim-time computer refusal in bindTurnComputer", () => {
   const refusalStart = source.indexOf("\nfunction computerPlaceRefusal(");
   const refusal = source.slice(refusalStart + 1, source.indexOf("\n}\n", refusalStart) + 3);
   const code = ts.transpileModule(refusal + guard, { compilerOptions: { target: ts.ScriptTarget.ESNext } }).outputText;
-  const bind = (managedPolicy: ManagedDesktopPolicy, cloudHome = false) =>
-    new Function("managedPolicy", "computerKindForResource", "CLOUD_HOME", "cloudHomePlaceRefusal", `${code}; return bindTurnComputer;`)(
-      managedPolicy, computerKindForResource, cloudHome ? { machineId: "fixture" } : null, cloudHomePlaceRefusal,
+  const bind = (managedPolicy: ManagedDesktopPolicy, cloudHome = false, donebot = false) =>
+    new Function("managedPolicy", "computerKindForResource", "CLOUD_HOME", "cloudHomePlaceRefusal", "DONEBOT_GATEWAY", `${code}; return bindTurnComputer;`)(
+      managedPolicy, computerKindForResource, cloudHome ? { machineId: "fixture" } : null, cloudHomePlaceRefusal, donebot,
     ) as (owner: unknown, resource: string) => Promise<string>;
 
   it("refuses a disallowed kind before claiming anything", async () => {
@@ -155,6 +155,15 @@ describe("claim-time computer refusal in bindTurnComputer", () => {
     await expect(bindTurnComputer({}, "computer:vm:shared")).resolves.toBe("claimed");
     managed.apply(null);
     await expect(bindTurnComputer({}, "computer:host")).resolves.toBe("claimed");
+  });
+
+  it("disables private desktops in DoneBot while retaining host and cloud policy checks", async () => {
+    const { managed } = overlay(null), claim = bind(managed, false, true);
+    await expect(claim({}, "computer:vm:shared")).rejects.toThrow("已停用私有桌面");
+    await expect(claim({}, "computer:host")).resolves.toBe("claimed");
+    await expect(claim({}, "computer:donebot")).resolves.toBe("claimed");
+    managed.apply(policy({ computers: { thisComputer: true, localVm: true, box: false, vps: true } }));
+    await expect(claim({}, "computer:donebot")).rejects.toThrow();
   });
 
   it("refuses this computer and a Local VM on an DoneBot Cloud home, and nothing else", async () => {

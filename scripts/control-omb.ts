@@ -282,7 +282,9 @@ export async function launchVerificationServer(
   staticDir?: string,
   donebotFixtureOrigin?: string,
   donebotCloudCredential?: { installationId: string; credential: string; user: { id: string; email: string } },
+  donebotDesktopSocket?: string,
 ): Promise<VerificationServer> {
+  if (donebotDesktopSocket && (!donebotCloudCredential || !/^\/tmp\/dbc-[\w/-]+\.sock$/.test(donebotDesktopSocket))) throw new ControlOmbError("Cloud desktop verification requires an owned fixture socket");
   if (donebotCloudCredential && !donebotFixtureOrigin) throw new ControlOmbError("Cloud credential verification requires an isolated gateway");
   if (donebotFixtureOrigin && !/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(donebotFixtureOrigin)) throw new ControlOmbError("DoneBot verification requires an explicit loopback gateway");
   if (boatFixtureApi) {
@@ -353,6 +355,7 @@ export async function launchVerificationServer(
 
   const log = openSync(logPath, "a", 0o600);
   const childEnv = verificationServerEnvironment(parentEnv, dataDir, port);
+  if (donebotDesktopSocket) childEnv.DONEBOT_CLOUD_DESKTOP_SOCKET = donebotDesktopSocket;
   // Opt-in live Local VM fixture: keep the temporary home and fake engine,
   // granting only the explicitly selected machine connection and static UI.
   if (localVm) Object.assign(childEnv, {

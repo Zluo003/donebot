@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import WebSocket from "ws";
+import { boundedResponseText } from "./bounded-response.ts";
 import type { DoneBotAccountState, DoneBotCatalog } from "../../shared/donebot.ts";
 import type { DoneBotAuthSettings, DoneBotEmailDelivery } from "../../shared/donebot-auth.ts";
 import type { DoneBotCloudInstance, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudOperation, DoneBotCloudPlan, DoneBotCloudSnapshot } from "../../shared/donebot-cloud.ts";
@@ -451,6 +453,37 @@ export class DoneBotGateway {
     } finally { this.controllers.delete(controller); }
   }
 
+  async cloudRelay(id: string, expected: DoneBotScope, body: unknown, signal?: AbortSignal, channel: "desktop" = "desktop"): Promise<unknown> {
+    if (!cloudInputText(id, cloudID)) throw new DoneBotGatewayError(400, "cloud_operation_invalid", "无效的 Cloud 实例。");
+    const epoch = this.epoch, session = await this.validSession();
+    this.checkEpoch(epoch);
+    if (session.mode === "installation") throw new DoneBotGatewayError(403, "cloud_login_required", "安装凭据不能连接其它运行服务。");
+    if (session.user.id !== expected.accountId || session.installationId !== expected.installationId) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换。");
+    const encoded = JSON.stringify(body);
+    if (Buffer.byteLength(encoded) > 34 * 1024 * 1024) throw new Error("Cloud relay request too large");
+    const controller = new AbortController(); this.controllers.add(controller);
+    try {
+      const response = await this.fetcher(`${this.origin}/api/v1/donebot/cloud/instances/${id}/proxy/api/donebot/relay/v1/${channel}`, {
+        method: "POST", redirect: "error", credentials: "omit", body: encoded,
+        headers: { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json" },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000), ...(signal ? [signal] : [])]),
+      });
+      if (!response.ok) { await response.body?.cancel(); throw new DoneBotGatewayError(response.status, "cloud_relay_failed", response.status === 401 ? "登录已失效，请重新登录。" : "Cloud 桌面连接未完成，请检查实例状态和版本。"); }
+      const chunks: Uint8Array[] = []; let bytes = 0;
+      if (!response.body) throw new Error("Empty Cloud relay response");
+      const reader = response.body.getReader();
+      try {
+        while (true) {
+          const next = await reader.read(); if (next.done) break;
+          bytes += next.value.byteLength; if (bytes > 34 * 1024 * 1024) throw new Error("Cloud relay response too large");
+          chunks.push(next.value);
+        }
+      } finally { await reader.cancel().catch(() => {}); }
+      this.checkEpoch(epoch);
+      return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    } finally { this.controllers.delete(controller); }
+  }
+
   async cloudSnapshot(): Promise<DoneBotCloudSnapshot> {
     const epoch = this.epoch;
     if (!this.session) throw new DoneBotGatewayError(401, "login_required", "请先在应用内登录 DoneBot 账号，再刷新 Cloud。");
@@ -470,6 +503,30 @@ export class DoneBotGateway {
     const balance = typeof cents === "number" && Number.isFinite(cents) || cloudInputText(cents, /^-?\d+(?:\.\d+)?$/) && Number.isFinite(Number(cents)) ? cents! : null;
     return { account_id: session.user.id, email: session.user.email, balance_cents: balance,
       plan, instance, operations: operations.map(cloudOperation), connection_available: info.browser_available === true };
+  }
+
+  async cloudViewerAccess(id: string, expected: DoneBotScope) {
+    if (!cloudInputText(id, cloudID)) throw new Error("Invalid Cloud instance");
+    const epoch = this.epoch, session = await this.validSession(); this.checkEpoch(epoch);
+    if (session.mode === "installation" || session.user.id !== expected.accountId || session.installationId !== expected.installationId) throw new Error("Cloud viewer account changed");
+    const controller = new AbortController(); this.controllers.add(controller);
+    const url = `${this.origin}/api/v1/donebot/cloud/instances/${id}/proxy/api/desktop-viewer/local/shared`;
+    try {
+      const response = await this.fetcher(url, { redirect: "error", credentials: "omit", headers: { authorization: `Bearer ${session.accessToken}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) });
+      if (!response.ok) { await response.body?.cancel(); throw new Error("Cloud viewer unavailable"); }
+      const text = await boundedResponseText(response, 2048);
+      const value = JSON.parse(text) as { password?: unknown };
+      if (typeof value.password !== "string" || value.password.length > 200) throw new Error("Invalid Cloud viewer credentials");
+      this.checkEpoch(epoch);
+      return { password: value.password, live: () => this.epoch === epoch,
+        open: () => {
+          this.checkEpoch(epoch);
+          const ws = new WebSocket(url.replace(/^http/, "ws") + "/websockify", { headers: { authorization: `Bearer ${session.accessToken}` }, followRedirects: false, handshakeTimeout: 10000, maxPayload: 8 * 1024 * 1024, perMessageDeflate: false });
+          const abort = () => ws.terminate(); controller.signal.addEventListener("abort", abort, { once: true }); this.controllers.add(controller);
+          ws.once("close", () => { controller.signal.removeEventListener("abort", abort); this.controllers.delete(controller); });
+          return ws;
+        } };
+    } finally { this.controllers.delete(controller); }
   }
 
   async cloudMutate(input: DoneBotCloudMutation): Promise<DoneBotCloudMutationResult> {

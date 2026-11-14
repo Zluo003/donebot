@@ -21,11 +21,11 @@ export function cloudDesktopTarget(target: LocalVmTarget): void {
   if (target.key !== "shared") throw Object.assign(new Error("Cloud provides one private desktop per user. Select shared Local VM mode."), { status: 409 });
 }
 
-export async function cloudDesktopCall<T>(path: string, input?: unknown): Promise<T> {
+export async function cloudDesktopCall<T>(path: string, input?: unknown, controller?: string): Promise<T> {
   const socketPath = cloudDesktopSocket();
   if (!socketPath) throw new Error("Cloud desktop is disabled.");
   return await new Promise<T>((resolve, reject) => {
-    const req = request({ socketPath, agent: false, path, method: input === undefined ? "GET" : "POST", headers: { "content-type": "application/json" }, timeout: 330_000 }, res => {
+    const req = request({ socketPath, agent: false, path, method: input === undefined ? "GET" : "POST", headers: { "content-type": "application/json", ...(controller ? { "x-donebot-desktop-controller": controller } : {}) }, timeout: 330_000 }, res => {
       let bytes = 0; const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => { bytes += chunk.length; if (bytes > 20 * 1024 * 1024) req.destroy(new Error("Cloud desktop response too large")); else chunks.push(chunk); });
       res.on("error", reject);

@@ -58,8 +58,8 @@ export interface ModelSelection {
   variant?: string;
 }
 
-/** Which cloud computer backs computer: "cloud"; absent means Boat. */
-export type CloudBackend = "box" | "vps";
+/** Which cloud computer backs computer: "cloud". DoneBot defaults to its own account's Cloud. */
+export type CloudBackend = "donebot" | "box" | "vps";
 
 /** A place a bot can act. `cloud` covers both cloud backends. */
 export type Surface = "cloud" | "vm" | "local" | "browser";

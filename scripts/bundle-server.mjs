@@ -50,6 +50,8 @@ const ENTRY_POINTS = [
   "hooks/omb-hook.ts",
   "container-mcp.ts",
   "cloud-desktop-stdio.ts",
+  "donebot-desktop-mcp.ts",
+  "donebot-desktop-stdio.ts",
   "vps-container-mcp.ts",
   "permission-proxy.ts",
   "connector-proxy.ts",

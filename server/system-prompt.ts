@@ -101,15 +101,16 @@ export function buildSystemPrompt(
 }
 
 // "box" is Boat's persisted kind literal.
-export type ComputerPromptKind = "vm-private" | "vm-shared" | "box" | "vps" | "local";
+export type ComputerPromptKind = "vm-private" | "vm-shared" | "donebot" | "box" | "vps" | "local";
 
 export type ComputerPromptKindInput = {
-  kind: "vm" | "box" | "vps" | "local" | null;
+  kind: "vm" | "donebot" | "box" | "vps" | "local" | null;
   vmPrivate: boolean;
 };
 
 export function resolveComputerPromptKind(input: ComputerPromptKindInput): ComputerPromptKind | null {
   if (input.kind === "vm") return input.vmPrivate ? "vm-private" : "vm-shared";
+  if (input.kind === "donebot") return "donebot";
   if (input.kind === "box") return "box";
   if (input.kind === "vps") return "vps";
   if (input.kind === "local") return "local";
@@ -127,6 +128,7 @@ export const SANDBOX_DESKTOP_INPUT =
   " On this desktop, read a window with get_window_state before acting on it and take x,y from that window's own screenshot. Pass delivery_mode \"foreground\" for keys, typing, scrolling and pixel clicks: background input is not available here, and foreground moves focus only inside this desktop, never on the user's own screen.";
 
 const COMPUTER_PARAGRAPH: Record<ComputerPromptKind, string> = {
+  donebot: " You control this account's DoneBot Cloud desktop. The Bot, conversation and model engine still run here; using a remote desktop alone does not transfer the task to Cloud. Save durable files under /home/cua/workspace. Run desktop commands with vm_exec and deliver files with attach_file; local file tools cannot read that desktop. Its control is exclusive across local Bots, Cloud Bots and interactive viewers. If an operation is interrupted with an unknown result, inspect and verify before retrying; do not repeat a side effect just because a response was lost." + SANDBOX_DESKTOP_INPUT,
   "vm-private":
     " You have your own isolated Cua sandbox: a Linux desktop in a container reserved for this bot. Only /home/cua/workspace is durable; save downloads, repositories, working files, and browser profiles there because everything else inside the VM is disposable. No other host folder is mounted. Run every command with vm_exec, which returns the exit code and the output as text; do not type commands into a terminal window and read screenshots. Create files there with vm_exec too (a shell heredoc or a script it runs); your host file tools cannot reach the VM. To give the user a file you made there (a report, image, audio, video, spreadsheet or slides), call attach_file with its path once it is saved; it reports an error if the file is missing. A path inside the VM cannot be opened from chat, so do not paste one as a link. Use the computer tools for the desktop, accessibility and windows. Inspect the desktop state before acting, prefer accessibility targets over raw coordinates, and work carefully." + SANDBOX_DESKTOP_INPUT,
   "vm-shared":

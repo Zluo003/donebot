@@ -10,7 +10,7 @@ node --experimental-strip-types scripts/verify-donebot-desktop.ts
 
 脚本启动两个临时运行服务、合成网关和桌面，挂载真实 ComputerPanel 并驱动 Chrome。检查同一 Bot 和原会话的工具调用、命令执行各一次、桌面文件成为原会话可下载附件、无 Boat/私有桌面入口、真实 noVNC 画布和退出后查看连接撤销。所有凭据均为合成数据，结束仅清理本脚本的子进程和临时目录，证据路径由脚本输出。
 
-此 fixture 的桌面和 LLM 为模拟实现，不证明真实 Linux 桌面、真实模型能力或生产部署。Linux 桌面另执行相邻 DoneBot-Cloud 的 `scripts/verify-desktop.mjs`，仅限显式标记的一次性 Linux 环境。
+此 fixture 的桌面和 LLM 为模拟实现，不证明真实 Linux 桌面、真实模型能力或生产部署。Linux 桌面另执行相邻 DoneBot-Cloud 的[桌面验证脚本](https://github.com/Zluo003/DoneBot-Cloud/blob/main/scripts/verify-desktop.mjs)，仅限显式标记的一次性 Linux 环境。
 
 ## 代码边界
 

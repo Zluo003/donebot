@@ -4,7 +4,7 @@
 
 添加工作区/服务器页面、应用菜单“添加云服务”和账号设置使用同一个自有面板。
 直接展示当前 DoneBot 账号、套餐精确月费、余额、实例和保留期。确认后调用本机
-`/api/donebot/cloud`，不跳转网页、不调用原版购买或外链桥接。
+[Cloud 路由](../../server/donebot/routes.ts)，不跳转网页、不调用原版购买或外链桥接。
 
 本机自有网关适配仅转接主控已有的 Cloud API，使用已登录 JWT；安装凭据不能
 获取订阅、扣款或配对权限。实例归属仍由主控验证的身份决定，正文 account_id
@@ -145,10 +145,10 @@ DONEBOT_FIXTURE_2FA=1 node --experimental-strip-types scripts/verify-donebot-aut
 ```
 
 输入错误动态验证码应保留验证界面，输入 `123456` 后应显示模型目录。
-分别检查桌面宽度和 390 × 844 移动视口。已核验的截图：
+分别检查桌面宽度和 390 × 844 移动视口。此前核验的截图保存在本地输出目录，未纳入版本库：
 
-- [`donebot-login-desktop.png`](../../output/playwright/donebot-login-desktop.png)
-- [`donebot-register-mobile.png`](../../output/playwright/donebot-register-mobile.png)
+- `output/playwright/donebot-login-desktop.png`
+- `output/playwright/donebot-register-mobile.png`
 
 ## 端到端覆盖
 

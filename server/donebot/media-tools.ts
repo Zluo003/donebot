@@ -1,21 +1,25 @@
 import type { ToolCallContext, ToolCallResult } from "../drivers/agents-call.ts";
 import type { Json } from "../drivers/agents-client.ts";
 import { MEDIA_REPLY_STYLE, MEDIA_PROGRESS_RULES } from "./media-replies.ts";
-import { doneBotFixedMediaModel } from "./media-registry.ts";
 
 type MediaIntent = "image" | "video" | "audio";
-const MEDIA_TOOL_RULES = `${MEDIA_REPLY_STYLE} ${MEDIA_PROGRESS_RULES} Use this gateway tool by default unless the user selects another provider for this request or has saved a different provider for this media kind; use that provider's CLI, MCP or skill instead. For the gateway, the client fixes the media model and provides its native parameter schema. Submit directly without model selection or capability queries. Pass reference files as {local_path:'/allowed/file'} in native reference fields. The saved asynchronous job returns immediately; acknowledge once and wait for completion in this conversation. Do not poll or resubmit a pending or uncertain job. Repeating this turn's same request reuses its job; variation_key is only for a distinct generation explicitly requested by the person.`;
+const MEDIA_TOOL_RULES = `${MEDIA_REPLY_STYLE} ${MEDIA_PROGRESS_RULES} Use the user's explicit or remembered media CLI/MCP preference first, then the configured gateway primary and fallback. The client supplies the selected model and native parameter schemas. Submit directly without capability queries. Pass reference files as {local_path:'/allowed/file'} in native reference fields. The saved asynchronous job returns immediately; acknowledge once and wait for completion in this conversation. Do not poll or resubmit a pending or uncertain job. Repeating this turn's same request reuses its job; variation_key is only for a distinct generation explicitly requested by the person.`;
 
 function generationTool(kind: MediaIntent) {
   const operations = kind === "image" ? ["generate"]
     : kind === "video" ? ["generate", "edit", "extend"] : ["generate"];
   return {
     name: `generate_${kind}`,
-    description: `Generate ${kind === "audio" ? "instrumental music or songs with lyrics" : kind} with ${doneBotFixedMediaModel(kind)} through the signed-in DoneBot account. ${MEDIA_TOOL_RULES}`,
+    description: `Generate ${kind === "audio" ? "instrumental music or songs with lyrics" : kind} through the signed-in DoneBot account using the configured media defaults. ${MEDIA_TOOL_RULES}`,
     inputSchema: {
       type: "object", additionalProperties: false,
       properties: {
-        operation: { type: "string", enum: operations, description: "Images, including reference edits and layer decomposition, use generate. Video edit/extend also use the matching native task fields." },
+        model: { type: "string", description: "Use the primary model supplied in this tool's current schema." },
+        fallback_model: { type: "string", description: "Use the backup model supplied in this tool's current schema." },
+        fallback_parameters: { type: ["object", "null"], description: "Native request for the configured backup, expressing the same intent. Null only when that model cannot support the requested operation; explain fallback_reason." },
+        fallback_operation: { type: "string", enum: ["generate", "edit", "extend"] },
+        fallback_reason: { type: "string", maxLength: 500 },
+        operation: { type: "string", enum: operations, description: "Use the operations in the current model schema. GPT Image reference edits use edit; Seedream reference edits and layer decomposition use generate. Video operations also require their matching native task fields." },
         parameters: { type: "object", additionalProperties: true, description: "Only the selected model's verified native generation request fields, excluding model. Do not add reason or other tool metadata. Include the complete prompt/content and supported output controls. Put local_path reference objects at the native reference URL positions." },
         variation_key: { type: "string", maxLength: 80, pattern: "^[A-Za-z0-9_-]{1,80}$", description: "Only for another distinct generation explicitly requested in this turn. Reuse the same value when checking or retrying the same operation." },
       },
@@ -27,7 +31,7 @@ function generationTool(kind: MediaIntent) {
 export const DONEBOT_MEDIA_TOOL_DEFINITIONS = [
   {
     name: "media_model_capabilities",
-    description: `Inspect the client's registered media contract when explicitly needed. Generation tools already contain their fixed model and native parameter schema; capability lookup is unnecessary before submission. This local read never submits or charges a generation. ${MEDIA_REPLY_STYLE}`,
+    description: `Inspect the client's registered media contract when explicitly needed. Generation tools already contain their configured model and native parameter schema; capability lookup is unnecessary before submission. This local read never submits or charges a generation. ${MEDIA_REPLY_STYLE}`,
     inputSchema: { type: "object", additionalProperties: false,
       properties: { kind: { type: "string", enum: ["image", "video", "audio"] }, model: { type: "string", minLength: 1, maxLength: 256 } }, required: ["kind"] },
   },
@@ -56,7 +60,7 @@ export async function callDoneBotMediaTool(name: string, args: Json, context: To
   const body = action === "capabilities"
     ? { ...(kind ? { kind: kind === "audio" ? "music" : kind } : {}), ...(model ? { model } : {}) }
     : generationKind
-      ? { kind: generationKind === "audio" ? "music" : generationKind, ...input, model: doneBotFixedMediaModel(generationKind as MediaIntent) }
+      ? { kind: generationKind === "audio" ? "music" : generationKind, ...input }
       : input;
   const { ok, body: response } = await context.client.apiResponse(`/api/internal/donebot/media/${action}`, { method: "POST", body: JSON.stringify(body) });
   return ok ? { text: JSON.stringify(response) } : { text: String(response.error ?? "DoneBot media request failed."), isError: true };

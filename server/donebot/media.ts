@@ -6,6 +6,7 @@ import { MediaJobStore, mediaScopeKey, type MediaJob, type MediaKind, type Media
 import { gatewayMediaDiagnostic, gatewayMediaError, mediaDiagnosticText, mediaFailureDetail } from "./media-errors.ts";
 import { MEDIA_ADAPTERS as ADAPTERS } from "./media-adapters.ts";
 import { mediaLayer } from "./media-layers.ts";
+import { prepareMediaFallback, mediaFallbackPatch } from "./media-fallback.ts";
 
 export type { MediaArtifact, MediaJob, MediaKind, MediaScope } from "./media-store.ts";
 export type MediaCapabilityKind = MediaKind | "llm" | "tts";
@@ -35,6 +36,7 @@ export interface MediaSubmission {
   operation?: "generate" | "edit" | "extend";
   /** Same operation in this turn is deduplicated; a requested variation needs a different value. */
   variationKey?: string;
+  fallback?: { model: string; parameters: Record<string, unknown>; operation?: "generate" | "edit" | "extend" };
 }
 
 export interface DoneBotMediaDeps {
@@ -50,6 +52,7 @@ export interface DoneBotMediaDeps {
   conversationExists?: (botId: string, threadId: string) => boolean;
   capabilities: (query: { model?: string; kind?: MediaCapabilityKind }) => Promise<unknown>;
   authorize: (context: MediaContext, input: MediaSubmission) => Promise<void>;
+  reviewFallback?: (job: MediaJob) => Promise<"pending" | "approved" | "declined">;
   /** Receipts and pending-result notices must be durable and idempotent by job.id and phase. */
   publish: (job: MediaJob) => Promise<void>;
   fetchArtifact?: (url: string, signal: AbortSignal) => Promise<Response>;
@@ -196,11 +199,12 @@ export class DoneBotMediaService {
     const parameters = { ...input.parameters, ...model.fixedParameters };
     const normalized = model.normalizeParameters?.(parameters, operation) ?? parameters;
     if (Buffer.byteLength(canonical(normalized)) > 1_000_000) throw jobError(413, "Media parameters exceed the local limit.");
-    const authorizedInput: MediaSubmission = { kind: input.kind, model: input.model, operation, parameters: normalized, variationKey: input.variationKey };
+    const authorizedInput: MediaSubmission = { kind: input.kind, model: input.model, operation, parameters: normalized, variationKey: input.variationKey, fallback: input.fallback };
     await this.deps.authorize(context, authorizedInput);
     if (!context.active() || !await this.sameScope(scope)) throw jobError(409, "This turn or DoneBot account changed before submission.");
     const prepared = await this.assets.prepare(context, scope, normalized, undefined, model.referencePolicy);
     model.validate?.(prepared.parameters, operation);
+    const fallback = await prepareMediaFallback(authorizedInput, context, scope, this.assets, this.deps.resolveModel, value => digest(canonical(value)), prepared.fingerprint);
     if (!context.active() || !await this.sameScope(scope)) throw jobError(409, "This turn or DoneBot account changed before submission.");
     const fingerprint = digest(canonical({ kind: input.kind, model: input.model, operation, parameters: prepared.fingerprint }));
     const operationKey = digest(JSON.stringify([context.botId, context.threadId, context.turnId, fingerprint, input.variationKey ?? ""]));
@@ -209,7 +213,7 @@ export class DoneBotMediaService {
     const now = this.now();
     const job: MediaJob = { version: 1, id: randomUUID(), operationKey, fingerprint, scope, botId: context.botId, threadId: context.threadId,
       turnId: context.turnId, kind: input.kind, model: input.model, adapter: model.adapter, operation, status: "queued",
-      parameters: structuredClone(normalized), referenceFingerprint: prepared.fingerprint, artifacts: [],
+      parameters: structuredClone(normalized), referenceFingerprint: prepared.fingerprint, fallback, artifacts: [],
       waitingStopped: false, createdAt: now, updatedAt: now, nextPollAt: now, attempts: 0 };
     this.store.put(job);
     void this.dispatchQueued().catch(() => {});
@@ -271,7 +275,7 @@ export class DoneBotMediaService {
     try {
       const adapterId = job.adapter;
       if (!adapterId) throw new Error("The queued media adapter is unavailable.");
-      const response = await this.deps.fetchGateway(path, { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": job.operationKey },
+      const response = await this.deps.fetchGateway(path, { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": job.dispatchKey ?? job.operationKey },
         body: JSON.stringify(parameters), signal: AbortSignal.timeout(120_000) }, job.scope);
       job = this.save(job, { receiptId: response.headers.get("X-DoneBot-Receipt-ID") ?? undefined });
       const body = await responseJson(response);
@@ -286,7 +290,7 @@ export class DoneBotMediaService {
           return;
         }
         const status = response.status >= 500 || [408, 409, 429, 499].includes(response.status) ? "uncertain" : "failed";
-        job = this.save(job, { status, nextPollAt: this.now(),
+        job = this.save(job, { status, fallbackEligible: status === "failed" && [400, 422].includes(response.status), nextPollAt: this.now(),
           diagnostic, error: `${gatewayMediaError(body, response.status)} Check its receipt before submitting again.` });
         if (job.status === "failed") await this.publish(job);
         else await this.publishPendingNotice(job);
@@ -390,7 +394,7 @@ export class DoneBotMediaService {
         const diagnostic = gatewayMediaDiagnostic(receipt);
         if (diagnostic) job = this.save(job, { diagnostic });
         if (["failed", "cancelled", "canceled", "refunded"].includes(String(receipt.status))) {
-          job = this.save(job, { status: "failed", nextPollAt: this.now(), error: `The gateway confirmed this media task ended without a deliverable result.${diagnostic ? ` ${mediaDiagnosticText(diagnostic)}` : job.error ? ` ${job.error}` : ""}` });
+          job = this.save(job, { status: "failed", fallbackEligible: ["failed", "refunded"].includes(String(receipt.status)), nextPollAt: this.now(), error: `The gateway confirmed this media task ended without a deliverable result.${diagnostic ? ` ${mediaDiagnosticText(diagnostic)}` : job.error ? ` ${job.error}` : ""}` });
           await this.publish(job); return;
         }
         const id = receipt.task_id;
@@ -423,7 +427,7 @@ export class DoneBotMediaService {
       if (["completed", "success", "succeeded"].includes(state)) await this.complete(job, body);
       else if (["failed", "cancelled", "canceled", "expired"].includes(state)) {
         const diagnostic = gatewayMediaDiagnostic(body, response.status, response.headers);
-        job = this.save(job, { status: "failed", nextPollAt: this.now(), diagnostic: diagnostic ?? job.diagnostic,
+        job = this.save(job, { status: "failed", fallbackEligible: state === "failed", nextPollAt: this.now(), diagnostic: diagnostic ?? job.diagnostic,
           error: `Media task ended with ${state}.${diagnostic ? ` ${mediaDiagnosticText(diagnostic)}` : ""}` });
         await this.publish(job);
       }
@@ -504,6 +508,20 @@ export class DoneBotMediaService {
     if (this.deps.conversationExists && !this.deps.conversationExists(current.botId, current.threadId)) {
       this.save(current, { waitingStopped: true });
       return;
+    }
+    const latest = this.store.get(job.id) ?? current;
+    const fallback = mediaFallbackPatch(latest, this.now());
+    if (fallback) {
+      const decision = await this.deps.reviewFallback?.(latest) ?? (latest.kind === "image" ? "approved" : "pending");
+      if (this.closed || !await this.sameScope(latest.scope)) return;
+      const reviewed = this.store.get(job.id) ?? latest;
+      if (reviewed.waitingStopped || reviewed.deliveredAt || this.cancelRemovedConversation(reviewed)) return;
+      if (decision === "pending") { this.save(reviewed, { fallbackDecision: "pending", nextPollAt: this.now() + (this.deps.pollMs ?? 3000) }); return; }
+      if (decision === "declined") this.save(reviewed, { fallbackDecision: "declined", fallbackEligible: false });
+      else {
+        const approved = mediaFallbackPatch(reviewed, this.now());
+        if (approved) { this.save(reviewed, { ...approved, fallbackDecision: "approved" }); this.schedule(); return; }
+      }
     }
     if ((await Promise.all(current.artifacts.map(artifact => safeMediaArtifact(artifact.path, this.deps.artifactDir)))).some(safe => !safe)) throw new Error("Media artifact escaped its private directory.");
     const ready = this.store.get(job.id) ?? current;

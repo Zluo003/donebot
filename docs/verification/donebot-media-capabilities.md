@@ -1,19 +1,20 @@
 # DoneBot 媒体能力与输入限制
 
-核对日期：2026-11-11。范围：客户端开放的 Seedream 5.5、Seedance 2.5 和
-Suno v6 生成接口。TTS 本轮不调整。
+核对日期：2026-11-15。本页列出 Seedream 5.5、Seedance 2.5 和 Suno v6 的详细限制；
+Muse、可选首选／备用模型与失败确认流程见[默认媒体模型](../donebot-media-models.md)。
+TTS 本轮不调整。
 
 这些模型是内置网关渠道的默认值。用户可另选媒体 CLI、MCP 或技能，并通过自然语言
 保存对应媒体的默认渠道；其能力和参数遵循该工具自身的契约。LLM 仍只经 DoneBot 网关。
 
-客户端首次 LLM 请求即提供固定模型的参数 schema 和使用限制；无需先查询能力。
+客户端首次 LLM 请求即提供设置所选模型的参数 schema 和使用限制；无需先查询能力。
 模型能力、默认值、请求组装属于客户端。网关只鉴权、路由转发、计费及保存异步任务。
 登记限制不等于已对媒体完成本地解码检查。
 
 | 模型 | 官方依据 | 客户端开放能力 |
 | --- | --- | --- |
 | Seedream 5.5 | [APIMart 生成接口](https://docs.apimart.ai/cn/api-reference/images/seedream-5-5/generation) | 文生图、参考图编辑、多图融合、透明图、图层拆分及可选 OCR |
-| Seedance 2.5 | [模型教程](https://docs.volcengine.com/docs/ark/seedance-2-5?lang=zh)、[创建任务 API](https://docs.volcengine.com/docs/ark/create-video-generation-task-api?lang=zh) | 文生视频、首帧、首尾帧、全模态参考、视频编辑和延长；音频参考可单独输入 |
+| Seedance 2.5 | [模型教程](https://docs.volcengine.com/docs/ark/seedance-2-5?lang=zh)、[创建任务 API](https://docs.volcengine.com/docs/ark/create-video-generation-task-api?lang=zh) | 文生视频、首帧、首尾帧、全模态参考和延长；音频参考可单独输入；当前网关工具不开放 edit |
 | Suno v6 | [APIMart 生成接口](https://docs.apimart.ai/en/api-reference/audios/suno/generation)、[任务约定](https://docs.apimart.ai/en/api-reference/audios/suno/overview) | 纯音乐、带歌词歌曲；均使用 v6 自定义模式 |
 
 ## Seedream 5.5
@@ -38,7 +39,7 @@ Suno v6 生成接口。TTS 本轮不调整。
 有参考素材时默认全能参考（omni_reference_task_type=reference），图片、视频、音频
 分别使用 reference_image/reference_video/reference_audio；单张图片也不自动设为首帧。
 无参考素材时使用文生视频，不填参考任务类型。用户明确要求时才切换首帧、首尾帧、
-编辑或延长模式。
+延长模式。原生 edit 要求自动时长 -1，与当前网关正整数时长契约不兼容，当前不开放。
 
 | 输入 | 登记限制 |
 | --- | --- |
@@ -54,9 +55,9 @@ Suno v6 生成接口。TTS 本轮不调整。
 文档中的 MB 在客户端字节校验中按 1024² 字节处理。模型登记保留原文单位及开闭边界。
 输出 480p/720p/1080p，默认 720p；24 FPS、双声道；MP4（默认）或 MOV；
 MOV 为 H.264/yuv444p/PCM。输出宽高比为 16:9/9:16/1:1/21:9/4:3/3:4/adaptive，
-默认 adaptive；时长 4–30 整数秒或 -1（自动，客户端默认），实际结果可能不同。
-客户端固定 generate_audio=true。首尾帧仅 adaptive；edit 需要参考视频、adaptive、
-duration=-1；extend 需要参考视频、adaptive，duration 为最终总时长。
+默认 adaptive；时长 4–30 整数秒，默认 6 秒，实际结果可能不同。原生自动时长 -1
+不提交网关。客户端固定 generate_audio=true。首尾帧仅 adaptive；extend 需要参考
+视频、adaptive，duration 为最终总时长。
 execution_expires_after=3600–259200（上游默认 172800），priority=0–9（默认 0），
 safety_identifier 最多 64 个 ASCII 字符。watermark、return_last_frame 为布尔值。
 

@@ -197,9 +197,10 @@ DONEBOT_FIXTURE_2FA=1 node --experimental-strip-types scripts/verify-donebot-aut
 pnpm exec vitest run server/donebot-media-selection.e2e.test.ts --maxWorkers=1
 ```
 
-验证客户端固定图片 `seedream-5-5`、视频 `seedance-2-5`、音乐 `suno`（v6）。
-正常生成工具不接受 model 参数，客户端注入固定 ID，并在首次 LLM 请求中提供原生参数
-schema。网关只提供开放模型 ID 与价格，不提供媒体能力；能力查询工具不进入正常
+默认配置验证图片 `seedream-5-5`、视频 `seedance-2-5`、音乐 `suno`（v6）。图片与视频
+可在设置中选择首选／备用；生成工具的 model 枚举绑定当前选择，首次 LLM 请求即提供
+两套原生参数 schema。Muse 及失败说明／确认验证见[媒体设置验证](donebot-media-settings.md)。
+网关只提供开放模型 ID 与价格，不提供媒体能力；能力查询工具不进入正常
 LLM 工具集，不要求先查目录或读第二轮参数。参考编辑使用 Seedream generation 的
 `image_urls`；图层拆分支持 `max_images=2..100` 与可选 OCR。
 

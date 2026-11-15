@@ -7657,5 +7657,11 @@
   "server.donebot.mediaApprovalDeny": "拒绝",
   "server.donebot.mediaKindImage": "图片",
   "server.donebot.mediaKindVideo": "视频",
-  "server.donebot.mediaKindMusic": "音乐"
+  "server.donebot.mediaKindMusic": "音乐",
+  "server.donebot.mediaFallbackConfirmTitle": "使用备用视频模型 {model}？",
+  "server.donebot.mediaFallbackConfirmSubtitle": "首选生成失败：{reason}。确认后使用 {model} 重新生成，按该模型正常计费。",
+  "server.donebot.mediaFallbackAwaiting": "首选模型 {primary} 生成失败：{reason}。我将使用备用模型 {model} 重新生成视频，请先确认。",
+  "server.donebot.mediaFallbackContinuing": "首选模型 {primary} 生成失败：{reason}。我将使用备用模型 {model} 重新生成。",
+  "server.donebot.mediaFallbackUnknownReason": "服务未提供更详细的失败原因",
+  "server.donebot.mediaFallbackDeclined": "已取消备用模型生成，没有提交备用请求。"
 }

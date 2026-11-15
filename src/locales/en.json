@@ -10217,5 +10217,11 @@
   "server.donebot.mediaApprovalDeny": "Deny",
   "server.donebot.mediaKindImage": "an image",
   "server.donebot.mediaKindVideo": "a video",
-  "server.donebot.mediaKindMusic": "music"
+  "server.donebot.mediaKindMusic": "music",
+  "server.donebot.mediaFallbackConfirmTitle": "Use backup video model {model}?",
+  "server.donebot.mediaFallbackConfirmSubtitle": "The primary failed: {reason}. Confirm to generate with {model}; that model's normal pricing applies.",
+  "server.donebot.mediaFallbackAwaiting": "The primary model {primary} failed: {reason}. I will use backup model {model} to generate the video after your confirmation.",
+  "server.donebot.mediaFallbackContinuing": "The primary model {primary} failed: {reason}. I will now generate with backup model {model}.",
+  "server.donebot.mediaFallbackUnknownReason": "The service did not provide a more specific failure reason",
+  "server.donebot.mediaFallbackDeclined": "Backup generation was declined. No backup request was submitted."
 }

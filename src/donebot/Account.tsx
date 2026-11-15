@@ -10,6 +10,7 @@ import { useDesktopCapabilities } from "@/components/DesktopCapabilities";
 import { DoneBotSignIn } from "./SignIn";
 import { isDoneBotCloudBrowser } from "./services";
 import { DoneBotCloudAccess } from "./CloudAccess";
+import { DoneBotMediaSettingsPanel } from "./MediaSettings";
 
 const buttonClass = "ui-button inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "请求失败，请稍后重试。";
@@ -67,6 +68,7 @@ export function DoneBotAccountSettings() {
     <Card title="DoneBot Cloud" subtitle="使用同一个 DoneBot 账号，开通或管理你的专属云实例。">
       {isDoneBotCloudBrowser() ? <p className="text-[13px] text-ink-secondary">请在本机 DoneBot 客户端管理 Cloud 订阅。</p> : <DoneBotCloudAccess key={state.config?.donebot?.user?.id} heading={false} />}
     </Card>
+    <DoneBotMediaSettingsPanel key={state.config?.donebot?.user?.id} />
     <Card title="可用模型" subtitle="账号可使用的模型将自动同步。">
       <button type="button" disabled={busy} onClick={() => void refresh()} className={buttonClass}><RefreshCw size={14} className={busy ? "animate-spin" : ""} />刷新模型</button>
       {error && <p role="alert" className="mt-3 text-[13px] text-danger">{error}</p>}

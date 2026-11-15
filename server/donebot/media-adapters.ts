@@ -15,6 +15,10 @@ export interface MediaAdapter {
 const nativeTaskId = (body: Record<string, unknown>) => mediaTaskId(body.id ?? body.task_id);
 
 export const MEDIA_ADAPTERS: Readonly<Record<string, MediaAdapter>> = {
+  "muse.videos.v1": {
+    kind: "video", submit: "/v1/videos", poll: id => `/v1/videos/${id}`,
+    taskId: nativeTaskId, results: () => [],
+  },
   "donebot.images.async.v1": {
     kind: "image", submit: "/v1/images/generations/async", edit: "/v1/images/edits/async", poll: id => `/v1/images/tasks/${id}`,
     taskId: nativeTaskId,

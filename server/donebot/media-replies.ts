@@ -20,6 +20,7 @@ export function mediaReplyContext(job: MediaJob, action: "generate" | "status" |
         ? "Acknowledge that DoneBot has taken on this media request and will return its outcome in this conversation. Keep the acknowledgement focused on the user's requested work; do not narrate the initial dispatch snapshot as an ongoing delay. Do not claim provider acceptance or active rendering without supporting evidence."
         : "Report the returned observation, existing artifacts, known problem or stop outcome as appropriate. A repeated generate call may return an existing task, including a completed, failed or cancelled task; it does not mean a new generation was started. If waiting_stopped is true, automatic follow-up is stopped; do not promise further delivery or imply the provider task was cancelled.",
       MEDIA_PROGRESS_RULES,
+      ...(job.fallbackDecision === "pending" ? ["The primary failed and the person was told the reason and proposed backup. Wait for the existing video confirmation card; no backup has been submitted. Do not generate another request or bypass the confirmation. An existing full access grant can waive this confirmation."] : []),
       "Do not resubmit this existing operation. Background receipts report unconfirmed submissions and final outcomes unless waiting has stopped. Successful artifacts are attached in the original conversation.",
     ].join(" "),
   };

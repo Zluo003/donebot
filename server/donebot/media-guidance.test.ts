@@ -4,14 +4,29 @@ import { FAKE_DONEBOT_CATALOG } from "../testing/fake-donebot-gateway.ts";
 import { createDoneBotCompletion } from "./llm-protocol.ts";
 import { guideDoneBotMedia } from "./media-guidance.ts";
 import { DONEBOT_MEDIA_TOOL_DEFINITIONS } from "./media-tools.ts";
+import { DEFAULT_DONEBOT_MEDIA_PREFERENCES } from "../../shared/donebot.ts";
 
 const input = (): CompletionTransportInput => ({ model: "gemini-4-argon", stream: false, signal: new AbortController().signal,
   replay: () => undefined, onBytes: vi.fn(), messages: [{ role: "user", content: "Create a product image" }],
   tools: DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => ({ type: "function", function: { name: `agents_${tool.name}`, description: tool.description, parameters: tool.inputSchema } })),
 });
 
-describe("DoneBot fixed local media contracts", () => {
-  it("exposes direct generation without discovery or a model argument, preserving other tools and chat history", () => {
+describe("DoneBot configured local media contracts", () => {
+  it("includes Muse and its backup's distinct native contracts in the first tool schema", () => {
+    const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
+    catalog.models.push({ id: "muse-video", display_name: "Muse", media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
+    const guided = guideDoneBotMedia(input(), catalog, { ...DEFAULT_DONEBOT_MEDIA_PREFERENCES, video: { primary: "muse-video", fallback: "seedance-2-5" } });
+    const video = guided.tools.find(tool => tool.function.name === "agents_generate_video")!.function;
+    expect(video.parameters).toMatchObject({ required: ["parameters", "model", "fallback_model", "fallback_parameters"], properties: {
+      model: { enum: ["muse-video"] }, operation: { enum: ["generate"] }, fallback_model: { enum: ["seedance-2-5"] },
+      parameters: { properties: { prompt: { type: "string" }, resolution: { enum: ["720p"] }, duration: { minimum: 4, maximum: 30 } } },
+      fallback_parameters: { anyOf: [{ properties: { content: { type: "array" }, duration: { minimum: 4, maximum: 30 } } }, { type: "null" }] },
+    } });
+    expect(video.description).toContain("at most once");
+    expect(String(guided.messages[0]!.content)).toContain("remembered third-party preference, use it first");
+    expect(String(guided.messages[0]!.content)).toContain("Never fall back while an external submission is pending");
+  });
+  it("exposes direct generation without discovery using the configured model, preserving other tools and chat history", () => {
     const turn = input();
     turn.tools.push({ type: "function", function: { name: "agents_media_center", description: "Legacy", parameters: {} } },
       { type: "function", function: { name: "workspace_read", description: "Read", parameters: {} } });
@@ -25,8 +40,8 @@ describe("DoneBot fixed local media contracts", () => {
     expect({ messages: turn.messages, tools: turn.tools }).toEqual(original);
     for (const kind of ["image", "video", "audio"]) {
       const tool = guided.tools.find(tool => tool.function.name === `agents_generate_${kind}`)!;
-      expect(tool.function.parameters).toMatchObject({ required: ["parameters"] });
-      expect(tool.function.parameters.properties).not.toHaveProperty("model");
+      expect(tool.function.parameters).toMatchObject({ required: ["parameters", "model"] });
+      expect(tool.function.parameters.properties).toHaveProperty("model");
     }
     expect(guided.messages[0]?.content).toContain("submit directly");
     expect(guided.messages[0]?.content).toContain("existing voice tools");
@@ -70,12 +85,12 @@ describe("DoneBot fixed local media contracts", () => {
 
   it("omits a disabled model's tool and keeps job controls available after sign-out", () => {
     const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
-    catalog.models = catalog.models.filter(model => model.id !== "seedream-5-5");
+    catalog.models = catalog.models.filter(model => !model.media_types.includes("image"));
     expect(guideDoneBotMedia(input(), catalog).tools.map(tool => tool.function.name)).not.toContain("agents_generate_image");
     expect(guideDoneBotMedia(input(), null).tools.map(tool => tool.function.name)).toEqual(["agents_media_job_status", "agents_media_stop_waiting"]);
   });
 
-  it.each(["messages", "gemini", "responses", "chat"] as const)("sends native parameter schemas over %s without an image model argument", async protocol => {
+  it.each(["messages", "gemini", "responses", "chat"] as const)("sends native parameter schemas over %s with the configured image model", async protocol => {
     let body: Record<string, any> = {};
     await createDoneBotCompletion(async (_path, init) => {
       body = JSON.parse(init.body as string);
@@ -88,7 +103,7 @@ describe("DoneBot fixed local media contracts", () => {
     const tools = protocol === "gemini" ? body.tools[0].functionDeclarations : body.tools;
     const generation = tools.map((tool: any) => protocol === "chat" ? tool.function : tool).find((tool: any) => tool.name === "agents_generate_image");
     const schema = generation.input_schema ?? generation.parametersJsonSchema ?? generation.parameters;
-    expect(schema.properties).not.toHaveProperty("model");
+    expect(schema.properties.model.enum).toEqual(["seedream-5-5"]);
     expect(schema.properties.parameters.properties).toHaveProperty("prompt");
     expect(JSON.stringify(body)).not.toContain("agents_media_model_capabilities");
   });

@@ -1,7 +1,7 @@
 import type { ModelCatalog, ProviderDriver } from "../contracts.ts";
 import type { SendTurnInput } from "../contracts.ts";
 import { allowsTool, parseToolScope } from "../../shared/tool-scope.ts";
-import type { DoneBotCatalog } from "../../shared/donebot.ts";
+import type { DoneBotCatalog, DoneBotMediaPreferences } from "../../shared/donebot.ts";
 import { createOpenAIChatRuntime } from "../drivers/openai-chat.ts";
 import { createDoneBotCompletion, type DoneBotLlmProtocol, type DoneBotLlmRequest } from "./llm-protocol.ts";
 import { guideDoneBotMedia } from "./media-guidance.ts";
@@ -24,6 +24,7 @@ export interface DoneBotLlmDependencies {
   authenticated(): boolean;
   imageInput?(model: string): boolean;
   catalog?(): DoneBotCatalog | null;
+  mediaPreferences?(): DoneBotMediaPreferences;
   toolUse?(model: string): boolean;
 }
 
@@ -41,7 +42,7 @@ export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDr
         return deps.protocol(model);
       });
       const runtime = createOpenAIChatRuntime({ input, driverKind: "donebot", apiKey: "", apiUrl: "https://donebot.cn/v1", authenticated: deps.authenticated,
-        models: deps.models, completionTransport: turn => complete(guideDoneBotMedia(turn, deps.catalog?.() ?? null)),
+        models: deps.models, completionTransport: turn => complete(guideDoneBotMedia(turn, deps.catalog?.() ?? null, deps.mediaPreferences?.())),
         localTools: createWorkspaceTools, computerUse: true, imageInput: deps.imageInput, toolUse: deps.toolUse, modelVariants: true,
         requestBody: () => { throw new Error("DoneBot models require their registered native protocol"); },
         httpErrorLabel: "DoneBot gateway", missingKeyError: "Sign in to DoneBot to use models", unavailableReason: "Sign in to DoneBot to use models", timeoutMs: 180_000,

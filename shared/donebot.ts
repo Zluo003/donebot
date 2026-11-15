@@ -24,6 +24,23 @@ export interface DoneBotCatalog {
   models: DoneBotGatewayModel[];
 }
 
+/** Media defaults belong to the signed-in account in the current workspace. */
+export interface DoneBotMediaPreferences {
+  image: { primary: string; fallback: string };
+  video: { primary: string; fallback: string };
+}
+
+export const DEFAULT_DONEBOT_MEDIA_PREFERENCES: DoneBotMediaPreferences = {
+  image: { primary: "seedream-5-5", fallback: "" }, video: { primary: "seedance-2-5", fallback: "" },
+};
+
+/** Choices are the enabled gateway models with a verified client adapter. */
+export interface DoneBotMediaSettings {
+  accountId: string;
+  preferences: DoneBotMediaPreferences;
+  models: { id: string; name: string; kind: "image" | "video" }[];
+}
+
 /** Account state sent to clients never contains a login token or installation credential. */
 export interface DoneBotAccountState {
   enabled: boolean;

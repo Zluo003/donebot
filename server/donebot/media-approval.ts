@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { Store } from "../store.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
 import type { MediaContext, MediaSubmission } from "./media.ts";
+import type { MediaJob } from "./media-store.ts";
 
 const MEDIA_KIND_LINES = {
   image: "server.donebot.mediaKindImage", video: "server.donebot.mediaKindVideo", music: "server.donebot.mediaKindMusic",
 } as const;
 
 export function createMediaApproval(deps: { store: Store; full(botId: string, threadId: string): boolean }) {
-  const pending = new Map<string, { context: MediaContext; finish(allowed: boolean, dismissed: boolean): void }>();
+  const pending = new Map<string, { context: MediaContext; background?: boolean; finish(allowed: boolean, dismissed: boolean): void }>();
   return {
     authorize(context: MediaContext, input: MediaSubmission): Promise<void> {
       if (!context.active()) return Promise.reject(new Error("This media turn has ended."));
@@ -29,9 +30,10 @@ export function createMediaApproval(deps: { store: Store; full(botId: string, th
         const entry = { context, finish(allowed: boolean, dismissed: boolean) {
           if (!pending.delete(requestId)) return;
           clearInterval(interval);
+          allowed = allowed && context.active();
           const current = deps.store.messagesFor(context.threadId).find(x => x.id === card.id);
           if (current?.card && !current.card.answered) deps.store.patchMessage(context.threadId, card.id, { card: { ...current.card, answered: allowed ? "allow" : "deny", dismissed } });
-          if (allowed && context.active()) resolve();
+          if (allowed) resolve();
           else reject(Object.assign(new Error("Media generation permission was denied or expired."), { status: 403 }));
         } };
         pending.set(requestId, entry);
@@ -39,12 +41,44 @@ export function createMediaApproval(deps: { store: Store; full(botId: string, th
         interval.unref?.();
       });
     },
+    reviewFallback(context: MediaContext, job: MediaJob): "pending" | "approved" | "declined" {
+      if (!context.active() || !job.fallback) return "declined";
+      const sendId = `donebot_media_${job.id}_fallback_confirmation`;
+      let card = deps.store.messagesFor(context.threadId).find(message => message.sendId === sendId);
+      if (card?.card?.answered) return card.card.answered === "allow" ? "approved" : "declined";
+      if (job.kind === "image" || deps.full(context.botId, context.threadId)) {
+        if (card?.card) {
+          if (card.card.requestId) pending.delete(card.card.requestId);
+          deps.store.patchMessage(context.threadId, card.id, { card: { ...card.card, answered: "allow", dismissed: false } });
+        }
+        return "approved";
+      }
+      const language = conversationLanguage(context.threadId);
+      if (!card?.card) card = deps.store.appendMessage(context.threadId, { role: "bot", kind: "options", sendId, card: {
+        title: serverLine(language, "server.donebot.mediaFallbackConfirmTitle", { model: job.fallback.model }),
+        subtitle: serverLine(language, "server.donebot.mediaFallbackConfirmSubtitle", { model: job.fallback.model, reason: job.diagnostic?.message || job.error || serverLine(language, "server.donebot.mediaFallbackUnknownReason") }),
+        options: [serverLine(language, "server.donebot.mediaApprovalAllow"), serverLine(language, "server.donebot.mediaApprovalDeny")],
+        requestId: randomUUID(), tool: "donebot_media",
+      } });
+      const options = card.card;
+      if (!options) return "declined";
+      const requestId = options.requestId ?? randomUUID(), cardId = card.id;
+      if (!options.requestId) deps.store.patchMessage(context.threadId, cardId, { card: { ...options, requestId } });
+      if (!pending.has(requestId)) pending.set(requestId, { context, background: true, finish(allowed, dismissed) {
+        pending.delete(requestId);
+        const current = deps.store.messagesFor(context.threadId).find(message => message.id === cardId);
+        if (current?.card && !current.card.answered) deps.store.patchMessage(context.threadId, cardId, { card: {
+          ...current.card, answered: allowed && context.active() ? "allow" : "deny", dismissed,
+        } });
+      } });
+      return "pending";
+    },
     answer(requestId: string, behavior?: string): boolean {
       const entry = pending.get(requestId);
       if (!entry) return false;
       entry.finish(behavior === "allow", false);
       return true;
     },
-    close(): void { for (const entry of pending.values()) entry.finish(false, true); },
+    close(): void { for (const [id, entry] of pending) { if (entry.background) pending.delete(id); else entry.finish(false, true); } },
   };
 }

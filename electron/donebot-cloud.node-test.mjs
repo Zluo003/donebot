@@ -5,7 +5,7 @@ import environments from "./environments.cjs";
 
 const id = "11861a47-7240-4f99-bf19-bd01d411596f", origin = `https://${id}.cloud.donebot.cn`;
 function fixture() {
-  let owner = "101", signedIn = false, live = true;
+  let owner = "101", signedIn = false, live = true, probeFailed = false;
   let state = { environments: [], activeId: "local" };
   const calls = [], opened = [];
   const connect = createDoneBotCloudConnection({ saved: () => state,
@@ -19,15 +19,30 @@ function fixture() {
     fetch: async (url, init) => {
       calls.push(url);
       assert.equal(init.credentials, "include");
-      if (url.endsWith("/api/auth/session")) return new Response("{}", { status: signedIn ? 200 : 401, headers: { "x-donebot-cloud": "1" } });
+      if (url.endsWith("/api/auth/session")) {
+        if (probeFailed) throw new TypeError("Failed to fetch");
+        return new Response("{}", { status: signedIn ? 200 : 401, headers: { "x-donebot-cloud": "1" } });
+      }
       assert.equal(url, origin + "/api/auth/pair"); assert.equal(init.headers.origin, origin);
       signedIn = true; return Response.json({ ok: true });
     },
     remember: target => { state = { ...state, environments: [{ id: "saved-cloud", origin: target.origin, name: "DoneBot Cloud", donebotCloud: { id: target.id, accountId: target.accountId } }] }; },
     activate: async target => { opened.push(target); return true; },
   });
-  return { connect, calls, opened, get entry() { return state.environments[0]; }, set owner(value) { owner = value; }, set signedIn(value) { signedIn = value; }, set live(value) { live = value; } };
+  return { connect, calls, opened, get entry() { return state.environments[0]; }, set owner(value) { owner = value; }, set signedIn(value) { signedIn = value; }, set live(value) { live = value; }, set probeFailed(value) { probeFailed = value; } };
 }
+
+test("failed session probes still renew the saved Cloud, and background renewal never navigates", async () => {
+  const f = fixture();
+  await f.connect.open({ id, accountId: "101" });
+  f.probeFailed = true;
+  await f.connect.open({ entry: f.entry });
+  assert.equal(f.opened.length, 2);
+  const pairings = f.calls.filter(url => url.endsWith("/api/auth/pair")).length;
+  await Promise.all([f.connect.renew(f.entry), f.connect.renew(f.entry)]);
+  assert.equal(f.calls.filter(url => url.endsWith("/api/auth/pair")).length, pairings + 1);
+  assert.equal(f.opened.length, 2);
+});
 
 test("reuses a live Cloud session and renews an expired one without generic pairing or account mutations", async () => {
   const f = fixture();
@@ -80,6 +95,7 @@ test("native IPC saves a reusable Cloud entry and refuses renewal from another p
   const connection = installDoneBotCloud({ ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
     guardLocal: (_name, handler) => handler, guardWorkspace: handler => handler,
     saved: () => state, persist: value => { state = value; }, cancelHome: () => { homeCancellations++; }, navigate: async target => { navigated.push(target); return true; },
+    local: () => { state = environments.withActive(state, "local"); },
     request: async path => path === "/api/donebot/state" ? Response.json({ authenticated: true, user: { id: "101" } })
       : Response.json({ url: `donebot://pair?address=${encodeURIComponent(origin)}&token=omb_pair_${"a".repeat(43)}` }),
     fetch: async () => new Response("{}", { headers: { "x-donebot-cloud": "1" } }),
@@ -93,4 +109,10 @@ test("native IPC saves a reusable Cloud entry and refuses renewal from another p
   await handlers.get("donebot-cloud:reconnect")({ senderFrame: { url: origin } });
   assert.equal(homeCancellations, 2);
   assert.deepEqual(navigated, [origin, origin]);
+  await handlers.get("donebot-cloud:local")({ senderFrame: { url: origin } });
+  assert.equal(state.activeId, "local");
+  assert.equal(state.environments.length, 1);
+  await connection.select(state.environments[0]);
+  assert.equal(state.activeId, state.environments[0].id);
+  assert.equal(state.environments.length, 1);
 });

@@ -162,6 +162,8 @@ const bridge = {
     probe: (address, code) => ipcRenderer.invoke("workspaces:probe", String(address ?? ""), String(code ?? "")),
     openCloud: (id, accountId) => ipcRenderer.invoke("donebot-cloud:open", String(id), String(accountId)),
     reconnectCloud: () => ipcRenderer.invoke("donebot-cloud:reconnect"),
+    returnLocal: () => navigator.userActivation?.isActive === true
+      ? ipcRenderer.invoke("donebot-cloud:local") : Promise.reject(new Error("Choose to return to this computer.")),
     // The colour of the place this page is (never another's): read, and changed only from the person's click.
     look: () => ipcRenderer.invoke("workspaces:look"),
     color: (swatch) => isLocalPage || navigator.userActivation?.isActive === true

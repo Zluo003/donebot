@@ -9974,5 +9974,11 @@
   "server.donebot.mediaApprovalDeny": "拒絕",
   "server.donebot.mediaKindImage": "圖片",
   "server.donebot.mediaKindVideo": "影片",
-  "server.donebot.mediaKindMusic": "音樂"
+  "server.donebot.mediaKindMusic": "音樂",
+  "server.donebot.mediaFallbackConfirmTitle": "使用備用影片模型 {model}？",
+  "server.donebot.mediaFallbackConfirmSubtitle": "首選生成失敗：{reason}。確認後使用 {model} 重新生成，按該模型正常計費。",
+  "server.donebot.mediaFallbackAwaiting": "首選模型 {primary} 生成失敗：{reason}。我將使用備用模型 {model} 重新生成影片，請先確認。",
+  "server.donebot.mediaFallbackContinuing": "首選模型 {primary} 生成失敗：{reason}。我將使用備用模型 {model} 重新生成。",
+  "server.donebot.mediaFallbackUnknownReason": "服務未提供更詳細的失敗原因",
+  "server.donebot.mediaFallbackDeclined": "已取消備用模型生成，沒有提交備用請求。"
 }

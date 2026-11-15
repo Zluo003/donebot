@@ -13,6 +13,7 @@ import { createDoneBotAccountRoutes } from "./routes.ts";
 import { bindDoneBotVoice } from "../tts/index.ts";
 import { createDoneBotVoice } from "./tts.ts";
 import { publicArtifactResponse } from "./media-download.ts";
+import { DoneBotMediaPreferencesStore, createDoneBotMediaSettingsRoute } from "./media-preferences.ts";
 
 export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfig, sourceUrl: string) {
   const fixture = sourceUrl.endsWith(".ts") && process.env.NODE_ENV === "test";
@@ -26,9 +27,12 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     ...(fixtureOrigin ? { testOrigin: fixtureOrigin } : {}),
   });
   const model = (id: string) => gateway.models()?.models.find(model => model.id === id);
+  const mediaPreferences = new DoneBotMediaPreferencesStore(join(dataDir, "donebot", "media-preferences.json"));
+  gateway.bindMediaPreferences(() => mediaPreferences.get(gateway.scope()?.accountId));
   const driver = createDoneBotLlmDriver({
     request: (path, init) => gateway.request(path, init),
     models: () => doneBotTextModels(gateway.models()), catalog: () => gateway.models(),
+    mediaPreferences: () => gateway.mediaPreferences(),
     protocol: id => doneBotProtocol(id, gateway.models()), authenticated: () => gateway.authenticated(),
     toolUse: id => model(id)?.capabilities?.tool_calling === true,
   });
@@ -50,7 +54,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
       return parsed.origin === fixtureOrigin && ["/fixture-audio.mp3", "/fixture-image.png"].includes(parsed.pathname) && !parsed.search && !parsed.hash
         ? fetch(url, { signal, redirect: "error", credentials: "omit" }) : publicArtifactResponse(url, signal);
     } : undefined,
-    routes: enabled ? [createDoneBotAccountRoutes(gateway)] : [],
+    routes: enabled ? [createDoneBotMediaSettingsRoute(gateway, mediaPreferences), createDoneBotAccountRoutes(gateway)] : [],
     helpers: () => createDoneBotHelpers(gateway, config, dataDir),
     async restore() { if (enabled) await gateway.restore().catch(() => console.warn("DoneBot secure session could not be restored.")); },
   };

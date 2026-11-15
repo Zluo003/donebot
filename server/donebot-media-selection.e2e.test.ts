@@ -45,7 +45,7 @@ it("submits Seedream 5.5 directly without capability discovery and delivers one 
     const native = gateway.requests.filter(request => request.path.startsWith("/v1beta/models/gemini-3.8-flash:"));
     const declarations = (native[0]!.body.tools as any[])[0].functionDeclarations;
     const generation = declarations.find((tool: any) => tool.name === "agents_generate_image");
-    expect(generation.parametersJsonSchema.properties).not.toHaveProperty("model");
+    expect(generation.parametersJsonSchema.properties.model.enum).toEqual(["seedream-5-5"]);
     expect(generation.parametersJsonSchema.properties.parameters.properties).toHaveProperty("prompt");
     expect(declarations.some((tool: any) => tool.name === "agents_media_model_capabilities")).toBe(false);
     expect(native.length).toBeLessThanOrEqual(3);

@@ -6,6 +6,7 @@ import { MEDIA_ADAPTERS } from "./media-adapters.ts";
 import { seedream55ReferencePolicy } from "./seedream-capabilities.ts";
 import { normalizeSeedanceParameters, seedanceReferencePolicy } from "./seedance-capabilities.ts";
 import { SUNO_FIXED_PARAMETERS } from "./suno-capabilities.ts";
+import { normalizeMuseParameters, museReferencePolicy } from "./muse-capabilities.ts";
 
 const protocolInterfaces = { messages: "anthropic.messages", gemini: "gemini.generate_content", responses: "openai.responses", chat: "openai.chat_completions" } as const;
 
@@ -72,10 +73,12 @@ export function doneBotMediaModel(catalog: DoneBotCatalog | null, id: string, ki
   return { id, kind, adapter, capabilities, fixedParameters: id === "suno" ? SUNO_FIXED_PARAMETERS : capabilities.client.fixedParameters,
     ...(id === "seedream-5-5" ? { referencePolicy: seedream55ReferencePolicy } : {}),
     ...(id === "suno" ? { normalizeParameters: (parameters: Record<string, unknown>) => ({ ...parameters, audio_format: parameters.audio_format ?? "mp3" }) } : {}),
-    ...(native.kind === "video" ? { normalizeParameters: (parameters: Record<string, unknown>, operation: "generate" | "edit" | "extend") => normalizeSeedanceParameters(native,
-      id === "seedance-2-5" ? { resolution: "720p", ratio: "adaptive", duration: -1, ...parameters } : parameters, operation), referencePolicy: seedanceReferencePolicy(native) } : {}),
+    ...(id === "muse-video" ? { normalizeParameters: normalizeMuseParameters, referencePolicy: museReferencePolicy } : {}),
+    ...(adapter === "seedance.videos.v1" ? { normalizeParameters: (parameters: Record<string, unknown>, operation: "generate" | "edit" | "extend") => normalizeSeedanceParameters(native,
+      { resolution: "720p", ratio: "adaptive", duration: 6, ...parameters }, operation), referencePolicy: seedanceReferencePolicy(native) } : {}),
     validate: (parameters, operation: "generate" | "edit" | "extend") => {
       if (id === "suno" && parameters.custom_model_id !== undefined) throw new Error("DoneBot music generation uses Suno v6 only.");
+      if (adapter === "seedance.videos.v1" && (typeof parameters.duration !== "number" || !Number.isSafeInteger(parameters.duration) || parameters.duration <= 0)) throw new Error("The DoneBot gateway requires a positive integer video duration; automatic duration and Seedance 2.5 edit are unavailable.");
       validateMediaParameters(model, parameters, operation);
     } };
 }

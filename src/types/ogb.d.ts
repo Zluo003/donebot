@@ -166,6 +166,8 @@ const __APP_VERSION__: string;
         openCloud?: (id: string, accountId: string) => Promise<{ outcome: "connected" | "cancelled" }>;
         /** Renews only the DoneBot Cloud currently displayed in the main window. */
         reconnectCloud?: () => Promise<{ outcome: "connected" | "cancelled" }>;
+        /** Returns the main window to this computer without contacting Cloud or forgetting its saved entry. */
+        returnLocal?: () => Promise<unknown>;
         /** `color`: a saved server's colour name (its owner chose it while setting the Cloud up); `home`: this window's
          * home is this Cloud, so there is nothing to switch to; `localPath`: a local workspace's folder, absent for This
          * computer's own; `profile`: this computer's page is a profile of its own (This Mac), by its id, and

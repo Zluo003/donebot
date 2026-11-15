@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import { boundedResponseText } from "./bounded-response.ts";
-import type { DoneBotAccountState, DoneBotCatalog } from "../../shared/donebot.ts";
+import { DEFAULT_DONEBOT_MEDIA_PREFERENCES, type DoneBotAccountState, type DoneBotCatalog, type DoneBotMediaPreferences } from "../../shared/donebot.ts";
 import type { DoneBotAuthSettings, DoneBotEmailDelivery } from "../../shared/donebot-auth.ts";
 import type { DoneBotCloudInstance, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudOperation, DoneBotCloudPlan, DoneBotCloudSnapshot } from "../../shared/donebot-cloud.ts";
 
@@ -104,6 +104,9 @@ function catalog(value: unknown): DoneBotCatalog {
 }
 
 export class DoneBotGateway {
+  private mediaPreferenceSource = (): DoneBotMediaPreferences => structuredClone(DEFAULT_DONEBOT_MEDIA_PREFERENCES);
+  bindMediaPreferences(read: () => DoneBotMediaPreferences): void { this.mediaPreferenceSource = read; }
+  mediaPreferences(): DoneBotMediaPreferences { return this.mediaPreferenceSource(); }
   private session: DoneBotCredential | null = null;
   private pending2fa: string | null = null;
   private currentCatalog: DoneBotCatalog | null = null;

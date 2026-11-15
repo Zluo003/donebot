@@ -3,6 +3,7 @@ import { MAX_MEDIA_REFERENCE_BYTES, MAX_MEDIA_REFERENCE_FILES } from "./media-as
 import { SEEDREAM55_SOURCE, seedream55, seedream55ParameterRules, SEEDREAM55_FIELDS, SEEDREAM55_RATIOS } from "./seedream-capabilities.ts";
 import { SUNO_FIELDS, SUNO_FIXED_PARAMETERS, SUNO_FORMATS, SUNO_LIMITS, SUNO_VARIETIES, sunoParameterRules, sunoV6 } from "./suno-capabilities.ts";
 import { seedance, seedanceParameterRules, SEEDANCE_FIELDS, SEEDANCE_RATIOS, type SeedanceReferenceConstraints } from "./seedance-capabilities.ts";
+import { museVideo, museParameterRules, validateMuseParameters } from "./muse-capabilities.ts";
 
 type Modality = "text" | "image" | "audio" | "video";
 export interface NativeModel {
@@ -137,6 +138,7 @@ function gptImage26(id: string): NativeModel {
         "Native SVG generation is registered but disabled in DoneBot; SVG editing is unsupported."] } };
 }
 const MODELS: Readonly<Record<string, NativeModel>> = {
+  "muse-video": museVideo,
   "claude-fable-5-1": claude("claude-fable-5-1", "high", ["adaptive"], ["Thinking cannot be disabled; legacy enabled/budget_tokens is unsupported."]),
   "claude-haiku-5-5": claude("claude-haiku-5-5", "medium", ["adaptive", "disabled"], ["disabled is accepted only at high effort or below."]),
   "claude-opus-5-5": claude("claude-opus-5-5", "medium", ["adaptive"], ["Thinking cannot be disabled; legacy enabled/budget_tokens is unsupported."]),
@@ -194,7 +196,8 @@ export function nativeModel(id: string): NativeModel | undefined {
 const record = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 const strings = (value: unknown): string[] | undefined => Array.isArray(value) && value.every(item => typeof item === "string") ? value : undefined;
 const interfaces: Record<DoneBotProtocol, string> = { messages: "anthropic.messages", gemini: "gemini.generate_content", responses: "openai.responses", chat: "openai.chat_completions" };
-const mediaAdapters: Readonly<Record<string, string>> = {
+export const registeredMediaAdapters: Readonly<Record<string, string>> = {
+  "muse-video": "muse.videos.v1",
   "gpt-image-2.5-flare": "donebot.images.async.v1",
   "gpt-image-2.5-sunburst": "donebot.images.async.v1",
   "gpt-image-2.6-flare": "donebot.images.async.v1",
@@ -213,6 +216,7 @@ const gptImageFields = ["model", "prompt", "images", "n", "size", "quality", "ba
 const seedreamFields = ["model", "prompt", "image_urls", "n", "size", "resolution", "layer_decomposition", "background", "output_format", "watermark", "optimize_prompt_options"];
 
 function parameterRules(native: NativeModel, adapter: unknown) {
+  if (adapter === "muse.videos.v1") return museParameterRules;
   if (adapter === "donebot.images.async.v1") return {
     fields: [...gptImageFields.filter(x => x !== "model"), ...(native.media?.animatedGif ? ["frame_count", "frame_duration_ms"] : [])], required: ["prompt"],
     references: "edit operation: images:[{image_url:{local_path:'/allowed/reference.png'}}]; up to 16 images. Use generate without images.",
@@ -255,22 +259,22 @@ function registeredModelCapabilities(model: DoneBotGatewayModel) {
   const native = nativeModel(model.id);
   const adapter = record(model.media_parameters?.protocol)?.adapter;
   const matched = native && model.media_types.includes(native.kind) && (native.kind === "text" ? Object.values(interfaces).some(iface => model.interfaces.includes(iface)) : model.interfaces.includes(expectedMediaInterface[native.kind]!));
-  const supported = Boolean(matched && (native?.kind === "text" ? true : typeof adapter === "string" && mediaAdapters[model.id] === adapter));
+  const supported = Boolean(matched && (native?.kind === "text" ? true : typeof adapter === "string" && registeredMediaAdapters[model.id] === adapter));
   const clientInput = native?.input.filter(modality => native.kind === "text" ? modality === "text" || modality === "image" : native.kind !== "music" || modality === "text") ?? [];
-  const operations = native?.kind === "text" ? ["conversation", ...(model.capabilities?.tool_calling === true ? ["tool_calling"] : [])] : native?.kind === "music" ? ["generate", "custom_lyrics", "instrumental"] : native?.media?.operations.filter(x => !["mask_edit", "markup_edit"].includes(x)) ?? [];
-  const fixedParameters: Record<string, unknown> | undefined = native?.kind === "music" ? SUNO_FIXED_PARAMETERS : native?.kind === "video" ? { generate_audio: true } : native?.media?.complexity ? { complexity: "high" } : undefined;
+  const operations = native?.kind === "text" ? ["conversation", ...(model.capabilities?.tool_calling === true ? ["tool_calling"] : [])] : native?.kind === "music" ? ["generate", "custom_lyrics", "instrumental"] : native?.media?.operations.filter(x => !["mask_edit", "markup_edit"].includes(x) && !(model.id === "seedance-2-5" && x === "edit")) ?? [];
+  const fixedParameters: Record<string, unknown> | undefined = native?.kind === "music" ? SUNO_FIXED_PARAMETERS : adapter === "seedance.videos.v1" ? { generate_audio: true } : native?.media?.complexity ? { complexity: "high" } : undefined;
   const referenceBytes = native?.media?.referenceMedia ? native.media.referenceMedia.video.maxMegabytes * 1024 * 1024 : native?.media?.referenceImage?.maxBytes ?? MAX_MEDIA_REFERENCE_BYTES;
   return { model: model.id, native: native ?? null,
     gateway: { capabilities: model.capabilities ?? {}, parameters: model.media_parameters ?? {}, ...(adapter === "apimart.images.v1" ? { adapterSources: [model.id === "seedream-5-5" ? SEEDREAM55_SOURCE : APIMART_SEEDREAM] } : adapter === "apimart.music.v1" ? { adapterSources: [APIMART_SUNO] } : {}), ...(native?.media?.mask === true ? { maskEditing: false, restriction: "DoneBot gateway forbids GPT Image mask edits.", responseFormatCompatibility: ["url", "b64_json"] } : {}) },
     client: { implemented: supported, input: clientInput, operations: supported ? operations : [],
       delivery: native?.kind === "text" || native?.kind === "audio" ? "streaming" : "async", referenceTransport: "gateway_asset_url",
-      imageEditEndpoint: native?.kind === "image" && adapter === "donebot.images.async.v1", videoEditAndExtend: supported && native?.kind === "video" && native.media?.operations.includes("edit"),
+      imageEditEndpoint: native?.kind === "image" && adapter === "donebot.images.async.v1", videoEditAndExtend: supported && native?.kind === "video" && operations.includes("edit") && operations.includes("extend"),
       ...(native?.media?.operations.includes("markup_edit") ? { markupOverlay: false, annotatedReferenceEdits: supported } : {}),
       fixedParameters,
       ...(native?.media?.complexity ? { svgOutput: false,
         outputFormats: ["png", "jpeg", "webp", "gif"].filter(format => !strings(model.media_parameters?.formats)?.length || strings(model.media_parameters?.formats)!.includes(format)),
         staticSizePolicy: { ...gptImage25Size } } : {}),
-      ...(native?.kind === "video" ? { defaultMode: "multimodal_reference", modeSwitch: "Only when explicitly requested by the person.",
+      ...(native?.kind === "video" ? { defaultMode: adapter === "muse.videos.v1" ? "text_or_image_reference" : "multimodal_reference", modeSwitch: "Only when explicitly requested by the person.",
         outputFormats: native.media!.formats!.filter(format => !strings(model.media_parameters?.formats)?.length || strings(model.media_parameters?.formats)!.includes(format)),
         unavailableNativeFeatures: [...(native.media?.draft ? ["draft"] : []), ...(native.media?.builtInTools ?? [])],
         referenceValidation: { local: ["file_type", "file_size", "reference_count", "roles", "parameter_values"], provider: ["dimensions", "aspect_ratio", "total_pixels", "codecs", "fps", "per_file_duration", "summed_duration", "portrait_authorization"] } } : {}),
@@ -543,6 +547,7 @@ export function validateMediaParameters(model: DoneBotGatewayModel, parameters: 
   if (native.kind === "image" && native.media?.mask === true) validateGptImage(native, parameters, operation);
   else if (native.officialId === "seedream-5-5") validateSeedream55(parameters);
   else if (native.kind === "image") validateSeedream(parameters);
+  else if (native.officialId === "muse-video") validateMuseParameters(parameters, operation);
   else if (native.kind === "video") validateSeedance(native, parameters);
   else if (native.kind === "music") validateSuno(parameters);
   else fail("Speech uses the existing streaming voice flow.");

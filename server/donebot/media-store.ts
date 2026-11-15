@@ -16,6 +16,12 @@ const artifactSchema = z.object({
 });
 export type MediaArtifact = z.infer<typeof artifactSchema>;
 
+const fallbackSchema = z.object({
+  model: z.string().min(1), adapter: z.string().min(1), operation: z.enum(["generate", "edit", "extend"]),
+  parameters: z.record(z.string(), z.unknown()), referenceFingerprint: z.record(z.string(), z.unknown()), fingerprint: z.string(),
+});
+export type MediaFallback = z.infer<typeof fallbackSchema>;
+
 const jobSchema = z.object({
   version: z.literal(1), id: z.string().uuid(), operationKey: z.string(), fingerprint: z.string(), scope: scopeSchema,
   botId: z.string().min(1), threadId: z.string().min(1), turnId: z.string().min(1), kind: mediaKindSchema,
@@ -24,6 +30,9 @@ const jobSchema = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
   referenceFingerprint: z.record(z.string(), z.unknown()).optional(),
   taskId: z.string().optional(), receiptId: z.string().optional(), error: z.string().optional(),
+  dispatchKey: z.string().optional(), fallback: fallbackSchema.optional(), fallbackEligible: z.boolean().optional(),
+  fallbackDecision: z.enum(["pending", "approved", "declined"]).optional(),
+  previousAttempts: z.array(z.object({ model: z.string(), taskId: z.string().optional(), receiptId: z.string().optional(), error: z.string().optional() })).max(1).optional(),
   diagnostic: mediaDiagnosticSchema.optional(),
   generationEndedAt: z.number().optional(),
   artifacts: z.array(artifactSchema), waitingStopped: z.boolean(), createdAt: z.number(), updatedAt: z.number(),

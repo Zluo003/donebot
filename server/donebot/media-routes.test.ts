@@ -56,6 +56,31 @@ describe("DoneBot media capability routes", () => {
     expect(await createDoneBotMediaRoutes(service as unknown as DoneBotMediaService, () => trusted)(ctx)).toBe(PASS);
   });
 
+  it("rejects obsolete primary/backup schemas before creating a paid job", async () => {
+    const localService = { ...service, submit: vi.fn(async () => pending) };
+    const route = createDoneBotMediaRoutes(localService as unknown as DoneBotMediaService, () => trusted, () => ({ primary: "muse-video", fallback: "seedance-2-5" }));
+    for (const patch of [{ model: "seedance-2-5" }, { fallback_model: "seedance-2-0" }]) {
+      const ctx = context({ kind: "video", model: "muse-video", fallback_model: "seedance-2-5", parameters: {}, fallback_parameters: {}, ...patch });
+      await route(ctx);
+      expect(ctx.json).toHaveBeenCalledWith(ctx.res, 409, expect.anything());
+    }
+    expect(localService.submit).not.toHaveBeenCalled();
+  });
+
+  it("requires backup parameters or an explicit unsupported-operation explanation", async () => {
+    const localService = { ...service, submit: vi.fn(async () => pending) };
+    const route = createDoneBotMediaRoutes(localService as unknown as DoneBotMediaService, () => trusted, () => ({ primary: "muse-video", fallback: "seedance-2-5" }));
+    for (const fallback_parameters of [undefined, null]) {
+      const ctx = context({ kind: "video", model: "muse-video", fallback_model: "seedance-2-5", parameters: {}, fallback_parameters });
+      await route(ctx);
+      expect(ctx.json).toHaveBeenCalledWith(ctx.res, 400, expect.anything());
+    }
+    const ctx = context({ kind: "video", model: "muse-video", fallback_model: "seedance-2-5", parameters: {}, fallback_parameters: null, fallback_reason: "The selected backup cannot preserve this requested output." });
+    await route(ctx);
+    expect(ctx.json).toHaveBeenCalledWith(ctx.res, 202, expect.objectContaining({ fallback_unavailable: expect.stringContaining("cannot preserve") }));
+    expect(localService.submit).toHaveBeenCalledTimes(1);
+  });
+
   it("passes other methods and unrelated paths to the original platform", async () => {
     const route = createDoneBotMediaRoutes(service as unknown as DoneBotMediaService, () => trusted), ctx = context({});
     ctx.method = "GET"; expect(await route(ctx)).toBe(PASS);
@@ -79,7 +104,7 @@ describe("DoneBot media capability routes", () => {
     for (const tools of [upstream, product]) expect(tools.filter(tool => tool.name === "generate_image")).toHaveLength(1);
     expect(upstream.find(tool => tool.name === "generate_image")?.inputSchema).toMatchObject({ required: ["prompt"] });
     expect(product.find(tool => tool.name === "generate_image")?.inputSchema).toMatchObject({ required: ["parameters"], properties: { parameters: { type: "object" } } });
-    expect(product.find(tool => tool.name === "generate_image")?.inputSchema.properties).not.toHaveProperty("model");
+    expect(product.find(tool => tool.name === "generate_image")?.inputSchema.properties).toHaveProperty("model");
     expect(fullInputSchema("generate_image", true)).toMatchObject({ required: ["parameters"] });
     expect(fullInputSchema("generate_image")).toMatchObject({ required: ["prompt"] });
     expect(fullInputSchema("generate_audio", true)).toMatchObject({ required: ["parameters"] });
@@ -91,7 +116,7 @@ describe("DoneBot media capability routes", () => {
       sharedComputers: false, client: { api: async () => ({}), apiResponse } };
     await callTool("generate_image", { parameters: { prompt: "fixture", size: "1024x1024" } }, { ...ctx, donebotMedia: true });
     expect(apiResponse.mock.calls[0]?.[0]).toBe("/api/internal/donebot/media/generate");
-    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "image", model: "seedream-5-5", parameters: { prompt: "fixture", size: "1024x1024" } });
+    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "image", parameters: { prompt: "fixture", size: "1024x1024" } });
     await callTool("generate_image", { prompt: "fixture", aspect: "1:1" }, ctx);
     expect(apiResponse.mock.calls[1]?.[0]).toBe("/api/internal/images/generate");
   });
@@ -103,7 +128,7 @@ describe("DoneBot media capability routes", () => {
       sharedComputers: false, donebotMedia: true, client: { api: async () => ({}), apiResponse } });
     expect(apiResponse).toHaveBeenCalledTimes(1);
     expect(apiResponse.mock.calls[0]?.[0]).toBe("/api/internal/donebot/media/generate");
-    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "music", model: "suno", ...input });
+    expect(JSON.parse(String(apiResponse.mock.calls[0]![1]!.body))).toEqual({ kind: "music", ...input });
     expect(fullInputSchema("generate_audio", true)).toMatchObject({ required: ["parameters"] });
   });
 

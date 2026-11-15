@@ -317,11 +317,14 @@ describe("DoneBot media parameters", () => {
     expect(nativeModel(id)!.media!.customSize!.maxPixels).toBe(8_294_400);
   });
 
-  it("retains video editing in every Seedance model while advertising the 2.5-only task type precisely", () => {
+  it("preserves native Seedance editing while exposing only gateway-compatible client operations", () => {
     for (const id of ["seedance-2-0", "seedance-2-0-fast", "seedance-2-0-mini", "seedance-2-5"]) {
       const capabilities = modelCapabilities(media(id));
       expect(capabilities.native!.media!.operations).toEqual(expect.arrayContaining(["edit", "extend"]));
-      expect(capabilities.client.videoEditAndExtend).toBe(true);
+      expect(capabilities.client.videoEditAndExtend).toBe(id !== "seedance-2-5");
+      expect(capabilities.client.operations.includes("edit")).toBe(id !== "seedance-2-5");
+      expect(capabilities.client.operations).toContain("extend");
+      expect(capabilities.client.parameterRules!.rules.join(" ")).not.toContain("Duration=-1");
       expect(capabilities.client.parameterRules!.fields.includes("omni_reference_task_type")).toBe(id === "seedance-2-5");
       expect(capabilities.client.parameterRules!.fields.includes("output_format")).toBe(id === "seedance-2-5");
       expect(() => validate(id, { content: [prompt, reference("video", "reference_video")], resolution: "720p" })).not.toThrow();

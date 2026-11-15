@@ -17,7 +17,9 @@ import { createMediaApproval } from "./media-approval.ts";
 import { mediaReferenceMime } from "./media-assets.ts";
 import { openMediaArtifact } from "./media-download.ts";
 import { createDoneBotMediaRoutes } from "./media-routes.ts";
-import { DoneBotMediaService, type MediaContext } from "./media.ts";
+import { DoneBotMediaService, type MediaContext, type MediaJob } from "./media.ts";
+import { selectedMediaModels } from "./media-preferences.ts";
+import { conversationLanguage, serverLine } from "../server-lines.ts";
 
 interface DoneBotMediaHostDeps {
   store: Store;
@@ -34,6 +36,7 @@ interface DoneBotMediaHostDeps {
 
 export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
   const { store, gateway: donebot } = deps;
+  let closed = false;
   const donebotMediaApproval = createMediaApproval({ store, full: deps.fullAccess });
   const donebotMedia: DoneBotMediaService = new DoneBotMediaService({
     dbPath: join(deps.dataDir, "donebot", "media.sqlite"), artifactDir: join(deps.dataDir, "donebot", "artifacts"),
@@ -51,6 +54,31 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       const kind = input.kind === "music" ? "audio" : input.kind;
       if (!bot || !allowsTool(bot.toolScope, { kind: "mcp", server: "agents", name: `generate_${kind}` })) throw Object.assign(new Error("This media operation is outside the bot's tool selection."), { status: 403 });
       return donebotMediaApproval.authorize(context, input);
+    },
+    async reviewFallback(job) {
+      const bot = store.bot(job.botId), group = store.groupByThread(job.threadId);
+      if (!bot || bot.hidden || !job.fallback || (group ? !group.memberIds.includes(bot.id) : store.botByThread(job.threadId)?.id !== bot.id)) return "declined";
+      const context = fallbackContext(job);
+      if (!context.active()) return "declined";
+      const language = conversationLanguage(job.threadId), sendId = `donebot_media_${job.id}_fallback_notice`;
+      const messageCount = store.messagesFor(job.threadId).length;
+      if (!store.messagesFor(job.threadId).some(message => message.sendId === sendId)) {
+        const confirmation = job.kind === "video" && !deps.fullAccess(job.botId, job.threadId);
+        const text = serverLine(language, confirmation ? "server.donebot.mediaFallbackAwaiting" : "server.donebot.mediaFallbackContinuing", {
+          primary: job.model ?? "", model: job.fallback.model,
+          reason: job.diagnostic?.message || job.error || serverLine(language, "server.donebot.mediaFallbackUnknownReason"),
+        });
+        store.appendMessage(job.threadId, { role: "bot", kind: "text", text, sendId,
+          ...(group ? { from: { botId: bot.id, name: bot.name, color: bot.color } } : {}),
+        });
+      }
+      const decision = donebotMediaApproval.reviewFallback(context, job);
+      if (store.messagesFor(job.threadId).length !== messageCount) {
+        if (group) store.patchGroup(group.id, { unread: true });
+        else store.patchTask(bot.id, job.threadId, { unread: true });
+        deps.wrote(bot, job.threadId);
+      }
+      return decision;
     },
     resolveReference: async (context, path, maxBytes) => {
       if (!context.active()) throw new Error("This media turn has ended.");
@@ -83,7 +111,9 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       if (!bot || bot.hidden || (group ? !group.memberIds.includes(bot.id) : store.botByThread(job.threadId)?.id !== bot.id)) return;
       const sendId = `donebot_media_${job.id}_${job.status}`;
       if (store.messagesFor(job.threadId).some(message => message.sendId === sendId)) return;
-      const text = job.status === "completed" ? `${job.kind} · ${job.model}` : `${job.kind} · ${job.model} · ${job.status}${job.error ? `: ${job.error}` : ""}`;
+      const attempts = job.previousAttempts?.length ? `（首选 ${job.previousAttempts[0]!.model} 失败后使用备用）` : "";
+      const text = job.fallbackDecision === "declined" ? serverLine(conversationLanguage(job.threadId), "server.donebot.mediaFallbackDeclined")
+        : job.status === "completed" ? `${job.kind} · ${job.model}${attempts}` : `${job.kind} · ${job.model}${attempts} · ${job.status}${job.error ? `: ${job.error}` : ""}`;
       store.appendMessage(job.threadId, { role: "bot", kind: "text", text, sendId,
         ...(job.status === "completed" ? { attachments: job.artifacts.map(file => ({ kind: file.mime.startsWith("image/") ? "image" as const : "file" as const, path: file.path, mime: file.mime, name: file.name })) } : {}),
         ...(group ? { from: { botId: bot.id, name: bot.name, color: bot.color } } : {}),
@@ -93,13 +123,24 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       deps.wrote(bot, job.threadId);
     },
   });
+  function fallbackContext(job: MediaJob): MediaContext {
+    return { botId: job.botId, threadId: job.threadId, turnId: job.turnId, active: () => {
+      const current = donebotMedia.deliveryJob(job.id), scope = donebot.scope();
+      const bot = store.bot(job.botId), group = store.groupByThread(job.threadId);
+      const kind = job.kind === "music" ? "audio" : job.kind;
+      return !closed && Boolean(current?.fallback && current.fallbackEligible && !current.waitingStopped &&
+        scope?.accountId === job.scope.accountId && scope.installationId === job.scope.installationId && bot && !bot.hidden &&
+        (group ? group.memberIds.includes(bot.id) : store.botByThread(job.threadId)?.id === bot.id) &&
+        allowsTool(bot.toolScope, { kind: "mcp", server: "agents", name: `generate_${kind}` }));
+    } };
+  }
   const mediaRouteContexts = new AsyncLocalStorage<MediaContext>();
   donebot.bindMediaActivity(accountId => donebotMedia.activeCount(accountId));
   const donebotMediaRoutes = createDoneBotMediaRoutes(donebotMedia, () => {
     const context = mediaRouteContexts.getStore();
     if (!context) throw new Error("No active media turn.");
     return context;
-  });
+  }, kind => selectedMediaModels(donebot.models(), donebot.mediaPreferences(), kind));
   const artifactRoute: RouteHandler = async ({ path, method, req, res, json, auth }) => {
     const match = /^\/api\/attachments\/(donebot-([a-f0-9-]{36})-\d+\.[a-z0-9]+)$/.exec(path);
     if (!match || method !== "GET") return PASS;
@@ -173,7 +214,24 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
 
   return {
     generatedFile, artifactRoute, internalRoute: donebotMediaRoutes, answerApproval: donebotMediaApproval.answer,
+    answerCard(threadId: string, requestId: string, behavior: string): "allowed-once" | "rejected" | null {
+      const card = store.messagesFor(threadId).find(message => message.card?.requestId === requestId && message.card.tool === "donebot_media");
+      if (!card || card.card?.answered) return null;
+      const match = /^donebot_media_([a-f0-9-]{36})_fallback_confirmation$/.exec(card.sendId ?? "");
+      const job = match ? donebotMedia.deliveryJob(match[1]!) : undefined;
+      if (job?.threadId === threadId && job.fallbackDecision === "pending") {
+        if (behavior !== "allow") {
+          donebotMediaApproval.answer(requestId, behavior);
+          store.patchMessage(threadId, card.id, { card: { ...card.card!, answered: "deny", dismissed: false } });
+          return "rejected";
+        }
+        const decision = donebotMediaApproval.reviewFallback(fallbackContext(job), job);
+        if (decision !== "pending") return decision === "approved" ? "allowed-once" : "rejected";
+      }
+      if (!donebotMediaApproval.answer(requestId, behavior)) return null;
+      return store.messagesFor(threadId).find(message => message.card?.requestId === requestId)?.card?.answered === "allow" ? "allowed-once" : "rejected";
+    },
     withContext<T>(context: MediaContext, work: () => T): T { return mediaRouteContexts.run(context, work); },
-    async close() { donebotMediaApproval.close(); await donebotMedia.close(); },
+    async close() { closed = true; donebotMediaApproval.close(); await donebotMedia.close(); },
   };
 }

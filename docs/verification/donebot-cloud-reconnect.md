@@ -68,3 +68,36 @@ API、SSE、WebSocket、附件上传及 Range 下载继续使用远端实例及�
 
 完整 Electron 检查中，Cloud 入口 mock、preload 接口列表和已禁用创建工作空间的断言已同步。
 图片处理和上下文预算的隔离验证见[附件上下文](donebot-image-context.md)。
+
+## 桌面 Cloud 写请求同源修复（0.1.154）
+
+0.1.153 的本地前端映射在 Electron 43 协议处理器内转发请求时，Chromium 尚未添加
+`Origin`；同时 HTML 的 `no-referrer` 策略使处理器无法取得页面来源。网关因而允许读取历史，
+但拒绝发消息、新建对话和浏览器控制等写请求，返回 `Same-origin access required`。
+手机使用独立 API 通道，不经过这层桌面前端映射。
+
+0.1.154 对安装包 HTML 使用 `same-origin` referrer 策略，只在目标是已验证 Cloud、
+原请求缺少 Origin、且 referrer 与目标 origin 完全相同时补齐来源标识。
+显式外站或 `null` Origin 保留；未知目标、空来源、外站及不透明来源不获得 Cloud 来源。
+原请求体、取消信号、Cookie 和原生网络通道继续复用。网关原有同源校验不变。
+
+定向 Node 检查包含 POST/PATCH/DELETE、请求体未被预读、原生配对和上述拒绝分支。
+真实 Electron fixture 在合成 Cloud 的认证和 API 代理前加入与网关等价的同源检查，
+验证新建对话、发送消息、假引擎回复，以及可选原生浏览器的控制、导航和页面绘制。
+外站和主动去除 referrer 的写请求必须仍返回 403。所有请求只触及临时 profile、独立
+资料目录及回环服务，不使用生产账号或用户聊天记录。
+
+```sh
+node --test electron/donebot-cloud-frontend.node-test.mjs electron/donebot-cloud.node-test.mjs electron/donebot-cloud-keepalive.node-test.mjs electron/server-session.node-test.mjs
+DONEBOT_VERIFY_BROWSER_BINARY=/absolute/path/to/agent-browser \
+DONEBOT_VERIFY_BROWSER_CHROME=/absolute/path/to/chrome-headless-shell \
+node scripts/verify-donebot-cloud.mjs
+```
+
+本修复只更新桌面客户端，无需更新手机、网关或 Cloud 镜像。
+
+2026-11-16：15 项定向 Node 测试、443 模块 Electron 语法检查及修改文件 lint 通过。
+真实 Electron 与原生浏览器回执：临时目录 `donebot-cloud-reconnect-fGw0ko/receipt.json`；
+新建对话 201、消息提交 202、浏览器操作 200，假引擎回复和回环测试页面均在真实界面可见。
+同一回执包含空来源及外站请求 403，以及 Cookie 续期、上传、SSE、WebSocket 和 Range 检查。
+该证据不代表生产安装、真实模型生成或公网长期稳定性测试。

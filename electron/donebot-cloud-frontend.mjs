@@ -15,7 +15,8 @@ export function installDoneBotCloudFrontend({ session, directory, origins }) {
   collect(directory);
   session.protocol.handle("https", async request => {
     const url = new URL(request.url);
-    if (origins().includes(url.origin) && (request.method === "GET" || request.method === "HEAD")) {
+    const cloud = origins().includes(url.origin);
+    if (cloud && (request.method === "GET" || request.method === "HEAD")) {
       const path = url.pathname === "/" ? "/index.html" : url.pathname;
       const file = files.get(path);
       if (file) {
@@ -27,14 +28,19 @@ export function installDoneBotCloudFrontend({ session, directory, origins }) {
         if (path.endsWith(".html")) {
           headers.set("content-security-policy", "frame-ancestors 'none'");
           headers.set("x-frame-options", "DENY");
-          headers.set("referrer-policy", "no-referrer");
+          headers.set("referrer-policy", "same-origin");
         }
         return new Response(request.method === "HEAD" ? null : response.body, { status: response.status, headers });
       }
       if (path.startsWith("/assets/")) return new Response("Client asset unavailable", { status: 404 });
     }
+    const headers = new Headers(request.headers);
+    if (cloud && !headers.has("origin") && request.referrer) {
+      // Electron 43 protocol handlers run before Chromium adds Origin; only a verified same-origin referrer may supply it.
+      if (new URL(request.referrer).origin === url.origin) headers.set("origin", url.origin);
+    }
     // Electron's native fetch re-enters protocol handlers unless explicitly bypassed.
-    return session.fetch(request, { bypassCustomProtocolHandlers: true });
+    return session.fetch(request, { headers, bypassCustomProtocolHandlers: true });
   });
   return () => session.protocol.unhandle("https");
 }

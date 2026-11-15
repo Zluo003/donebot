@@ -4,6 +4,10 @@ DoneBot 0.1.153 桌面共用安装包中的聊天界面；Cloud 仅提供 API、
 本次包含黑白电脑连线云端加载页、保存项自动续连、缓存及返回本地、Cloud 中隐藏工作空间栏和禁止创建工作空间；
 同时包含 Muse 最长 10 秒、图片预处理和附件预算整理。手机附件传输与交互的配套修改位于 DoneBot-Mobile。
 
+桌面安装应使用 0.1.154 或后续兼容版本。0.1.154 修复本地前端请求缺少 Origin，导致
+发消息、新建对话和浏览器操作被网关拒绝的问题；详见[同源修复及隔离证据](donebot-cloud-reconnect.md#桌面-cloud-写请求同源修复0154)。
+这项客户端修复不改变下列镜像摘要，无需为此重建 Cloud 实例。
+
 ## 已发布镜像
 
 - DoneBot 源码：`cf396bc1a526a908f0a302f8d51cd26151240271`。
@@ -18,7 +22,7 @@ DoneBot 0.1.153 桌面共用安装包中的聊天界面；Cloud 仅提供 API、
 
 ## 升级顺序
 
-1. 先安装 DoneBot 0.1.153 或后续兼容版本。旧客户端依赖 Cloud 网页，无法使用 API 专用镜像。
+1. 先安装 DoneBot 0.1.154 或后续兼容版本。更旧的客户端可能依赖 Cloud 网页，或缺少上述同源写请求修复。
 2. 节点代码包含 Cloud `dd79356` 或后续版本；按原维护流程备份，记录实际旧服务和桌面摘要，使用旧配置停止 worker 和 agent。
 3. 将当前清单的两个值合入原 `agent.env`，保留其它配置。逐实例运行 `prepare-upgrade` 和 `prepare-desktop-upgrade`，传入实际旧摘要，保留原盘、凭据、实例及 deployment ID。
 4. 恢复 agent、worker。核对实际容器的镜像和完整 revision、原有 Bot/消息/文件，并检查健康与手机状态；有账号凭据的实例应达到 `authenticated=true`、`registered=true`、`relay=connected`。

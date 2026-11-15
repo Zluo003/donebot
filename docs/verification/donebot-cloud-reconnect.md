@@ -21,7 +21,7 @@ pnpm test:packaged-server
 
 Electron fixture 使用临时 HOME、独立 profile、回环 HTTPS 合成 Cloud 和真实 Chromium Cookie 容器；外部请求被阻止。覆盖首次连接、有效 Cookie 复用、会话过期自动续连及账号不匹配拒绝，证据目录由脚本打印。回环耗时不能作为公网延迟承诺。
 
-2026-11-15 本地结果：上述 5 文件 Vitest 共 28 项、3 文件 Electron Node 测试共 44 项通过，真实 Electron Cookie fixture、类型检查、437 模块 Electron 语法检查、修改文件 oxlint、前端/服务端构建及隔离打包服务 smoke 均通过。下载中断证据位于忽略目录 `.omb-scratch/verify-evidence/donebot-http-failure/result.json`；本次 Electron 证据目录为临时目录 `donebot-cloud-reconnect-VeuGRQ`。相邻 Cloud 的 37 项测试及网关 `TestBrowser`、临时 PostgreSQL 会话专项也通过。
+2026-11-15 本地结果：上述 5 文件 Vitest 共 28 项、3 文件 Electron Node 测试共 45 项通过，真实 Electron Cookie fixture、类型检查、437 模块 Electron 语法检查、修改文件 oxlint、前端/服务端构建及隔离打包服务 smoke 均通过。下载中断证据位于忽略目录 `.omb-scratch/verify-evidence/donebot-http-failure/result.json`；本次 Electron 证据目录为临时目录 `donebot-cloud-reconnect-L1kI7k`。相邻 Cloud 的 37 项测试及网关 `TestBrowser`、临时 PostgreSQL 会话专项也通过。
 
 缓存 DOM 检查让新网络读取全部保持待定，验证真实 StoreProvider 立即显示缓存且没有自动发送写请求。HTTP E2E 使用既有隔离 launcher、合成网关和独立资料目录，下载合成媒体后主动断开，再检查真实服务健康及 Bot 列表；它检验一条可重现的中断路径，不识别生产崩溃的原始请求。
 
@@ -32,4 +32,4 @@ Electron fixture 使用临时 HOME、独立 profile、回环 HTTPS 合成 Cloud 
 - DoneBot-Cloud 节点：更新 agent/worker，才能检查容器实际状态并恢复意外退出的运行服务；仅更新容器镜像不包含节点恢复逻辑。
 - donebot-api：静态资源缓存优化需更新网关。仅成功 GET 的带版本 hash JS/CSS/woff2 允许浏览器私有缓存；HTML、API、附件、错误及带查询参数的响应仍为 no-store。前置代理不启用共享缓存。
 
-手机和桌面可以同时连接同一 Cloud；桌面续连不注销手机。上述变更不要求更新手机 App 或独立手机中继。已发布的旧镜像不会自动包含本轮源码；本记录不表示已发布镜像、部署生产或恢复实际实例。
+手机和桌面可以同时连接同一 Cloud；桌面续连不注销手机。上述变更不要求更新手机 App 或独立手机中继。本轮 `6c31434` 的 amd64 双镜像已发布，摘要与 Linux 证据见[发布记录](cloud-images-2026-11-15.md)。发布不等于生产节点已升级或实际实例已恢复。

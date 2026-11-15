@@ -49,7 +49,7 @@ pnpm --dir ../DoneBot-Relay test
 
 网关 `TestDoneBotMobileSessionUsesOriginalRefreshFamily` 覆盖原版 refresh family 撤销和账号密码安全版本变化；`TestAPNsSignsAndSeparatesEnvironments` 验证 ES256 签名、APNs topic、失效 token 与临时失败处理。发送目标为内存 HTTP transport，没有向 Apple 发出推送。
 
-`TestPostgresRelayManagement` 覆盖节点创建、独立凭据、轮换、容量策略、停用、健康过期、最多 4 个启用节点及优先地址；`TestPostgresDevicePresenceAndRelayStatus` 覆盖归属隔离、中继未配置时登记手机、后台状态和撤销会话过滤。中继项目 `test/management.test.ts` 用真实 WebSocket 证明 1 台电脑加 2 个会话为 5 条 WebSocket、容量限制、停用不影响已有连接、Origin 白名单、网关不可用时中继仍监听，以及策略恢复后自动接入。
+`TestPostgresRelayManagement` 覆盖节点创建、独立凭据、轮换、容量策略、停用、健康过期、最多 4 个启用节点及优先地址；`TestPostgresDevicePresenceAndRelayStatus` 覆盖归属隔离、中继未配置时登记手机、后台状态和撤销会话过滤。独立中继的管理测试用真实 WebSocket 证明 1 台电脑加 2 个会话为 5 条 WebSocket、容量限制、停用不影响已有连接、Origin 白名单、网关不可用时中继仍监听，以及策略恢复后自动接入。
 
 真实蜂窝网络、线上多副本网关、真实 Cloud 节点和 Apple 后台通知不由这些夹具证明。公网启用方式见网关 `docs/donebot-mobile.md`。
 
@@ -57,7 +57,7 @@ pnpm --dir ../DoneBot-Relay test
 
 网关目录的 `input_modalities` 是可选字段。统一网关接入不再把该字段缺失判定为不支持图片，沿用原版 driver 的图片输入能力；所有网关模型均按支持多模态输入处理，不按模型名称过滤。手机上传、桌面保存与原会话附件机制保持复用。
 
-- `server/donebot/llm-driver.test.ts` 与 `catalog.test.ts` 共 44 项通过。新增 messages、gemini、responses、chat 四种接口的回归检查，逐字节核对图片的原生请求内容。
+- `server/donebot/llm-driver.test.ts` 与 `server/donebot/catalog.test.ts` 共 44 项通过。新增 messages、gemini、responses、chat 四种接口的回归检查，逐字节核对图片的原生请求内容。
 - 临时 PostgreSQL 中枢、独立中继与原版隔离运行服务的 Desktop / Cloud 工作流均通过。完整上传流程在修复前观测到模型请求中的图片输入为 0，修复后为 1，`input_image.image_url` 与上传 PNG 的 data URL 完全一致；1056 字节图片的 SHA-256 为 `557deecf584802cc55e56286a0a2190ec51891b6943e0cfd8529c287c0457bd1`。
 - 原图输入证据保存在 `.omb-scratch/verify-evidence/mobile-hub/evidence.json` 与 `mobile-cloud/evidence.json` 的 `modelImageInput`；修复前后日志为 `.omb-scratch/mobile-image-before.log` 与 `mobile-image-after.log`。模型服务使用合成响应，验证不代表真实收费模型已经识别图片。
 - 修改文件的 oxlint、`pnpm package:prepare`、构建目录与安装包内服务的隔离冒烟、DMG 完整性校验均通过。安装包中的 1567 个服务文件与本次构建逐字节一致，并确认包内网关接入不含可选模态字段的图片门控；安装包 SHA-256 与验证结果保存在产物目录的 `SHA256SUMS`、`verification.json`。

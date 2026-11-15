@@ -38,4 +38,4 @@ Electron fixture 使用临时 HOME、独立 profile、回环 HTTPS 合成 Cloud 
 - DoneBot-Cloud 节点：更新 agent/worker，才能检查容器实际状态并恢复意外退出的运行服务；仅更新容器镜像不包含节点恢复逻辑。
 - donebot-api：静态资源缓存优化需更新网关。仅成功 GET 的带版本 hash JS/CSS/woff2 允许浏览器私有缓存；HTML、API、附件、错误及带查询参数的响应仍为 no-store。前置代理不启用共享缓存。
 
-手机和桌面可以同时连接同一 Cloud；桌面续连不注销手机。上述变更不要求更新手机 App 或独立手机中继。本轮 `6c31434` 的 amd64 双镜像已发布，摘要与 Linux 证据见[发布记录](cloud-images-2026-11-15.md)。发布不等于生产节点已升级或实际实例已恢复。
+手机和桌面可以同时连接同一 Cloud；桌面续连不注销手机。上述变更不要求更新手机 App 或独立手机中继。当前 `c7b31ef` 的 amd64 双镜像已发布，摘要与 Linux 证据见[发布记录](cloud-images-2026-11-15.md)。发布不等于生产节点已升级或实际实例已恢复。

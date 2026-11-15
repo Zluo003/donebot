@@ -143,5 +143,31 @@
     "Published images are for linux/amd64 only.",
     "Registry metadata verification and disposable Linux checks do not prove a production node rollout.",
     "Existing instances require controlled service and desktop upgrade preparation while stopped; retain disks, installation credentials and node state."
-  ]
+  ],
+  "publishedImageMobileStatusVerification": {
+    "checkedAt": "2026-11-15T07:20:24.099267+00:00",
+    "image": "ghcr.io/zluo003/donebot-cloud-service@sha256:ad2a1b3a2461cfe95e99926d190025f9d1a63f7b1dd7459add8fc597df1ccd36",
+    "sourceRevision": "75704dddf140e27aa319de0c0baef7d54d366ebf",
+    "platform": "linux/amd64",
+    "isolation": {
+      "network": "none",
+      "readOnlyRoot": true,
+      "user": "1001:1001",
+      "temporaryData": true,
+      "publishedPorts": false
+    },
+    "probe": {
+      "health": 200,
+      "httpStatus": 200,
+      "status": {
+        "authenticated": false,
+        "registered": false,
+        "relay": "off",
+        "node": null,
+        "problem": "",
+        "lastHeartbeat": null
+      }
+    },
+    "productionDeployed": false
+  }
 }

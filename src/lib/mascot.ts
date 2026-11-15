@@ -3,6 +3,7 @@ import { botShowsUnread } from "./bot-unread";
 import { lastNonReceipt } from "./receipts";
 import type { MausColor } from "../../shared/wire";
 import type { LocaleKey } from "@/locales";
+import { mascotExpressionSchema } from "../../shared/bot-avatar";
 
 export { MAUS_COLOR_NAMES, type MausColor } from "../../shared/wire";
 
@@ -116,9 +117,10 @@ const LEGACY_STATES: LegacyStates = {
 const KNOWN_STATES = new Set<string>(MAUS_STATES);
 
 export function normalizeState(value: string | null | undefined): MausState | null {
-  if (!value) return null;
-  if (KNOWN_STATES.has(value)) return value as MausState;
-  return LEGACY_STATES[value] ?? null;
+  const expression = mascotExpressionSchema.safeParse(value).data;
+  if (!expression) return null;
+  if (KNOWN_STATES.has(expression)) return expression as MausState;
+  return LEGACY_STATES[expression] ?? null;
 }
 
 export const PICKABLE_STATES: MausState[] = [

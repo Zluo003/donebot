@@ -241,6 +241,7 @@ const __APP_VERSION__: string;
           remote: boolean;
           /** Named local environments exist only in a packaged build. */
           packaged: boolean;
+          localCreation?: boolean;
           activeId: string;
           environments: Array<{
             id: string;

@@ -84,7 +84,7 @@ export function ConnectedWorkspacesSettings() {
   const forgetEntry = locals.find(entry => entry.id === envForget);
   return <>
     <p className="text-[13px] leading-relaxed text-ink-secondary">{t("servers.intro")}</p>
-    {saved?.packaged && <Card title={t("connectedWorkspaces.localTitle")} subtitle={t("connectedWorkspaces.localSubtitle")}>
+    {saved?.packaged && (locals.length > 0 || saved.localCreation !== false) && <Card title={t("connectedWorkspaces.localTitle")} subtitle={t("connectedWorkspaces.localSubtitle")}>
       {envError && <p role="alert" className="text-[12px] text-danger">{envError}</p>}
       {locals.length > 0 && <ul className="divide-y divide-hairline/40">
         {locals.map((entry) => {
@@ -123,8 +123,8 @@ export function ConnectedWorkspacesSettings() {
           <button type="button" onClick={() => setEnvForget(null)} className="rounded-lg px-3 py-1.5 text-[12px] text-ink hover:bg-control">{t("connectedWorkspaces.cancel")}</button>
         </div>
       </div>}
-      <p className="mt-4 text-[13px] font-medium text-ink">{t("connectedWorkspaces.newEnvironment")}</p>
-      <form className="flex flex-col gap-3 pt-2" onSubmit={(event) => {
+      {saved.localCreation !== false && <p className="mt-4 text-[13px] font-medium text-ink">{t("connectedWorkspaces.newEnvironment")}</p>}
+      {saved.localCreation !== false && <form className="flex flex-col gap-3 pt-2" onSubmit={(event) => {
         event.preventDefault();
         if (!envName.trim()) return;
         void perform(async () => {
@@ -150,7 +150,7 @@ export function ConnectedWorkspacesSettings() {
         <button type="submit" disabled={busy || !envName.trim()} className="flex w-fit items-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-medium text-accent-ink disabled:opacity-50">
           {busy && <Loader2 size={14} className="animate-spin" />}{t("connectedWorkspaces.create")}
         </button>
-      </form>
+      </form>}
     </Card>}
     <Card title={t("servers.yours.title")} subtitle={t("servers.yours.subtitle")}>
       {!saved ? <p role="status" className="text-[13px] text-ink-secondary">{t(error ? "servers.yours.loadFailed" : "servers.yours.loading")}</p> :

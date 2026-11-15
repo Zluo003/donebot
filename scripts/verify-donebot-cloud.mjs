@@ -7,8 +7,12 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import { installDoneBotCloud } from "../electron/donebot-cloud.mjs";
 import { createDoneBotCloudKeepalive } from "../electron/donebot-cloud-keepalive.mjs";
+import { createChromeRail } from "../electron/chrome-rail.mjs";
+import { createLocalProfiles } from "../electron/local-profiles.mjs";
+import { installCloudRail } from "../electron/cloud-rail.mjs";
 import environments from "../electron/environments.cjs";
 
 if (!process.versions.electron) {
@@ -26,7 +30,7 @@ if (!process.versions.electron) {
   assert.equal(JSON.parse(readFileSync(join(output, "receipt.json"))).passed, true);
   for (const name of ["home", "profile", "key.pem", "cert.pem"]) rmSync(join(output, name), { recursive: true, force: true });
 } else {
-  const { app, session, BrowserWindow, ipcMain } = await import("electron");
+  const { app, session, BrowserWindow, WebContentsView, ipcMain } = await import("electron");
   const output = process.argv[2];
   app.setPath("userData", join(output, "profile"));
   app.setPath("sessionData", join(output, "profile"));
@@ -37,7 +41,12 @@ if (!process.versions.electron) {
   for (const channel of ["home:page", "update:offered"]) ipcMain.on(channel, event => { event.returnValue = false; });
   const id = "11861a47-7240-4f99-bf19-bd01d411596f";
   let valid = true, launches = 0, pairings = 0, requests = 0, owner = "101", code = "", win, localOrigin, phase = "startup";
-  let state = { activeId: "local", environments: [] }, origin;
+  let state = { activeId: "local", environments: [] }, origin, holdAuth = null, failAuth = false, waitForPaint = false, rail;
+  const loadingViews = [], checks = [];
+  const until = async check => {
+    for (let n = 0; n < 200; n++) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 25)); }
+    throw new Error("Timed out waiting for fixture condition");
+  };
   const localHttp = createHttpServer((_req, res) => { res.setHeader("content-type", "text/html"); res.end("<!doctype html><h1>Local conversations</h1>"); });
   const server = createServer({ key: readFileSync(join(output, "key.pem")), cert: readFileSync(join(output, "cert.pem")) }, (req, res) => {
     requests++;
@@ -54,7 +63,7 @@ if (!process.versions.electron) {
     const signedIn = valid && req.headers.cookie?.includes("__Host-dbc_session=synthetic-session");
     if (!signedIn) return res.writeHead(401).end('{}');
     if (req.url === "/api/auth/session") return res.end(JSON.stringify({ kind: "loopback", environmentId: id }));
-    res.setHeader("content-type", "text/html"); res.end("<!doctype html><title>Isolated Cloud</title><h1>Cloud workspace</h1>");
+    res.setHeader("content-type", "text/html"); res.end(`<!doctype html><title>Isolated Cloud</title><div id="root">${waitForPaint ? "" : "<h1>Cloud workspace</h1>"}</div>`);
   });
   void app.whenReady().then(async () => {
   try {
@@ -63,7 +72,7 @@ if (!process.versions.electron) {
     localOrigin = `http://127.0.0.1:${localHttp.address().port}`;
     origin = `https://${id}.cloud.localhost:${server.address().port}`;
     session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-      callback({ cancel: !details.url.startsWith(origin + "/") && !details.url.startsWith(localOrigin + "/") && details.url !== "about:blank" });
+      callback({ cancel: !details.url.startsWith(origin + "/") && !details.url.startsWith(localOrigin + "/") && !details.url.startsWith("data:text/html;") && details.url !== "about:blank" });
     });
     win = new BrowserWindow({ show: false, width: 800, height: 600, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false,
       preload: fileURLToPath(new URL("../electron/preload.cjs", import.meta.url)), additionalArguments: [`--omb-local-origin=${localOrigin}`] } });
@@ -71,6 +80,8 @@ if (!process.versions.electron) {
       guardLocal: (_name, handler) => (event, ...args) => { assert.equal(new URL(event.senderFrame.url).origin, localOrigin); return handler(event, ...args); },
       guardWorkspace: handler => (event, ...args) => { assert.equal(environments.workspaceSenderAllowed(event, win.webContents, state, localOrigin), true); return handler(event, ...args); },
       request: async path => {
+        if (holdAuth) { const held = holdAuth; holdAuth = null; await held; }
+        if (failAuth) throw new Error("Synthetic authorization failure");
         if (path === "/api/donebot/state") return Response.json({ authenticated: true, user: { id: owner } });
         launches++; code = "omb_pair_" + "a".repeat(43);
         return Response.json({ url: `donebot://pair?address=${encodeURIComponent(origin)}&token=${code}` });
@@ -78,11 +89,42 @@ if (!process.versions.electron) {
       fetch: (...args) => session.defaultSession.fetch(...args),
       cancelHome: () => {}, navigate: async target => { await win.loadURL(target); return true; },
       local: async () => { state = environments.withActive(state, "local"); await win.loadURL(localOrigin); },
+      loading: { window: () => win, changed: () => rail?.refresh(), createView: options => {
+        const view = new WebContentsView(options); loadingViews.push({ view, webContents: view.webContents }); return view;
+      } },
     });
+    rail = createChromeRail({ createView: options => new WebContentsView(options), preload: fileURLToPath(new URL("../electron/preload.cjs", import.meta.url)),
+      args: () => [`--omb-local-origin=${localOrigin}`], url: () => localOrigin + "/rail", wanted: () => true, suppressed: connection.hidesRail });
+    rail.install(ipcMain); rail.attach(win);
+    await win.loadURL(localOrigin);
+    win.showInactive();
+    assert.equal(rail.shown(), true);
     const timings = {};
     phase = "first connection";
     let start = performance.now();
-    await connection.open({ id, accountId: "101" }); timings.firstMs = performance.now() - start;
+    let releaseAuth;
+    holdAuth = new Promise(resolve => { releaseAuth = resolve; });
+    waitForPaint = true;
+    const first = connection.open({ id, accountId: "101" });
+    assert.equal(rail.shown(), false);
+    const loading = loadingViews.at(-1).webContents;
+    await until(async () => !loading.isLoading() && await loading.executeJavaScript("Boolean(document.querySelector('.spinner'))"));
+    assert.equal(await loading.executeJavaScript("typeof process"), "undefined");
+    assert.equal(await loading.executeJavaScript("getComputedStyle(document.querySelector('.spinner')).animationName"), "spin");
+    await loading.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+    writeFileSync(join(output, "cloud-loading.png"), (await loading.capturePage()).toPNG());
+    checks.push("loading animation covers pending authorization and hides native rail");
+    releaseAuth();
+    await until(() => win.webContents.getURL() === origin + "/" && !win.webContents.isLoading());
+    assert.equal(loading.isDestroyed(), false);
+    assert.equal(await win.webContents.executeJavaScript("document.getElementById('root').childElementCount"), 0);
+    await win.webContents.executeJavaScript("document.getElementById('root').innerHTML='<h1>Cloud workspace</h1>'");
+    await first; timings.firstMs = performance.now() - start;
+    waitForPaint = false;
+    await until(() => loading.isDestroyed());
+    assert.equal(rail.shown(), false);
+    assert.equal(await win.webContents.executeJavaScript("getComputedStyle(document.body).paddingLeft"), "0px");
+    checks.push("loading stays through empty React root and gives Cloud the full width after render");
     assert.equal(pairings, 1); assert.equal(await win.webContents.executeJavaScript("document.querySelector('h1').textContent"), "Cloud workspace");
     phase = "live cookie reuse"; start = performance.now();
     await connection.open({ entry: state.environments[0] }); timings.reuseMs = performance.now() - start;
@@ -114,9 +156,49 @@ if (!process.versions.electron) {
     assert.equal(pairings, 4); assert.equal(win.webContents.getURL(), origin + "/");
     assert.ok((await session.defaultSession.cookies.get({ url: origin, name: cookie.name }))[0].expirationDate * 1000 > Date.now() + 120_000);
     keeper.stop();
+    phase = "cancel while connecting";
+    await connection.select(undefined);
+    state = environments.withActive(state, "local"); await win.loadURL(localOrigin); rail.refresh();
+    let releaseCancel;
+    holdAuth = new Promise(resolve => { releaseCancel = resolve; });
+    const abandoned = connection.open({ entry: state.environments[0] });
+    const cancelView = loadingViews.at(-1).webContents;
+    await until(() => !cancelView.isLoading());
+    await cancelView.executeJavaScript("document.getElementById('local').click()");
+    await until(() => cancelView.isDestroyed());
+    releaseCancel();
+    assert.equal((await abandoned).outcome, "cancelled");
+    assert.equal(state.activeId, "local"); assert.equal(rail.shown(), true);
+    assert.equal(new URL(win.webContents.getURL()).origin, localOrigin);
+    checks.push("native loading-page return cancels old selection without later Cloud navigation");
+    phase = "failure and retry";
+    failAuth = true;
+    await assert.rejects(connection.open({ entry: state.environments[0] }), /Synthetic/);
+    const failed = loadingViews.at(-1).webContents;
+    await until(async () => !failed.isLoading() && await failed.executeJavaScript("document.body.hasAttribute('data-failed')"));
+    assert.equal(await failed.executeJavaScript("document.getElementById('retry').hidden"), false);
+    writeFileSync(join(output, "cloud-loading-failed.png"), (await failed.capturePage()).toPNG());
+    failAuth = false;
+    await failed.executeJavaScript("document.getElementById('retry').click()");
+    await until(() => state.activeId !== "local" && new URL(win.webContents.getURL()).origin === origin && loadingViews.at(-1).webContents.isDestroyed());
+    checks.push("failed connection shows retry and the native retry button restores Cloud");
+    phase = "workspace creation disabled";
+    let created = 0;
+    const local = createLocalProfiles({ canCreate: () => false, registry: { create: () => { created++; } }, home: () => "local" });
+    const handlers = new Map();
+    installCloudRail({ ipcMain: { handle: (key, handler) => handlers.set(key, handler) }, guard: f => f, trusted: () => true,
+      places: () => [], local, add: { choices: () => ({}) }, account: () => null, targets: () => [] });
+    assert.equal((await handlers.get("workspaces:places")({})).add.local, false);
+    assert.throws(() => handlers.get("workspaces:local-new")({}, "Forbidden"));
+    const main = readFileSync(new URL("../electron/main.mjs", import.meta.url), "utf8");
+    const creation = main.slice(main.indexOf('ipcMain.handle("environments:create",'), main.indexOf('ipcMain.handle("environments:pick-dir",'));
+    vm.runInNewContext(creation, { ipcMain: { handle: (key, handler) => handlers.set(key, handler) }, localWorkspaceOnly: (_name, f) => f, environmentsState: state });
+    assert.equal(handlers.get("environments:create")({}).error, "disabled");
+    assert.equal(created, 0);
+    checks.push("rail capability and both workspace creation IPC paths refuse creation");
     owner = "202";
     await assert.rejects(connection.open({ entry: state.environments[0] }), /账号/);
-    const receipt = { passed: true, checks: ["real-electron-cookie-jar", "reuse-live-session", "automatic-expired-session-renewal", "native-return-local", "reopen-saved-cloud-without-add", "proactive-cookie-renewal-without-navigation", "account-isolation"], timings, requests, launches, pairings, syntheticCloud: true, liveDataTouched: false };
+    const receipt = { passed: true, checks: [...checks, "real-electron-cookie-jar", "reuse-live-session", "automatic-expired-session-renewal", "native-return-local", "reopen-saved-cloud-without-add", "proactive-cookie-renewal-without-navigation", "account-isolation"], timings, requests, launches, pairings, syntheticCloud: true, liveDataTouched: false };
     writeFileSync(join(output, "receipt.json"), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) { console.error(phase, error); process.exitCode = 1; }

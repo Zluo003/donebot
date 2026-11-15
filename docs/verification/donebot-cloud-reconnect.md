@@ -39,3 +39,13 @@ Electron fixture 使用临时 HOME、独立 profile、回环 HTTPS 合成 Cloud 
 - donebot-api：静态资源缓存优化需更新网关。仅成功 GET 的带版本 hash JS/CSS/woff2 允许浏览器私有缓存；HTML、API、附件、错误及带查询参数的响应仍为 no-store。前置代理不启用共享缓存。
 
 手机和桌面可以同时连接同一 Cloud；桌面续连不注销手机。上述变更不要求更新手机 App 或独立手机中继。当前 `c7b31ef` 的 amd64 双镜像已发布，摘要与 Linux 证据见[发布记录](cloud-images-2026-11-15.md)。发布不等于生产节点已升级或实际实例已恢复。
+
+## Cloud 切换加载页与工作空间入口
+
+自有 Cloud 连接开始即覆盖显示独立加载页，依次提示登录校验、安全连接及聊天内容加载；页面完成导航后，仍等待 React 根节点产生内容再撤下。等待超过 8 秒显示耗时提示，用户随时可以返回本地对话。实际连接失败显示重试按钮；新选择、返回本地及退出会清理旧加载页，旧请求不能再次导航。提前续期 Cookie 不显示加载页。Windows 加载页保留窗口控制按钮。
+
+Cloud 连接期间及 Cloud 为当前工作位置时，原生工作空间竖栏与其显示按钮不可用，聊天页面恢复全部宽度。顶部原有本地／Cloud 下拉菜单继续用于切换。本机新建 workspace 的菜单、竖栏及设置入口关闭；`workspaces:local-new` 和旧 `environments:create` IPC 也拒绝创建。已有 workspace 的保存项及访问能力保留。
+
+`node scripts/verify-donebot-cloud.mjs` 使用真实 Electron、独立 profile、临时 HOME 与回环合成服务，覆盖授权等待动画、页面空根节点等待、竖栏消失及完整宽度、原生返回按钮取消、失败后原生重试按钮、两条创建 IPC 拒绝，以及原有 Cookie 续连。2026-11-15 证据：临时目录 `donebot-cloud-reconnect-1wNeVc/receipt.json`，含加载和失败页面截图。60 项 Node 检查、20 项 DOM／大小限制检查、类型及 Electron 语法检查通过。该检查不连接生产 Cloud，不测公网耗时或 Windows 物理按钮交互。
+
+本次加载页和工作空间入口变更由桌面 Electron 控制，不要求重新发布 Cloud 镜像。Bot 表情仍以原有字符串名称传递；手机端已同步桌面的表情校验与名称映射，需要重新构建安装手机 App。Cloud 服务接口、网关与中继协议未变，不因这项手机兼容修复重建已有实例。

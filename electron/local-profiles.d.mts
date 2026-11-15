@@ -50,6 +50,7 @@ export function createLocalProfiles(deps: {
   trash(dir: string): Promise<void>;
   reserved?(): string | null;
   allowed?(): boolean;
+  canCreate?(): boolean;
   remember?(place: { profile: string } | null): void;
   changed?(): void;
   log?(line: string): void;

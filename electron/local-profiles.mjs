@@ -123,6 +123,7 @@ export function createProfileRegistry({ dataDir, fs = nodeFs, now = Date.now, ra
  *   trash(dir: string): Promise<void>,
  *   reserved?(): string | null,
  *   allowed?(): boolean,
+ *   canCreate?(): boolean,
  *   remember?(place: { profile: string } | null): void,
  *   changed?(): void,
  *   log?(line: string): void,
@@ -136,7 +137,7 @@ export function createProfileRegistry({ dataDir, fs = nodeFs, now = Date.now, ra
  * what This Mac is called here (This Mac or This PC). `remember(place)`: the place the next launch opens:
  * the workspace that opened, or null once This computer's own copy is back.
  */
-export function createLocalProfiles({ registry, clean, dataDir, home, window: shown, showLocal, onLocal, busy, trash, reserved = () => null, allowed = () => true,
+export function createLocalProfiles({ registry, clean, dataDir, home, window: shown, showLocal, onLocal, busy, trash, reserved = () => null, allowed = () => true, canCreate = () => true,
   remember = () => {}, changed = () => {}, log = () => {}, fs = nodeFs, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), now = Date.now }) {
   /** Each switch asked for; a newer one (another tile, My Cloud) ends the wait of the one before. */
   let turn = 0;
@@ -196,7 +197,7 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     /** The workspace a switch waits to open (`id` null: This computer), and the name of what it waits for. */
     settling: () => settling,
     /** A new workspace may be added from ＋ here. */
-    creatable: () => allowed() && home() !== null,
+    creatable: () => allowed() && canCreate() && home() !== null,
     open,
     /** Back to This computer's own copy from a workspace (no home but this computer). */
     async computer() {
@@ -212,7 +213,7 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     cancel() { turn++; if (settling) { settling = null; tell(); } },
     /** A new workspace's entry; the rail opens it next (cloud-rail.mjs), so a switch that waits shows on its circle. */
     create({ name, color }) {
-      if (!allowed() || home() === null) return { outcome: "failed" };
+      if (!allowed() || !canCreate() || home() === null) return { outcome: "failed" };
       const made = registry.create({ name, color, reserved: reserved() });
       if (!made.ok) return { outcome: made.error === "full" ? "failed" : made.error };
       tell();

@@ -33,6 +33,7 @@ const ABORTED = -3;
  *   args: () => string[],
  *   url: () => string,
  *   wanted: () => boolean,
+ *   suppressed?: () => boolean,
  *   prefs?: () => { railHidden(): boolean, setRailHidden(hidden: boolean): void, windowFrame?(): boolean } | null,
  *   changed?: () => void,
  *   log?: (line: string) => void,
@@ -40,7 +41,7 @@ const ABORTED = -3;
  * show it for (railPlaces); `args()`: the preload's arguments, as the window's own page gets them; `prefs()`: where this
  * desktop keeps the person's choice to hide it; `changed()`: the rail came or went beside the page.
  */
-export function createChromeRail({ createView, preload, args, url, wanted, prefs = () => null, changed = () => {}, log = () => {} }) {
+export function createChromeRail({ createView, preload, args, url, wanted, suppressed = () => false, prefs = () => null, changed = () => {}, log = () => {} }) {
   let view = null, win = null, shown = false, expanded = false, held = false;
   // The rail's page didn't load (this app's server was restarting): it loads again at the next refresh, or it stays a blank strip.
   let unloaded = false;
@@ -60,7 +61,7 @@ export function createChromeRail({ createView, preload, args, url, wanted, prefs
   const choseHidden = () => prefs()?.railHidden() === true;
   /** Hidden by the person's choice, beside a document that can bring it back. */
   const hidden = () => choseHidden() && !hung && (offered || grace !== null);
-  const pageState = () => ({ available: alive() && wanted(), hidden: choseHidden() });
+  const pageState = () => ({ available: alive() && !suppressed() && wanted(), hidden: choseHidden() });
   /** The document that offered the button hears when it would change. */
   const tellState = () => {
     const state = pageState(), key = JSON.stringify(state);
@@ -142,7 +143,7 @@ export function createChromeRail({ createView, preload, args, url, wanted, prefs
     /** Shown while there are two places or more (railPlaces) and the person hasn't hidden it; the page beside it has the
      * whole window otherwise. */
     refresh() {
-      const on = alive() && ((wanted() && !hidden()) || held);
+      const on = alive() && !suppressed() && ((wanted() && !hidden()) || held);
       if (view && unloaded && on) { unloaded = false; load(view.webContents); }
       if (on === shown) layout();
       else {

@@ -9,7 +9,7 @@ import { createLocalProfiles, createProfileRegistry, MAX_PROFILES, PROFILES_FILE
 
 /** This computer's data folder on disk, with the one server the app runs at a time (`running`), the real profile swap
  * (clean-workspace.mjs) over it, the registry beside it and the home window's side of a profile on screen. */
-function computer(t, { home = "cloud", frozen = home === "cloud" } = {}) {
+function computer(t, { home = "cloud", frozen = home === "cloud", canCreate = () => true } = {}) {
   const parent = mkdtempSync(join(tmpdir(), "omb-profiles-"));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
   const dataDir = join(parent, ".donebot");
@@ -21,7 +21,7 @@ function computer(t, { home = "cloud", frozen = home === "cloud" } = {}) {
   w.clean = createCleanWorkspace({ dataDir: () => dataDir, running: () => w.running,
     swap: async (dir) => { w.swaps.push(dir); await new Promise((resolve) => setImmediate(resolve)); w.running = dir; w.onScreen = "local"; return { ok: true }; } });
   w.registry = createProfileRegistry({ dataDir: () => dataDir, now: w.now, random: () => "abc123" });
-  w.profiles = createLocalProfiles({ registry: w.registry, clean: w.clean, dataDir: () => dataDir, home: () => w.home,
+  w.profiles = createLocalProfiles({ registry: w.registry, clean: w.clean, canCreate, dataDir: () => dataDir, home: () => w.home,
     window: {
       openProfile: async (id) => { if (w.beforeOpen) return w.beforeOpen(); const opened = await w.clean.open(id); if (opened) { w.shown = id; w.onScreen = "local"; } return opened; },
       profile: () => w.shown,
@@ -303,4 +303,15 @@ test("the workspace that opened is the place the next launch opens; one that did
   assert.equal(await local.profiles.open("work"), true);
   assert.equal(await local.profiles.computer(), true);
   assert.deepEqual(local.remembered, [{ profile: "work" }, null]);
+});
+
+test("disabling creation preserves existing profiles and refuses direct creation without writing", async t => {
+  const w = computer(t, { home: "local", canCreate: () => false });
+  w.registry.create({ name: "Existing" });
+  const before = readFileSync(w.file(), "utf8");
+  assert.equal(w.profiles.creatable(), false);
+  assert.deepEqual(w.profiles.create({ name: "Not allowed" }), { outcome: "failed" });
+  assert.equal(readFileSync(w.file(), "utf8"), before);
+  assert.equal(w.profiles.places({ activeLocal: false })[0].name, "Existing");
+  assert.equal(await w.profiles.open("existing"), true);
 });

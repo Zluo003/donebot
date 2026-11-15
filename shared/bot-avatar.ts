@@ -4,6 +4,9 @@ export const MASCOT_FACE_COLORS = ["white", "black"] as const;
 export const mascotFaceColorSchema = z.enum(MASCOT_FACE_COLORS);
 export type MascotFaceColor = z.infer<typeof mascotFaceColorSchema>;
 
+/** The persisted and wire expression is a state name; null or absent lets the avatar follow activity. */
+export const mascotExpressionSchema = z.string().nullable().optional();
+
 export function mascotFaceInk(value: unknown): string | undefined {
   const color = mascotFaceColorSchema.safeParse(value).data;
   return color === "white" ? "#ffffff" : color === "black" ? "#000000" : undefined;

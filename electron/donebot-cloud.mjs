@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import environments from "./environments.cjs";
 import { createDoneBotCloudKeepalive } from "./donebot-cloud-keepalive.mjs";
+import { createDoneBotCloudLoading } from "./donebot-cloud-loading.mjs";
 
 const instanceId = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -70,15 +71,18 @@ export function createDoneBotCloudConnection({ request, fetch: cookieFetch, save
       await account(owner);
       if (still()) remember(renewed);
     },
-    async open({ id, accountId, entry, still = () => true }) {
+    async open({ id, accountId, entry, still = () => true, progress = () => {} }) {
       const mine = ++turn;
       id ??= entry?.donebotCloud?.id ?? new URL(entry.origin).hostname.split(".")[0];
       if (!instanceId.test(id ?? "")) throw new Error("无效的 Cloud 实例。");
       const owner = await account(accountId ?? entry?.donebotCloud?.accountId);
+      if (mine !== turn || !still()) return { outcome: "cancelled" };
+      progress("connecting");
       const destination = await target(id, owner, entry);
       await account(owner);
       if (mine !== turn || !still()) return { outcome: "cancelled" };
       remember(destination);
+      progress("loading");
       const result = await activate(destination.origin);
       if (result === false) throw new Error("Cloud 页面暂时无法打开，请稍后重试。");
       return { outcome: "connected" };
@@ -86,7 +90,7 @@ export function createDoneBotCloudConnection({ request, fetch: cookieFetch, save
   };
 }
 
-export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, request, fetch, saved, persist, cancelHome, navigate, local, expires, lifecycle }) {
+export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, request, fetch, saved, persist, cancelHome, navigate, local, expires, lifecycle, loading }) {
   const { withEnvironment, withActive, activeEnvironment } = environments;
   const connection = createDoneBotCloudConnection({ request, fetch, saved,
     remember: target => {
@@ -101,24 +105,35 @@ export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, reque
       return navigate(origin);
     },
   });
-  ipcMain.handle("donebot-cloud:open", guardLocal("donebot-cloud:open", (_event, id, accountId) => connection.open({ id, accountId })));
+  const cancel = () => { connection.cancel(); display?.hide(); };
+  const returnLocal = () => { cancel(); return local(); };
+  const display = loading ? createDoneBotCloudLoading({ ...loading, local: returnLocal }) : null;
+  const open = async args => {
+    const screen = display?.start(() => open(args));
+    try {
+      const result = await connection.open({ ...args, progress: stage => screen?.update(stage) });
+      if (result.outcome === "connected") await screen?.finish();
+      else screen?.close();
+      return result;
+    } catch (error) { screen?.fail(); throw error; }
+  };
+  ipcMain.handle("donebot-cloud:open", guardLocal("donebot-cloud:open", (_event, id, accountId) => open({ id, accountId })));
   ipcMain.handle("donebot-cloud:reconnect", guardWorkspace(event => {
     const entry = activeEnvironment(saved());
     if (!doneBotCloudEntry(entry) || new URL(event.senderFrame.url).origin !== entry.origin) throw new Error("此页面不能重新连接 Cloud。");
-    return connection.open({ entry });
+    return open({ entry });
   }));
-  ipcMain.handle("donebot-cloud:local", guardWorkspace(() => {
-    connection.cancel();
-    return local();
-  }));
+  ipcMain.handle("donebot-cloud:local", guardWorkspace(returnLocal));
   const renewal = expires ? createDoneBotCloudKeepalive({ entry: () => {
     const entry = activeEnvironment(saved());
     return doneBotCloudEntry(entry) ? entry : null;
   }, expires, renew: connection.renew }) : null;
   lifecycle?.whenReady().then(() => renewal?.start());
-  lifecycle?.once("before-quit", () => { renewal?.stop(); connection.cancel(); });
-  return { ...connection, start: () => renewal?.start(), stop: () => { renewal?.stop(); connection.cancel(); }, select(entry, still) {
+  lifecycle?.once("before-quit", () => { renewal?.stop(); cancel(); });
+  return { ...connection, open, cancel, hidesRail: () => Boolean(display?.visible()) || doneBotCloudEntry(activeEnvironment(saved())), start: () => renewal?.start(), stop: () => { renewal?.stop(); cancel(); }, select(entry, still) {
     connection.cancel();
-    return doneBotCloudEntry(entry) ? connection.open({ entry, still }) : null;
+    if (doneBotCloudEntry(entry)) return open({ entry, still });
+    display?.hide();
+    return null;
   } };
 }

@@ -209,3 +209,13 @@ it("shows local environment controls in Simplified Chinese", async () => {
   expect(html).toContain("每个环境都有自己的机器人、会话和数据文件夹");
   expect(html).not.toContain("Separate setups on this computer");
 });
+
+it("hides workspace creation when the desktop disables it while preserving existing workspaces", async () => {
+  stubEnvironments({ localCreation: false });
+  await mount();
+  const view = render();
+  expect(view.nodes.some(node => node.type === "form")).toBe(false);
+  expect(view.html).not.toContain("New environment");
+  expect(view.html).toContain("Work");
+  expect(view.html).toContain("VPS");
+});

@@ -245,18 +245,26 @@ test("main's own wiring: the choice is this desktop's, and the pages hear the ra
   const start = main.indexOf("const chromeRail = createChromeRail("), end = main.indexOf("chromeRail.install(ipcMain);", start);
   assert.ok(start >= 0 && end > start, "main makes the window's rail");
   const { made, createView } = viewMaker();
-  const kept = { hidden: false }, signals = [], handlers = new Map();
+  const kept = { hidden: false, cloud: false }, signals = [], handlers = new Map();
   const context = vm.createContext({ createChromeRail, CHROME_RAIL_PATH, WebContentsView: function WebContentsView(options) { return createView(options); },
     path: { join: (...parts) => parts.join("/") }, __dirname: "/app", slog: () => {}, desktopCompanionRendererArguments: () => [],
     app: { isPackaged: true, getVersion: () => "0.1.133" }, desktopRemoteAccess: null, rendererOrigin: () => "http://127.0.0.1:18899", serverReady: true,
     railList: () => [{ id: "local" }, { id: "home" }], desktopPrefs: { railHidden: () => kept.hidden, setRailHidden: (hidden) => { kept.hidden = hidden; } },
-    rail: { changed: () => signals.push("changed") }, ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) } });
+    donebotCloud: { hidesRail: () => kept.cloud }, rail: { changed: () => signals.push("changed") }, ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) } });
   const chromeRail = vm.runInContext(`${main.slice(start, end)}chromeRail.install(ipcMain); chromeRail`, context);
   const { win, page } = appWindow();
   chromeRail.attach(win);
   assert.deepEqual(made.map((view) => view.webContents.loaded), [["http://127.0.0.1:18899/rail"]]);
   handlers.get("rail:hide")({ sender: page, senderFrame: page.mainFrame }, true);
   assert.deepEqual([kept.hidden, chromeRail.shown(), signals], [true, false, ["changed", "changed"]]);
+  kept.cloud = true;
+  chromeRail.holdOpen(true);
+  assert.equal(chromeRail.shown(), false);
+  assert.equal(handlers.get("rail:offer")({ sender: page, senderFrame: page.mainFrame }).available, false);
+  kept.cloud = false;
+  chromeRail.refresh();
+  assert.equal(chromeRail.shown(), true);
+  win.emit("closed");
 });
 
 /** The app's preload in a page of the window, with what the room needs of the page: its document, size and zoom. */

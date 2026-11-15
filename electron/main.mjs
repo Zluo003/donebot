@@ -117,7 +117,8 @@ import { createWindowStateFile } from "./window-state-file.mjs";
 import { createEnvironmentsFile, ENVIRONMENTS_SAVE_FAILED } from "./environments-file.mjs";
 import { createWorkspaceSettings, createClipboardServerConnect } from "./workspace-settings.mjs";
 import { createWorkspaceNavigation } from "./workspace-navigation.mjs";
-import { installDoneBotCloud } from "./donebot-cloud.mjs";
+import { installDoneBotCloud, doneBotCloudEntry } from "./donebot-cloud.mjs";
+import { installDoneBotCloudFrontend } from "./donebot-cloud-frontend.mjs";
 import { createOrgLibrary } from "./org-library.mjs";
 import { createCompanyBackups } from "./company-backups.mjs";
 import { createCompanyBackupSchedule } from "./company-backup-schedule.mjs";
@@ -2786,6 +2787,11 @@ setCuaStateListener((connection) => {
 });
 
 app.whenReady().then(async () => {
+  if (app.isPackaged || fs.existsSync(path.join(app.getAppPath(), "dist", "index.html"))) installDoneBotCloudFrontend({
+    session: session.defaultSession,
+    directory: app.isPackaged ? path.join(process.resourcesPath, "ui") : path.join(app.getAppPath(), "dist"),
+    origins: () => environmentsState.environments.filter(doneBotCloudEntry).map(entry => entry.origin),
+  });
   await evictStartupCacheOnce({
     userData: app.getPath("userData"),
     currentVersion: app.getVersion(),

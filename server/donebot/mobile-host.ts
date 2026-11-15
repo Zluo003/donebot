@@ -40,6 +40,13 @@ export function mobileChatRoute(method: string, raw: string): boolean {
   if (method === "GET" && /^\/api\/threads\/[\w-]+\/messages$/.test(path)) return [...url.searchParams].every(([key,value]) => key === "limit" ? /^\d{1,2}$/.test(value) && Number(value) <= 50 : key === "before" && /^[\w-]+$/.test(value));
   if (method === "GET" && !url.search && /^\/api\/attachments\/[A-Za-z0-9-]+\.(png|jpg|gif|webp)$/.test(path)) return true;
   if (method === "POST" && path === "/api/attachments") return url.searchParams.size === 1 && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(url.searchParams.get("uploadId") ?? "");
+  if (method === "POST" && path === "/api/files") {
+    const name = url.searchParams.get("name") ?? "";
+    return !url.hash && url.searchParams.size === 2
+      && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(url.searchParams.get("uploadId") ?? "")
+      && name.length >= 1 && name.length <= 180 && !name.includes("/") && !name.includes("\\")
+      && ![...name].some(character => character.charCodeAt(0) < 32) && name !== "." && name !== "..";
+  }
   return method === "POST" && !url.search && (/^\/api\/(bots|groups)\/[\w-]+\/(messages|read)$/.test(path) || /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/file$/.test(path));
 }
 export function createDoneBotMobileHost(options: HostOptions) {

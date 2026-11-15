@@ -58,10 +58,7 @@ COPY cloudflare/control-plane/package.json ./cloudflare/control-plane/package.js
 COPY scripts/install-git-hooks.mjs ./scripts/install-git-hooks.mjs
 RUN pnpm install --frozen-lockfile
 COPY . .
-# The Cloud home runs these as root, so nobody else may write them. The web app's
-# build needs more heap than Node gives itself on a 4 GB server, where it ran out
-# of memory: a fixed limit, which such a server meets with swap (docs/deploy-vps.md).
-RUN pnpm build:server && NODE_OPTIONS=--max-old-space-size=6144 pnpm exec vite build && chmod -R go-w dist dist-server skills
+RUN pnpm build:server && chmod -R go-w dist-server skills
 # The Data engine's native modules (server/data/engine.ts), staged like the
 # desktop app's extraResources for the image's CPU (amd64 -> x64, arm64), into
 # one tree the runtime stages copy. pnpm installed both CPUs' packages
@@ -70,6 +67,9 @@ ARG TARGETARCH
 RUN arch=x64 && if [ "$TARGETARCH" = arm64 ]; then arch=arm64; fi \
   && DONEBOT_DUCKDB_ARCH=$arch node scripts/prepare-duckdb.mjs \
   && mv "dist-native/duckdb/linux-$arch" dist-native/duckdb/target && chmod -R go-w dist-native/duckdb
+
+FROM build AS build-ui
+RUN NODE_OPTIONS=--max-old-space-size=6144 pnpm exec vite build && chmod -R go-w dist
 
 FROM node:24-bookworm-slim AS runtime
 # Install Chrome's Bookworm libraries directly: agent-browser --with-deps
@@ -122,7 +122,6 @@ RUN echo "agent-browser ${AGENT_BROWSER_VERSION}, Chrome for Testing ${CHROME_CA
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/donebot-browser/chrome \
     DONEBOT_DUCKDB_DIR=/app/duckdb \
     DONEBOT_DATA_DIR=/data/.donebot \
-    DONEBOT_STATIC_DIR=/app/dist \
     DONEBOT_PORT=18899 \
     DONEBOT_WEBHOOK_PORT=18900 \
     NODE_ENV=production
@@ -190,7 +189,7 @@ COPY deploy/fly/Caddyfile deploy/fly/Caddyfile.tls deploy/fly/Caddyfile.tunnel d
 # DuckDB and resvg change on a version bump, not per commit: beneath the app files.
 COPY --from=build /src/dist-native/duckdb/target ./duckdb
 COPY --from=build /src/dist-server ./dist-server
-COPY --from=build /src/dist ./dist
+COPY --from=build-ui /src/dist ./dist
 # The bundled skills (server/skill-library.ts reads ./skills from /app).
 COPY --from=build /src/skills ./skills
 RUN export HOME=/tmp/omb-build-home \
@@ -205,7 +204,7 @@ RUN export HOME=/tmp/omb-build-home \
  && untrusted="$(find /app /usr/local/bin/caddy /usr/local/bin/cloudflared \( ! -user root -o ! -type l -perm /022 \) -print)" \
  && if [ -n "$untrusted" ]; then echo "not root's, or writable by others:" >&2; echo "$untrusted" >&2; exit 1; fi \
  && rm -rf /tmp/omb-build-home
-ENV HOME=/data
+ENV HOME=/data DONEBOT_STATIC_DIR=/app/dist
 VOLUME ["/data"]
 EXPOSE 8080
 # Fly uses the checks in fly.toml; this one serves a plain `docker run`.
@@ -218,14 +217,12 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
 USER root
 CMD ["node", "/app/dist-server/cloud-home-start.js"]
 
-# The self-hosted server, last so a plain `docker build .` builds it.
-FROM runtime AS server
+FROM runtime AS cloud-service
 # Optional engine CLIs baked into the image (space-separated npm packages).
 ARG ENGINES=""
 RUN if [ -n "$ENGINES" ]; then HOME=/tmp/omb-build-home npm install -g $ENGINES && rm -rf /tmp/omb-build-home /tmp/node-compile-cache; fi
 COPY --from=build --chown=maus:maus /src/dist-native/duckdb/target ./duckdb
 COPY --from=build --chown=maus:maus /src/dist-server ./dist-server
-COPY --from=build --chown=maus:maus /src/dist ./dist
 COPY --from=build --chown=maus:maus /src/skills ./skills
 # `docker compose exec omb donebot pair`: the commands the CLI prints start the same way.
 RUN printf '#!/bin/sh\nexec node /app/dist-server/donebot.js "$@"\n' > /usr/local/bin/donebot && chmod 0755 /usr/local/bin/donebot
@@ -239,3 +236,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # (a copied workspace committing, server/restart.ts), so the container, and a
 # Caddy sharing its network, stays up through that restart.
 CMD ["node", "dist-server/server-launcher.js"]
+
+FROM cloud-service AS server
+COPY --from=build-ui --chown=maus:maus /src/dist ./dist
+ENV DONEBOT_STATIC_DIR=/app/dist

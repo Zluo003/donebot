@@ -141,6 +141,8 @@ export interface SendTurnInput {
   confinedWhy?: string;
   /** Images for this user turn only; kept out of replay transcripts. */
   images?: TurnImageInput[];
+  /** Admitted images from this active conversation branch; only these references may be reopened by an API driver. */
+  imageReferences?: Array<{ image: TurnImageInput; messageId: string; position: number; text: string; current: boolean }>;
   model?: string;
   effort?: EffortLevel;
   variant?: string;

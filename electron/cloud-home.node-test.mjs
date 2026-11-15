@@ -440,6 +440,7 @@ test("the Server menu opens My Cloud through the Cloud's own connection, never a
     environmentsState: { environments: [entry, other], activeId: environments.LOCAL_ID }, LOCAL_ID: environments.LOCAL_ID,
     cloudAccount: { homeTarget: () => ({ origin }), state: () => ({}) }, isCloudHomeEntry, slog: () => {}, nativeT: nativeText.englishText.t,
     connectCloudHome: (...args) => connect(...args), cloudHomeSignedIn: async () => signedIn,
+    donebotCloud: { select: () => null },
     openCloudSettings: async () => { calls.push("settings"); },
     persistEnvironments: next => { calls.push(`active:${next.activeId}`); context.environmentsState = next; }, withActive: environments.withActive,
     navigateMainWindow: url => calls.push(`navigate:${url}`), activeOrigin: () => context.environmentsState.environments.find(e => e.id === context.environmentsState.activeId)?.origin,

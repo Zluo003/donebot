@@ -19,11 +19,11 @@ describe("Muse gateway contract", () => {
     expect(() => doneBotMediaModel(doneBotClientMediaCatalog(disabled), "muse-video", "video")).toThrow(/unavailable/);
   });
 
-  it.each([4, 6, 30])("accepts integer duration %i and uploaded reference images", duration => {
+  it.each([4, 6, 10])("accepts integer duration %i and uploaded reference images", duration => {
     expect(() => validateMediaParameters(model, { ...parameters, duration, reference_images: ["https://assets.invalid/reference.png"] }, "generate")).not.toThrow();
   });
 
-  it.each([{ duration: 3 }, { duration: 31 }, { duration: -1 }, { duration: 6.5 }, { resolution: "1080p" }, { aspect_ratio: "1:1" }, { prompt: " " },
+  it.each([{ duration: 3 }, { duration: 11 }, { duration: 30 }, { duration: -1 }, { duration: 6.5 }, { resolution: "1080p" }, { aspect_ratio: "1:1" }, { prompt: " " },
     { stream: true }, { reference_videos: ["https://assets.invalid/video.mp4"] }, { reference_audios: [] }, { generate_audio: true },
     { reference_images: Array.from({ length: 11 }, () => "https://assets.invalid/image.png") }])("rejects unsupported native fields before submission: %j", patch => {
     expect(() => validateMediaParameters(model, { ...parameters, ...patch }, "generate")).toThrow();

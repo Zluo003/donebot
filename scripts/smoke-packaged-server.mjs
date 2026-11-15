@@ -2,6 +2,9 @@
 // copied out of the repo first: inside it, a bare import still resolves by
 // walking up to ./node_modules.
 import { execFile, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { Worker } from "node:worker_threads";
+import { PNG } from "pngjs";
 import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -130,6 +133,22 @@ if (listening) {
     versionReport = (await (await fetch(`http://127.0.0.1:${port}/.well-known/donebot/environment`, { signal: AbortSignal.timeout(5_000) })).json()).version;
   } catch (error) { versionReport = String(error); }
 }
+
+let imageWorkerReport = null;
+try {
+  const image = new PNG({ width: 400, height: 400 }); image.data = randomBytes(400 * 400 * 4);
+  for (let i = 3; i < image.data.length; i += 4) image.data[i] = 255;
+  const bytes = PNG.sync.write(image);
+  const worker = new Worker(join(staging, "server", "donebot", "image-worker.js"), { workerData: { bytes, mime: "image/png" } });
+  try {
+    const prepared = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Image worker timed out")), 10_000);
+      worker.once("message", value => { clearTimeout(timer); resolve(value); });
+      worker.once("error", error => { clearTimeout(timer); reject(error); });
+    });
+    imageWorkerReport = { mime: prepared.mime, originalBytes: bytes.length, preparedBytes: prepared.bytes.length };
+  } finally { await worker.terminate(); }
+} catch (error) { imageWorkerReport = { error: String(error) }; }
 
 let searchReport = null;
 if (listening) {
@@ -509,6 +528,10 @@ if (!headlessReport || headlessReport.error || headlessReport.doctor.body?.serve
 }
 
 const count = Object.keys(proxyReport.resolved).length;
+if (imageWorkerReport?.mime !== "image/jpeg" || !(imageWorkerReport.preparedBytes < imageWorkerReport.originalBytes)) {
+  console.error("the packaged image worker failed its PNG to JPEG smoke:", imageWorkerReport);
+  process.exit(1);
+}
 if (!backupReport?.ok) {
   console.error("the packaged backup worker failed its encrypted export smoke:", backupReport);
   process.exit(1);
@@ -523,6 +546,7 @@ console.log(`all ${count} spawned proxy paths resolve inside the packaged server
 console.log("packaged MCP stdio server reached the API and flushed its final frames ✓");
 console.log("packaged donebot doctor and bots answered from the bundle ✓");
 console.log("packaged backup worker exported an encrypted archive ✓");
+console.log("packaged image worker converted PNG to smaller JPEG without node_modules ✓");
 console.log("packaged loopback trust gate: health serves, a public mutation is refused at service trust ✓");
 if (launcherReport) console.log("packaged container launcher ran the server as its child and stopped it cleanly ✓");
 if (desktopEntryReport) console.log(`packaged desktop entry started the server twice on its compile cache (${desktopEntryReport.starts[0].cached.length} entries) ✓`);

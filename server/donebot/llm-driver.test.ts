@@ -42,7 +42,7 @@ const fixture = async (protocol: DoneBotLlmProtocol, toolUse = true) => {
   const bodies: Record<string, unknown>[] = [];
   let authenticated = true;
   const request = vi.fn(async (_path: string, init: RequestInit) => { bodies.push(JSON.parse(init.body as string)); return reply(protocol, toolUse && bodies.length === 1); });
-  const driver = createDoneBotLlmDriver({ toolUse: () => toolUse, request, models: () => ({ default: "fixture", options: [{ id: "fixture", label: "Fixture" }] }), protocol: () => protocol, authenticated: () => authenticated });
+  const driver = createDoneBotLlmDriver({ imageCacheDir: join(cwd, "cache"), toolUse: () => toolUse, request, models: () => ({ default: "fixture", options: [{ id: "fixture", label: "Fixture" }] }), protocol: () => protocol, authenticated: () => authenticated });
   const instance = await driver.create({ instanceId: "donebot-fixture", displayName: "Fixture", environment: {}, enabled: true, config: {} }); instances.push(instance);
   const events: RuntimeEvent[] = [];
   instance.adapter.onEvent((event) => events.push(event));
@@ -96,6 +96,50 @@ const partialTextThenError = (protocol: DoneBotLlmProtocol) => {
 };
 
 describe("DoneBot driver using the existing platform tool loop", () => {
+  it("continues repeated image reads after the aggregate would exceed 32 MiB, without rerunning generation tools", async () => {
+    const fx = await fixture("chat");
+    const images = [];
+    for (let index = 0; index < 4; index++) {
+      const bytes = Buffer.alloc(9 * 1024 * 1024, index); Buffer.from("GIF89a").copy(bytes);
+      const path = join(fx.cwd, `${index}.gif`); await writeFile(path, bytes);
+      images.push({ path, mime: "image/gif" as const, bytes: bytes.length });
+    }
+    let identifiers: string[] = [];
+    fx.request.mockImplementation(async (_path, init) => {
+      const body = JSON.parse(init.body as string); fx.bodies.push(body);
+      const messages = rows(body.messages), parts = messages.flatMap(message => rows(message.content));
+      const encoded = parts.filter(part => part.type === "image_url").reduce((total, part) => total + String((part.image_url as { url: string }).url).length, 0);
+      expect(encoded).toBeLessThanOrEqual(32 * 1024 * 1024);
+      if (!identifiers.length) identifiers = parts.flatMap(part => part.type === "text" && typeof part.text === "string" && part.text.startsWith("{") ? [JSON.parse(part.text).id] : []).filter(Boolean);
+      const round = fx.bodies.length;
+      return round <= 4 ? json({ choices: [{ message: { tool_calls: [{ id: `read-${round}`, type: "function", function: {
+        name: "attachment_read_image", arguments: JSON.stringify({ id: identifiers[(round - 1) % identifiers.length], original: true }),
+      } }] }, finish_reason: "tool_calls" }] }) : json({ choices: [{ message: { content: "Read all reference images." }, finish_reason: "stop" }] });
+    });
+    await fx.instance.adapter.sendTurn({ threadId: "fixture", text: "Inspect the reference images", images, cwd: fx.cwd, approvalMode: "full" });
+    await fx.completed();
+    expect(fx.events.at(-1)).toMatchObject({ type: "turn.completed", ok: true });
+    expect(fx.events.filter(event => event.type === "item.completed" && event.itemType === "tool")).toHaveLength(4);
+    expect(fx.bodies).toHaveLength(5);
+    expect(fx.events.filter(event => event.type === "runtime.notice")).toHaveLength(1);
+    expect(JSON.stringify(fx.bodies.at(-1))).toContain("unloaded to fit attachment budget");
+  }, 30_000);
+  it("deduplicates identical 9 MiB reference pairs replayed three times before the original encoded-image budget", async () => {
+    const fx = await fixture("responses", false);
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64");
+    const images = [];
+    for (let batch = 0; batch < 3; batch++) for (let image = 0; image < 2; image++) {
+      const bytes = Buffer.alloc(4.5 * 1024 * 1024, image); png.copy(bytes);
+      const path = join(fx.cwd, `${batch}-${image}.png`); await writeFile(path, bytes);
+      images.push({ path, mime: "image/png" as const, bytes: bytes.length });
+    }
+    await fx.instance.adapter.sendTurn({ threadId: "fixture", text: "Generate from these two repeated references", cwd: fx.cwd, approvalMode: "full", images });
+    await fx.completed();
+    const parts = rows(fx.bodies[0].input).flatMap(message => rows(message.content)).filter(part => part.type === "input_image");
+    expect(parts).toHaveLength(2);
+    expect(fx.events.at(-1)).toMatchObject({ type: "turn.completed", ok: true });
+    expect((await readFile(images[0].path)).length).toBe(images[0].bytes);
+  });
   it.each(["messages", "gemini", "responses", "chat"] as const)("sends the image bytes through %s without requiring optional gateway modality metadata", async protocol => {
     const fx = await fixture(protocol, false);
     const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64");

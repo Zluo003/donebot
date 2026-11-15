@@ -28,3 +28,11 @@ it("admits automation switches and public connection lists without other setup o
   expect(mobileChatRoute("POST", "/api/app-triggers/event/enabled")).toBe(true);
   for (const [method, path] of [["POST", "/api/routines"], ["DELETE", "/api/routines/daily"], ["PATCH", "/api/webhooks/hook"], ["POST", "/api/webhooks/hook/rotate"], ["GET", "/api/connectors/catalog"], ["GET", "/api/routines?admin=1"], ["POST", "/api/app-triggers/event/enabled?admin=1"]]) expect(mobileChatRoute(method!, path!)).toBe(false);
 });
+
+it("admits named document uploads without arbitrary file access or extra query parameters", () => {
+  const path = "/api/files?uploadId=11111111-1111-4111-8111-111111111111&name=";
+  expect(mobileChatRoute("POST", path + encodeURIComponent("工作说明.pdf"))).toBe(true);
+  for (const name of ["", ".", "..", "../secret.pdf", "a\\b.pdf", "a\u0000.pdf", "a".repeat(181)]) expect(mobileChatRoute("POST", path + encodeURIComponent(name))).toBe(false);
+  for (const suffix of ["&admin=1", "&name=another.pdf", "#fragment"]) expect(mobileChatRoute("POST", path + "note.pdf" + suffix)).toBe(false);
+  expect(mobileChatRoute("GET", path + "note.pdf")).toBe(false);
+});

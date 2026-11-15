@@ -40,7 +40,7 @@ function chain(target: string): Step[] {
   if (!stage) throw new Error(`the Dockerfile has no ${target} stage`);
   return [...(all.some(s => s.name === stage.from) ? chain(stage.from) : []), ...stage.steps];
 }
-const shipped = () => all.filter(s => s.name !== "build" && s.name !== "edge" && s.name !== "tunnel").flatMap(s => s.steps);
+const shipped = () => all.filter(s => s.name !== "build" && s.name !== "build-ui" && s.name !== "edge" && s.name !== "tunnel").flatMap(s => s.steps);
 const npmInstall = (step: Step) => step.op === "RUN" && /\bnpm install\b/.test(step.args);
 const browserRun = () => chain("runtime").find(step => step.op === "RUN" && step.args.includes("agent-browser install"))!;
 const grokRun = (steps: Step[]) => steps.findIndex(step => step.op === "RUN" && step.args.includes("https://x.ai/cli/install.sh"));
@@ -56,7 +56,7 @@ describe("container images", () => {
   it("keeps the self-hosted server the default target, and Cloud home a target of the same file", () => {
     expect(all.at(-1)!.name).toBe("server");
     expect(all.find(s => s.name === "cloud-home")!.from).toBe("runtime");
-    expect(all.find(s => s.name === "server")!.from).toBe("runtime");
+    expect(all.find(s => s.name === "server")!.from).toBe("cloud-service");
     // the build arg docker-compose.yml passes keeps its name and empty default
     expect(chain("server")).toContainEqual({ op: "ARG", args: 'ENGINES=""' });
   });
@@ -69,7 +69,7 @@ describe("container images", () => {
       // agent-browser + Chrome, then (Cloud home only) pnpm in the tools layer, then the engines, then the app files
       // (and the Cloud home's Caddyfile)
       expect(heavy, target).toHaveLength(target === "cloud-home" ? 3 : 2);
-      const fromBuild = steps.flatMap((step, i) => (step.op === "COPY" && step.args.includes("--from=build") ? [i] : []));
+      const fromBuild = steps.flatMap((step, i) => (step.op === "COPY" && /--from=build(?:-ui)? /.test(step.args) ? [i] : []));
       expect(fromBuild, target).toHaveLength(4);
       expect(Math.max(...heavy), target).toBeLessThan(Math.min(...app));
       // The Data engine's native tree (DuckDB, resvg) changes on a version bump,
@@ -96,7 +96,7 @@ describe("container images", () => {
     for (const { args } of shipped()) expect(args).not.toMatch(/\bch(own|mod) -R\b/);
     // modes are fixed where the files are built, in a stage that is not shipped
     const build = all.find(s => s.name === "build")!.steps.find(step => step.op === "RUN" && step.args.startsWith("pnpm build:server"))!;
-    expect(build.args).toMatch(/ && chmod -R go-w dist dist-server skills$/);
+    expect(build.args).toMatch(/ && chmod -R go-w dist-server skills$/);
     // a plain copy to a fresh inode drops the privileged-port capability and the 1001 owner
     expect(all.find(s => s.name === "edge")!.steps).toContainEqual({ op: "RUN", args: "cp /usr/bin/caddy /caddy" });
     const home = chain("cloud-home");
@@ -112,10 +112,19 @@ describe("container images", () => {
       { op: "COPY", args: "--from=tunnel /cloudflared /usr/local/bin/cloudflared" },
     ]);
     expect(home.findIndex(step => step.args.startsWith("--from=tunnel "))).toBeLessThan(home.findLastIndex(npmInstall));
-    expect(home.filter(step => step.args.includes("--from=build")).map(step => step.args)).toEqual([
-      "/src/dist-native/duckdb/target ./duckdb", "/src/dist-server ./dist-server", "/src/dist ./dist", "/src/skills ./skills",
-    ].map(path => `--from=build ${path}`));
-    expect(chain("server").filter(step => step.args.includes("--from=build")).every(step => step.args.startsWith("--from=build --chown=maus:maus "))).toBe(true);
+    expect(home.filter(step => /--from=build(?:-ui)? /.test(step.args)).map(step => step.args)).toEqual([
+      "/src/dist-native/duckdb/target ./duckdb", "/src/dist-server ./dist-server", "UI", "/src/skills ./skills",
+    ].map(path => path === "UI" ? "--from=build-ui /src/dist ./dist" : `--from=build ${path}`));
+    expect(chain("server").filter(step => step.args.includes("--from=build")).every(step => /--from=build(?:-ui)? --chown=maus:maus /.test(step.args))).toBe(true);
+  });
+
+  it("builds Cloud service without frontend artifacts or a frontend build dependency", () => {
+    const service = chain("cloud-service");
+    expect(service.filter(step => step.op === "COPY").map(step => step.args)).not.toContain(expect.stringMatching(/\/src\/dist \.\/dist/));
+    expect(service.some(step => step.args.includes("DONEBOT_STATIC_DIR"))).toBe(false);
+    expect(service.some(step => step.args.includes("--from=build-ui"))).toBe(false);
+    expect(all.find(stage => stage.name === "build")!.steps.some(step => step.args.includes("vite build"))).toBe(false);
+    expect(service).toContainEqual({ op: "CMD", args: '["node", "dist-server/server-launcher.js"]' });
   });
 
   it("installs the pinned Grok in Cloud home only, beneath the engines and the app, from a home the same step removes", () => {
@@ -306,7 +315,7 @@ describe("container images", () => {
       fake("npm", `case "$2" in @anthropic-ai/claude-code@latest) echo 2.1.291;; @openai/codex@latest) echo 0.160.1;; *) exit 1;; esac`);
       const output = join(root, "output");
       writeFileSync(output, "");
-      const result = spawnSync("bash", ["-e", "-c", keys.run!], {
+      const result = spawnSync("/bin/bash", ["--noprofile", "--norc", "-e", "-c", keys.run!], {
         env: { ...keys.env, PATH: `${root}:${dirname(jq)}:/usr/bin:/bin`, GITHUB_OUTPUT: output }, encoding: "utf8",
       });
       expect(result.status, result.stderr).toBe(0);

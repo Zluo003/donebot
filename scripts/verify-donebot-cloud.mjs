@@ -5,10 +5,12 @@ import { createServer as createHttpServer } from "node:http";
 import { createRequire } from "node:module";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { request as httpRequest } from "node:http";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { installDoneBotCloud } from "../electron/donebot-cloud.mjs";
+import { installDoneBotCloudFrontend } from "../electron/donebot-cloud-frontend.mjs";
 import { createDoneBotCloudKeepalive } from "../electron/donebot-cloud-keepalive.mjs";
 import { createChromeRail } from "../electron/chrome-rail.mjs";
 import { createLocalProfiles } from "../electron/local-profiles.mjs";
@@ -16,15 +18,20 @@ import { installCloudRail } from "../electron/cloud-rail.mjs";
 import environments from "../electron/environments.cjs";
 
 if (!process.versions.electron) {
+  const { launchVerificationServer } = await import("./control-omb.ts");
+  const fixture = await launchVerificationServer();
+  const configured = await fetch(fixture.info.url + "/api/config", { method: "PATCH", headers: { "content-type": "application/json", origin: fixture.info.url }, body: JSON.stringify({ onboarding: { completedAt: new Date().toISOString(), version: 1, reelSeen: true } }) });
+  assert.equal(configured.ok, true);
   const output = mkdtempSync(join(tmpdir(), "donebot-cloud-reconnect-")), home = join(output, "home");
   mkdirSync(home);
   execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", join(output, "key.pem"), "-out", join(output, "cert.pem"), "-days", "1", "-subj", "/CN=cloud.localhost"], { stdio: "ignore" });
-  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  const env = { ...process.env, HOME: home, USERPROFILE: home, DONEBOT_FRONTEND_FIXTURE: fixture.info.url };
   delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(createRequire(import.meta.url)("electron"), [fileURLToPath(import.meta.url), output], { env, stdio: "inherit" });
   const watchdog = setTimeout(() => child.kill(), 45_000);
   const code = await new Promise(resolve => { child.once("error", () => resolve(1)); child.once("exit", resolve); });
   clearTimeout(watchdog);
+  await fixture.close();
   console.log(`Cloud connection evidence: ${output}`);
   assert.equal(code, 0);
   assert.equal(JSON.parse(readFileSync(join(output, "receipt.json"))).passed, true);
@@ -39,9 +46,19 @@ if (!process.versions.electron) {
   app.commandLine.appendSwitch("host-resolver-rules", "MAP *.cloud.localhost 127.0.0.1");
   app.on("window-all-closed", () => {});
   for (const channel of ["home:page", "update:offered"]) ipcMain.on(channel, event => { event.returnValue = false; });
+  for (const channel of ["desktop-language:read", "desktop-analytics:read"]) ipcMain.on(channel, event => { event.returnValue = null; });
+  ipcMain.handle("desktop:skin", () => {});
+  ipcMain.handle("desktop:capabilities", () => ({
+    host: { platform: process.platform, packaged: true, label: "Fixture", session: "unknown" },
+    windowChrome: "native", screenPreview: { available: false, interaction: "none" },
+    dictation: { available: false, engine: "none", onDevice: false, reasonCode: "remote-server" },
+    localComputer: { available: false, support: "unsupported", enabled: false, status: "unavailable", reasonCode: "remote-server" },
+  }));
   const id = "11861a47-7240-4f99-bf19-bd01d411596f";
   let valid = true, launches = 0, pairings = 0, requests = 0, owner = "101", code = "", win, localOrigin, phase = "startup";
   let state = { activeId: "local", environments: [] }, origin, holdAuth = null, failAuth = false, waitForPaint = false, rail;
+  let apiOnly = false, realApi = false, staticRequests = 0;
+  const builtUI = resolve("dist");
   const loadingViews = [], checks = [];
   const until = async check => {
     for (let n = 0; n < 200; n++) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 25)); }
@@ -63,7 +80,29 @@ if (!process.versions.electron) {
     const signedIn = valid && req.headers.cookie?.includes("__Host-dbc_session=synthetic-session");
     if (!signedIn) return res.writeHead(401).end('{}');
     if (req.url === "/api/auth/session") return res.end(JSON.stringify({ kind: "loopback", environmentId: id }));
+    if (realApi && (req.url.startsWith("/api/") || req.url.startsWith("/.well-known/"))) {
+      const target = new URL(process.env.DONEBOT_FRONTEND_FIXTURE);
+      const proxy = httpRequest(new URL(req.url, target), { method: req.method, headers: { "content-type": req.headers["content-type"] ?? "application/json", origin: target.origin } }, upstream => {
+        res.writeHead(upstream.statusCode, { ...upstream.headers, "x-donebot-cloud": "1" }); upstream.pipe(res);
+      });
+      proxy.on("error", () => res.destroy()); res.on("close", () => proxy.destroy()); req.pipe(proxy); return;
+    }
+    if (req.url === "/api/fixture/events") {
+      res.writeHead(200, { "content-type": "text/event-stream" }); res.write("data: first\n\n");
+      setTimeout(() => res.end("data: second\n\n"), 50); return;
+    }
+    if (req.url === "/api/fixture/file") {
+      res.writeHead(206, { "content-type": "video/mp4", "content-range": "bytes 2-5/8" }); res.end("2345"); return;
+    }
+    if (req.url === "/api/fixture/upload") { req.pipe(res); return; }
+    if (apiOnly) { staticRequests++; return res.writeHead(404).end(); }
     res.setHeader("content-type", "text/html"); res.end(`<!doctype html><title>Isolated Cloud</title><div id="root">${waitForPaint ? "" : "<h1>Cloud workspace</h1>"}</div>`);
+  });
+  const { WebSocketServer } = createRequire(import.meta.url)("ws");
+  const sockets = new WebSocketServer({ noServer: true });
+  server.on("upgrade", (req, socket, head) => {
+    if (req.url !== "/api/fixture/socket" || !valid || req.headers.origin !== origin || !req.headers.cookie?.includes("__Host-dbc_session=synthetic-session")) return socket.destroy();
+    sockets.handleUpgrade(req, socket, head, ws => ws.on("message", bytes => ws.send(bytes.toString())));
   });
   void app.whenReady().then(async () => {
   try {
@@ -72,7 +111,7 @@ if (!process.versions.electron) {
     localOrigin = `http://127.0.0.1:${localHttp.address().port}`;
     origin = `https://${id}.cloud.localhost:${server.address().port}`;
     session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-      callback({ cancel: !details.url.startsWith(origin + "/") && !details.url.startsWith(localOrigin + "/") && !details.url.startsWith("data:text/html;") && details.url !== "about:blank" });
+      callback({ cancel: !details.url.startsWith(origin + "/") && !details.url.startsWith(origin.replace("https:", "wss:") + "/") && !details.url.startsWith(localOrigin + "/") && !details.url.startsWith("file://" + join(output, "ui") + "/") && !details.url.startsWith("file://" + builtUI + "/") && !details.url.startsWith("data:text/html;") && details.url !== "about:blank" });
     });
     win = new BrowserWindow({ show: false, width: 800, height: 600, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false,
       preload: fileURLToPath(new URL("../electron/preload.cjs", import.meta.url)), additionalArguments: [`--omb-local-origin=${localOrigin}`] } });
@@ -196,12 +235,47 @@ if (!process.versions.electron) {
     assert.equal(handlers.get("environments:create")({}).error, "disabled");
     assert.equal(created, 0);
     checks.push("rail capability and both workspace creation IPC paths refuse creation");
+    phase = "bundled frontend with API-only Cloud";
+    apiOnly = true;
+    const ui = join(output, "ui"); mkdirSync(join(ui, "assets"), { recursive: true });
+    writeFileSync(join(ui, "index.html"), '<!doctype html><div id="root"></div><script type="module" src="/assets/client.js"></script>');
+    writeFileSync(join(ui, "assets", "client.js"), `const session = await fetch('/api/auth/session').then(r => r.json()); document.getElementById('root').innerHTML = '<h1>Bundled client ' + session.environmentId + '</h1>';`);
+    const stopFrontend = installDoneBotCloudFrontend({ session: session.defaultSession, directory: ui, origins: () => [origin] });
+    const before = requests;
+    await connection.open({ entry: state.environments[0] });
+    assert.equal(await win.webContents.executeJavaScript("document.querySelector('h1').textContent"), `Bundled client ${id}`);
+    assert.equal(requests - before, 2);
+    assert.equal((await session.defaultSession.fetch(origin + "/assets/not-in-client.js")).status, 404);
+    assert.equal((await session.defaultSession.fetch(origin + "/api/auth/session")).status, 200);
+    assert.equal(await win.webContents.executeJavaScript("fetch('/api/fixture/events').then(r=>r.text())"), "data: first\n\ndata: second\n\n");
+    assert.deepEqual(await win.webContents.executeJavaScript("fetch('/api/fixture/file', {headers:{Range:'bytes=2-5'}}).then(async r=>[r.status,r.headers.get('content-range'),await r.text()])"), [206, "bytes 2-5/8", "2345"]);
+    assert.equal(await win.webContents.executeJavaScript("fetch('/api/fixture/upload',{method:'POST',body:'upload contents'}).then(r=>r.text())"), "upload contents");
+    assert.equal(await win.webContents.executeJavaScript("new Promise((resolve,reject)=>{const ws=new WebSocket(location.origin.replace('https:','wss:')+'/api/fixture/socket'); ws.onopen=()=>ws.send('encrypted transport fixture'); ws.onmessage=e=>{resolve(e.data);ws.close()};ws.onerror=()=>reject(new Error('WebSocket failed'))})"), "encrypted transport fixture");
+    valid = false;
+    assert.equal((await session.defaultSession.fetch(origin + "/api/auth/session")).status, 401);
+    await connection.open({ entry: state.environments[0] });
+    checks.push("bundled UI and dynamic imports stay local; Cloud receives only authenticated API requests");
+    checks.push("SSE, WebSocket, range responses and uploads preserve origin and Cookie; expired session still refused");
+    stopFrontend();
+    phase = "production client with isolated API-only runtime";
+    realApi = true;
+    const stopBuiltFrontend = installDoneBotCloudFrontend({ session: session.defaultSession, directory: builtUI, origins: () => [origin] });
+    await connection.open({ entry: state.environments[0] });
+    await until(async () => await win.webContents.executeJavaScript("Boolean(document.querySelector('#root').childElementCount)"));
+    assert.equal((await session.defaultSession.fetch(origin)).headers.get("x-donebot-frontend"), "desktop");
+    assert.equal(staticRequests, 0);
+    await until(async () => await win.webContents.executeJavaScript("!document.querySelector('[data-app-loading]') && document.body.innerText.includes('Fixture Starter')"));
+    assert.equal(await win.webContents.executeJavaScript("document.body.innerText.includes('此页面出错了') || document.body.innerText.includes('认识 DoneBot')"), false);
+    writeFileSync(join(output, "bundled-cloud.png"), (await win.webContents.capturePage()).toPNG());
+    writeFileSync(join(output, "bundled-cloud-text.txt"), await win.webContents.executeJavaScript("document.body.innerText"));
+    checks.push("production bundled client renders against isolated real runtime with no Cloud frontend requests");
+    stopBuiltFrontend();
     owner = "202";
     await assert.rejects(connection.open({ entry: state.environments[0] }), /账号/);
     const receipt = { passed: true, checks: [...checks, "real-electron-cookie-jar", "reuse-live-session", "automatic-expired-session-renewal", "native-return-local", "reopen-saved-cloud-without-add", "proactive-cookie-renewal-without-navigation", "account-isolation"], timings, requests, launches, pairings, syntheticCloud: true, liveDataTouched: false };
     writeFileSync(join(output, "receipt.json"), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) { console.error(phase, error); process.exitCode = 1; }
-  finally { win?.destroy(); server.closeAllConnections(); localHttp.closeAllConnections(); await Promise.all([new Promise(resolve => server.close(resolve)), new Promise(resolve => localHttp.close(resolve))]); app.exit(process.exitCode ?? 0); }
+  finally { win?.destroy(); for (const socket of sockets.clients) socket.terminate(); sockets.close(); server.closeAllConnections(); localHttp.closeAllConnections(); await Promise.all([new Promise(resolve => server.close(resolve)), new Promise(resolve => localHttp.close(resolve))]); app.exit(process.exitCode ?? 0); }
   });
 }

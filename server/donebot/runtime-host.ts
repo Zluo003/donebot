@@ -30,6 +30,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
   const mediaPreferences = new DoneBotMediaPreferencesStore(join(dataDir, "donebot", "media-preferences.json"));
   gateway.bindMediaPreferences(() => mediaPreferences.get(gateway.scope()?.accountId));
   const driver = createDoneBotLlmDriver({
+    imageCacheDir: join(dataDir, "donebot", "model-images"),
     request: (path, init) => gateway.request(path, init),
     models: () => doneBotTextModels(gateway.models()), catalog: () => gateway.models(),
     mediaPreferences: () => gateway.mediaPreferences(),

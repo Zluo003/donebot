@@ -21,7 +21,7 @@ export type { CompletionTransportInput } from "./chat-completion-transport.ts";
 export type { LocalChatTools } from "./chat-tool-session.ts";
 import { noteToolBudget } from "../tool-budgets.ts";
 import { chatToolLimitFor, chatToolLimitKey } from "../tool-count-limit.ts";
-import { assertImageTransport, chatImageBudget, chatToolImages, chatUserContent, type ChatContentPart } from "./chat-images.ts";
+import { assertImageTransport, chatImageBudget, chatToolImages, chatUserContent, type ChatContentPart, type ChatImagePart } from "./chat-images.ts";
 import { promptHalves, volatileContextNote, withContextNote } from "./prompt-split.ts";
 import { createChatToolApproval, refusal } from "./chat-tool-approval.ts";
 import { ChatProtocolError, ChatReasoningDetails, ChatToolCalls, object, type ChatToolCall } from "./openai-chat-protocol.ts";
@@ -41,6 +41,12 @@ import { classifyContinuable, writeTurnHandoff } from "../turn-continuation.ts";
 import { KEY_REJECTED_REASON, keyRejected, noteKeyAccepted, noteKeyRejected, rejectsKey } from "../key-rejections.ts";
 import { FETCH_LIMIT_MS, fetchPastLimit } from "./openai-chat-fetch.ts";
 import { announcesAction } from "./chat-announcement.ts";
+
+export interface ChatImageContext {
+  userContent(text: string): Promise<ChatContentPart[]>;
+  toolImages(callId: string, images: ChatImagePart[]): Promise<ChatImagePart[]>;
+  fit(messages: OpenAIChatMessage[]): number;
+}
 
 export interface OpenAIChatMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -99,6 +105,7 @@ interface RuntimeOptions<Config> {
   authenticated?: () => boolean;
   completionTransport?: (input: CompletionTransportInput) => Promise<Completion>;
   localTools?: (turn: SendTurnInput, signal: AbortSignal) => Promise<LocalChatTools>;
+  imageContext?: (turn: SendTurnInput, signal: AbortSignal) => ChatImageContext;
   models: () => ModelCatalog;
   requestBody(model: string, messages: OpenAIChatMessage[], stream: boolean, variant?: string): Record<string, unknown>;
   httpErrorLabel: string;
@@ -463,7 +470,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
     const textOnly = (text: string) => !options.computerUse || seesImages(turn) || !turn.images?.length ? text
       : `${text}\n\n${TEXT_ONLY_ATTACHMENT_NOTE}`;
     const userTurn = note ? { ...turn, text: withContextNote(note, turn.text) } : turn;
-    const content = options.computerUse && seesImages(turn) ? chatUserContent(userTurn) : textOnly(userTurn.text);
+    const content = options.computerUse && seesImages(turn) ? options.imageContext ? userTurn.text : chatUserContent(userTurn) : textOnly(userTurn.text);
     const kept = turn.recalled ? turn.text.replace(`${turn.recalled}\n\n`, "") : turn.text;
     const record = {
       text: kept,
@@ -492,10 +499,11 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
 
     const turnId = newId();
     const abort = new AbortController();
+    const imageContext = seesImages(turn) ? options.imageContext?.(turn, abort.signal) : undefined;
     const messages = messagesFor(turn);
     const request = messages.at(-1)!;
     const retainImages = chatImageBudget();
-    for (const message of messages) retainImages(message.content);
+    if (!imageContext) for (const message of messages) retainImages(message.content);
     const model = turn.model || options.models().default;
     const maskable = (value: unknown): value is string => typeof value === "string" && value.length >= 8; // a short placeholder key ("1") would redact every match
     const secrets = [options.apiKey].filter(maskable);
@@ -572,7 +580,9 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
       let callsAtNudge = -1;
       const repeats = options.localModel ? new ChatRepeatGuard() : undefined;
       let unreadable = false, askedAgain = false;
+      let imageNoticeShown = false;
       try {
+        if (imageContext) request.content = await imageContext.userContent(typeof request.content === "string" ? request.content : turn.text);
         const parsed = parseToolScope(turn.toolScope);
         if (!parsed.ok) throw new Error(parsed.error);
         const scope = parsed.scope;
@@ -594,6 +604,10 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             // Between rounds, never inside a tool batch.
           unread = turnEntry.asides.splice(0);
           if (unread.length) messages.push({ role: "user", content: unread.join("\n\n") });
+          if (imageContext?.fit(messages) && !imageNoticeShown) {
+            imageNoticeShown = true;
+            emit({ ...base(turn.threadId, turnId), type: "runtime.notice", message: "已整理图片上下文，原图仍保留，可按需重新读取。" });
+          }
           turnEntry.ending = round === MAX_CHAT_ROUNDS - 1;
           native("out", options.nativeLog.outgoing(turn, messages, model, tools.definitions));
           let attempt = 0;
@@ -821,7 +835,8 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                   if (result.images?.length) {
                     try {
                       assertImageTransport(options.apiUrl);
-                      retainImages(result.images);
+                      if (imageContext) result.images = await imageContext.toolImages(call.id, result.images);
+                      else retainImages(result.images);
                     } catch (error) {
                       throw new ChatToolSessionError(asError(error).message);
                     }

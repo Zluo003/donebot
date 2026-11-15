@@ -206,7 +206,7 @@ test("local switching in main rejects dev mode and overlaps, and adopts the roll
   // The flag stays set through the safety-net revive, so a second switch cannot race it for the previous folder's lease.
   assert.ok(finallyBlock.indexOf("serverSupervisor.resume();") < finallyBlock.indexOf("reviveAfterFailedSwitch("));
   assert.ok(finallyBlock.indexOf("reviveAfterFailedSwitch(") < finallyBlock.indexOf("localSwitchInFlight = false;"));
-  assert.match(source, /function createLocalEnvironment\(name, dataDir\) \{\s*if \(!app\.isPackaged\) return \{ ok: false, error: "dev", state: environmentsState \};/);
+  assert.match(source, /ipcMain\.handle\("environments:create", localWorkspaceOnly\("environments:create", \(\) => \(\{ ok: false, error: "disabled", state: environmentsState \}\)\)\);/);
 });
 
 test("repeated quit requests join the exact same child cleanup", async (t) => {

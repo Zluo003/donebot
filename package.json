@@ -1,7 +1,7 @@
 {
   "name": "donebot",
   "private": true,
-  "version": "0.1.152",
+  "version": "0.1.153",
   "description": "A local-first chat app for running a team of AI agents.",
   "homepage": "https://donebot.cn",
   "repository": {
@@ -118,6 +118,7 @@
     "imapflow": "2.10.0",
     "jmespath": "0.16.0",
     "jose": "6.2.10",
+    "jpeg-js": "0.4.4",
     "katex": "^0.16.47",
     "lucide-react": "^0.539.0",
     "mailparser": "3.14.1",
@@ -125,6 +126,7 @@
     "mermaid": "^12.1.0",
     "nodemailer": "10.3.1",
     "papaparse": "^5.7.0",
+    "pngjs": "7.0.0",
     "posthog-js": "^1.415.6",
     "qrcode-terminal": "0.12.0",
     "qrcode.react": "^4.2.0",
@@ -156,6 +158,7 @@
     "@types/node": "^26.2.0",
     "@types/novnc__novnc": "1.6.0",
     "@types/papaparse": "^5.5.2",
+    "@types/pngjs": "6.0.5",
     "@types/qrcode-terminal": "0.12.2",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",

@@ -6,6 +6,7 @@ import { createOpenAIChatRuntime } from "../drivers/openai-chat.ts";
 import { createDoneBotCompletion, type DoneBotLlmProtocol, type DoneBotLlmRequest } from "./llm-protocol.ts";
 import { guideDoneBotMedia } from "./media-guidance.ts";
 import { createWorkspaceTools } from "./workspace-tools.ts";
+import { createDoneBotImageContext } from "./image-context.ts";
 
 const MEDIA_CAPABILITY_TOOL = "mcp:agents:media_model_capabilities";
 const MEDIA_GENERATION_TOOLS = ["generate_image", "generate_video", "generate_audio"] as const;
@@ -18,6 +19,7 @@ export function doneBotMediaToolScope(scope: SendTurnInput["toolScope"]): SendTu
 }
 
 export interface DoneBotLlmDependencies {
+  imageCacheDir: string;
   request: DoneBotLlmRequest;
   models(): ModelCatalog;
   protocol(model: string): DoneBotLlmProtocol;
@@ -36,6 +38,7 @@ export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDr
     decodeConfig(raw) { if (raw !== undefined && (raw === null || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length)) throw new Error("DoneBot model service is managed by your account"); return {}; },
     defaultConfig: () => ({}),
     async create(input) {
+      const contexts = new WeakMap<SendTurnInput, ReturnType<typeof createDoneBotImageContext>>();
       const complete = createDoneBotCompletion(deps.request, model => {
         if (!deps.authenticated()) throw new Error("Sign in to DoneBot to use models");
         if (!deps.models().options.some(one => one.id === model)) throw new Error("This model is not available to your DoneBot account");
@@ -43,7 +46,23 @@ export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDr
       });
       const runtime = createOpenAIChatRuntime({ input, driverKind: "donebot", apiKey: "", apiUrl: "https://donebot.cn/v1", authenticated: deps.authenticated,
         models: deps.models, completionTransport: turn => complete(guideDoneBotMedia(turn, deps.catalog?.() ?? null, deps.mediaPreferences?.())),
-        localTools: createWorkspaceTools, computerUse: true, imageInput: deps.imageInput, toolUse: deps.toolUse, modelVariants: true,
+        imageContext: (turn, signal) => {
+          const context = createDoneBotImageContext(turn, deps.imageCacheDir, signal);
+          contexts.set(turn, context);
+          return context;
+        },
+        localTools: async (turn, signal) => {
+          const workspace = await createWorkspaceTools(turn, signal), context = contexts.get(turn);
+          if (!context) return workspace;
+          const names = new Set(context.tools.definitions.map(definition => definition.function.name));
+          return {
+            definitions: [...workspace.definitions, ...context.tools.definitions],
+            validate: (name, args) => (names.has(name) ? context.tools : workspace).validate(name, args),
+            view: (name, args) => (names.has(name) ? context.tools : workspace).view(name, args),
+            execute: (name, args, callSignal) => (names.has(name) ? context.tools : workspace).execute(name, args, callSignal),
+            async close() { try { await workspace.close(); } finally { await context.tools.close(); } },
+          };
+        }, computerUse: true, imageInput: deps.imageInput, toolUse: deps.toolUse, modelVariants: true,
         requestBody: () => { throw new Error("DoneBot models require their registered native protocol"); },
         httpErrorLabel: "DoneBot gateway", missingKeyError: "Sign in to DoneBot to use models", unavailableReason: "Sign in to DoneBot to use models", timeoutMs: 180_000,
         retryScale: 1,

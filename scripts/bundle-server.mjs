@@ -31,6 +31,7 @@ const NODE_REQUIRE = {
 
 // Every file run as its own process.
 const ENTRY_POINTS = [
+  "donebot/image-worker.ts",
   "index.ts",
   "message-search.worker.ts",
   // the `donebot` command

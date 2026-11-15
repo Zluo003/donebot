@@ -34,7 +34,7 @@ Electron fixture 使用临时 HOME、独立 profile、回环 HTTPS 合成 Cloud 
 ## 发布组件
 
 - 桌面客户端：自动续连、已保存 Cloud 入口及内容缓存需要新版客户端。
-- Cloud 运行服务镜像：需包含 HTTP 响应中断防护和新前端；发布新摘要后按 Cloud 节点文档保留数据升级实际容器。
+- Cloud 运行服务镜像：使用 `cloud-service` API 专用目标，包含 HTTP 响应中断防护、Muse 最长 10 秒能力与附件上下文整理；桌面使用安装包内的前端，不再等待云端 HTML／JS；发布新摘要后按 Cloud 节点文档保留数据升级实际容器。
 - DoneBot-Cloud 节点：更新 agent/worker，才能检查容器实际状态并恢复意外退出的运行服务；仅更新容器镜像不包含节点恢复逻辑。
 - donebot-api：静态资源缓存优化需更新网关。仅成功 GET 的带版本 hash JS/CSS/woff2 允许浏览器私有缓存；HTML、API、附件、错误及带查询参数的响应仍为 no-store。前置代理不启用共享缓存。
 
@@ -49,3 +49,22 @@ Cloud 连接期间及 Cloud 为当前工作位置时，原生工作空间竖栏�
 `node scripts/verify-donebot-cloud.mjs` 使用真实 Electron、独立 profile、临时 HOME 与回环合成服务，覆盖授权等待动画、页面空根节点等待、竖栏消失及完整宽度、原生返回按钮取消、失败后原生重试按钮、两条创建 IPC 拒绝，以及原有 Cookie 续连。2026-11-15 证据：临时目录 `donebot-cloud-reconnect-1wNeVc/receipt.json`，含加载和失败页面截图。60 项 Node 检查、20 项 DOM／大小限制检查、类型及 Electron 语法检查通过。该检查不连接生产 Cloud，不测公网耗时或 Windows 物理按钮交互。
 
 本次加载页和工作空间入口变更由桌面 Electron 控制，不要求重新发布 Cloud 镜像。Bot 表情仍以原有字符串名称传递；手机端已同步桌面的表情校验与名称映射，需要重新构建安装手机 App。Cloud 服务接口、网关与中继协议未变，不因这项手机兼容修复重建已有实例。
+
+
+## 本地前端连接 Cloud（2026-11-16）
+
+Electron 使用安装包内 `ui/` 的 HTML、脚本、样式和字体，通过原 Cloud HTTPS origin 打开。
+API、SSE、WebSocket、附件上传及 Range 下载继续使用远端实例及其原有 Cookie，
+不把云实例接口代理到本地 Bot。仅已保存并验证的自有 Cloud origin 可用这层前端映射，
+未知本地资源返回 404，API 请求通过原生网络发送。Cloud 镜像 `cloud-service` 不包含 `dist/`；
+通用自托管 `server` 目标仍提供网页。先安装新版桌面客户端，再升级 API 专用 Cloud 镜像；
+旧客户端依赖云端页面，无法打开 API 专用镜像。手机原本使用 API，无此依赖。
+
+加载页采用黑白 `d.` 标记、电脑与云端连线动画；返回本地、取消、重试和隐藏工作空间栏保留。
+`node scripts/verify-donebot-cloud.mjs` 在真实 Electron 隔离 profile 中验证安装包前端与 API
+专用 Cloud 的组合：本地资源命中、API／SSE／WebSocket、Range 下载、上传、缓存、Cookie
+复用及过期续连、本地返回、等待页取消与失败重试均通过。回执目录：临时目录
+`donebot-cloud-reconnect-fgSQfN/receipt.json`，不代表公网延迟或长期在线测试。
+
+完整 Electron 检查中，Cloud 入口 mock、preload 接口列表和已禁用创建工作空间的断言已同步。
+图片处理和上下文预算的隔离验证见[附件上下文](donebot-image-context.md)。

@@ -23,7 +23,7 @@ DoneBot 0.1.153 桌面共用安装包中的聊天界面；Cloud 仅提供 API、
 3. 将当前清单的两个值合入原 `agent.env`，保留其它配置。逐实例运行 `prepare-upgrade` 和 `prepare-desktop-upgrade`，传入实际旧摘要，保留原盘、凭据、实例及 deployment ID。
 4. 恢复 agent、worker。核对实际容器的镜像和完整 revision、原有 Bot/消息/文件，并检查健康与手机状态；有账号凭据的实例应达到 `authenticated=true`、`registered=true`、`relay=connected`。
 
-完整维护命令沿用[此前的受控升级步骤](cloud-images-2026-11-15.md#在线升级已有节点)，其中目标镜像必须换成本页当前清单。
+完整维护命令沿用[此前记录中的“在线升级已有节点”步骤](cloud-images-2026-11-15.md)，其中目标镜像必须换成本页当前清单。
 新镜像的 `/api/health` 返回 `static=false`；`GET /` 返回 404 是预期行为，不能用根页面判断故障。
 网关控制台、Bot 的浏览器及专属图形桌面保留。先前已具备的 agent 意外退出恢复仍由节点执行，镜像不能替代节点更新。
 

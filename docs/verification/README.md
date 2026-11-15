@@ -180,7 +180,8 @@ Cookie reuse and renewal, cached conversations while loading, and interrupted
 media downloads through an isolated production request handler.
 
 The [published Cloud image record](cloud-images-2026-11-16.md) identifies the
-verified image digests and the controlled upgrade procedure for existing nodes.
+verified image digests and the controlled upgrade procedure for existing nodes;
+the [earlier image record](cloud-images-2026-11-15.md) remains available for history.
 
 The [loading screen and tray smoke](startup-tray.md) checks the startup close
 button, hidden handoff, tray restore, and Quit in a disposable Electron profile.

@@ -36,6 +36,8 @@ DONEBOT_MOBILE_PG_FIXTURE=1 DONEBOT_MOBILE_DESKTOP_ROOT=/Users/zluo/Dev/DoneBot 
 
 同日构建的 `donebot-cloud-service:mobile-automation-20261115-amd64` 在无网络、只读根目录、UID `1001:1001`、临时资料盘的独立 Docker 容器启动成功，健康检查和 `/api/donebot/mobile/status` 均为 200。未提供安装凭据时状态为 `authenticated=false`、`relay=off`，该检查仅证明编译后的镜像包含手机连接器。构建来源、镜像导出与启动证据保存在本机 `release/cloud-mobile-20261115/`，未发布或部署。已有 Cloud 需按相邻 Cloud 项目的镜像升级流程保留数据重建运行容器，更新桌面 DMG 不会更新 Cloud。
 
+随后以固定提交 `75704dddf140e27aa319de0c0baef7d54d366ebf` 通过 GitHub Actions 重新构建、验证并发布 x64 运行服务和图形桌面镜像，供节点直接在线拉取。正式摘要、Linux 证据及保留数据的在线升级步骤见 [本日发布记录](cloud-images-2026-11-15.md)；正式发布与上述离线候选是不同产物。
+
 ## 其他检查
 
 ```sh

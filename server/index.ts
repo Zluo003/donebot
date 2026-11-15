@@ -337,8 +337,7 @@ import { turnStartLogLine } from "./turn-log.ts";
 import { TurnStops, outwardActions, stoppedTurnOutcome, turnEvidence } from "./turn-outcome.ts";
 import { buildRecoveryText, buildTurnContext, engineIsFresh, replaysNatively } from "./turn-context.ts";
 import { Handoffs, handedStateUsable, isContextMessage, recordHanded, renderUnseen, sessionStart, unseenMessages, withUnseenMessages, type ContextMessage } from "./delta-context.ts"; import { isFreshStart, sinceFreshStart } from "./fresh-start.ts";
-import { extractReplayImages, extractTurnImages, videoFramesWithin } from "./turn-images.ts";
-import { doneBotImageReferences } from "./donebot/image-references.ts";
+import { extractReplayImages, extractTurnImages, videoFramesWithin } from "./turn-images.ts"; import { doneBotImageReferences } from "./donebot/image-references.ts";
 import { callTitleExcerpt } from "./thread-title.ts";
 import { generateThreadTitle, llmThreadTitlesEnabled } from "./thread-title-generate.ts";
 import { engineProcessGone, stallLimitMs, TurnWatchdog } from "./turn-watchdog.ts"; import { createIdleThreads } from "./host/idle-threads.ts";
@@ -8456,8 +8455,7 @@ async function beginTurn(
         startupRecovery,
         text: withTurnClock(clock, withRecalled(recalled, attachmentsForBox(dispatchContext.turnText, cwd) + shareNote.text + devsReports.note(threadId, Boolean(integrations.agents)))),
         ...(recalled ? { recalled } : {}),
-        images: dispatchContext.images,
-        ...(instance.driverKind === "donebot" ? { imageReferences: doneBotImageReferences(activeMessages, turnImages) } : {}),
+        images: dispatchContext.images, ...(instance.driverKind === "donebot" ? { imageReferences: doneBotImageReferences(activeMessages, turnImages) } : {}),
         approvalMode: approvalModeForTurn(bot, commsDepth > 0, threadId),
         approvalModeNow: () => liveApprovalMode(bot, threadId, commsDepth > 0),
         toolScope,

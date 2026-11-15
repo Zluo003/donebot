@@ -1,6 +1,7 @@
 import { t } from "./i18n";
 import { serverErrorText } from "./server-error";
 import { rememberDoneBotCloud } from "@/donebot/services";
+import { bindCloudWorkspaceCache } from "../donebot/workspace-cache";
 
 export interface EnvironmentDescriptor {
   environmentId: string;
@@ -52,6 +53,9 @@ export async function readSessionState(fetchImpl: typeof fetch = fetch): Promise
   const body: unknown = await res.json().catch(() => ({}));
   rememberDoneBotCloud(res);
   const record = Object(body) as Record<string, unknown>;
+  if (res.ok && res.headers.get("x-donebot-cloud") === "1") {
+    bindCloudWorkspaceCache(JSON.stringify([location.origin, record.environmentId, record.id ?? "owner"]));
+  } else bindCloudWorkspaceCache(null);
   if (res.status === 401 || res.status === 403) {
     return { kind: "unauthenticated", error: typeof record.error === "string" ? record.error : `${res.status}` };
   }

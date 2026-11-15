@@ -99,3 +99,16 @@ it("accepts only the native Cloud pairing contract and rejects foreign or creden
     await expect(invalid.gateway.cloudConnect(id, "1")).rejects.toMatchObject({ code: "cloud_connection_invalid" });
   }
 });
+
+it("refreshes a JWT with less than 90 seconds remaining before requesting a desktop connection", async () => {
+  const { gateway, requests } = await fixture(path => path.endsWith("/auth/refresh")
+    ? json({ access_token: "synthetic-refreshed-secret", refresh_token: "synthetic-next-refresh-secret", expires_in: 3600 }) : undefined);
+  const now = Date.now();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(now + 3600_000 - 75_000);
+  try {
+    await gateway.cloudConnect(id, "1");
+    expect(requests.filter(value => value.path.endsWith("/auth/refresh"))).toHaveLength(1);
+    const launch = requests.find(value => value.path.endsWith("/desktop-launch"))!;
+    expect(new Headers(launch.init?.headers).get("authorization")).toBe("Bearer synthetic-refreshed-secret");
+  } finally { clock.mockRestore(); }
+});

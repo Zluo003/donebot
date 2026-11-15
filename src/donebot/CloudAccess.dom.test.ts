@@ -91,6 +91,15 @@ it("connects through the existing desktop pairing bridge without opening a websi
   expect(add).toHaveBeenCalledExactlyOnceWith("link", "donebot://pair?synthetic-fixture");
   expect(external).not.toHaveBeenCalled(); expect(host.textContent).toContain("已连接 Cloud");
 });
+it("uses the owned Cloud bridge without generating a second launch or snapshot", async () => {
+  running();
+  const openCloud = vi.fn(async () => ({ outcome: "connected" as const }));
+  window.ogb!.workspaces!.openCloud = openCloud;
+  await mount(); await click("连接 Cloud");
+  expect(openCloud).toHaveBeenCalledExactlyOnceWith("fixture-id", "fixture-user");
+  expect(add).not.toHaveBeenCalled(); expect(posts()).toHaveLength(0);
+  expect(host.textContent).toContain("已连接 Cloud");
+});
 it("refuses to pair when the account switches during the connection request", async () => {
   running();
   fixture.api.mockImplementation(async path => {

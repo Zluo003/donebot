@@ -160,6 +160,8 @@ const bridge = {
     add: (choice, link, code) => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("workspaces:add", String(choice), ...(typeof link === "string" ? [link, ...(typeof code === "string" ? [code] : [])] : [])) : Promise.reject(new Error("Choose what to add.")),
     probe: (address, code) => ipcRenderer.invoke("workspaces:probe", String(address ?? ""), String(code ?? "")),
+    openCloud: (id, accountId) => ipcRenderer.invoke("donebot-cloud:open", String(id), String(accountId)),
+    reconnectCloud: () => ipcRenderer.invoke("donebot-cloud:reconnect"),
     // The colour of the place this page is (never another's): read, and changed only from the person's click.
     look: () => ipcRenderer.invoke("workspaces:look"),
     color: (swatch) => isLocalPage || navigator.userActivation?.isActive === true

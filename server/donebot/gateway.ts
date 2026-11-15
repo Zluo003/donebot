@@ -312,10 +312,10 @@ export class DoneBotGateway {
     }
   }
 
-  private async validSession(): Promise<DoneBotCredential> {
+  private async validSession(minimumValidityMs = 30_000): Promise<DoneBotCredential> {
     if (!this.session) throw new DoneBotGatewayError(401, "login_required", "Sign in to DoneBot to use models.");
     if (this.session.mode === "installation") return this.session;
-    if (this.session.expiresAt <= Date.now() + 30_000 && this.session.refreshToken) {
+    if (this.session.expiresAt <= Date.now() + minimumValidityMs && this.session.refreshToken) {
       if (!this.refreshFlight) {
         const old = this.session;
         const epoch = this.epoch;
@@ -418,7 +418,7 @@ export class DoneBotGateway {
   private async cloudRequest(method: "GET" | "POST", path: string, accountId?: string, key?: string): Promise<unknown> {
     const epoch = this.epoch;
     if (!this.session) throw new DoneBotGatewayError(401, "login_required", "请先在应用内登录 DoneBot 账号，再刷新 Cloud。");
-    const session = await this.validSession();
+    const session = await this.validSession(path.endsWith("/desktop-launch") ? 90_000 : 30_000);
     this.checkEpoch(epoch);
     if (session.mode === "installation") throw new DoneBotGatewayError(403, "cloud_login_required", "请在本机登录 DoneBot 账号后管理 Cloud，安装凭据不能操作账户扣款。");
     if (accountId && accountId !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重新确认。");

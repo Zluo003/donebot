@@ -2,6 +2,7 @@ import { dataTablesFromResponse, dataSheetFromResponse } from "./data-responses"
 export { dataTablesFromResponse, dataSheetFromResponse } from "./data-responses";
 import { cloudAsleep, onCloudPower } from "../lib/cloud-power";
 import { api, ApiError, retryRequest, snapshotArrays } from "./api";
+import { readCloudWorkspaceCache, saveCloudWorkspaceCache } from "../donebot/workspace-cache";
 import {
   createContext,
   useCallback,
@@ -2095,9 +2096,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ...bot,
     tasks: bot.tasks?.map((task) => ({ ...task, ...taskPatchFields(taskWrites.get(task.threadId)?.patch ?? {}) })),
   });
-  const [state, rawDispatch] = useReducer(reducer, initialState, (initial) => withRememberedTrayPin(restoreBotSettingsSection(initial)));
+  const [state, rawDispatch] = useReducer(reducer, initialState, (initial) => {
+    const cached = readCloudWorkspaceCache();
+    return withRememberedTrayPin(restoreBotSettingsSection(cached ? { ...initial, ...cached, hydrated: true, connected: false } : initial));
+  });
   const stateRef = useRef(state), selectionRevision = useRef(0);
   stateRef.current = state;
+  useEffect(() => {
+    const save = () => saveCloudWorkspaceCache(stateRef.current);
+    const timer = window.setTimeout(save, 500);
+    window.addEventListener("pagehide", save);
+    return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", save); };
+  }, [state.bots, state.groups, state.sections, state.selectedId, state.config, state.instances, state.hydrated]);
   const showThreads = useShowThreads();
   const showThreadsRef = useRef(showThreads);
   showThreadsRef.current = showThreads;

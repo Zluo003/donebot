@@ -173,6 +173,10 @@ The [failed workspace navigation smoke](workspace-navigation.md) checks blocked
 Cloud redirects, selection recovery and native menu access in an isolated
 Electron profile.
 
+The [DoneBot Cloud reconnect checks](donebot-cloud-reconnect.md) cover native
+Cookie reuse and renewal, cached conversations while loading, and interrupted
+media downloads through an isolated production request handler.
+
 The [loading screen and tray smoke](startup-tray.md) checks the startup close
 button, hidden handoff, tray restore, and Quit in a disposable Electron profile.
 

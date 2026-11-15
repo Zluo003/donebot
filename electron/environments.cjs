@@ -324,7 +324,9 @@ function parseEnvironments(raw) {
     const color = cleanColor(entry?.color), team = entry?.home === true ? null : cleanTeam(entry?.team);
     const cloud = entry?.home === true || team ? null : cleanCloud(entry?.cloud);
     environments.push({ id, kind: "remote", name: cleanName(entry?.name, nameFromOrigin(origin)), origin, ...(entry?.microphone === true ? { microphone: true } : {}),
-      ...(color ? { color } : {}), ...(entry?.home === true ? { home: true } : {}), ...(team ? { team } : {}), ...(cloud ? { cloud } : {}) });
+      ...(color ? { color } : {}), ...(entry?.home === true ? { home: true } : {}), ...(team ? { team } : {}), ...(cloud ? { cloud } : {}),
+      ...(entry?.donebotCloud && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(entry.donebotCloud.id) && /^[1-9][0-9]{0,19}$/.test(entry.donebotCloud.accountId)
+        ? { donebotCloud: { id: entry.donebotCloud.id, accountId: entry.donebotCloud.accountId } } : {}) });
   }
   const activeId = typeof value?.activeId === "string" && environments.some((e) => e.id === value.activeId) ? value.activeId : LOCAL_ID;
   const localColor = cleanColor(value?.localColor);

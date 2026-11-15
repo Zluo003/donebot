@@ -70,6 +70,11 @@ export function DoneBotCloudAccess({ heading = true }: { heading?: boolean }) {
     const generation = ++epoch.current;
     flight.current = true; setLoading(false); setBusy(true); setError(""); setNotice("");
     try {
+      if (workspaces.openCloud) {
+        const outcome = await workspaces.openCloud(instance.id, snapshot.account_id);
+        if (epoch.current === generation && outcome.outcome === "connected") setNotice("已连接 Cloud。");
+        return;
+      }
       const result = await api<{ url: string }>("/api/donebot/cloud/connect", { method: "POST", body: JSON.stringify({ id: instance.id, account_id: snapshot.account_id }) });
       const current = await api<DoneBotCloudSnapshot>("/api/donebot/cloud");
       if (epoch.current !== generation) return;

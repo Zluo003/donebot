@@ -3483,5 +3483,11 @@
   "server.donebot.mediaApprovalDeny": "Ablehnen",
   "server.donebot.mediaKindImage": "ein Bild",
   "server.donebot.mediaKindVideo": "ein Video",
-  "server.donebot.mediaKindMusic": "Musik"
+  "server.donebot.mediaKindMusic": "Musik",
+  "server.donebot.mediaFallbackConfirmTitle": "Ersatz-Videomodell {model} verwenden?",
+  "server.donebot.mediaFallbackConfirmSubtitle": "Das bevorzugte Modell ist fehlgeschlagen: {reason}. Bestätige die Generierung mit {model}; es gelten die üblichen Preise dieses Modells.",
+  "server.donebot.mediaFallbackAwaiting": "Das bevorzugte Modell {primary} ist fehlgeschlagen: {reason}. Nach deiner Bestätigung werde ich das Video mit dem Ersatzmodell {model} generieren.",
+  "server.donebot.mediaFallbackContinuing": "Das bevorzugte Modell {primary} ist fehlgeschlagen: {reason}. Ich werde jetzt mit dem Ersatzmodell {model} generieren.",
+  "server.donebot.mediaFallbackUnknownReason": "Der Dienst hat keinen genaueren Grund für den Fehler angegeben",
+  "server.donebot.mediaFallbackDeclined": "Die Generierung mit dem Ersatzmodell wurde abgelehnt. Es wurde keine Ersatzanfrage gesendet."
 }

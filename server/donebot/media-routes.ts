@@ -31,6 +31,7 @@ export function publicMediaJob(job: MediaJob) {
 export function createDoneBotMediaRoutes(service: DoneBotMediaService, contextFor: (ctx: HelperToolContext & { threadId: string }) => MediaContext,
   modelsFor?: (kind: "image" | "video" | "music") => { primary: string; fallback: string }) {
   return async (ctx: HelperToolContext & { threadId: string }): Promise<typeof PASS | void> => {
+    if (ctx.path === "/api/internal/images/generate") return ctx.json(ctx.res, 403, { error: "Use the DoneBot media tools for image generation." });
     const prefix = "/api/internal/donebot/media/";
     if (ctx.method !== "POST" || !ctx.path.startsWith(prefix)) return PASS;
     const action = ctx.path.slice(prefix.length);

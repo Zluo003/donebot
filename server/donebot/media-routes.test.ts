@@ -87,6 +87,15 @@ describe("DoneBot media capability routes", () => {
     ctx.method = "POST"; ctx.path = "/api/internal/helpers/decide"; expect(await route(ctx)).toBe(PASS);
   });
 
+  it("blocks legacy image generation without invoking a paid service", async () => {
+    const ctx = context({ prompt: "fixture" });
+    ctx.path = "/api/internal/images/generate";
+    ctx.readBody = vi.fn();
+    await createDoneBotMediaRoutes(service as unknown as DoneBotMediaService, () => trusted)(ctx);
+    expect(ctx.json).toHaveBeenCalledWith(ctx.res, 403, { error: "Use the DoneBot media tools for image generation." });
+    expect(ctx.readBody).not.toHaveBeenCalled();
+  });
+
   it("adds media tools only for the DoneBot product and marks only local reads read-only", () => {
     const upstream = availableTools(catalogProfileFromEnv({}));
     const donebot = availableTools(catalogProfileFromEnv({ DONEBOT_MEDIA: "1" }));

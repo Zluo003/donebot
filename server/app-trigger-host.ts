@@ -1,6 +1,7 @@
 // Wires app-event automations into the server: the manager over the managed connected-apps service, the routes the
 // app and the bot tools use, and the chat receipts. index.ts builds it once and hands it what it needs.
 import type { ServerResponse } from "node:http";
+import { automationEnabledSchema } from "./automation-enabled.ts";
 
 import { botMayWatchApp, type AppEventCatalog } from "../shared/app-triggers.ts";
 import type { ConnectorToolGrant } from "../shared/wire.ts";
@@ -102,7 +103,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     return result;
   }
 
-  /** The person's side: /api/app-triggers. Reads follow what this viewer may see; changes need the owner. */
+  /** Reads and enable-only updates follow the viewer's visible bots; other changes need the owner. */
   const routes: RouteHandler = async ({ req, res, url, path, method, auth, json, readBody }: RouteContext) => {
     if (!path.startsWith("/api/app-triggers")) return PASS;
     try {
@@ -136,9 +137,16 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
         });
         return json(res, 201, { trigger });
       }
-      const match = path.match(/^\/api\/app-triggers\/([\w-]+)(?:\/(test))?$/);
+      const match = path.match(/^\/api\/app-triggers\/([\w-]+)(?:\/(test|enabled))?$/);
       if (!match) return PASS;
       const id = match[1]!;
+      if (match[2] === "enabled" && method === "POST") {
+        const current = manager.snapshot().triggers.find((trigger) => trigger.id === id);
+        if (!current || !deps.visibleBot(auth, current.botId)) return json(res, 404, { error: "no such automation" });
+        const patch = automationEnabledSchema.safeParse(await readBody(req));
+        if (!patch.success) return json(res, 400, { error: "Only enabled may be changed." });
+        return json(res, 200, { trigger: await manager.update(id, patch.data) });
+      }
       if (match[2] === "test" && method === "POST") {
         const result = await manager.runNow(id);
         return result ? json(res, 202, result) : json(res, 404, { error: "no such automation" });

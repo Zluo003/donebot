@@ -93,6 +93,16 @@ describe("request source for the lockout", () => {
 });
 
 describe("scopes", () => {
+  it("allows public connected-app status and enable-only automation routes while keeping other mutations admin-only", () => {
+    expect(requiredScope("GET", "/api/connectors/connected")).toBe("client");
+    for (const kind of ["webhooks", "app-triggers"]) {
+      expect(requiredScope("POST", `/api/${kind}/fixture/enabled`)).toBe("client");
+      expect(requiredScope("PATCH", `/api/${kind}/fixture`)).toBe("admin");
+      expect(requiredScope("DELETE", `/api/${kind}/fixture`)).toBe("admin");
+      expect(requiredScope("POST", `/api/${kind}`)).toBe("admin");
+    }
+    expect(requiredScope("POST", "/api/connectors/gmail/authorize")).toBe("admin");
+  });
   it("lets a member reach a connection card's authorize, whose handler decides who may sign in, and nothing past it", () => {
     for (const [method, path] of [
       ["POST", "/api/bots/bot-1/connector-cards/card-1/authorize"],

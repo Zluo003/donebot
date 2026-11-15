@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { z } from "zod";
 import { writeFileAtomic } from "../atomic.ts";
 import type { SessionRegistry } from "../sessions.ts";
+import { automationEnabledSchema } from "../automation-enabled.ts";
+import { onParsedBody } from "../harness/http.ts";
 import { bearerToken, ownerOrAdmin, PROXY_HEADERS } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { phoneRelayKey } from "../phone-relay.ts";
@@ -31,9 +33,14 @@ export function mobileChatRoute(method: string, raw: string): boolean {
   if (!raw.startsWith("/") || raw.startsWith("//") || /%|\\/.test(url.pathname)) return false;
   const path = url.pathname;
   if (raw.split("?")[0] !== path) return false;
-  if (method === "GET" && path === "/api/bots") return [...url.searchParams].every(([key,value]) => key === "messages" && value === "1");
+  if (method === "GET" && path === "/api/bots") return [...url.searchParams].every(([key,value]) => key === "messages" && (value === "1" || value === "20"));
+  if (method === "GET" && !url.search && ["/api/routines", "/api/webhooks", "/api/app-triggers", "/api/connectors/connected"].includes(path)) return true;
+  if (method === "PATCH" && !url.search && /^\/api\/routines\/[\w-]+$/.test(path)) return true;
+  if (method === "POST" && !url.search && /^\/api\/(webhooks|app-triggers)\/[\w-]+\/enabled$/.test(path)) return true;
   if (method === "GET" && /^\/api\/threads\/[\w-]+\/messages$/.test(path)) return [...url.searchParams].every(([key,value]) => key === "limit" ? /^\d{1,2}$/.test(value) && Number(value) <= 50 : key === "before" && /^[\w-]+$/.test(value));
-  return method === "POST" && !url.search && /^\/api\/bots\/[\w-]+\/(messages|read)$/.test(path);
+  if (method === "GET" && !url.search && /^\/api\/attachments\/[A-Za-z0-9-]+\.(png|jpg|gif|webp)$/.test(path)) return true;
+  if (method === "POST" && path === "/api/attachments") return url.searchParams.size === 1 && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(url.searchParams.get("uploadId") ?? "");
+  return method === "POST" && !url.search && (/^\/api\/(bots|groups)\/[\w-]+\/(messages|read)$/.test(path) || /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/file$/.test(path));
 }
 export function createDoneBotMobileHost(options: HostOptions) {
   let dir = "", stateFile = "";
@@ -66,6 +73,7 @@ export function createDoneBotMobileHost(options: HostOptions) {
     const record = token && options.sessions.authenticate(token);
     if (!scope || Date.now() >= leaseUntil || context?.peer.kind !== "device" || !record || record.id !== context.peer.id || !devices.records().some(device => device.id === record.id)) return reply(res,401);
     if (!mobileChatRoute(req.method ?? "GET", req.url ?? "/")) return reply(res,403);
+    if (req.method === "PATCH") onParsedBody(req, body => automationEnabledSchema.safeParse(body).success ? null : { status: 400, error: "Only enabled may be changed." });
     for (const name of Object.keys(req.headers)) if (name === "cookie" || name.startsWith("x-donebot-") || (PROXY_HEADERS as readonly string[]).includes(name)) delete req.headers[name];
     req.headers.host = "phone-relay.invalid";
     req.headers["x-forwarded-for"] = `mobile-${record.id}`;

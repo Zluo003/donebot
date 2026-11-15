@@ -238,6 +238,32 @@ describe("appEventCatalog", () => {
 });
 
 describe("createAppTriggerHost", () => {
+  it("allows enable-only updates for visible automations and rejects other fields and hidden targets", async () => {
+    const { createAppTriggerHost } = await import("./app-trigger-host.ts");
+    let visible = true;
+    const host = createAppTriggerHost({
+      file: join(dir, "phone-app-triggers.json"),
+      store: { bot: () => ({ id: "scout", name: "Scout" }), messagesFor: () => [], appendMessage: () => ({}), patchMessage: () => ({}) } as never,
+      connectionMode: () => "managed", access: () => ({ url: broker.url, token: owner.token }), connectedApps: async () => connected,
+      routines: () => routines, webhooks: { list: () => [] } as never, webhookBase: () => "http://127.0.0.1:18900",
+      botState: () => "ready", timeZone: () => "UTC", visibleBot: () => visible, emit: () => {}, audit: () => {},
+    });
+    const created = await host.manager.create({ name: "Phone switch", prompt: "Keep these instructions", botId: "scout", app: "gmail", event: "GMAIL_NEW_GMAIL_MESSAGE" });
+    const call = async (body: unknown) => {
+      let answer: { status: number; body: any } | undefined;
+      const path = `/api/app-triggers/${created.id}/enabled`;
+      await host.routes({ path, method: "POST", req: {}, res: {}, url: new URL(path, "http://localhost"), auth: { kind: "loopback", scopes: ["client"] }, readBody: async () => body, json: (_res: unknown, status: number, data: unknown) => { answer = { status, body: data }; } } as never);
+      return answer!;
+    };
+    expect(await call({ enabled: false })).toMatchObject({ status: 200, body: { trigger: { enabled: false, prompt: "Keep these instructions" } } });
+    expect((await call({ enabled: true, prompt: "Changed" })).status).toBe(400);
+    expect((await call({ enabled: null })).status).toBe(400);
+    visible = false;
+    expect((await call({ enabled: true })).status).toBe(404);
+    expect(host.manager.get(created.id)?.enabled).toBe(false);
+    visible = true;
+    expect((await call({ enabled: true })).body.trigger.enabled).toBe(true);
+  });
   it("refuses a guest-driven Cloud turn and an app outside the bot's grants; otherwise applies with one receipt and Undo", async () => {
     const { createAppTriggerHost } = await import("./app-trigger-host.ts");
     const messages = new Map<string, Array<{ id: string; card?: any }>>();

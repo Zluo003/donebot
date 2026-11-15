@@ -45,6 +45,21 @@ async function serve(seen: (botId: string) => boolean = () => true, file = join(
 }
 
 describe("a webhook's address for the person", () => {
+  it("switches only visible webhooks without changing instructions or returning credentials", async () => {
+    const { webhooks, call } = await serve(id => id !== "hidden");
+    const shown = webhooks.create({ name: "Shown", prompt: "Keep this instruction", botId: "bot-a" });
+    const hidden = webhooks.create({ name: "Hidden", prompt: "Private", botId: "hidden" });
+    const path = `/api/webhooks/${shown.webhook.id}/enabled`;
+    expect(requiredScope("POST", path)).toBe("client");
+    const stopped = await call("POST", path, { enabled: false });
+    expect(stopped).toMatchObject({ status: 200, body: { webhook: { enabled: false, prompt: "Keep this instruction" } } });
+    expect(stopped.body).not.toHaveProperty("credential");
+    expect((await call("POST", path, { enabled: true, prompt: "Changed" })).status).toBe(400);
+    expect((await call("POST", path, { enabled: "true" })).status).toBe(400);
+    expect((await call("POST", `/api/webhooks/${hidden.webhook.id}/enabled`, { enabled: false })).status).toBe(404);
+    expect(webhooks.list().find(item => item.id === hidden.webhook.id)?.enabled).toBe(true);
+    expect((await call("POST", path, { enabled: true })).body.webhook.enabled).toBe(true);
+  });
   it("is an admin route that reads the kept address without replacing it, so a setup the bot made keeps working", async () => {
     expect(requiredScope("GET", "/api/webhooks/hook-1/address")).toBe("admin");
     const { webhooks, call } = await serve();

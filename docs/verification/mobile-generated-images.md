@@ -94,3 +94,49 @@ performed. The preview protocol and fleet selection are compiled only in DEBUG.
 | ![Original iOS renderer omits the attached image](assets/mobile-generated-images/before.png) | ![iOS now displays the generated image](assets/mobile-generated-images/after.png) |
 
 ![Full-screen preview of the synthetic image](assets/mobile-generated-images/preview.png)
+
+## DoneBot React / Capacitor client
+
+The sibling `DoneBot-Mobile` client now carries binary files over the existing
+Noise / yamux connection. The custom DoneBot mobile origin admits idempotent
+image uploads, stored raster avatars, and message-scoped POST downloads before
+the original request authorization and file checks. The gateway and independent
+relay keep forwarding opaque encrypted records.
+
+`server/donebot/mobile-host.test.ts` covers the restricted routes, and
+`scripts/verify-mobile-hub.ts` exercises PNG / MP4 / WAV / PDF / TXT through an
+isolated original server, the PostgreSQL hub and independent relay. It compares
+all returned bytes, checks repeated upload IDs, and rejects a file not shared by
+the requested message and the private server configuration. Evidence is written
+to `.omb-scratch/verify-evidence/mobile-hub/evidence.json`.
+
+Run with the sibling projects available:
+
+```sh
+cd ../donebot-api
+DONEBOT_MOBILE_PG_FIXTURE=1 \
+DONEBOT_MOBILE_DESKTOP_ROOT=/Users/zluo/Dev/DoneBot \
+DONEBOT_MOBILE_RELAY_ROOT=/Users/zluo/Dev/DoneBot-Relay \
+go -C backend test -tags integration ./internal/mobilehub \
+  -run TestPostgresDesktopMobileWorkflow -count=1 -v -timeout 150s
+```
+
+The 2026-11-15 run passed, including notification and logout revocation checks.
+Mobile unit tests and simulator compilation are recorded in the sibling
+`DoneBot-Mobile/docs/verification.md`. Physical camera access and iOS document /
+share destinations still require device verification. Existing desktop and Cloud
+runtimes need the new mobile route gate; no gateway or relay protocol deployment
+is required for these file operations.
+
+The follow-up 2026-11-15 workflow also calls the original `attach_file` tool on a
+synthetic `jimeng-image-generate-20261114155450727-fixture.png`. It finds the
+resulting structured image on the stored bot message and compares the bytes
+downloaded through the encrypted mobile connection. This passed alongside the
+five Markdown file downloads and the existing upload / notification checks.
+
+Read-only inspection of the installed `/Applications/DoneBot.app` found the old
+chat-only mobile gate, which returns `mobile request refused` for file requests.
+The new unsigned arm64 DMG is under `release/mobile-media-20261115/`; its packaged
+server includes the attachment routes. The packaged-server smoke and DMG checksum
+verification passed. Neither the installed application nor a running Cloud was
+replaced during verification.

@@ -416,8 +416,10 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/routine-runs\/seen-all$/ },
   // webhook list is secret-free; creating or rotating one is not
   { methods: ["GET"], path: /^\/api\/webhooks$/ },
+  { methods: ["POST"], path: /^\/api\/(?:webhooks|app-triggers)\/[\w-]+\/enabled$/ },
   // app-event automations: the list carries no credential; creating or changing one is the owner's
   { methods: ["GET"], path: /^\/api\/app-triggers$/ },
+  { methods: ["GET"], path: /^\/api\/connectors\/connected$/ },
   // counts and lines from the threads this viewer can see; engine and app fixes only for an admin
   { methods: ["GET"], path: /^\/api\/today$/ },
   // configured-or-not booleans; the handler strips the few identifying fields for clients

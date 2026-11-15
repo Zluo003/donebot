@@ -30,7 +30,6 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     request: (path, init) => gateway.request(path, init),
     models: () => doneBotTextModels(gateway.models()), catalog: () => gateway.models(),
     protocol: id => doneBotProtocol(id, gateway.models()), authenticated: () => gateway.authenticated(),
-    imageInput: id => Array.isArray(model(id)?.capabilities?.input_modalities) && (model(id)!.capabilities!.input_modalities as unknown[]).includes("image"),
     toolUse: id => model(id)?.capabilities?.tool_calling === true,
   });
   const allows = (selection: ModelSelection) => selection.instanceId === "donebot" && doneBotTextModels(gateway.models()).options.some(model => model.id === selection.model);

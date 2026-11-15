@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -96,6 +96,26 @@ const partialTextThenError = (protocol: DoneBotLlmProtocol) => {
 };
 
 describe("DoneBot driver using the existing platform tool loop", () => {
+  it.each(["messages", "gemini", "responses", "chat"] as const)("sends the image bytes through %s without requiring optional gateway modality metadata", async protocol => {
+    const fx = await fixture(protocol, false);
+    const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64");
+    const path = join(fx.cwd, "uploaded.png");
+    await writeFile(path, bytes);
+    await fx.instance.adapter.sendTurn({ threadId: "fixture", text: "Use this uploaded image", cwd: fx.cwd, approvalMode: "full", images: [{ path, mime: "image/png", bytes: bytes.length }] });
+    await fx.completed();
+    const body = fx.bodies[0]!, data = bytes.toString("base64");
+    if (protocol === "responses") {
+      expect(rows(body.input).flatMap(message => rows(message.content))).toContainEqual({ type: "input_image", image_url: `data:image/png;base64,${data}`, detail: "auto" });
+    } else if (protocol === "messages") {
+      expect(rows(body.messages).flatMap(message => rows(message.content))).toContainEqual({ type: "image", source: { type: "base64", media_type: "image/png", data } });
+    } else if (protocol === "gemini") {
+      expect(rows(body.contents).flatMap(message => rows(message.parts))).toContainEqual({ inlineData: { mimeType: "image/png", data } });
+    } else {
+      expect(rows(body.messages).flatMap(message => rows(message.content))).toContainEqual({ type: "image_url", image_url: { url: `data:image/png;base64,${data}` } });
+    }
+    expect(fx.events.at(-1)).toMatchObject({ type: "turn.completed", ok: true });
+  });
+
   it.each(["messages", "gemini", "responses", "chat"] as const)("executes an explicitly Full workspace turn through %s with native replay", async (protocol) => {
     const fx = await fixture(protocol);
     await fx.instance.adapter.sendTurn({ threadId: "fixture", text: "Write the fixture", cwd: fx.cwd, approvalMode: "full", toolScope: { allow: ["native:workspace_write"] } });

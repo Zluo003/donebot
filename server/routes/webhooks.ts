@@ -1,5 +1,6 @@
 // The person's side of webhook automations. Deliveries land on a separate webhook-only loopback listener, so a relay never
-// exposes the rest of the control surface. Only the list is a client route; the rest, the address included, needs admin.
+// exposes the rest of the control surface. Clients may list and switch visible automations; credentials need admin.
+import { automationEnabledSchema } from "../automation-enabled.ts";
 import { webhookVisible } from "../bot-visibility.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { webhookCredential } from "../webhook-ingress.ts";
@@ -28,9 +29,16 @@ export function createWebhookRoutes({ webhooks, ingress, visible }: WebhookRoute
       const created = webhooks.create(await readBody(req));
       return json(res, 201, { webhook: created.webhook, ...withCredential(created.webhook, created.secret) });
     }
-    const match = path.match(/^\/api\/webhooks\/([\w-]+)(?:\/(rotate|test|address))?$/);
+    const match = path.match(/^\/api\/webhooks\/([\w-]+)(?:\/(rotate|test|address|enabled))?$/);
     if (!match) return PASS;
     const id = match[1]!;
+    if (match[2] === "enabled" && method === "POST") {
+      const current = webhooks.list().find((webhook) => webhook.id === id);
+      if (!current || !webhookVisible(current, visible(auth))) return json(res, 404, { error: "no such webhook" });
+      const patch = automationEnabledSchema.safeParse(await readBody(req));
+      if (!patch.success) return json(res, 400, { error: "Only enabled may be changed." });
+      return json(res, 200, { webhook: webhooks.update(id, patch.data) });
+    }
     if (match[2] === "test" && method === "POST") {
       const result = webhooks.test(id, await readBody(req));
       return result ? json(res, 202, result) : json(res, 404, { error: "no such webhook" });

@@ -90,6 +90,19 @@ await build({
   banner: NODE_REQUIRE,
 });
 
+const imageLicenses = join(root, "dist-server", "licenses");
+mkdirSync(imageLicenses, { recursive: true });
+for (const dependency of ["pngjs", "jpeg-js"]) {
+  copyFileSync(join(root, "node_modules", dependency, "LICENSE"), join(imageLicenses, `${dependency}-LICENSE.txt`));
+}
+const jpegSourceNotices = ["encoder.js", "decoder.js"].map(file => {
+  const source = readFileSync(join(root, "node_modules", "jpeg-js", "lib", file), "utf8");
+  const copyright = source.indexOf("Copyright");
+  return source.slice(source.lastIndexOf("/*", copyright), source.indexOf("*/", copyright) + 2);
+});
+writeFileSync(join(imageLicenses, "jpeg-js-source-NOTICES.txt"), jpegSourceNotices.join("\n\n") + "\n");
+copyFileSync(join(root, "LICENSE"), join(imageLicenses, "Apache-2.0.txt"));
+
 // External MCP clients launch this as an independent stdio process, so release
 // users need no repository, TypeScript, pnpm or node_modules.
 await build({

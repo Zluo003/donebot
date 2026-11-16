@@ -77,7 +77,8 @@ import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { effectiveCloudBackend } from "../shared/cloud-backend.ts";
-import { createDoneBotMediaHost } from "./donebot/host.ts";
+import { createExternalContext } from "./host/external-context.ts";
+import { createDoneBotMediaHost, withDoneBotMediaFollowup } from "./donebot/host.ts";
 import { imageGenerationReady } from "./image-generation.ts";
 import { createImageToolRoutes } from "./routes/image-tools.ts"; import { createMeetingsHost } from "./host/meetings-host.ts"; import { meetingsUnavailablePrompt } from "./meetings/prompt.ts";
 import { createImageSettingsRoutes } from "./routes/image-settings.ts";
@@ -2830,6 +2831,7 @@ const store = new Store(
   () => appLanguage() ?? Intl.DateTimeFormat().resolvedOptions().locale,
   () => sharedMembership() ? undefined : cfg.profile?.name,
 );
+const { isExternalContextMarker, markTaskContextExternallyUpdated } = createExternalContext({ store, botForThread, registry });
 const outsideLineage = createOutsideLineage({
   home: Boolean(CLOUD_HOME), team: Boolean(CLOUD_TEAM), solo: () => cloudHome?.solo() === true, store,
   confinedNow: (threadId) => guestDrivenTurns.has(threadId), activeRun: activeRoutineRunForThread,
@@ -4024,15 +4026,7 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
           { botId: parent.botId, name: store.bot(parent.botId)?.name ?? childTask.openedBy.name, at: Date.now() });
       }
     },
-    run: async (node, resumed, signal, composed: ComposedTurn) => {
-      if (!composed.mediaJobIds) {
-        const cap = mediaFollowups?.continuation(node);
-        if (cap) return { ok: true, text: "Waiting for the existing background media tasks.", cap };
-      }
-      if (composed.mediaJobIds && mediaFollowups) {
-        const note = mediaFollowups.followup(node, composed.mediaJobIds);
-        composed = { ...composed, text: `${composed.text}\n\n${note}`, note: `${composed.note}\n\n${note}` };
-      }
+    run: withDoneBotMediaFollowup(() => mediaFollowups, async (node, resumed, signal, composed: ComposedTurn) => {
       const group = node.groupId ? store.group(node.groupId) : undefined;
       const bot = store.bot(node.botId)!; if (node.answeredBy) askCards.decided(node, (node.answeredBy.kind === "bot" ? store.bot(node.answeredBy.botId)?.name : undefined) ?? bot.name);
       if (!node.parentId && !group && !resumed) return runRootTurn(node, bot, signal, composed);
@@ -4105,7 +4099,7 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
           undefined, error => { result.stopReason = error; }, () => operation.cancelled,
           () => groupProviderHandshakeStarted(operation), () => groupProviderHandshakeSettled(operation),
           { claimed: true }, { roomHandoffId: node.id, resumed, systemInstructions, turnInstructions: brief, turnNote: composed.note, turnRestartNote: composed.restartNote, liveRoster, followMentions: false, result, coordination }, operation));
-    },
+    }),
     names: (node, parent) => {
       const scope = parent ?? node;
       const person = personNameIn(scope.threadId);
@@ -7000,27 +6994,6 @@ function turnAnswers(threadId: string, opts?: {
     incident: reports.length > 0,
     quiet: reports.length > 0 && reports.length === lines.length && reports.every(line => line.queueId && line.peerAsk?.incident?.notified),
   };
-}
-
-// Provider sessions only know their own turns' messages, so a harness-appended result marks the task for one replay; the unique suffix keeps a newer marker through a racing replay.
-const EXTERNAL_CONTEXT_MARKER_PREFIX = "__openmaus_external_context__:";
-
-function isExternalContextMarker(value: string | undefined): boolean {
-  return Boolean(value?.startsWith(EXTERNAL_CONTEXT_MARKER_PREFIX));
-}
-
-function markTaskContextExternallyUpdated(bot: BotRecord, threadId: string): void {
-  const task = store.taskByThread(bot.id, threadId);
-  if (!task) return;
-  const owner = task.lastInstanceId;
-  const record = owner ? task.handedMessages?.[owner] : undefined;
-  if (owner && record?.session !== undefined && record.session === task.resumeCursors[owner] &&
-    (botForThread(bot.id, threadId) ?? bot).modelSelection.instanceId === owner &&
-    registry.get(owner)?.adapter.capabilities.strictResume) return;
-  store.patchTask(bot.id, threadId, {
-    resumeCursors: {},
-    lastInstanceId: `${EXTERNAL_CONTEXT_MARKER_PREFIX}${randomUUID()}`,
-  });
 }
 
 function latestCompaction(messages: readonly Message[]) {

@@ -20,7 +20,7 @@ import { createDoneBotMediaRoutes } from "./media-routes.ts";
 import { DoneBotMediaService, type MediaContext, type MediaJob } from "./media.ts";
 import { selectedMediaModels } from "./media-preferences.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
-import type { HandoffView, HostTurnResult } from "../coordinator.ts";
+import type { CoordinatorHost, HandoffView, HostTurnResult } from "../coordinator.ts";
 
 interface DoneBotMediaHostDeps {
   store: Store;
@@ -266,4 +266,22 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
 
 function belongsTo(job: MediaJob, node: HandoffView): boolean {
   return job.botId === node.botId && job.threadId === node.threadId && (job.assignmentId ?? job.turnId) === node.id;
+}
+
+export function withDoneBotMediaFollowup(
+  host: () => ReturnType<typeof createDoneBotMediaHost> | undefined,
+  run: CoordinatorHost["run"],
+): CoordinatorHost["run"] {
+  return async (node, resumed, signal, composed) => {
+    const mediaFollowups = host();
+    if (!composed.mediaJobIds) {
+      const cap = mediaFollowups?.continuation(node);
+      if (cap) return { ok: true, text: "Waiting for the existing background media tasks.", cap };
+    }
+    if (composed.mediaJobIds && mediaFollowups) {
+      const note = mediaFollowups.followup(node, composed.mediaJobIds);
+      composed = { ...composed, text: `${composed.text}\n\n${note}`, note: `${composed.note}\n\n${note}` };
+    }
+    return run(node, resumed, signal, composed);
+  };
 }

@@ -361,7 +361,7 @@ export class RuntimeCoordinator implements Coordinator {
     const cards = result.cards && result.cards.ids.length > 0 ? result.cards : undefined;
     const end: EndResult = { ok: result.ok, text: result.text, ...(result.evidence ? { evidence: result.evidence } : {}),
       ...(cards ? { needsInput: { question: cards.question, cards: cards.ids } } : {}),
-      ...(result.cap ? { continue: { note: result.cap.note, ...(result.cap.handoffPath ? { handoffPath: result.cap.handoffPath } : {}) } } : {}),
+      ...(result.cap ? { continue: { note: result.cap.note, ...(result.cap.mediaJobIds ? { mediaJobIds: result.cap.mediaJobIds } : {}), ...(result.cap.handoffPath ? { handoffPath: result.cap.handoffPath } : {}) } } : {}),
       ...(result.stalled ? { stalled: true } : {}) };
     this.runtime.end(id, end);
   }
@@ -484,7 +484,8 @@ export class RuntimeCoordinator implements Coordinator {
       const parent = n.parentId && n.reply !== "none" ? this.store.get(n.parentId) : undefined;
       if (parent && !isTerminal(parent) && parent.assignee.destination.groupId === undefined) threads.add(parent.assignee.destination.threadId);
       const root = view(n);
-      if (!root.parentId && !root.groupId && (root.status === "resume" || (root.status === "waiting" && root.question === undefined && !root.cards?.length))) {
+      if (!root.parentId && !root.groupId && (root.status === "resume" || (root.status === "waiting" && root.question === undefined && !root.cards?.length)
+        || root.status === "queued" && Boolean(root.continuation?.mediaJobIds?.length))) {
         threads.add(root.threadId);
       }
     }
@@ -621,9 +622,9 @@ export class RuntimeCoordinator implements Coordinator {
     const note = resumed || root ? body : envelopeNote(body);
     const evidence = (result: HostTurnResult) => result.evidence ? { evidence: result.evidence } : {};
     const result = await this.host.run(node, resumed, signal,
-      { text: `${input.restartNote}${body}`, note: `${input.restartNote}${note}`, restartNote: input.restartNote, turn: input.turn });
+      { text: `${input.restartNote}${body}`, note: `${input.restartNote}${note}`, restartNote: input.restartNote, turn: input.turn, ...(input.continuation?.mediaJobIds ? { mediaJobIds: input.continuation.mediaJobIds } : {}) });
     if (signal.aborted) return { kind: "failed", outcome: "stopped", text: result.text };
-    if (result.cap) return { kind: "continue", text: result.text, note: result.cap.note, ...(result.cap.handoffPath ? { handoffPath: result.cap.handoffPath } : {}), ...evidence(result) };
+    if (result.cap) return { kind: "continue", text: result.text, note: result.cap.note, ...(result.cap.mediaJobIds ? { mediaJobIds: result.cap.mediaJobIds } : {}), ...(result.cap.handoffPath ? { handoffPath: result.cap.handoffPath } : {}), ...evidence(result) };
     if (result.cards) return { kind: "needs_input", question: result.cards.question, cards: result.cards.ids, ...evidence(result) };
     const question = root ? undefined : needsInputQuestion(result.text);
     if (!root && a.origin.kind === "person" && result.approvalAsk && !result.stalled && question === undefined) return { kind: "needs_input", question: result.approvalAsk, ...evidence(result) };

@@ -4,10 +4,11 @@ import { createPortal } from "react-dom";
 import { BookOpen, Crown, Pencil, Sparkles, Wand2 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
-import { t } from "@/lib/i18n";
+import { activeLocale, t } from "@/lib/i18n";
+import { defaultBotName } from "../../shared/default-bot";
 import { emailGateDone } from "@/lib/analytics";
 import { useAdvancedMode } from "@/lib/interface-mode";
-import { DEFAULT_BOT_NAME, myDefaultBot, setWelcomingBot, useViewerEmail } from "@/lib/default-bot";
+import { myDefaultBot, setWelcomingBot, useViewerEmail } from "@/lib/default-bot";
 import { landInSidebar } from "@/lib/mausbot-landing";
 import { firstReplyPending } from "@/lib/corner-popup";
 import { launchDialogShown, markLaunchDialog } from "@/lib/launch-dialogs";
@@ -24,7 +25,7 @@ export type WelcomeDraft = Pick<Bot, (typeof LOOK)[number]>;
 const RECEDE_MS = 240;
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
-export const welcomeName = (name: string): string => name.trim().slice(0, BOT_PROFILE_LIMITS.name) || DEFAULT_BOT_NAME;
+export const welcomeName = (name: string): string => name.trim().slice(0, BOT_PROFILE_LIMITS.name) || defaultBotName(activeLocale());
 
 export function draftOf(bot: Bot): WelcomeDraft {
   return { name: bot.name, color: bot.color, mascotBody: bot.mascotBody ?? "cursor", avatarUrl: bot.avatarUrl ?? null,

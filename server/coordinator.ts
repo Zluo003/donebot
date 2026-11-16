@@ -68,7 +68,7 @@ export interface HandoffView {
   /** While its turn runs: the teammates' questions that turn was resumed with. */
   carrying?: string[];
   cards?: string[];
-  continuation?: { note: string; handoffPath?: string; count: number };
+  continuation?: { note: string; handoffPath?: string; mediaJobIds?: string[]; count: number };
   goalRunId?: string;
 }
 
@@ -87,7 +87,7 @@ export interface HostTurnResult {
   ok: boolean;
   text: string;
   evidence?: TurnEvidence;
-  cap?: { note: string; handoffPath?: string };
+  cap?: { note: string; handoffPath?: string; mediaJobIds?: string[] };
   cards?: { question: string; ids: string[] };
   /** The question it ends on stayed in one person's private chat: only that person can answer it. */
   privateQuestion?: boolean;
@@ -124,6 +124,7 @@ export interface ComposedTurn {
   note: string;
   restartNote: string;
   turn: "first" | "resume" | "rerun" | "answered" | "continued";
+  mediaJobIds?: string[];
 }
 
 export interface LiveHandoffEdge {

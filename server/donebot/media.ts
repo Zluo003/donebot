@@ -15,6 +15,7 @@ export interface MediaContext {
   botId: string;
   threadId: string;
   turnId: string;
+  assignmentId?: string;
   active: () => boolean;
 }
 
@@ -151,6 +152,12 @@ export class DoneBotMediaService {
 
   deliveryJob(id: string): MediaJob | undefined { return this.store.get(id); }
 
+  assignmentJobs(botId: string, threadId: string, assignmentId: string): MediaJob[] {
+    return this.store.forAssignment(botId, threadId, assignmentId);
+  }
+
+  beginFollowup(job: MediaJob): void { this.save(job, { followupStartedAt: this.now() }); }
+
   private save(job: MediaJob, patch: Partial<MediaJob>): MediaJob {
     const next = { ...(this.store.get(job.id) ?? job), ...patch, updatedAt: this.now() };
     this.store.put(next);
@@ -212,7 +219,7 @@ export class DoneBotMediaService {
     if (duplicate) return duplicate;
     const now = this.now();
     const job: MediaJob = { version: 1, id: randomUUID(), operationKey, fingerprint, scope, botId: context.botId, threadId: context.threadId,
-      turnId: context.turnId, kind: input.kind, model: input.model, adapter: model.adapter, operation, status: "queued",
+      turnId: context.turnId, ...(context.assignmentId ? { assignmentId: context.assignmentId } : {}), kind: input.kind, model: input.model, adapter: model.adapter, operation, status: "queued",
       parameters: structuredClone(normalized), referenceFingerprint: prepared.fingerprint, fallback, artifacts: [],
       waitingStopped: false, createdAt: now, updatedAt: now, nextPollAt: now, attempts: 0 };
     this.store.put(job);

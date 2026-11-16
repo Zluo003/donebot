@@ -143,7 +143,7 @@ export interface Assignment {
   cards?: string[];
   /** The next execution continues the last one in place: after a step cap,
    * or a wait the host could not hold (a computer seat). Cleared at dispatch. */
-  continuation?: { note: string; handoffPath?: string; count: number };
+  continuation?: { note: string; handoffPath?: string; mediaJobIds?: string[]; count: number };
   /** While a node continues in place, for the loop guard: `stale` counts consecutive continuations
    * with no successful tool call; `errors` holds the last three tool error texts. */
   guard?: { stale: number; errors: string[] };
@@ -249,7 +249,7 @@ export interface RunInput {
   asked?: Assignment[];
   /** For a continued turn: why it continues and, after a step cap, where
    * the steps so far are listed. */
-  continuation?: { note: string; handoffPath?: string };
+  continuation?: { note: string; handoffPath?: string; mediaJobIds?: string[] };
   level: Level;
   mode: Mode;
 }
@@ -261,7 +261,7 @@ export type RunResult =
   | { kind: "needs_input"; question: string; cards?: string[]; decide?: { default?: string }; evidence?: TurnEvidence }
   /** The turn stopped short (a step cap, a seat it could not get) and the
    * same node continues in place with its next execution. */
-  | { kind: "continue"; text: string; note: string; handoffPath?: string; evidence?: TurnEvidence };
+  | { kind: "continue"; text: string; note: string; handoffPath?: string; mediaJobIds?: string[]; evidence?: TurnEvidence };
 
 /** How a host-run root turn ended (Runtime.end). */
 export interface EndResult {
@@ -271,7 +271,7 @@ export interface EndResult {
   /** The turn left the person something to act on: it parks until they do. */
   needsInput?: { question: string; cards?: string[] };
   /** The turn stopped short and continues in place. */
-  continue?: { note: string; handoffPath?: string };
+  continue?: { note: string; handoffPath?: string; mediaJobIds?: string[] };
   /** The host's stall watchdog stopped the turn. */
   stalled?: boolean;
 }

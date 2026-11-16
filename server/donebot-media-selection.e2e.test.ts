@@ -34,7 +34,7 @@ it("submits Seedream 5.5 directly without capability discovery and delivers one 
       { name: "generate_image", arguments: { parameters } },
     ], "The fixture image job is saved; waiting for its existing task.");
     await control("send", "--bot", bot.id, "--text", "使用 seedream 5.5 画一只 3D 卡通老虎。");
-    expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("settled");
+    await expect.poll(async () => (await api("GET", "/api/bots?messages=0")).bots.find((value: any) => value.id === bot.id)?.busy, { timeout: 15_000 }).toBe(false);
     const posts = () => gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/generations");
     await expect.poll(() => posts().length, { timeout: 15_000 }).toBe(1);
     expect(posts()[0]!.body).toEqual({ model: "seedream-5-5", ...parameters });
@@ -59,6 +59,10 @@ it("submits Seedream 5.5 directly without capability discovery and delivers one 
       const completed = await api("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`);
       return completed.messages.some((message: any) => message.attachments?.some((file: any) => file.mime === "image/png"));
     }, { timeout: 20_000 }).toBe(true);
+    expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("settled");
+    const finished = await api("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`);
+    expect(finished.messages.some((message: any) => message.text === "Synthetic media completed receipt acknowledged.")).toBe(true);
+    expect(gateway.requests.filter(request => request.path.startsWith("/v1beta/models/gemini-3.8-flash:")).length).toBe(native.length + 1);
     expect(posts()).toHaveLength(1);
     const evidence = { fixture: fixture.info, chatModel: "gemini-3.8-flash", imageModel: "seedream-5-5",
       generationRequests: posts().map(request => ({ path: request.path, body: request.body })),

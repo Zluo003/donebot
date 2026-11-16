@@ -7,7 +7,7 @@ import { MOVE_BOT_FIELDS, moveKindsRoute, type MoveKindsDeps } from "./cloud-sen
 import { chiefLevel, readTeamRolesWith } from "./chief-level.ts";
 import { DATA_DIR } from "./config.ts";
 import type { ModelSelection } from "./contracts.ts";
-import { defaultBotPatchRefusal, ensureDefaultBot } from "./default-bot.ts";
+import { defaultBotPatchRefusal, ensureDefaultBot, localizeDefaultBotName } from "./default-bot.ts";
 import * as mdb from "./message-db.ts";
 import { Store, type BotRecord } from "./store.ts";
 import { availableTools, catalogProfileFromEnv } from "./drivers/agents-catalog.ts";
@@ -31,6 +31,18 @@ function seededBefore(store: Store): BotRecord {
 describe("DoneBot, every person's helper", () => {
   beforeEach(() => rmSync(DATA_DIR, { recursive: true, force: true }));
   afterEach(() => readTeamRolesWith(() => null));
+
+  it("uses the selected Chinese language for the default name and keeps custom names", () => {
+    const store = new Store(selection);
+    store.seedIfEmpty();
+    const bot = ensureDefaultBot(store, { dataDir: DATA_DIR, language: "zh-CN" })!;
+    expect(bot.name).toBe("多宝");
+    expect(ensureDefaultBot(store, { dataDir: DATA_DIR, language: "zh-tw" })?.name).toBe("多宝");
+    expect(ensureDefaultBot(store, { dataDir: DATA_DIR, language: "ja" })?.name).toBe("DoneBot");
+    store.patchBot(bot.id, { name: "我的协调员", sidebarHidden: true });
+    expect(localizeDefaultBotName(store, store.bot(bot.id)!, "zh")).toMatchObject({ name: "我的协调员", sidebarHidden: true });
+    expect(placeMausBots(store)).toHaveLength(1);
+  });
 
   it("gives a fresh install one DoneBot, its Chief, in chrome, introduced once", () => {
     const store = new Store(selection);

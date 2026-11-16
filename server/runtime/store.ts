@@ -75,7 +75,7 @@ const assignmentSchema = z.object({
   budgets: z.object({ since: z.number(), requests: z.number(), executions: z.number(), wakes: z.number() }).optional(),
   // The schema strips any field it does not name: every optional Assignment field must be listed here.
   cards: z.array(z.string()).optional(),
-  continuation: z.object({ note: z.string(), handoffPath: z.string().optional(), count: z.number().int().nonnegative() }).optional(),
+  continuation: z.object({ note: z.string(), handoffPath: z.string().optional(), mediaJobIds: z.array(z.string().uuid()).optional(), count: z.number().int().nonnegative() }).optional(),
   guard: z.object({ stale: z.number().int().nonnegative(), errors: z.array(z.string()) }).optional(),
   carrying: z.array(z.string()).optional(),
   approved: z.boolean().optional(),

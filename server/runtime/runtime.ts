@@ -156,7 +156,7 @@ export class Runtime {
     const outcome: RunResult = result.needsInput
       ? { kind: "needs_input", question: result.needsInput.question, ...(result.needsInput.cards ? { cards: result.needsInput.cards } : {}), ...evidence }
       : result.continue
-        ? { kind: "continue", text: result.text, note: result.continue.note, ...(result.continue.handoffPath ? { handoffPath: result.continue.handoffPath } : {}), ...evidence }
+        ? { kind: "continue", text: result.text, note: result.continue.note, ...(result.continue.mediaJobIds ? { mediaJobIds: result.continue.mediaJobIds } : {}), ...(result.continue.handoffPath ? { handoffPath: result.continue.handoffPath } : {}), ...evidence }
         : result.ok
           ? { kind: "completed", text: result.text, ...evidence }
           : { kind: "failed", outcome: result.stalled ? "stalled" : "provider_error", text: result.text, ...evidence };
@@ -383,7 +383,7 @@ export class Runtime {
         restartNote: interruption ? "" : restartNote(n, children, child => this.names(child, n).assignee),
         envelope: composeEnvelope(n, names, parent),
         ...(n.answer !== undefined ? { answer: n.answer } : {}),
-        ...(n.continuation ? { continuation: { note: n.continuation.note, ...(n.continuation.handoffPath ? { handoffPath: n.continuation.handoffPath } : {}) } } : {}),
+        ...(n.continuation ? { continuation: { note: n.continuation.note, ...(n.continuation.mediaJobIds ? { mediaJobIds: n.continuation.mediaJobIds } : {}), ...(n.continuation.handoffPath ? { handoffPath: n.continuation.handoffPath } : {}) } } : {}),
         ...(settled.length ? { settled } : {}),
         ...(asked.length ? { asked } : {}),
         level: n.level, mode: n.mode,
@@ -475,7 +475,7 @@ export class Runtime {
         return;
       }
       n.status = "queued"; n.lastActivityAt = now;
-      n.continuation = { note: result.note, ...(result.handoffPath ? { handoffPath: result.handoffPath } : {}), count: continuations(this.store, n.id) + 1 };
+      n.continuation = { note: result.note, ...(result.mediaJobIds ? { mediaJobIds: result.mediaJobIds } : {}), ...(result.handoffPath ? { handoffPath: result.handoffPath } : {}), count: continuations(this.store, n.id) + 1 };
       if (root && root.id !== n.id) root.lastActivityAt = now;
       this.store.transaction(() => {
         this.store.update(n, { kind: "continued", at: now, detail: `queued: ${clip(result.note, DETAIL_MAX)}` });

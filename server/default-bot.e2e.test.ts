@@ -45,6 +45,17 @@ it("makes DoneBot a new install's first bot, never deleted, hidden by its switch
     expect(maus).toMatchObject({ color: "chrome", chiefOfStaff: true, defaultBot: {} });
     expect(maus.messages.map((message: any) => [message.kind, message.helperIntro])).toEqual([["options", true]]);
 
+    await api("PATCH", `/api/bots/${maus.id}`, { name: "DoneBot" });
+    await api("POST", "/api/presence/active", { language: "zh-CN" });
+    expect((await bots()).find(bot => bot.id === maus.id)?.name).toBe("多宝");
+    await api("POST", "/api/presence/active", { language: "en" });
+    expect((await bots()).find(bot => bot.id === maus.id)?.name).toBe("DoneBot");
+    await api("PATCH", `/api/bots/${maus.id}`, { name: "星星" });
+    await api("POST", "/api/presence/active", { language: "zh-tw" });
+    expect((await bots()).find(bot => bot.id === maus.id)?.name).toBe("星星");
+    await api("PATCH", `/api/bots/${maus.id}`, { name: maus.name });
+    await api("POST", "/api/presence/active", { language: "en" });
+
     const refused = await api("DELETE", `/api/bots/${maus.id}`);
     expect(refused.status).toBe(409);
     expect(refused.body.error).toBe(`${maus.name} can't be deleted or archived. To take it off the sidebar, choose Hide in its menu, or turn off "Show ${maus.name} in the sidebar" in Settings → General.`);

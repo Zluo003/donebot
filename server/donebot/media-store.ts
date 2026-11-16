@@ -24,7 +24,7 @@ export type MediaFallback = z.infer<typeof fallbackSchema>;
 
 const jobSchema = z.object({
   version: z.literal(1), id: z.string().uuid(), operationKey: z.string(), fingerprint: z.string(), scope: scopeSchema,
-  botId: z.string().min(1), threadId: z.string().min(1), turnId: z.string().min(1), kind: mediaKindSchema,
+  botId: z.string().min(1), threadId: z.string().min(1), turnId: z.string().min(1), assignmentId: z.string().optional(), followupStartedAt: z.number().optional(), kind: mediaKindSchema,
   model: z.string().min(1).optional(), adapter: z.string().min(1).optional(), operation: z.enum(["generate", "edit", "extend"]),
   status: z.enum(["queued", "submitting", "submitted", "running", "downloading", "completed", "failed", "cancelled", "uncertain"]),
   parameters: z.record(z.string(), z.unknown()).optional(),
@@ -61,6 +61,9 @@ export class MediaJobStore {
         json TEXT NOT NULL,
         UNIQUE(scope, operation_key)
       );
+      CREATE INDEX IF NOT EXISTS donebot_media_assignment ON donebot_media_jobs (
+        json_extract(json, '$.botId'), json_extract(json, '$.threadId'), coalesce(json_extract(json, '$.assignmentId'), json_extract(json, '$.turnId'))
+      );
       CREATE TABLE IF NOT EXISTS donebot_media_dispatch (
         scope TEXT PRIMARY KEY,
         dispatched_at REAL NOT NULL
@@ -82,6 +85,13 @@ export class MediaJobStore {
     const checked = jobSchema.parse(job);
     this.db.prepare(`INSERT INTO donebot_media_jobs(id, scope, operation_key, json) VALUES(?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET json = excluded.json`).run(checked.id, mediaScopeKey(checked.scope), checked.operationKey, JSON.stringify(checked));
+  }
+
+  forAssignment(botId: string, threadId: string, assignmentId: string): MediaJob[] {
+    return this.db.prepare(`SELECT json FROM donebot_media_jobs
+      WHERE json_extract(json, '$.botId') = ? AND json_extract(json, '$.threadId') = ?
+        AND coalesce(json_extract(json, '$.assignmentId'), json_extract(json, '$.turnId')) = ? ORDER BY rowid`)
+      .all(botId, threadId, assignmentId).map(row => jobSchema.parse(JSON.parse(String(row.json))));
   }
 
   pending(): MediaJob[] {

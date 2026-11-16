@@ -111,6 +111,51 @@ const base: Assignment = {
 const row = (patch: Partial<Assignment>): Assignment => ({ ...base, ...patch });
 const roomRow = (patch: Partial<Assignment> = {}): Assignment => row({ assignee: { botId: "builder", destination: { kind: "room_thread", threadId: "room-1", groupId: "g1" } }, ...patch });
 
+it("keeps a person's media task waiting instead of owing a done notice for its submission", async () => {
+  const w = world();
+  try {
+    begun(w, chief, "media-root");
+    w.coordinator.endTurn("media-root", { ok: true, text: "Submitted", cap: { note: "Await media", mediaJobIds: ["00000000-0000-4000-8000-000000000001"] } });
+    expect(w.coordinator.awaitingTeammateThreads().has(chief.threadId)).toBe(true);
+    w.coordinator.tick(); await flush();
+    expect(w.host.runs[0]!.composed.mediaJobIds).toHaveLength(1);
+    expect(w.coordinator.awaitingTeammateThreads().has(chief.threadId)).toBe(false);
+  } finally { w.coordinator.close(); }
+});
+
+it.each([false, true])("preserves a media wait across restart, resumes once, and respects stop=%s", async stop => {
+  const dataDir = mkdtempSync(join(tmpdir(), "donebot-media-wait-"));
+  const ids = ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"];
+  const before = world(hold, {}, dataDir);
+  let after: World | undefined;
+  try {
+    const { node } = send(before, chief, "media-root", undefined, builder, "Generate the illustrations");
+    ended(before, "media-root");
+    before.coordinator.tick(); await flush();
+    await before.host.release(node.id, { ok: true, text: "Submitted", cap: { note: "Await the saved media receipts", mediaJobIds: ids } });
+    expect(before.coordinator.node(node.id)?.continuation?.mediaJobIds).toEqual(ids);
+    before.coordinator.close();
+    after = world(undefined, {}, dataDir);
+    let ready = false;
+    after.host.busyAnswer = node => Boolean(node.continuation?.mediaJobIds && !ready);
+    after.coordinator.tick(); await flush();
+    expect(after.host.runs).toHaveLength(0);
+    expect(after.coordinator.node("media-root")?.status).toBe("waiting");
+    if (stop) after.coordinator.cancelDirect(chief.threadId, "Stopped by user");
+    ready = true;
+    after.coordinator.tick(); await flush();
+    after.coordinator.tick(); await flush();
+    if (stop) expect(after.host.runs).toHaveLength(0);
+    else {
+      expect(after.host.runs).toHaveLength(2);
+      expect(after.host.runs[0]!.composed).toMatchObject({ turn: "continued", mediaJobIds: ids });
+      expect(after.coordinator.node(node.id)).toMatchObject({ status: "completed", executions: 2, reported: true });
+      after.coordinator.tick(); await flush();
+      expect(after.host.runs).toHaveLength(2);
+    }
+  } finally { before.coordinator.close(); after?.coordinator.close(); removeTempDir(dataDir); }
+});
+
 describe("view: an Assignment as the legacy node", () => {
   it("projects the plain fields: ids, address, key = bot, text = brief, times, counts", () => {
     expect(view(row({ startedAt: 1_500, executions: 2, restarts: 1, restart: "rerun", result: "half done", reportedAt: 3_000, batchKey: "b1" }))).toEqual({

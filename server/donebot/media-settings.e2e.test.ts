@@ -37,7 +37,7 @@ it("saves enabled model defaults and delivers a video in the original conversati
     gateway.setPlan([{ name: "generate_video", arguments: { model: "muse-video", fallback_model: "seedance-2-5", parameters: { prompt: "Synthetic waves", duration: 6, resolution: "720p", aspect_ratio: "16:9" },
       fallback_parameters: { content: [{ type: "text", text: "Synthetic waves" }], duration: 6, resolution: "720p", ratio: "16:9" }, fallback_operation: "generate" } }]);
     await control("send", "--bot", bot.id, "--task", task.threadId, "--text", "生成一段海浪视频，首选失败后使用备用模型。");
-    expect((await control("wait", "--bot", bot.id, "--task", task.threadId, "--timeout", "30")).status).toBe("settled");
+    await vi.waitFor(async () => expect((await api("GET", "/api/bots?messages=0")).bots.find((value: any) => value.id === bot.id)?.busy).toBe(false), { timeout: 15_000 });
     const posts = () => gateway.requests.filter(entry => entry.method === "POST" && entry.path === "/v1/videos");
     await vi.waitFor(() => expect(posts()).toHaveLength(1), { timeout: 15_000 });
     expect(posts()[0]!.body).toMatchObject({ model: "muse-video", prompt: "Synthetic waves", duration: 6, resolution: "720p" });
@@ -85,7 +85,7 @@ it.each(["image", "video-allow", "video-deny", "video-revoked"] as const)("repor
       parameters: kind === "image" ? { prompt: "Synthetic scene" } : { prompt: "Synthetic scene", duration: 6, resolution: "720p" },
       fallback_parameters: kind === "image" ? { prompt: "Synthetic scene" } : { content: [{ type: "text", text: "Synthetic scene" }], duration: 6, resolution: "720p" } } }]);
     await control("send", "--bot", bot.id, "--text", "Generate the synthetic scene.");
-    expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("settled");
+    await vi.waitFor(async () => expect((await api("GET", "/api/bots?messages=0")).bots.find((value: any) => value.id === bot.id)?.busy).toBe(false), { timeout: 15_000 });
     const posts = () => gateway.requests.filter(entry => entry.method === "POST" && ["/v1/videos", "/v1/images/generations/async", "/v1/images/generations"].includes(entry.path));
     await vi.waitFor(() => expect(posts()).toHaveLength(1), { timeout: 10_000 });
     await api("PATCH", `/api/bots/${bot.id}`, { approvalMode: "ask" });

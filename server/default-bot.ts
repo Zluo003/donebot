@@ -2,11 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { writeFileAtomic } from "./atomic.ts";
-import { DEFAULT_BOT_COLOR, DEFAULT_BOT_NAME, defaultBotPerson } from "../shared/default-bot.ts";
+import { DEFAULT_BOT_COLOR, DEFAULT_BOT_NAME, defaultBotName, defaultBotPerson } from "../shared/default-bot.ts";
 import { takeImportName } from "../shared/import-name.ts";
 import type { BotRecord, Message, Store } from "./store.ts";
 
 export type DefaultBotStore = Pick<Store, "bots" | "bot" | "createBot" | "patchBot" | "appendMessage" | "messagesFor" | "createTask" | "setChiefOfStaff">;
+
+export function localizeDefaultBotName(store: Pick<Store, "patchBot">, bot: BotRecord, language?: string): BotRecord {
+  const name = defaultBotName(language);
+  return bot.defaultBot && [DEFAULT_BOT_NAME, defaultBotName("zh")].includes(bot.name) && bot.name !== name
+    ? store.patchBot(bot.id, { name }) ?? bot : bot;
+}
 
 /** Where each place (key "") and Team Cloud member (their email) is recorded as having had its DoneBot, so one that is
  * gone is never made twice. */
@@ -112,14 +118,14 @@ export function createDefaultBot(store: DefaultBotStore, options: { person?: str
  * place with no Chief of Staff at all gets DoneBot as its Chief, so someone keeps an eye on the day; one that has a
  * Chief keeps it. */
 /** `opened`: a new one, before anyone is told of it, so its person's main chat is theirs from its first frame. */
-export function ensureDefaultBot(store: DefaultBotStore, options: { dataDir: string; person?: string; team?: string | null; opened?: (bot: BotRecord) => void }): BotRecord | null {
+export function ensureDefaultBot(store: DefaultBotStore, options: { dataDir: string; person?: string; team?: string | null; language?: string; opened?: (bot: BotRecord) => void }): BotRecord | null {
   const person = options.person?.trim().toLowerCase() ?? "";
   const marked = store.bots.filter((bot) => bot.defaultBot && defaultBotPerson(bot) === person)
     .sort((a, b) => a.createdAt - b.createdAt);
   for (const extra of marked.slice(1)) store.patchBot(extra.id, { defaultBot: undefined, sidebarHidden: undefined });
   if (marked[0]) {
     remember(options.dataDir, person, marked[0].id);
-    return marked[0];
+    return localizeDefaultBotName(store, marked[0], options.language);
   }
   if (Object.hasOwn(ledger(options.dataDir), person)) return null;
   const adoptable = person ? undefined : seededMausBot(store.bots);
@@ -133,7 +139,7 @@ export function ensureDefaultBot(store: DefaultBotStore, options: { dataDir: str
     bot = createDefaultBot(store, { person, team: options.team, chief, opened: options.opened });
   }
   remember(options.dataDir, person, bot.id);
-  return bot;
+  return localizeDefaultBotName(store, bot, options.language);
 }
 
 /** True once the person has made this bot their own: written to it, opened a second chat, or changed who it is. */

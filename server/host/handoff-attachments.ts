@@ -86,6 +86,20 @@ export function createHandoffAttachments(deps: {
     messageReferencesFile(text, attachment.path) || "source" in attachment && Boolean(attachment.source && messageReferencesFile(text, attachment.source)));
 
   return {
+    messageIds(threadId: string): string[] { return store.activePath(threadId).map(message => message.id); },
+    reported(node: HandoffView, previous: ReadonlySet<string>): void {
+      const messages = store.activePath(node.threadId);
+      const reply = messages.findLast(message => !previous.has(message.id) && message.role === "bot" && message.kind === "text" &&
+        message.text?.trim() && !message.roomRequest && (message.from?.botId === node.botId || !node.groupId && !message.from));
+      if (!reply) return;
+      const end = messages.indexOf(reply);
+      const sources = messages.slice(0, end).filter(message => message.attachments?.length &&
+        message.handoffAssignmentIds?.includes(node.id) && !message.sendId?.startsWith("handoff_inputs_") &&
+        message.from?.botId !== node.botId);
+      if (sources.length) store.patchMessage(node.threadId, reply.id, {
+        reportedAttachmentMessageIds: [...new Set([...(reply.reportedAttachmentMessageIds ?? []), ...sources.map(message => message.id)])],
+      });
+    },
     async referenced(from: AttachmentAddress, to: AttachmentAddress, text: string, live: () => boolean): Promise<Attachment[]> {
       return deliver(from, to, references(from.threadId, text), "", live, undefined, false);
     },
@@ -161,5 +175,14 @@ export function withHandoffAttachments(host: () => ReturnType<typeof createHando
       unwatch();
     }
   };
-  return (node, resumed, signal, composed) => node.parentId ? handoff(node, resumed, signal, composed) : run(node, resumed, signal, composed);
+  return (node, resumed, signal, composed) => {
+    if (!node.parentId && !resumed) return run(node, resumed, signal, composed);
+    const attachments = host();
+    const previous = new Set(attachments.messageIds(node.threadId));
+    const pending = (node.parentId ? handoff : run)(node, resumed, signal, composed);
+    void pending.then(() => {
+      if (!signal.aborted) attachments.reported(node, previous);
+    }, () => {}).catch(error => console.warn("Could not record the artifact report:", error));
+    return pending;
+  };
 }

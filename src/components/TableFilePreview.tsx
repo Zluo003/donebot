@@ -38,7 +38,7 @@ export function TableFileButton({ path, name, message }: { path: string; name: s
   </>;
 }
 
-function TableFileContent({ path, name, message, delimiter }: {
+export function TableFileContent({ path, name, message, delimiter }: {
   path: string; name: string; message: MessageAttachmentContext; delimiter: "," | "\t";
 }) {
   const [attempt, setAttempt] = useState(0);

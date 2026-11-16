@@ -1,13 +1,14 @@
 import type { LocaleKey } from "@/locales";
 import type { BotSettingsSection } from "@/state/store";
 
-export const PANEL_TABS = ["details", "library", "computer"] as const;
+export const PANEL_TABS = ["details", "library", "computer", "artifacts"] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
 
 export const TAB_LABEL: Record<PanelTab, LocaleKey> = {
   details: "botPanel.tab.details",
   library: "botPanel.tab.library",
   computer: "botPanel.tab.computer",
+  artifacts: "botPanel.tab.artifacts",
 };
 
 export type PageId =
@@ -79,6 +80,7 @@ const SECTION_TARGET: Record<BotSettingsSection, PanelTarget> = {
   skills: { tab: "library", page: "skills" },
   memory: { tab: "library", page: "memory" },
   library: { tab: "library" },
+  artifacts: { tab: "artifacts" },
   routines: { tab: "details", page: "routines" },
   access: { tab: "computer" },
   model: { tab: "details", anchor: "model" },

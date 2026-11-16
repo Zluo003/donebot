@@ -156,6 +156,21 @@ it("keeps same-room files visible to every upstream assignment without duplicati
   expect(f.rows.get("chat")![0]!.attachments![0]!.path).toBe(path);
 });
 
+it("records the reporting reply's exact same-thread file sources on resumed roots without replacing their settlement promise", async () => {
+  const f = setup();
+  f.add();
+  await f.host.returned(f.child, new AbortController().signal, { ok: true, text: "Delivered." });
+  const incoming = f.rows.get("chat")![0]!;
+  const pending = Promise.resolve({ ok: true, text: "Here are the files." });
+  const wrapped = withHandoffAttachments(() => f.host, () => {
+    f.rows.get("chat")!.push({ id: "summary", at: Date.now(), role: "bot", kind: "text", text: "Here are the files." });
+    return pending;
+  });
+  expect(wrapped(f.parent, true, new AbortController().signal, { text: "", note: "", restartNote: "", turn: "resume" })).toBe(pending);
+  await pending;
+  expect(f.rows.get("chat")!.at(-1)!.reportedAttachmentMessageIds).toEqual([incoming.id]);
+});
+
 it("passes only exact references to files already attached in the source conversation", async () => {
   const f = setup();
   const own = f.add(); f.rows.get("chat")!.push(own);

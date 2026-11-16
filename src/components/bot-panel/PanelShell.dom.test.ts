@@ -28,6 +28,7 @@ const stub = (name: string) => (props: Record<string, unknown>) =>
 vi.mock("./DetailsTab", () => ({ DetailsTab: stub("details") }));
 vi.mock("./LibraryTab", () => ({ LibraryTab: stub("library") }));
 vi.mock("./ComputerTab", () => ({ ComputerTab: stub("computer") }));
+vi.mock("./ArtifactsTab", () => ({ ArtifactsTab: stub("artifacts") }));
 vi.mock("./pages", () => ({
   PageBody: ({ page, editingInstructions }: { page: string; editingInstructions?: boolean }) =>
     createElement("div", { "data-stub-page": page, "data-editing-instructions": editingInstructions === true ? "true" : undefined },
@@ -164,17 +165,17 @@ describe("named links into the bot panel", () => {
 });
 
 describe("the panel's tabs", () => {
-  it("are Details, Library and Computer, opening on Details, each drawing its own tab", async () => {
+  it("are Details, Library, Computer and Artifacts, opening on Details, each drawing its own tab", async () => {
     render(null);
     await settle();
     expect([...host.querySelectorAll('[role="tab"]')].map((element) => [element.getAttribute("data-panel-tab"), element.textContent]))
-      .toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
+      .toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"], ["artifacts", "Artifacts"]]);
     expect(tab()).toBe("details");
     const strip = host.querySelector('[role="tablist"]')!.className.split(" ");
     expect(strip).toEqual(expect.arrayContaining(["sticky", "top-0", "bg-app"]));
     expect(host.querySelector('[role="tab"]')!.parentElement!.className.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "bg-ink/[0.05]"]));
     expect(host.querySelector('[role="tab"]')!.className.split(" ")).toEqual(expect.arrayContaining(["h-[26px]", "text-[13px]", "bg-ink/[0.1]", "font-medium"]));
-    for (const id of ["library", "computer", "details"]) {
+    for (const id of ["library", "computer", "artifacts", "details"]) {
       click(host.querySelector(`[data-panel-tab="${id}"]`));
       expect(tab()).toBe(id);
       expect(host.querySelector(`[data-stub-${id}]`), id).not.toBeNull();

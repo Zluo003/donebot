@@ -256,6 +256,10 @@ interaction in a disposable workspace.
 The [recent files fixture](computer-files.md) mounts the Files panel with synthetic
 digest rows and real message-scoped downloads from a disposable workspace.
 
+The [Bot artifacts fixture](bot-artifacts.md) checks task-named deliverables,
+delegated and room reports, media previews, downloads, and visibility revocation
+through isolated servers and the real Bot profile panel.
+
 The [Data viewer fixture](data.md) checks real DuckDB loading, querying, export,
 restart persistence, result history and the full renderer's 100,000-row grid
 in a disposable workspace with synthetic data.

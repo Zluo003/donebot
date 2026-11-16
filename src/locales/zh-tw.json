@@ -9980,5 +9980,19 @@
   "server.donebot.mediaFallbackAwaiting": "首選模型 {primary} 生成失敗：{reason}。我將使用備用模型 {model} 重新生成影片，請先確認。",
   "server.donebot.mediaFallbackContinuing": "首選模型 {primary} 生成失敗：{reason}。我將使用備用模型 {model} 重新生成。",
   "server.donebot.mediaFallbackUnknownReason": "服務未提供更詳細的失敗原因",
-  "server.donebot.mediaFallbackDeclined": "已取消備用模型生成，沒有提交備用請求。"
+  "server.donebot.mediaFallbackDeclined": "已取消備用模型生成，沒有提交備用請求。",
+  "botPanel.tab.artifacts": "產物",
+  "artifacts.hint": "彙整{name}在各個對話中向你交付或引用的檔案。",
+  "artifacts.empty": "此 Bot 向你回報檔案後，產物會顯示在這裡。",
+  "artifacts.loading": "正在載入產物…",
+  "artifacts.loadFailed": "無法載入產物，請重試。",
+  "artifacts.previewFailed": "暫時無法預覽，請重試或下載檔案。",
+  "artifacts.downloadToOpen": "請下載後使用對應的應用程式查看此檔案。",
+  "artifacts.more": "顯示更早的產物",
+  "artifacts.refresh": "重新整理產物",
+  "artifacts.showMessage": "查看原始回報",
+  "artifacts.kind.image": "圖片",
+  "artifacts.kind.video": "影片",
+  "artifacts.kind.audio": "音訊",
+  "artifacts.kind.document": "文件"
 }

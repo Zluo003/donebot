@@ -1,5 +1,6 @@
 import { userError } from "../user-errors.ts";
 import { messageFileResponse } from "../message-file-response.ts";
+import { artifactPage, collectBotArtifacts, type ArtifactThread } from "../bot-artifacts.ts";
 import { basename, join } from "node:path";
 
 import type { WireBot, WireGroup } from "../../shared/wire.ts";
@@ -35,7 +36,7 @@ export interface ThreadRouteDeps {
   store: Pick<Store,
     | "activeLeaf" | "activePath" | "bot" | "botByThread" | "bots" | "groupByThread" | "groupTaskByThread" | "groups" | "messagesFor"
     | "onChange" | "sections" | "taskByThread" | "tasks">;
-  coordinator: Pick<Coordinator, "job">;
+  coordinator: Pick<Coordinator, "job" | "node">;
   groupThreadIsWorking(groupId: string, threadId: string): boolean;
   /** What people's lines are called in this conversation (replies.ts PersonName). */
   userName(threadId: string): PersonName;
@@ -122,6 +123,36 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       });
     }
 
+    m = path.match(/^\/api\/bots\/([\w-]+)\/artifacts$/);
+    if (m && method === "GET") {
+      const bot = store.bot(m[1]);
+      if (!bot || !visible.bot(bot.id)) return json(res, 404, { error: "no such bot" });
+      const rawLimit = url.searchParams.get("limit");
+      const limit = rawLimit === null ? 40 : Number(rawLimit);
+      const cursor = url.searchParams.get("before");
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100 || (cursor?.length ?? 0) > 512) {
+        return json(res, 400, { error: "invalid artifact page" });
+      }
+      const threads: ArtifactThread[] = [];
+      const add = (threadId: string, title: string, ownerBotId?: string, internal = false) => {
+        if (visible.thread(threadId)) threads.push({ threadId, title, ownerBotId, internal, messages: store.activePath(threadId) });
+      };
+      const tasks = store.tasks(bot.id);
+      for (const task of tasks) add(task.threadId, task.title, bot.id, Boolean(task.openedBy));
+      if (!tasks.some(task => task.threadId === bot.threadId)) add(bot.threadId, bot.name, bot.id);
+      for (const group of store.groups) {
+        if (group.dm || !visible.group(group.id)) continue;
+        for (const task of group.tasks ?? []) add(task.threadId, `${group.name} · ${task.title}`);
+        if (!group.tasks?.some(task => task.threadId === group.threadId)) add(group.threadId, group.name);
+      }
+      const items = collectBotArtifacts(bot.id, threads, id => deps.coordinator.node(id));
+      let page;
+      try { page = artifactPage(items, limit, cursor); }
+      catch { return json(res, 400, { error: "invalid artifact cursor" }); }
+      res.setHeader("cache-control", "private, no-store");
+      return json(res, 200, page);
+    }
+
     m = path.match(/^\/api\/threads\/([\w-]+)\/messages$/);
     if (m && method === "GET") {
       const threadId = m[1];
@@ -172,10 +203,10 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
 
     // Only a file this exact stored message grants; deliberately not a general path reader.
     m = path.match(/^\/api\/threads\/([\w-]+)\/messages\/([\w-]+)\/file$/);
-    const streamsMessageImage = Boolean(
+    const streamsMessagePreview = Boolean(
       m && method === "GET" && url.searchParams.get("preview") === "1",
     );
-    if (m && (method === "POST" || streamsMessageImage)) {
+    if (m && (method === "POST" || streamsMessagePreview)) {
       if (method === "POST" && !String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
         return json(res, 415, { error: "content-type must be application/json" });
       }
@@ -191,13 +222,14 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       }
       const messageText = message.text ?? "";
       const body = method === "POST" ? await readBody(req) : null;
-      const rawReference = streamsMessageImage ? url.searchParams.get("ref") : null;
-      if (streamsMessageImage && (!rawReference || !/^\d+$/.test(rawReference))) {
+      const rawReference = streamsMessagePreview ? url.searchParams.get("ref") : null;
+      const previewPath = streamsMessagePreview ? url.searchParams.get("path") : null;
+      if (streamsMessagePreview && !previewPath && (!rawReference || !/^\d+$/.test(rawReference))) {
         return json(res, 400, { error: "ref must identify a rendered image" });
       }
       const href = method === "POST"
         ? (typeof body.path === "string" ? body.path : "")
-        : messageImageTargetAt(messageText, Number(rawReference));
+        : previewPath ?? messageImageTargetAt(messageText, Number(rawReference));
       if (!href) return json(res, 400, { error: "path is required" });
 
       let roots: string[];
@@ -232,8 +264,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         ? messageFolderEntryName(body.entry)
         : undefined;
       if (folderEntry === null) return json(res, 400, { error: "entry must be one file name" });
-      // An inline image is read whole by the browser; a saved file is streamed below, so it may be larger.
-      const maxBytes = streamsMessageImage ? MESSAGE_FILE_MAX_BYTES : MESSAGE_FILE_DOWNLOAD_MAX_BYTES;
+      const maxBytes = streamsMessagePreview && !previewPath ? MESSAGE_FILE_MAX_BYTES : MESSAGE_FILE_DOWNLOAD_MAX_BYTES;
       let file: Awaited<ReturnType<typeof openMessageFile>>;
       try {
         file = (!folderEntry && botAttachment ? await deps.generatedFile?.(threadId, message.id, href) : null) ?? (folderEntry
@@ -258,14 +289,15 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
           return json(res, 200, listing);
         }
       }
-      if ((streamsMessageImage || botAttachment?.kind === "image") && !file.mime.startsWith("image/")) {
+      const inlineMedia = /^(?:image\/(?:png|jpeg|gif|webp|avif|bmp)|video\/(?:mp4|webm|quicktime|x-m4v)|audio\/[\w.+-]+|application\/pdf)$/.test(file.mime);
+      if ((streamsMessagePreview && (previewPath ? !inlineMedia : !file.mime.startsWith("image/"))) || botAttachment?.kind === "image" && !file.mime.startsWith("image/")) {
         await file.handle.close();
-        return json(res, 415, { error: "only images can be previewed here" });
+        return json(res, 415, { error: "unsupported inline preview type" });
       }
       await messageFileResponse(req, res, file, {
         "content-type": file.mime,
         "content-length": String(file.bytes),
-        ...(streamsMessageImage
+        ...(streamsMessagePreview
           ? { "content-disposition": "inline" }
           : { "content-disposition": messageFileDisposition(messageFileDownloadName(downloadName, file.name)) }),
         "cache-control": "private, no-store",
@@ -274,7 +306,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         pragma: "no-cache",
         vary: "Authorization",
         "x-content-type-options": "nosniff",
-        ...(streamsMessageImage
+        ...(streamsMessagePreview
           ? {
               "cross-origin-resource-policy": "same-origin",
               "referrer-policy": "no-referrer",

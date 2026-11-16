@@ -25,6 +25,7 @@ import { t } from "@/lib/i18n";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { BotPanel } from "./bot-panel/PanelShell";
 import { LibraryTab } from "./bot-panel/LibraryTab";
+import { ArtifactsTab } from "./bot-panel/ArtifactsTab";
 import type { SimplePageId } from "./bot-panel/page-registry";
 import { BOT_PANEL_ID, sidePanelCls } from "./bot-panel/side-panel";
 import { HistoryRollbackDialog, useBotHistory, useBotOverview } from "./bot-settings/useBotOverview";
@@ -138,6 +139,8 @@ export function BotSettingsDialog({ bot, overlay = false }: {
         return <MemorySection bot={bot} active={!collapsed && section === "memory"} onToggle={(enabled) => derived.patch({ memoryEnabled: enabled })} />;
       case "library":
         return <LibraryTab bot={bot} onOpen={(page) => dispatch({ type: "toggleSettings", open: true, section: LIBRARY_LINKS[page] ?? "overview" })} />;
+      case "artifacts":
+        return <ArtifactsTab key={bot.id} bot={bot} />;
       case "routines":
         return <RoutinesSection bot={bot} routines={derived.botRoutines} runs={state.routineRuns} />;
       case "access":

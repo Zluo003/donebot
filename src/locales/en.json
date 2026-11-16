@@ -10223,5 +10223,19 @@
   "server.donebot.mediaFallbackAwaiting": "The primary model {primary} failed: {reason}. I will use backup model {model} to generate the video after your confirmation.",
   "server.donebot.mediaFallbackContinuing": "The primary model {primary} failed: {reason}. I will now generate with backup model {model}.",
   "server.donebot.mediaFallbackUnknownReason": "The service did not provide a more specific failure reason",
-  "server.donebot.mediaFallbackDeclined": "Backup generation was declined. No backup request was submitted."
+  "server.donebot.mediaFallbackDeclined": "Backup generation was declined. No backup request was submitted.",
+  "botPanel.tab.artifacts": "Artifacts",
+  "artifacts.hint": "Files {name} has delivered or referenced across conversations.",
+  "artifacts.empty": "Files will appear here after this bot reports them to you.",
+  "artifacts.loading": "Loading artifacts…",
+  "artifacts.loadFailed": "Could not load artifacts. Try again.",
+  "artifacts.previewFailed": "Preview unavailable. Retry or download the file.",
+  "artifacts.downloadToOpen": "Download this file to view it in a compatible app.",
+  "artifacts.more": "Show older artifacts",
+  "artifacts.refresh": "Refresh artifacts",
+  "artifacts.showMessage": "Show original report",
+  "artifacts.kind.image": "Image",
+  "artifacts.kind.video": "Video",
+  "artifacts.kind.audio": "Audio",
+  "artifacts.kind.document": "Document"
 }

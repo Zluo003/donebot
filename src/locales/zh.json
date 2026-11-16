@@ -7663,5 +7663,19 @@
   "server.donebot.mediaFallbackAwaiting": "首选模型 {primary} 生成失败：{reason}。我将使用备用模型 {model} 重新生成视频，请先确认。",
   "server.donebot.mediaFallbackContinuing": "首选模型 {primary} 生成失败：{reason}。我将使用备用模型 {model} 重新生成。",
   "server.donebot.mediaFallbackUnknownReason": "服务未提供更详细的失败原因",
-  "server.donebot.mediaFallbackDeclined": "已取消备用模型生成，没有提交备用请求。"
+  "server.donebot.mediaFallbackDeclined": "已取消备用模型生成，没有提交备用请求。",
+  "botPanel.tab.artifacts": "产物",
+  "artifacts.hint": "汇总{name}在各个对话中向你交付或引用的文件。",
+  "artifacts.empty": "该 Bot 向你汇报文件后，产物会显示在这里。",
+  "artifacts.loading": "正在加载产物…",
+  "artifacts.loadFailed": "无法加载产物，请重试。",
+  "artifacts.previewFailed": "暂时无法预览，请重试或下载文件。",
+  "artifacts.downloadToOpen": "请下载后使用对应的应用查看此文件。",
+  "artifacts.more": "显示更早的产物",
+  "artifacts.refresh": "刷新产物",
+  "artifacts.showMessage": "查看原始汇报",
+  "artifacts.kind.image": "图片",
+  "artifacts.kind.video": "视频",
+  "artifacts.kind.audio": "音频",
+  "artifacts.kind.document": "文档"
 }

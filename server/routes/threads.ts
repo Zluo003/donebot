@@ -1,4 +1,5 @@
 import { userError } from "../user-errors.ts";
+import { messageFileResponse } from "../message-file-response.ts";
 import { basename, join } from "node:path";
 
 import type { WireBot, WireGroup } from "../../shared/wire.ts";
@@ -261,7 +262,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         await file.handle.close();
         return json(res, 415, { error: "only images can be previewed here" });
       }
-      res.writeHead(200, {
+      await messageFileResponse(req, res, file, {
         "content-type": file.mime,
         "content-length": String(file.bytes),
         ...(streamsMessageImage
@@ -280,14 +281,6 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
             }
           : {}),
       });
-      if (file.bytes === 0) {
-        await file.handle.close();
-        return res.end();
-      }
-      const stream = file.handle.createReadStream({ start: 0, end: file.bytes - 1, autoClose: true });
-      stream.on("error", () => res.destroy());
-      res.on("close", () => stream.destroy());
-      stream.pipe(res);
       return;
     }
 

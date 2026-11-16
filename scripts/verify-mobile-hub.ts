@@ -79,7 +79,7 @@ try {
  assert.equal(devices.mobile.length,1); assert.equal(devices.mobile[0].name,"Fixture iPhone");
  const descriptor=await api(`/api/v1/donebot/mobile/workspaces/${install}/connection`,{installationId:phone});
  const out=join(process.cwd(),".omb-scratch","verify-evidence",workspaceKind === "cloud" ? "mobile-cloud" : "mobile-hub");await mkdir(out,{recursive:true});
- const bundle=join(out,"mobile-transport.mjs");await build({entryPoints:[join(process.cwd(),"../DoneBot-Mobile/src/core/relay.ts")],outfile:bundle,bundle:true,platform:"node",format:"esm",define:{__FIXTURE__:"false"},logLevel:"silent"});
+ const bundle=join(out,"mobile-transport.mjs");await build({stdin:{contents:`export { RelayConnection } from ${JSON.stringify(join(process.cwd(),"../DoneBot-Mobile/src/core/relay.ts"))}; export { downloadFileSegments, FILE_SEGMENT_BYTES } from ${JSON.stringify(join(process.cwd(),"../DoneBot-Mobile/src/core/file-download.ts"))};`,resolveDir:process.cwd(),sourcefile:"mobile-fixture.ts"},outfile:bundle,bundle:true,platform:"node",format:"esm",define:{__FIXTURE__:"false"},logLevel:"silent"});
  const contractsBundle=join(out,"mobile-contracts.mjs");
  await build({entryPoints:[join(process.cwd(),"../DoneBot-Mobile/src/core/contracts.ts")],outfile:contractsBundle,bundle:true,platform:"node",format:"esm",logLevel:"silent"});
  const {directorySchema,messagePageSchema}=await import(pathToFileURL(contractsBundle).href);
@@ -88,7 +88,7 @@ try {
  const {readAutomations,connectedAppsSchema}=await import(pathToFileURL(workspaceBundle).href);
  assert.deepEqual(descriptor.r,["relay1.donebot.cn"]);
  globalThis.WebSocket=class extends NativeWebSocket {constructor(url:string|URL,protocols?:string|string[]){super(String(url).replace("wss://relay1.donebot.cn",`ws://127.0.0.1:${address.port}`),protocols,{origin:"capacitor://localhost"});}} as unknown as typeof WebSocket;
- const {RelayConnection}=await import(pathToFileURL(bundle).href);
+ const {RelayConnection,downloadFileSegments,FILE_SEGMENT_BYTES}=await import(pathToFileURL(bundle).href);
  connection=await RelayConnection.connect(descriptor);
  assert.equal(proxiedPhones,1);
  assert.deepEqual(relay.stats(),{hosts:1,sessions:1,sockets:3});
@@ -152,6 +152,26 @@ try {
    const downloaded = await connection!.request<any>(`/api/threads/${bot.activeTaskId}/messages/${reply.id}/file`, { method: "POST", body: { path }, responseType: "bytes" });
    assert.deepEqual(Buffer.from(downloaded.data), file.data);
    downloads.push({ name: file.name, bytes: downloaded.data.length, mime: downloaded.mime });
+   if (!file.name.endsWith(".txt")) {
+     const source = Buffer.concat([file.data, Buffer.alloc(2 * FILE_SEGMENT_BYTES + 19, 17)]);
+     await writeFile(path, source);
+     const offsets: number[] = []; let interrupted = false, reconnected = false;
+     const resumed = await downloadFileSegments({ key: path, cache: null, signal: new AbortController().signal, ready: async () => {}, progress: () => {}, request: async (options:any) => {
+       if (!connection || (connection as any).closed) {
+         connection = await RelayConnection.connect(await api(`/api/v1/donebot/mobile/workspaces/${install}/connection`,{installationId:phone}));
+         reconnected = true;
+       }
+       offsets.push(options.range?.start ?? 0);
+       return connection!.request<any>(`/api/threads/${bot.activeTaskId}/messages/${reply.id}/file`, { ...options, method: "POST", body: { path }, onProgress: (bytes:number) => {
+         options.onProgress?.(bytes);
+         if (!interrupted && options.range?.start === FILE_SEGMENT_BYTES && bytes > 128 * 1024) { interrupted = true; connection!.close(); }
+       } });
+     } });
+     assert.ok(interrupted && reconnected, "the encrypted stream must actually disconnect and reconnect");
+     assert.equal(offsets.filter(offset => offset === FILE_SEGMENT_BYTES).length,2,"retry must retain the first completed segment");
+     assert.deepEqual(Buffer.from(resumed.data),source);
+     downloads.push({ name: file.name, bytes: source.length, mime: resumed.mime, offsets, interrupted, reconnected, sha256: createHash("sha256").update(resumed.data).digest("hex") });
+   }
  }
  const sent = messages.messages.find((m:any) => m.role === "user" && m.text?.includes(upload.path));
  const photo = await connection!.request<any>(`/api/threads/${bot.activeTaskId}/messages/${sent.id}/file`, { method: "POST", body: { path: upload.path }, responseType: "bytes" });

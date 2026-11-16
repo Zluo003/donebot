@@ -51,6 +51,7 @@ Use only mapped, tested commands:
 - [OpenAI-compatible structured tools](openai-tools.md)
 - [DoneBot unified gateway, account flows and media](donebot-gateway.md)
 - [DoneBot mobile hub, encrypted relay and notifications](donebot-mobile.md)
+- [Mobile attachment transfer and resume](mobile-file-resume.md)
 - [DoneBot media capabilities and input limits](donebot-media-capabilities.md)
 - [DoneBot media defaults, Muse and fallback delivery](donebot-media-settings.md)
 - [DoneBot asynchronous media receipts and coordinator returns](donebot-media-coordination.md)

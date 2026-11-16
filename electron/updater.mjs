@@ -16,6 +16,7 @@ import { openBlankTerminal } from "./terminal-launch.mjs";
 import { UPDATE_TEXT } from "./update-errors.mjs";
 import { createUpdaterCoordinator } from "./updater-coordinator.mjs";
 import { createQuietInstall, installFailed, launchAfter, LOOK_EVERY_MS, updateSeen } from "./update-when-quiet.mjs";
+import { clientUpdateFeed } from "./client-update-feed.mjs";
 
 export { quietSignals } from "./update-when-quiet-main.mjs";
 
@@ -163,6 +164,8 @@ export function startUpdater(signals = null) {
   // The coordinator starts each download itself, so it owns macOS staging and quiet failures.
   autoUpdater.autoDownload = false;
   autoUpdater.logger = updaterLogger();
+  const clientFeed = clientUpdateFeed(process.platform, process.arch, process.env.DONEBOT_CLIENT_UPDATE_URL ?? "");
+  if (clientFeed) autoUpdater.setFeedURL(clientFeed);
 
   // Broadcast the install flavour before the first check so the banner never offers a restart it cannot deliver.
   const packageType = linuxPackageType({ readMarker: (file) => (existsSync(file) ? readFileSync(file, "utf8") : null) });

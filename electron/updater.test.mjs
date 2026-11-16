@@ -109,6 +109,7 @@ async function load(pageAllowed) {
     autoUpdater.emit("update-downloaded", { version: "2.0.0" });
     return ["/unused-staged-update.zip"];
   });
+  autoUpdater.setFeedURL = vi.fn();
   autoUpdater.quitAndInstall = vi.fn();
   fixture.autoUpdater = autoUpdater;
   writeFileSync(join(process.resourcesPath, "app-update.yml"), "provider: generic\nurl: https://updates.example.test\n");

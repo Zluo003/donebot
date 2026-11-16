@@ -42,3 +42,6 @@ deploy/podman/.env
 deploy/podman/.env.*
 !deploy/podman/.env.example
 /.env
+
+.playwright-mcp/
+dist-client-demo/

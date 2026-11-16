@@ -230,6 +230,26 @@
   --chat-column-max: 100%;
 }
 
+[data-demo-client][data-demo-layout="phone"] [data-chat-bubble] {
+  width: 100%;
+  max-width: 100%;
+  flex: 0 0 100%;
+}
+
+[data-demo-client][data-demo-layout="phone"] .glass-scroller {
+  padding-inline: 0;
+}
+
+[data-demo-client][data-demo-layout="phone"] .chat-column {
+  width: 100%;
+  max-width: 100%;
+}
+
+[data-demo-client][data-demo-layout="phone"] [data-testid="message-actions"],
+[data-demo-client][data-demo-layout="phone"] [data-chat-bubble] ~ span {
+  display: none;
+}
+
 :root {
   --code-color-scheme: dark;
   /* how far the frame steps from the app's colour toward black: further on

@@ -36,6 +36,10 @@ Before claiming a server or conversation change works, follow
 [`docs/verification/README.md`](docs/verification/README.md). Always launch an
 isolated fixture; never verify mutations against the user's live app or data.
 
+## 打包默认
+
+除非用户明确指定其他方式，macOS 打包只生成 Apple 芯片（arm64）的未签名 DMG，不执行 Developer ID 签名或公证，也不生成 Intel 或 ZIP 安装包。`pnpm package:mac` 遵循此默认。
+
 ## Comments
 
 Write a comment only for what the code cannot say:

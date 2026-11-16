@@ -70,7 +70,7 @@
     "build:cua:linux:offline": "node scripts/prepare-cua-linux.mjs --offline",
     "build:updater": "node scripts/bundle-updater.mjs",
     "package:prepare": "pnpm build && pnpm build:server && pnpm build:companion && pnpm build:updater && pnpm build:android-tools && pnpm build:cloudflared && pnpm build:browser && pnpm build:duckdb",
-    "package:mac": "pnpm package:prepare && pnpm build:speech && pnpm build:cua && electron-builder --mac --publish never",
+    "package:mac": "pnpm package:prepare && pnpm build:speech && pnpm build:cua && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --arm64 --publish never -c.mac.identity=null -c.dmg.sign=false",
     "package:win": "pnpm package:prepare && pnpm build:cua:win && electron-builder --win --publish never",
     "package:linux": "pnpm package:prepare && pnpm build:cua:linux && electron-builder --linux --x64 --publish never",
     "package:arch": "pnpm package:prepare && pnpm build:cua:linux && electron-builder --linux pacman --x64 --publish never",

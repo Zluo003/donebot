@@ -153,3 +153,9 @@ export async function attachForTurn<S>(
     }
   }
 }
+
+export function attachmentReceipt(saved: SavedBotAttachment, requestedName: string | undefined, requestedPath: string) {
+  const name = saved.attachment.kind === "file" ? saved.attachment.name
+    : requestedName?.trim() || requestedPath.split(/[\\/]/).at(-1) || "image";
+  return { ok: true, name, path: saved.attachment.path, bytes: saved.bytes };
+}

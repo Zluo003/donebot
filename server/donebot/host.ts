@@ -116,6 +116,7 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       const text = job.fallbackDecision === "declined" ? serverLine(conversationLanguage(job.threadId), "server.donebot.mediaFallbackDeclined")
         : job.status === "completed" ? `${job.kind} · ${job.model}${attempts}` : `${job.kind} · ${job.model}${attempts} · ${job.status}${job.error ? `: ${job.error}` : ""}`;
       store.appendMessage(job.threadId, { role: "bot", kind: "text", text, sendId,
+        ...(job.assignmentId ? { handoffAssignmentIds: [job.assignmentId] } : {}),
         ...(job.status === "completed" ? { attachments: job.artifacts.map(file => ({ kind: file.mime.startsWith("image/") ? "image" as const : "file" as const, path: file.path, mime: file.mime, name: file.name })) } : {}),
         ...(group ? { from: { botId: bot.id, name: bot.name, color: bot.color } } : {}),
       });

@@ -163,6 +163,8 @@ export interface CoordinatorHost {
   shareAnswer?(first: HandoffView, joiner: HandoffView): boolean;
   /** `node` waits for `first`'s answer instead of running its own turn (only ever a request outside a room). */
   joined?(node: HandoffView, first: HandoffView): void;
+  /** Delivers the shared answer's attachments through the joiner's own authorization before settlement. */
+  joinedResult?(first: HandoffView, joiner: HandoffView, signal: AbortSignal, result: HostTurnResult): Promise<HostTurnResult>;
   /** One word from a small model about a teammate's reply (runtime/status-reply.ts), on `requesterBotId`'s own engine: the
    * requester's turn is what the answer may save, and the teammate's engine is busy with the teammate's work. Absent,
    * undefined or a throw: the requester wakes. */

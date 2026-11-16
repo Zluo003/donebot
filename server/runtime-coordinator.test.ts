@@ -682,6 +682,28 @@ describe("RuntimeCoordinator: one answer to the same request from two teammates"
     expect(w.host.reports.map((report) => report.child.id).sort()).toEqual([first.node.id, second.node.id].sort());
   });
 
+  it("waits for the shared answer's attachment delivery before reporting and resuming its requester", async () => {
+    const w = world(hold);
+    sharing(w);
+    let delivered!: () => void;
+    const gate = new Promise<void>(resolve => { delivered = resolve; });
+    w.host.joinedResult = vi.fn(async (_first, _joiner, _signal, result) => {
+      await gate;
+      return { ...result, text: `${result.text}\nFiles delivered.` };
+    });
+    const first = send(w, chief, "gen-1", undefined, builder, ASK);
+    const second = send(w, lead, "gen-2", undefined, builderForLead, ASK);
+    w.coordinator.tick(); await flush();
+    await w.host.release(first.node.id, { ok: true, text: "Answer with files." });
+    w.coordinator.tick(); await flush();
+    await vi.waitFor(() => expect(w.host.joinedResult).toHaveBeenCalledTimes(1), { timeout: 5_000, interval: 50 });
+    expect(w.coordinator.node(second.node.id)?.status).toBe("running");
+    expect(w.host.reports.some(report => report.child.id === second.node.id)).toBe(false);
+    delivered();
+    expect((await settledChild(w, second.node.id)).result).toContain("Files delivered.");
+    expect(w.host.runs.filter(run => run.node.botId === "builder")).toHaveLength(1);
+  });
+
   it("gives the answer at once when it came while the second request waited for its turn", async () => {
     const w = world(hold);
     sharing(w);

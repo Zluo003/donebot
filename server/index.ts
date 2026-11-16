@@ -78,6 +78,7 @@ import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { effectiveCloudBackend } from "../shared/cloud-backend.ts";
 import { createExternalContext } from "./host/external-context.ts";
+import { createHandoffAttachments, withHandoffAttachments } from "./host/handoff-attachments.ts";
 import { createDoneBotMediaHost, withDoneBotMediaFollowup } from "./donebot/host.ts";
 import { imageGenerationReady } from "./image-generation.ts";
 import { createImageToolRoutes } from "./routes/image-tools.ts"; import { createMeetingsHost } from "./host/meetings-host.ts"; import { meetingsUnavailablePrompt } from "./meetings/prompt.ts";
@@ -153,7 +154,7 @@ import {
   type Runtime,
 } from "./container-computer.ts";
 import { containerComputerMcp } from "./local-vm-box.ts";
-import { attachForTurn, saveBotAttachment } from "./bot-attachment.ts";
+import { attachmentReceipt, attachForTurn, saveBotAttachment } from "./bot-attachment.ts";
 import { withCloudDesktopFile } from "./cloud-desktop.ts";
 import {
   cacheUntilConfigChanges,
@@ -4026,7 +4027,7 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
           { botId: parent.botId, name: store.bot(parent.botId)?.name ?? childTask.openedBy.name, at: Date.now() });
       }
     },
-    run: withDoneBotMediaFollowup(() => mediaFollowups, async (node, resumed, signal, composed: ComposedTurn) => {
+    run: withHandoffAttachments(() => handoffAttachments, withDoneBotMediaFollowup(() => mediaFollowups, async (node, resumed, signal, composed: ComposedTurn) => {
       const group = node.groupId ? store.group(node.groupId) : undefined;
       const bot = store.bot(node.botId)!; if (node.answeredBy) askCards.decided(node, (node.answeredBy.kind === "bot" ? store.bot(node.answeredBy.botId)?.name : undefined) ?? bot.name);
       if (!node.parentId && !group && !resumed) return runRootTurn(node, bot, signal, composed);
@@ -4099,7 +4100,7 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
           undefined, error => { result.stopReason = error; }, () => operation.cancelled,
           () => groupProviderHandshakeStarted(operation), () => groupProviderHandshakeSettled(operation),
           { claimed: true }, { roomHandoffId: node.id, resumed, systemInstructions, turnInstructions: brief, turnNote: composed.note, turnRestartNote: composed.restartNote, liveRoster, followMentions: false, result, coordination }, operation));
-    }),
+    })),
     names: (node, parent) => {
       const scope = parent ?? node;
       const person = personNameIn(scope.threadId);
@@ -4126,6 +4127,7 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
       }
       return outwardActions(turnRows(node));
     },
+    joinedResult: (first, node, signal, result) => handoffAttachments.shared(first, node, signal, result),
     shareAnswer: createShareAnswer({ askedFrom: (node) => (node.parentId ? coordinator.node(node.parentId)?.threadId : undefined), audienceOf: teamHost.audienceOf, pinned: (botId, threadId) => store.taskByThread(botId, threadId)?.cwd, botFolder: (botId) => store.bot(botId)?.cwd, privateFolders: TASK_WORKSPACES_DIR }),
     joined: (node) => { store.appendMessage(node.threadId, { role: "bot", kind: "activity", tool: { name: `notice: ${serverLine(threadLanguage(node.threadId), "server.teammates.sameRequest")}`, ok: true } }); },
   },
@@ -12475,6 +12477,12 @@ const donebotMediaHost = createDoneBotMediaHost({
   wrote: markTaskContextExternallyUpdated, fetchArtifact: donebotHost.fetchArtifact,
 });
 mediaFollowups = donebotMediaHost;
+const handoffAttachments = createHandoffAttachments({
+  store, attachmentsDir: ATTACHMENTS_DIR, parent: node => node.parentId ? coordinator.node(node.parentId) : undefined,
+  wrote: (botId, threadId) => { const bot = store.bot(botId); if (bot) markTaskContextExternallyUpdated(bot, threadId); },
+  allowed: (node, parent) => !roomHandoffProblem(node, parent), privateTo: teamHost.privateTo,
+  openGenerated: (threadId, messageId, path) => donebotMediaHost.generatedFile(threadId, messageId, path),
+});
 ROUTES.unshift(donebotMobile.route, donebotDesktop.route, ...donebotHost.routes, ...(DONEBOT_GATEWAY ? [doneBotModelRoutes, donebotMediaHost.artifactRoute] : []));
 const internalToolRoutes = createInternalToolRoutes({ donebotMedia: DONEBOT_GATEWAY ? donebotMediaHost.internalRoute : undefined, engineLimits: { instances: () => registry.instances(), configs: () => instanceConfigs(cfg), status: (instanceId) => registry.knownSnapshot(instanceId), load: (accounts) => loadPlanUsage({ accounts }), audienceOf: (threadId) => teamHost.audienceOf(threadId), guestDriven: cloudGuestDriven, dataDir: DATA_DIR }, helpers: { decider, extractor }, notifications: { bot: (id) => store.bot(id), team: sharedMembership, broadcast }, xResearch: { credential: () => researchCredential(cfg.treg?.key), botEnabled: (botId) => store.bot(botId)?.xResearch !== false, cloudHome: CLOUD_HOME !== null, researchOff: () => researchAvailability.refused() } }); const waitRoutes = createWaitRoutes({ waits: botWaits, cloudHome: Boolean(CLOUD_HOME), sleeps: Boolean(CLOUD_HOME) && CLOUD_TEAM === null }); ROUTES.push(createXConnectorRoutes({ credential: () => researchCredential(cfg.treg?.key), included: () => xCredential(), unavailable: () => xResearchStatus().unavailable === true }));
 
@@ -13313,10 +13321,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
             return json(res, 409, { error: "This turn ended before the file could be attached, so nothing was posted." });
           }
           const { saved } = outcome;
-          const label = saved.attachment.kind === "file"
-            ? saved.attachment.name
-            : (requestedName?.trim() || requestedPath.split(/[\\/]/).at(-1) || "image");
-          return json(res, 200, { ok: true, name: label, bytes: saved.bytes });
+          return json(res, 200, attachmentReceipt(saved, requestedName, requestedPath));
         } catch (error) {
           const status = typeof (error as { status?: unknown }).status === "number" ? (error as { status: number }).status : 500;
           const message = status === 404
@@ -13969,7 +13974,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         })).filter(g => g.members.length);
         return json(res, 200, { currentRoom: source ? { id: source.id, name: source.name, workingFolder: source.cwd || null } : null,
           bots: personalReach.peers(store.bots, internalSender, internalCapability.threadId).map(bot => ({ id: bot.id, name: bot.name, title: bot.title, section: bot.section, busy: bot.busy })),
-          rooms, note: "Each bot uses its own environment and permissions. Files are not transferred: pass absolute paths only when accessible to the recipient, otherwise pass the content." });
+          rooms, note: "Each bot uses its own environment and permissions. Files attached during coordinated work return with its result. To pass an existing attached file, include its exact attachment path in the brief; arbitrary private workspace paths are not transferred." });
       }
       if (method === "POST" && path === "/api/internal/retry-thread") {
         const body = await readInternalBody();
@@ -14062,7 +14067,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         // Reading the mark keeps its window alive through a turn that only posts; an aged-out mark would hand the next hop to auto-approve.
         const unattended = isUnattended(poster.id, internalCapability.threadId);
         let attachedVoiceNote = false;
-        let stagedAttachments: NonNullable<Message["attachments"]> = [];
+        let stagedAttachments = await handoffAttachments.referenced({ botId: from.id, threadId: fromThreadId }, { botId: from.id, threadId: room.threadId }, message, () => internalCapabilityIsActive(internalCapability) && roomPostEligibility(from, store.group(room.id) ?? { ...room, memberIds: [] }, fromThreadId).ok);
         let detachParkedAudio: (() => void) | undefined;
         if (attachVoiceNote) {
           const parkedKey = turnAttachmentKey(fromThreadId, liveTurnByThread.get(fromThreadId));
@@ -14071,12 +14076,12 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           if (!audio.length) {
             return json(res, 400, { error: "no voice note to attach — call send_voice_note in this turn first" });
           }
-          stagedAttachments = audio.map((attachment) => ({
+          stagedAttachments = [...stagedAttachments, ...audio.map((attachment) => ({
             kind: "audio" as const,
             path: attachment.path,
             mime: attachment.mime,
             ...(attachment.text?.trim() ? { text: redactSecretsInText(attachment.text.trim()) } : {}),
-          }));
+          }))];
           attachedVoiceNote = true;
           // Unpark only after the append lands: a persistence failure must leave the clip parked.
           detachParkedAudio = () =>
@@ -14085,13 +14090,15 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
               parked.filter((attachment) => attachment.kind !== "audio"),
             );
         }
+        requireActiveInternalCapability();
+        const currentEligibility = roomPostEligibility(from, store.group(room.id) ?? { ...room, memberIds: [] }, fromThreadId); if (!currentEligibility.ok) return json(res, currentEligibility.status, { error: currentEligibility.error });
         const posted = store.appendMessage(room.threadId, {
           role: "bot",
           kind: "text",
           text: message,
           from: { botId: poster.id, name: poster.name, color: poster.color },
           peerPost: unattended ? { unattended: true } : {},
-          ...(attachedVoiceNote ? { attachments: stagedAttachments } : {}),
+          ...(stagedAttachments.length ? { attachments: stagedAttachments } : {}),
         });
         internalCapability.roomPosts = (internalCapability.roomPosts ?? 0) + 1;
         detachParkedAudio?.();

@@ -8,7 +8,13 @@ import { readHandoffs } from "./testing/handoff-rows.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
-it.each(["completed", "failed", "stopped", "restarted"] as const)("returns asynchronous media %s through the generating bot to its coordinator", async scenario => {
+const mediaCases = [
+  ...(["completed", "failed", "stopped", "restarted"] as const).map(scenario => ({ kind: "image", scenario, mime: "image/png", path: "/v1/images/generations", parameters: { prompt: "Synthetic coordination illustration" } })),
+  ...(["completed", "restarted"] as const).map(scenario => ({ kind: "video", scenario, mime: "video/mp4", path: "/v1/videos", parameters: { content: [{ type: "text", text: "Synthetic video" }], resolution: "720p", duration: 5 } })),
+  ...(["completed", "restarted"] as const).map(scenario => ({ kind: "audio", scenario, mime: "audio/mpeg", path: "/v1/music/generations", parameters: { style: "Synthetic instrumental piano", instrumental: true } })),
+];
+
+it.each(mediaCases)("returns asynchronous $kind $scenario through the generating bot to its coordinator", async ({ kind, scenario, mime, path, parameters }) => {
   const outcome = scenario === "restarted" ? "completed" : scenario;
   const gateway = await startFakeDoneBotGateway();
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true }, [], undefined, undefined, gateway.origin);
@@ -26,13 +32,13 @@ it.each(["completed", "failed", "stopped", "restarted"] as const)("returns async
     const { bot: chief } = await control("new-bot", "--name", "多宝");
     const { bot: artist } = await control("new-bot", "--name", "画布");
     await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true, approvalMode: "full" });
-    await api("PATCH", `/api/bots/${artist.id}`, { approvalMode: "full", toolScope: { allow: ["mcp:agents:generate_image"] } });
+    await api("PATCH", `/api/bots/${artist.id}`, { approvalMode: "full", toolScope: { allow: [`mcp:agents:generate_${kind}`] } });
     await control("set-model", "--bot", artist.id, "--instance", "donebot", "--model", "deepseek-flash");
     await control("set-model", "--bot", chief.id, "--instance", "donebot", "--model", "gpt-6.1-sol");
     gateway.setModelPlan("gpt-6.1-sol", [{ name: "coordinate_bots", arguments: { bot_ids: [artist.id], message: "Create an illustration and return the actual result." } }],
       "Assigned illustration; awaiting the real result.", "The artist returned its actual media result.");
     gateway.setMediaStatus("processing");
-    gateway.setPlan([{ name: "generate_image", arguments: { parameters: { prompt: "Synthetic coordination illustration" } } }], "The image is submitted, not completed.");
+    gateway.setPlan([{ name: `generate_${kind}`, arguments: { parameters } }], "The image is submitted, not completed.");
     await control("send", "--bot", chief.id, "--text", "让画布生成一张配图，等结果后再向我汇报。");
     const nodes = () => readHandoffs(fixture.info.dataDir);
     const artistNode = () => nodes().find(node => node.botId === artist.id);
@@ -42,8 +48,8 @@ it.each(["completed", "failed", "stopped", "restarted"] as const)("returns async
     expect(nodes().find(one => one.botId === chief.id)).toMatchObject({ status: "waiting" });
     const llmRequests = () => gateway.requests.filter(request => request.path === "/v1/chat/completions");
     const before = llmRequests().length;
-    const imagePosts = () => gateway.requests.filter(request => request.method === "POST" && request.path === "/v1/images/generations");
-    await expect.poll(() => imagePosts().length, { timeout: 10_000 }).toBe(1);
+    const mediaPosts = () => gateway.requests.filter(request => request.method === "POST" && request.path === path);
+    await expect.poll(() => mediaPosts().length, { timeout: 10_000 }).toBe(1);
     if (scenario === "restarted") {
       await waitForExit(fixture.child, { signal: "SIGTERM" });
       const { url, dataDir, logPath } = fixture.info;
@@ -70,16 +76,41 @@ it.each(["completed", "failed", "stopped", "restarted"] as const)("returns async
     } else {
       gateway.setMediaStatus(outcome);
       expect((await control("wait", "--bot", chief.id, "--timeout", "30")).status).toBe("settled");
-      expect(artistNode()).toMatchObject({ status: "completed", executions: 2, reported: true, result: `Synthetic media ${outcome} receipt acknowledged.` });
+      expect(artistNode()).toMatchObject({ status: "completed", executions: 2, reported: true, result: expect.stringContaining(`Synthetic media ${outcome} receipt acknowledged.`) });
       expect(llmRequests()).toHaveLength(before + 1);
       const receiptPrompt = JSON.stringify(llmRequests().at(-1)!.body);
       expect(receiptPrompt).toContain("[DoneBot media receipt: terminal]");
       expect(receiptPrompt).toContain(node.continuation!.mediaJobIds![0]);
-      if (outcome === "completed") expect(receiptPrompt).toContain("image/png");
+      if (outcome === "completed") expect(receiptPrompt).toContain(mime);
       const chiefRequests = gateway.requests.filter(request => request.path === "/v1/responses");
       expect(chiefRequests).toHaveLength(3);
       expect(JSON.stringify(chiefRequests.at(-1)!.body)).toContain(`Synthetic media ${outcome} receipt acknowledged.`);
+      if (outcome === "completed") {
+        expect(JSON.stringify(chiefRequests.at(-1)!.body)).toContain("DoneBot returned attachments");
+        expect(JSON.stringify(chiefRequests.at(-1)!.body)).toContain(mime);
+      }
+      if (outcome === "completed") {
+        const destinations = (await api("GET", `/api/threads/${chief.activeTaskId}/messages`)).messages
+          .filter((message: any) => message.attachments?.length);
+        expect(destinations).toHaveLength(1);
+        const sources = (await api("GET", `/api/threads/${node.threadId}/messages`)).messages
+          .filter((message: any) => message.attachments?.length);
+        expect(sources).toHaveLength(1);
+        const download = async (threadId: string, message: any) => {
+          const file = message.attachments[0];
+          expect(file.mime).toBe(mime);
+          const response = await fetch(`${fixture.info.url}/api/threads/${threadId}/messages/${message.id}/file`, {
+            method: "POST", headers: { origin: fixture.info.url, "content-type": "application/json" }, body: JSON.stringify({ path: file.path }),
+          });
+          expect(response.status).toBe(200);
+          expect(response.headers.get("content-type")).toBe(mime);
+          return Buffer.from(await response.arrayBuffer());
+        };
+        const original = await download(node.threadId, sources[0]);
+        expect(original.length).toBeGreaterThan(0);
+        expect(await download(chief.activeTaskId, destinations[0])).toEqual(original);
+      }
     }
-    expect(imagePosts()).toHaveLength(1);
+    expect(mediaPosts()).toHaveLength(1);
   } finally { await waitForExit(restarted, { signal: "SIGTERM" }); await fixture.close(); await gateway.close(); }
 }, hostTimeout(90_000));

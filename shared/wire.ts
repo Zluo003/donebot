@@ -450,6 +450,8 @@ export const EXCERPT_SUMMARY_HEADER = "Historical excerpts in chronological orde
 
 /** One transcript line, serialized as stored. */
 export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCardFields, WaitLineField, BugReportField {
+  /** Server-owned assignments whose executions produced or received these attachments; never a file access grant. */
+  handoffAssignmentIds?: string[];
   roomRequest?: { id: string; phase: "request" | "result" };
   id: string;
   role: "bot" | "user";

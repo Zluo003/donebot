@@ -669,7 +669,11 @@ export class RuntimeCoordinator implements Coordinator {
     for (;;) {
       if (signal.aborted) return { kind: "failed", outcome: "stopped", text: "" };
       const first = this.store.get(firstId);
-      if (first?.status === "completed") return { kind: "completed", text: `${JOINED_NOTE}\n${first.result.replace(`${JOINED_NOTE}\n`, "")}` };
+      if (first?.status === "completed") {
+        const original = { ok: true, text: `${JOINED_NOTE}\n${first.result.replace(`${JOINED_NOTE}\n`, "")}` };
+        const result = this.host.joinedResult ? await this.host.joinedResult(this.project(first), this.project(a), signal, original) : original;
+        return result.ok ? { kind: "completed", text: result.text } : { kind: "failed", outcome: "provider_error", text: result.text };
+      }
       if (!first || isTerminal(first)) return undefined;
       this.runtime.progress(a.id);
       await Promise.race([stopped, new Promise<void>(resolve => setTimeout(resolve, JOIN_POLL_MS))]);

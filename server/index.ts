@@ -155,6 +155,7 @@ import {
 } from "./container-computer.ts";
 import { containerComputerMcp } from "./local-vm-box.ts";
 import { attachmentReceipt, attachForTurn, saveBotAttachment } from "./bot-attachment.ts";
+import { existingAttachmentReceipt } from "./reused-attachment.ts";
 import { withCloudDesktopFile } from "./cloud-desktop.ts";
 import {
   cacheUntilConfigChanges,
@@ -13278,24 +13279,23 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         threadBusy, queuedThreadPosition, queuedReason: queuedStatus,
       }), createToolTimingRoute(usageTrace, internalCapability.threadId)], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/attach-file") {
-        const from = internalSender;
-        const threadId = internalCapability.threadId;
+        const from = internalSender, threadId = internalCapability.threadId;
         const source = connectorThread(from.id, threadId);
         if (!source) return json(res, 403, { error: "source conversation does not belong to sender" });
         const body = await readInternalBody();
         const requestedPath = typeof body.path === "string" ? body.path : "";
         const requestedName = typeof body.name === "string" ? body.name : undefined;
         try {
+          const existing = await existingAttachmentReceipt(requestedPath, () => store.activePath(threadId), () => internalCapabilityIsActive(internalCapability) && connectorThread(from.id, threadId) !== null, (messageId, filePath) => donebotMediaHost.generatedFile(threadId, messageId, filePath));
+          if (existing) return json(res, 200, existing);
           const vm = await attachmentVmForTurn(internalCapability);
           const outcome = await attachForTurn(internalCapability, MAX_ATTACHED_FILES_PER_TURN, {
             save: () => donebotDesktop.withFile(internalCapability, requestedPath, remote => { const save = async (local?: { path: string; root: string }) => {
               return saveBotAttachment({
                 path: local?.path ?? requestedPath,
                 name: requestedName,
-                // The attachment store is not a source: only the bot's own files are.
                 roots: local ? [local.root] : messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR),
                 ...(vm && !local ? { guest: { root: VM_WORKSPACE_GUEST, host: vm.workspaceDir } } : {}),
-                // Saved outside those folders this turn, never from the data dir, which holds every bot's memory and the app's state.
                 ...(!vm && internalCapability.deliversSavedFiles && internalCapability.turnStartedAt !== undefined
                   ? { savedThisTurn: { since: internalCapability.turnStartedAt, refuse: [DATA_DIR] } }
                   : {}),

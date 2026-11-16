@@ -245,6 +245,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       body: JSON.stringify({ path: args.path, ...(typeof args.name === "string" ? { name: args.name } : {}) }),
     });
     if (!ok) return { text: String(body.error ?? "Could not attach that file."), isError: true };
+    if (body.alreadyAttached) return { text: `Already attached ${String(body.name ?? "the file")} (${Number(body.bytes ?? 0)} bytes). It is visible in this conversation; no new copy or attachment was created. Reply directly without attaching it again.` };
     return { text: `Attached ${String(body.name ?? "the file")} (${Number(body.bytes ?? 0)} bytes). It now appears in the chat with a preview.` };
   }
   if (CARD_TOOL_NAMES.has(name)) return callCardTool(name, args, context);

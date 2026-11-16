@@ -68,7 +68,7 @@ describe("workspace", () => {
   it("tells a bot with attach_file to deliver a file saved outside its folders, and no one else", () => {
     const thread = ensureTaskWorkspace(BOT, "thread-first");
     expect(workspaceLocationsPrompt(BOT, thread, undefined, { attachFile: true }))
-      .toContain("also attach it with attach_file in the same turn");
+      .toContain("attach it with attach_file once");
     expect(workspaceLocationsPrompt(BOT, thread)).not.toContain("attach_file");
   });
 

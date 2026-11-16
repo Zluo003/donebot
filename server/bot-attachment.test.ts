@@ -86,6 +86,16 @@ describe("saveBotAttachment", () => {
     expect(readFileSync(saved.attachment.path, "utf8")).toBe("%PDF-1.4 fake");
   });
 
+  it("allows an existing file in the working folder regardless of when it was written", async () => {
+    const path = join(WORK, "existing-report.pdf");
+    writeFileSync(path, "%PDF-existing");
+    const old = new Date(Date.now() - 86_400_000);
+    utimesSync(path, old, old);
+    const saved = await saveBotAttachment({ path, roots: [WORK], savedThisTurn: { since: Date.now(), refuse: [DATA_ROOT] } });
+    expect(saved.attachment).toMatchObject({ name: "existing-report.pdf", mime: "application/pdf" });
+    expect(readFileSync(saved.attachment.path, "utf8")).toBe("%PDF-existing");
+  });
+
   it("attaches a VM video over the preview size, up to the same limit a person's upload has", async () => {
     // A bot on a VM has no link to fall back on: attaching is the only way its video reaches the chat.
     const guest = { root: "/home/cua/workspace", host: VM_HOME };

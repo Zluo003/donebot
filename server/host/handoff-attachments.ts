@@ -143,7 +143,7 @@ function withFiles(text: string, attachments: readonly Attachment[]): string {
   if (!attachments.length) return text;
   const files = attachments.map(attachment => ({ path: attachment.path, mime: attachment.mime,
     ...("name" in attachment ? { name: attachment.name } : {}) }));
-  return `${text}\n\n[DoneBot returned attachments]\n${JSON.stringify(files)}\nThese files are already attached in this conversation. Use these delivered paths; no copy request or regeneration is needed.`;
+  return `${text}\n\n[DoneBot returned attachments]\n${JSON.stringify(files)}\nDoneBot has already delivered these files into this conversation for preview and download. Delivery is complete; reply directly to acknowledge or summarize the result. Do not call attach_file, copy files, request another transfer or regenerate them just to deliver them here. These paths identify the delivered files for further work only; they are not pending attachment instructions. If you create a new or edited file, attach that new output once.`;
 }
 
 export function withHandoffAttachments(host: () => ReturnType<typeof createHandoffAttachments>, run: CoordinatorHost["run"]): CoordinatorHost["run"] {

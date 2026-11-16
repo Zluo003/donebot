@@ -5,6 +5,7 @@
 
 ```sh
 pnpm exec vitest run server/handoff-attachments.e2e.test.ts server/host/handoff-attachments.test.ts server/donebot-media-coordination.e2e.test.ts server/runtime-coordinator.test.ts server/donebot/media-followup.test.ts --maxWorkers=2
+pnpm exec vitest run server/reused-attachment.e2e.test.ts server/reused-attachment.test.ts server/drivers/openai-chat.test.ts src/components/FailedTurnRow.partial.test.ts --maxWorkers=2
 pnpm exec vitest run server/direct-coordination.e2e.test.ts server/crossed-handoffs.e2e.test.ts server/voice-notes.e2e.test.ts server/bot-attachment.test.ts server/host/turn-attachments.test.ts scripts/testing/file-size-ratchet.test.ts --maxWorkers=2
 pnpm typecheck
 ```
@@ -24,6 +25,23 @@ pnpm typecheck
 生成 Bot 收到实际回执后，文件进入请求会话；请求 Bot 的续作输入包含交付清单，
 原会话和请求会话的消息下载结果逐字节一致，每个任务只有一次收费生成提交。
 图片另有失败和停止场景，停止后迟到产物只留在原会话，不再唤醒请求者。
+
+媒体回执、跨 Bot 回传清单、附件工具描述与工作目录提示均明确：已交付的文件直接汇报，
+无需再次复制或附加；新建或编辑后的文件才需要附加。`reused-attachment.e2e.test.ts`
+用隔离网关驱动实际 Chat Completions 和 Responses 引擎，在普通 Bot 直接对话和同群对话
+中收到 PNG、MP4、MP3、PDF 后，故意连续再次附加 12 次。工具全部成功返回已有附件回执，
+不消耗新附件名额，不新增文件消息，也不更改已有文件名；原始四份文件仍可逐字节下载，
+任务只派发一次并且不出现失败或“部分完成”。脚本化调用用于验证服务容错，不代表真实模型
+必定遵循交付提示。
+每个场景的 fixture URL、日志路径、等待结果和完整消息记录保存在
+`.omb-scratch/verify-evidence/attachment-reuse/`，fixture 退出时删除临时用户数据并保留日志。
+
+异步媒体验证还让生成 Bot 在完成或重启后的媒体回执中再次附加原始图片、视频或音频，
+验证通过原有生成任务和消息归属检查复用产物，不复制附件或再次生成。
+`reused-attachment.test.ts` 验证缺失文件、软链接逃逸、未交付的兄弟文件、其他会话、原始源路径、
+预览图片，以及打开期间停止或移除附件的拒绝。复用权限仅来自当前活动对话的已有附件；
+没有开放整个应用数据目录。工作目录内已有文件无需在当前轮次创建，相关回归位于
+`bot-attachment.test.ts`。实际工具失败的提示沿用原有引擎和 UI 测试。
 
 `handoff-attachments.test.ts` 验证任务归属立即落盘、其他 Bot／历史任务隔离、同字节去重、
 重复交付幂等、生成产物与手动附件去重、共享一次执行结果、同群多级回传、停止、

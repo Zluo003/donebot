@@ -35,7 +35,7 @@ export interface FakeDoneBotGateway {
   requests: FakeDoneBotRequest[];
   cloud: FakeDoneBotCloud;
   setPlan(steps: FakeDoneBotToolStep[], answer?: string): void;
-  setModelPlan(model: string, steps: FakeDoneBotToolStep[], answer: string, resumeAnswer: string): void;
+  setModelPlan(model: string, steps: FakeDoneBotToolStep[], answer: string, resumeAnswer: string, resumeSteps?: (prompt: string) => FakeDoneBotToolStep[]): void;
   setReceiptPlan(status: "completed" | "failed" | "uncertain", steps: FakeDoneBotToolStep[]): void;
   setMediaStatus(status: "processing" | "completed" | "failed" | "uncertain"): void;
   setMediaSubmissionOutcome(outcome: "accepted" | "uncertain"): void;
@@ -62,7 +62,7 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
   let templateDocuments: unknown[] | null = [];
   const requests: FakeDoneBotRequest[] = [];
   let plan: FakeDoneBotToolStep[] = [], answer = "Synthetic DoneBot fixture complete.";
-  const modelPlans = new Map<string, { steps: FakeDoneBotToolStep[]; answer: string; resumeAnswer: string }>();
+  const modelPlans = new Map<string, { steps: FakeDoneBotToolStep[]; answer: string; resumeAnswer: string; resumeSteps?: (prompt: string) => FakeDoneBotToolStep[] }>();
   const receiptPlans = new Map<string, FakeDoneBotToolStep[]>();
   let mediaStatus: "processing" | "completed" | "failed" | "uncertain" = "completed", mediaTaskCount = 0;
   let mediaSubmissionOutcome: "accepted" | "uncertain" = "accepted";
@@ -229,7 +229,7 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
     const modelPlan = modelPlans.get(String(body.model));
     const resumed = currentPrompt.includes("Your downstream room requests have settled.");
     const reply = mediaReceipt ? `Synthetic media ${mediaReceipt} receipt acknowledged.` : modelPlan ? resumed ? modelPlan.resumeAnswer : modelPlan.answer : answer;
-    const step = tools.length ? (mediaReceipt ? receiptPlans.get(mediaReceipt) ?? [] : modelPlan ? resumed ? [] : modelPlan.steps : plan)[results.length] : undefined;
+    const step = tools.length ? (mediaReceipt ? receiptPlans.get(mediaReceipt) ?? [] : modelPlan ? resumed ? modelPlan.resumeSteps?.(currentPrompt) ?? [] : modelPlan.steps : plan)[results.length] : undefined;
     const name = step ? tools.find((tool) => tool.name === step.name || String(tool.name).endsWith(`_${step.name}`))?.name : undefined;
     if (step && typeof name !== "string") return send(response, { error: "Fixture tool not offered", tool: step.name }, 422);
     const callId = `fixture-call-${results.length}`;
@@ -245,7 +245,7 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
     setAuthRequires2fa(required) { requires2fa = required; },
     setTemplateDocuments(documents) { templateDocuments = documents; },
     setPlan(steps, final = "Synthetic DoneBot fixture complete.") { plan = steps; answer = final; },
-    setModelPlan(model, steps, final, resumeAnswer) { modelPlans.set(model, { steps, answer: final, resumeAnswer }); },
+    setModelPlan(model, steps, final, resumeAnswer, resumeSteps) { modelPlans.set(model, { steps, answer: final, resumeAnswer, resumeSteps }); },
     setReceiptPlan(status, steps) { receiptPlans.set(status, steps); },
     setMediaStatus(status) {
       mediaStatus = status;

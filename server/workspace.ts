@@ -146,7 +146,7 @@ export function workspaceLocationsPrompt(botId: string, cwd: string | undefined,
     " Do not move old files, edit another active thread's work, or read another bot's private folders without authorization. These paths do not grant additional access." +
     " Chat links and inline images open only files in currentWorkingFolder and sharedBotFolder." +
     (opts.attachFile
-      ? " When you save a file or picture for the person somewhere else, also attach it with attach_file in the same turn so it opens from chat. For many files, attach the few that matter most, such as a preview."
+      ? " When you save a new file or picture for the person somewhere else, attach it with attach_file once so it opens from chat. Files DoneBot already delivered from media generation or another bot are already attached here: acknowledge them directly, without copying or attaching them again. For many new files, attach the few that matter most, such as a preview."
       : " Save a file or picture you want to show in chat there.");
 }
 

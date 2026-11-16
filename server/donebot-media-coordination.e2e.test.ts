@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, openSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
@@ -32,7 +33,7 @@ it.each(mediaCases)("returns asynchronous $kind $scenario through the generating
     const { bot: chief } = await control("new-bot", "--name", "多宝");
     const { bot: artist } = await control("new-bot", "--name", "画布");
     await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true, approvalMode: "full" });
-    await api("PATCH", `/api/bots/${artist.id}`, { approvalMode: "full", toolScope: { allow: [`mcp:agents:generate_${kind}`] } });
+    await api("PATCH", `/api/bots/${artist.id}`, { approvalMode: "full", toolScope: { allow: [`mcp:agents:generate_${kind}`, "mcp:agents:attach_file"] } });
     await control("set-model", "--bot", artist.id, "--instance", "donebot", "--model", "deepseek-flash");
     await control("set-model", "--bot", chief.id, "--instance", "donebot", "--model", "gpt-6.1-sol");
     gateway.setModelPlan("gpt-6.1-sol", [{ name: "coordinate_bots", arguments: { bot_ids: [artist.id], message: "Create an illustration and return the actual result." } }],
@@ -44,6 +45,11 @@ it.each(mediaCases)("returns asynchronous $kind $scenario through the generating
     const artistNode = () => nodes().find(node => node.botId === artist.id);
     await expect.poll(() => artistNode()?.continuation?.mediaJobIds?.length, { timeout: 20_000 }).toBe(1);
     const node = artistNode()!;
+    if (outcome === "completed") {
+      const jobId = node.continuation!.mediaJobIds![0]!;
+      const extension = kind === "image" ? "png" : kind === "video" ? "mp4" : "mp3";
+      gateway.setReceiptPlan("completed", [{ name: "attach_file", arguments: { path: join(fixture.info.dataDir, "donebot", "artifacts", jobId, `donebot-${jobId}-1.${extension}`) } }]);
+    }
     expect(node).toMatchObject({ status: "queued", reported: false });
     expect(nodes().find(one => one.botId === chief.id)).toMatchObject({ status: "waiting" });
     const llmRequests = () => gateway.requests.filter(request => request.path === "/v1/chat/completions");
@@ -77,7 +83,7 @@ it.each(mediaCases)("returns asynchronous $kind $scenario through the generating
       gateway.setMediaStatus(outcome);
       expect((await control("wait", "--bot", chief.id, "--timeout", "30")).status).toBe("settled");
       expect(artistNode()).toMatchObject({ status: "completed", executions: 2, reported: true, result: expect.stringContaining(`Synthetic media ${outcome} receipt acknowledged.`) });
-      expect(llmRequests()).toHaveLength(before + 1);
+      expect(llmRequests()).toHaveLength(before + (outcome === "completed" ? 2 : 1));
       const receiptPrompt = JSON.stringify(llmRequests().at(-1)!.body);
       expect(receiptPrompt).toContain("[DoneBot media receipt: terminal]");
       expect(receiptPrompt).toContain(node.continuation!.mediaJobIds![0]);
@@ -96,6 +102,9 @@ it.each(mediaCases)("returns asynchronous $kind $scenario through the generating
         const sources = (await api("GET", `/api/threads/${node.threadId}/messages`)).messages
           .filter((message: any) => message.attachments?.length);
         expect(sources).toHaveLength(1);
+        const producerMessages = (await api("GET", `/api/threads/${node.threadId}/messages`)).messages;
+        expect(producerMessages.some((message: any) => message.tool?.ok === false)).toBe(false);
+        expect(producerMessages.find((message: any) => message.tool?.name === "agents_attach_file")?.tool.output).toContain("Already attached");
         const download = async (threadId: string, message: any) => {
           const file = message.attachments[0];
           expect(file.mime).toBe(mime);

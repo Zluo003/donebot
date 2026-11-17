@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { DONEBOT_CODING, subscriptionCodingId, type DoneBotCodingEngine } from "../../shared/donebot-coding.ts";
+import { DONEBOT_CODING, subscriptionCodingId, existingCodingId, EXISTING_CODING_MODEL, type DoneBotCodingEngine } from "../../shared/donebot-coding.ts";
 import { TurnNotStartedError, newId } from "../contracts.ts";
 import type { AnyProviderDriver, ProviderAdapter, ProviderInstance, RuntimeEventListener, SendTurnInput, TextGenerationOptions } from "../contracts.ts";
 import { CodexDriver } from "../drivers/codex.ts";
@@ -68,6 +68,30 @@ export function createCodingDrivers(gateway: DoneBotGateway, dataDir: string, na
         return {};
       },
       async create(input): Promise<ProviderInstance> {
+        if (input.instanceId === existingCodingId(engine)) {
+          const instance = await driver.create({ ...input, config: driver.decodeConfig({ preserveModelConfig: true }), environment: input.environment });
+          const stripSelection = (turn: SendTurnInput): SendTurnInput => ({ ...turn, model: undefined, effort: undefined, variant: undefined });
+          const configuredAdapter = new Proxy(instance.adapter, { get(target, property) {
+            if (property === "capabilities") return { ...target.capabilities, effortLevels: undefined, modelVariants: undefined };
+            if (property === "sendTurn") return (turn: SendTurnInput) => target.sendTurn(stripSelection(turn));
+            const value = Reflect.get(target, property);
+            return typeof value === "function" ? value.bind(target) : value;
+          } });
+          const adapter = codingStartup(() => configuredAdapter, async turn => {
+            if (turn.guestConfined) throw new Error("Coding executors require an owner-authorized project folder.");
+            if (!findCliCandidates(engine).length) throw new Error(`Install and configure ${engine === "codex" ? "Codex" : "Claude Code"} on this computer first.`);
+            return configuredAdapter;
+          });
+          const background = (options?: TextGenerationOptions): TextGenerationOptions => ({ ...options, model: undefined, fallback: undefined });
+          return { ...instance, displayName: `${engine === "codex" ? "Codex" : "Claude Code"} · 维持现有 CLI 配置`, adapter,
+            models: { default: EXISTING_CODING_MODEL, options: [{ id: EXISTING_CODING_MODEL, label: "维持现有 CLI 配置" }] },
+            refreshModels: async () => {}, installRuntime: undefined, modelsUnconfirmed: false, authenticationMethod: undefined, startAuthentication: undefined, getAuthentication: undefined, completeAuthentication: undefined,
+            cancelAuthentication: undefined, signOut: undefined,
+            ...(instance.generateText ? { generateText: (text: string, options?: TextGenerationOptions) => instance.generateText!(text, background(options)) } : {}),
+            ...(instance.generateMemoryText ? { generateMemoryText: (text: string, options?: TextGenerationOptions) => instance.generateMemoryText!(text, background(options)) } : {}),
+            async dispose() { await adapter.stopAll(); await instance.dispose(); },
+          };
+        }
         if (input.instanceId === subscriptionCodingId(engine)) {
           const home = join(dataDir, "providers", "donebot-subscription", engine);
           mkdirSync(home, { recursive: true, mode: 0o700 });
@@ -96,7 +120,7 @@ export function createCodingDrivers(gateway: DoneBotGateway, dataDir: string, na
           const bridge = await startCodingProxy(gateway, engine, scope);
           const home = join(dataDir, "providers", "donebot-coding", createHash("sha256").update(key).digest("hex"), engine);
           mkdirSync(home, { recursive: true, mode: 0o700 });
-          const modelIds = codingModels(engine, gateway.models()).options.map(model => model.id);
+          const modelIds = codingModels(engine, gateway.codingCatalog(engine)).options.map(model => model.id);
           if (!modelIds.length) modelIds.push("donebot-unavailable");
           try {
             const config = engine === "codex" ? { endpoint: { url: `${bridge.url}/v1`, models: modelIds } }
@@ -134,11 +158,11 @@ export function createCodingDrivers(gateway: DoneBotGateway, dataDir: string, na
             await changing;
           }
           if (disposed || current.key !== scopeKey(gateway.scope())) throw new Error("DoneBot account changed. Send again with the current account.");
-          current.modelIds.splice(0, current.modelIds.length, ...codingModels(engine, gateway.models()).options.map(model => model.id));
+          current.modelIds.splice(0, current.modelIds.length, ...codingModels(engine, gateway.codingCatalog(engine)).options.map(model => model.id));
           return current.instance;
         };
         const validate = (model?: string) => {
-          if (!model || !codingModels(engine, gateway.models()).options.some(option => option.id === model)) throw new Error("Choose an available DoneBot coding model.");
+          if (!model || !codingModels(engine, gateway.codingCatalog(engine)).options.some(option => option.id === model)) throw new Error("Choose an available DoneBot coding model.");
         };
         const prepare = async (turn: SendTurnInput) => {
           validate(turn.model);
@@ -162,14 +186,14 @@ export function createCodingDrivers(gateway: DoneBotGateway, dataDir: string, na
           if (!call) throw new Error("This executor does not support background text.");
           if (kind === "reviewPermission") return instance.reviewPermission!(text, options as AbortSignal | undefined);
           const settings = options as TextGenerationOptions | undefined;
-          const model = settings?.model ?? codingModels(engine, gateway.models()).default;
+          const model = settings?.model ?? codingModels(engine, gateway.codingCatalog(engine)).default;
           validate(model);
           return (kind === "generateText" ? instance.generateText! : instance.generateMemoryText!)(text, { ...settings, model });
         };
         const managed: ProviderInstance = {
           instanceId: input.instanceId, driverKind: driver.driverKind, displayName: DONEBOT_CODING[engine].name, enabled: true,
-          get models() { return codingModels(engine, gateway.models()); },
-          refreshModels: async () => {}, installRuntime: () => install(engine), adapter,
+          get models() { return codingModels(engine, gateway.codingCatalog(engine)); },
+          refreshModels: async () => { await gateway.refreshCodingCatalog(engine); }, installRuntime: () => install(engine), adapter,
           async snapshot() {
             if (!gateway.authenticated()) return { state: "unavailable", authenticated: false, reason: "Sign in to DoneBot to use coding executors." };
             const instance = await ensure();

@@ -14,3 +14,12 @@ it("opens installation and model refresh for fixed coding instances, and login o
   expect(codingInstanceAction("/api/instances/claude-endpoint", "POST")).toBe(false);
   expect(codingInstanceAction("/api/instances/donebot-codex/install", "DELETE")).toBe(false);
 });
+
+it("only permits status checks for existing CLI configuration", () => {
+  for (const engine of ["codex", "claude"]) {
+    const prefix = `/api/instances/donebot-${engine}-existing`;
+    expect(isDoneBotCodingInstance(`donebot-${engine}-existing`)).toBe(true);
+    for (const action of ["check", "refresh-models"]) expect(codingInstanceAction(`${prefix}/${action}`, "POST")).toBe(true);
+    for (const action of ["install", "auth/start", "auth/complete", "auth/sign-out"]) expect(codingInstanceAction(`${prefix}/${action}`, "POST")).toBe(false);
+  }
+});

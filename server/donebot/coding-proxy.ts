@@ -9,7 +9,7 @@ import { codingModels } from "./coding-models.ts";
 
 const sameScope = (a: DoneBotScope | null, b: DoneBotScope | null) => a?.accountId === b?.accountId && a?.installationId === b?.installationId;
 
-export async function startCodingProxy(gateway: Pick<DoneBotGateway, "scope" | "models" | "requestForScope">, engine: DoneBotCodingEngine, scope: DoneBotScope | null) {
+export async function startCodingProxy(gateway: Pick<DoneBotGateway, "scope" | "codingCatalog" | "requestForScope">, engine: DoneBotCodingEngine, scope: DoneBotScope | null) {
   const token = randomBytes(32).toString("base64url");
   const active = new Set<AbortController>();
   let revoked = false;
@@ -27,14 +27,14 @@ export async function startCodingProxy(gateway: Pick<DoneBotGateway, "scope" | "
       if (!String(req.headers["content-type"]).toLowerCase().startsWith("application/json")) return json(res, 415, { error: { message: "Expected JSON." } });
       const body = await readBody(req, 16 * 1024 * 1024);
       if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.model !== "string" ||
-        !codingModels(engine, gateway.models()).options.some(model => model.id === body.model)) return json(res, 403, { error: { message: "Choose a permitted DoneBot coding model." } });
+        !codingModels(engine, gateway.codingCatalog(engine)).options.some(model => model.id === body.model)) return json(res, 403, { error: { message: "Choose a permitted DoneBot coding model." } });
       controller.signal.throwIfAborted();
       if (revoked || !sameScope(scope, gateway.scope())) return json(res, 401, { error: { message: "DoneBot coding access expired." } });
       const headers = new Headers({ "content-type": "application/json" });
       for (const [key, value] of Object.entries(req.headers)) {
         if (typeof value === "string" && (/^(?:anthropic-|openai-|x-codex-)/.test(key) || ["user-agent", "originator", "session_id"].includes(key))) headers.set(key, value);
       }
-      const response = await gateway.requestForScope(scope, req.url!, { method: "POST", headers, body: JSON.stringify(body), signal: controller.signal });
+      const response = await gateway.requestForScope(scope, req.url!, { method: "POST", headers, body: JSON.stringify(body), signal: controller.signal }, engine);
       res.writeHead(response.status, { "content-type": response.headers.get("content-type") ?? "application/json", "cache-control": "no-store" });
       if (response.body) {
         const reader = response.body.getReader();

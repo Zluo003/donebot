@@ -379,3 +379,13 @@ describe("Ollama setup", () => {
     expect(markup).not.toContain("Ollama has no models yet.");
   });
 });
+
+it("does not offer an installer or login for the existing CLI configuration mode", () => {
+  vi.stubGlobal("window", { ogb: { platform: "darwin" } });
+  const engine: InstanceInfo = { ...instance({ state: "unavailable", reason: "CLI not installed" }),
+    instanceId: "donebot-codex-existing", displayName: "Codex · 维持现有 CLI 配置",
+    install: { command: { darwin: "npm install -g fixture-cli" }, server: { package: "fixture-cli" } } };
+  const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: engine })));
+  expect(markup).toContain("维持现有 CLI 配置"); expect(markup).not.toContain("fixture-cli");
+  expect(markup).not.toContain("ui-button-primary");
+});

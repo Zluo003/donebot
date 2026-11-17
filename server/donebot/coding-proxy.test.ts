@@ -9,8 +9,8 @@ const bridges: Array<Awaited<ReturnType<typeof startCodingProxy>>> = [];
 afterEach(async () => { await Promise.all(bridges.splice(0).map(bridge => bridge.close())); });
 const setup = async (engine: "codex" | "claude" = "codex") => {
   let current: DoneBotScope | null = scope;
-  const request = vi.fn(async (_scope: DoneBotScope, _path: string, _init: RequestInit) => new Response("data: synthetic\n\n", { headers: { "content-type": "text/event-stream", "set-cookie": "private" } }));
-  const bridge = await startCodingProxy({ scope: () => current, models: () => FAKE_DONEBOT_CATALOG, requestForScope: request }, engine, scope);
+  const request = vi.fn(async (_scope: DoneBotScope, _path: string, _init: RequestInit, _engine?: "codex" | "claude") => new Response("data: synthetic\n\n", { headers: { "content-type": "text/event-stream", "set-cookie": "private" } }));
+  const bridge = await startCodingProxy({ scope: () => current, codingCatalog: () => FAKE_DONEBOT_CATALOG, requestForScope: request }, engine, scope);
   bridges.push(bridge);
   const post = (path = engine === "codex" ? "/v1/responses" : "/v1/messages", body: unknown = { model: codingModels(engine, FAKE_DONEBOT_CATALOG).default }, extra: RequestInit = {}) => fetch(bridge.url + path, {
     method: "POST", body: JSON.stringify(body), ...extra, headers: { authorization: `Bearer ${bridge.token}`, "content-type": "application/json", ...extra.headers },
@@ -20,10 +20,12 @@ const setup = async (engine: "codex" | "claude" = "codex") => {
 
 it.each(["codex", "claude"] as const)("streams %s native protocol without leaking credentials or upstream headers", async engine => {
   const { post, request } = await setup(engine);
-  const response = await post(undefined, undefined, { headers: { cookie: "secret", "x-api-key": "unrelated", "anthropic-version": "2023-06-01", "x-destination-url": "https://invalid.example" } });
+  const response = await post(undefined, { model: codingModels(engine, FAKE_DONEBOT_CATALOG).default, ...(engine === "codex" ? { reasoning: { effort: "xhigh" } } : { output_config: { effort: "high" }, thinking: { type: "adaptive" } }) }, { headers: { cookie: "secret", "x-api-key": "unrelated", "anthropic-version": "2023-06-01", "x-destination-url": "https://invalid.example" } });
   expect(response.status).toBe(200); expect(await response.text()).toBe("data: synthetic\n\n");
   expect(response.headers.get("set-cookie")).toBeNull(); expect(response.headers.get("cache-control")).toBe("no-store");
   const [bound, path, init] = request.mock.calls[0]!;
+  expect(request.mock.calls[0]![3]).toBe(engine);
+  expect(JSON.parse(init.body as string)).toMatchObject(engine === "codex" ? { reasoning: { effort: "xhigh" } } : { output_config: { effort: "high" }, thinking: { type: "adaptive" } });
   expect(bound).toEqual(scope); expect(path).toBe(engine === "codex" ? "/v1/responses" : "/v1/messages");
   expect([...new Headers(init.headers).keys()]).toEqual(["anthropic-version", "content-type", "user-agent"]);
 });

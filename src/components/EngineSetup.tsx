@@ -1,4 +1,4 @@
-import { isDoneBotCodingInstance } from "../../shared/donebot-coding";
+import { isDoneBotCodingInstance, isExistingCodingInstance } from "../../shared/donebot-coding";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, Copy, Download, ExternalLink, KeyRound, Loader2, LogIn, TerminalSquare, X } from "lucide-react";
 import { api, type InstanceInfo, useStore } from "@/state/store";
@@ -586,6 +586,13 @@ export function EngineSetup({
         <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{t("remote.client.setUpOnHost", { name: instance.displayName })}</p>
       </div>
     );
+  }
+
+  if (isExistingCodingInstance(instance.instanceId)) {
+    return <div className={cn("space-y-2 text-[12px] text-ink-secondary", className)}>
+      <p>维持现有 CLI 配置。请先在当前执行电脑或服务器上安装并配置 CLI，再检查状态。</p>
+      <CheckEnginesAgain />
+    </div>;
   }
 
   if (apiKeySetup(instance)) {

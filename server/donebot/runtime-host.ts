@@ -1,4 +1,4 @@
-import { DONEBOT_CODING, subscriptionCodingId, isDoneBotCodingInstance } from "../../shared/donebot-coding.ts";
+import { DONEBOT_CODING, subscriptionCodingId, existingCodingId, EXISTING_CODING_MODEL, isDoneBotCodingInstance } from "../../shared/donebot-coding.ts";
 import { createCodingDrivers } from "./coding-drivers.ts";
 import { codingModels } from "./coding-models.ts";
 import { join } from "node:path";
@@ -45,7 +45,8 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     if (selection.instanceId === "donebot") return doneBotTextModels(gateway.models()).options.some(model => model.id === selection.model);
     for (const [engine, entry] of Object.entries(DONEBOT_CODING)) {
       const kind = engine as keyof typeof DONEBOT_CODING;
-      if (selection.instanceId === entry.instanceId) return codingModels(kind, gateway.models()).options.some(model => model.id === selection.model);
+      if (selection.instanceId === entry.instanceId) return codingModels(kind, gateway.codingCatalog(kind)).options.some(model => model.id === selection.model);
+      if (selection.instanceId === existingCodingId(kind)) return selection.model === EXISTING_CODING_MODEL;
       if (selection.instanceId === subscriptionCodingId(kind)) {
         const catalog = coding.subscriptions.get(kind)?.models;
         return catalog?.options.length ? catalog.options.some(model => model.id === selection.model)
@@ -60,6 +61,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     configs: (): InstanceConfigMap => ({ donebot: { driver: "donebot", displayName: "DoneBot", config: {} },
       ...Object.fromEntries(Object.entries(DONEBOT_CODING).flatMap(([engine, entry]) => [
         [entry.instanceId, { driver: entry.driver, displayName: entry.name, access: "api", config: {} }],
+        [existingCodingId(engine as keyof typeof DONEBOT_CODING), { driver: entry.driver, displayName: `${engine === "codex" ? "Codex" : "Claude Code"} · 维持现有 CLI 配置`, access: "api", config: {} }],
         [subscriptionCodingId(engine as keyof typeof DONEBOT_CODING), { driver: entry.driver, displayName: `${engine === "codex" ? "Codex" : "Claude Code"} · Subscription`, access: "subscription", config: {} }],
       ])),
     }),

@@ -5,8 +5,8 @@ import { doneBotTextModels } from "./catalog.ts";
 
 export function codingModels(engine: DoneBotCodingEngine, catalog: DoneBotCatalog | null): ModelCatalog {
   const ids = new Set(catalog?.models.filter(model => model.media_types.includes("text") && model.capabilities?.tool_calling === true &&
-    (engine === "codex" ? /^gpt-/i.test(model.id) && model.interfaces.includes("openai.responses")
-      : /^claude-/i.test(model.id) && model.interfaces.includes("anthropic.messages"))).map(model => model.id));
+    (engine === "codex" ? model.interfaces.includes("openai.responses")
+      : model.interfaces.includes("anthropic.messages"))).map(model => model.id));
   const options = doneBotTextModels(catalog).options.filter(model => ids.has(model.id));
   return { default: options.find(model => model.id === catalog?.defaults?.text)?.id ?? options[0]?.id ?? "", options };
 }

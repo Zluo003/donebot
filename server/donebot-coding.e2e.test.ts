@@ -27,7 +27,7 @@ it("switches coding execution and billing in an existing conversation with an ex
     await api("POST", "/api/donebot/login", { email: "fixture@example.invalid", password: "synthetic-fixture-password" });
     const { instances } = await api("GET", "/api/instances?fresh=1");
     const managed = instances.filter((instance: any) => instance.instanceId.startsWith("donebot-"));
-    expect(managed).toHaveLength(4);
+    expect(managed).toHaveLength(6);
     for (const instance of managed) {
       expect(instance.readOnly).not.toBe(true); expect(instance.install).toBeTruthy();
       expect(instance.access).toBe(instance.instanceId.endsWith("-subscription") ? "subscription" : "api");
@@ -60,6 +60,23 @@ it("switches coding execution and billing in an existing conversation with an ex
     expect(second.env.CLAUDE_CONFIG_DIR).not.toBe(first.env.CLAUDE_CONFIG_DIR);
     expect(second.argv).not.toContain("--resume");
     expect(second.pid).not.toBe(first.pid);
+    const existing = managed.find((instance: any) => instance.instanceId === "donebot-claude-existing");
+    expect(existing.capabilities.effortLevels).toBeUndefined(); expect(existing.authentication).toBeUndefined();
+    const configDir = join(fixture.info.dataDir, ".claude");
+    await mkdir(configDir, { recursive: true });
+    const configFile = join(configDir, "settings.json");
+    const cliSettings = JSON.stringify({ model: "user-selected-model", env: { ANTHROPIC_BASE_URL: "https://existing.invalid", ANTHROPIC_AUTH_TOKEN: "synthetic-existing-token" } });
+    await writeFile(configFile, cliSettings);
+    await api("PATCH", `/api/bots/${bot.id}/tasks/${bot.threadId}`, { modelSelection: selection(existing) });
+    await direct("Reply: existing CLI configuration fixture.");
+    const preserved = JSON.parse(await readFile(fixture.fixtureDumpPath, "utf8"));
+    expect(preserved.cwd).toBe(project); expect(preserved.argv).not.toContain("--model"); expect(preserved.argv).not.toContain("--effort");
+    expect(preserved.argv).toContain("user,project,local");
+    expect(preserved.env.ANTHROPIC_BASE_URL).toBeUndefined(); expect(preserved.env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(preserved.env.CLAUDE_CONFIG_DIR).toBeUndefined();
+    expect(await readFile(configFile, "utf8")).toBe(cliSettings);
+    await api("POST", "/api/instances/donebot-claude-existing/install", {}, 403);
+    await api("POST", "/api/instances/donebot-claude-existing/auth/sign-out", {}, 403);
     await api("PATCH", `/api/bots/${bot.id}/tasks/${bot.threadId}`, { modelSelection: selection(codex) });
     await direct("Reply: Codex coding fixture.");
     await api("PATCH", `/api/bots/${bot.id}/tasks/${bot.threadId}`, { modelSelection: selection(claude) });

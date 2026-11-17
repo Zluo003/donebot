@@ -12,7 +12,7 @@ vi.mock("../env-path.ts", async original => ({ ...await original<typeof import("
 const { createCodingDrivers } = await import("./coding-drivers.ts");
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { await Promise.all(cleanups.splice(0).map(close => close())); deps.install.mockReset().mockResolvedValue(undefined); deps.find.mockReset().mockReturnValue(["fixture-cli"]); });
-async function setup(engine: "codex" | "claude" = "codex", subscription = false) {
+async function setup(engine: "codex" | "claude" = "codex", subscription: boolean | "existing" = false) {
   const directory = await mkdtemp(join(tmpdir(), "donebot-coding-test-"));
   const nativeInstances: ProviderInstance[] = [], inputs: DriverCreateInput<unknown>[] = [];
   const events = new Set<(event: unknown) => void>();
@@ -33,11 +33,11 @@ async function setup(engine: "codex" | "claude" = "codex", subscription = false)
     } };
   let scope: DoneBotScope | null = { accountId: "synthetic-owner", installationId: "synthetic-installation" };
   const changes = new Set<() => void>();
-  const gateway = { authenticated: () => scope !== null, scope: () => scope, models: () => FAKE_DONEBOT_CATALOG,
+  const gateway = { authenticated: () => scope !== null, scope: () => scope, codingCatalog: () => FAKE_DONEBOT_CATALOG, refreshCodingCatalog: async () => {},
     onChange: (listener: () => void) => { changes.add(listener); return () => changes.delete(listener); }, requestForScope: vi.fn(async () => new Response("{}")) } as unknown as DoneBotGateway;
   const factory = createCodingDrivers(gateway, directory, { codex: native, claude: native });
   const driver = factory.drivers[engine === "codex" ? 0 : 1]!;
-  const instance = await driver.create({ instanceId: `donebot-${engine}${subscription ? "-subscription" : ""}`, displayName: "fixture", enabled: true, environment: { OPENAI_API_KEY: "must-not-forward" }, config: {} });
+  const instance = await driver.create({ instanceId: `donebot-${engine}${subscription === "existing" ? "-existing" : subscription ? "-subscription" : ""}`, displayName: "fixture", enabled: true, environment: { OPENAI_API_KEY: "must-not-forward" }, config: {} });
   cleanups.push(async () => { await instance.dispose(); await rm(directory, { recursive: true, force: true }); });
   const turn: SendTurnInput = { threadId: "thread", text: "edit this project", model, cwd: directory, approvalMode: "ask" };
   return { instance, factory, inputs, nativeInstances, turn, driver, events, gateway, change: (next: DoneBotScope | null) => { scope = next; for (const changed of changes) changed(); } };
@@ -91,4 +91,22 @@ it.each(["thread", "all", "account"])("Stop cancels startup during installation 
   else await instance.adapter.interruptTurn(turn.threadId);
   expect((await rejected).message).toContain("stopped"); finish();
   expect(nativeInstances[0]!.adapter.sendTurn).not.toHaveBeenCalled();
+});
+
+it.each(["codex", "claude"] as const)("preserves %s CLI configuration without managed routing, auth or installation", async engine => {
+  const { instance, inputs, nativeInstances, turn, gateway, change } = await setup(engine, "existing");
+  expect(inputs[0]!.config).toEqual({ preserveModelConfig: true });
+  expect(inputs[0]!.environment).toEqual({ OPENAI_API_KEY: "must-not-forward" });
+  expect(instance.models).toEqual({ default: "cli-configured", options: [{ id: "cli-configured", label: "维持现有 CLI 配置" }] });
+  expect(instance.startAuthentication).toBeUndefined(); expect(instance.getAuthentication).toBeUndefined(); expect(instance.signOut).toBeUndefined(); expect(instance.installRuntime).toBeUndefined();
+  expect(instance.adapter.capabilities.effortLevels).toBeUndefined();
+  change(null);
+  await instance.adapter.sendTurn({ ...turn, model: "cli-configured", effort: "high", variant: "override" });
+  expect(nativeInstances[0]!.adapter.sendTurn).toHaveBeenCalledWith({ ...turn, model: undefined, effort: undefined, variant: undefined, mcpFromUserConfig: false, userSkillsDir: undefined });
+  await instance.generateText!("background", { model: "must-not-select" });
+  expect(nativeInstances[0]!.generateText).toHaveBeenCalledWith("background", { model: undefined, fallback: undefined });
+  expect(gateway.requestForScope).not.toHaveBeenCalled();
+  deps.find.mockReturnValue([]);
+  await expect(instance.adapter.sendTurn(turn)).rejects.toThrow("Install and configure");
+  expect(deps.install).not.toHaveBeenCalled();
 });

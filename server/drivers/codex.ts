@@ -1,4 +1,6 @@
-import { decodeRoutedCodexConfig, managedCodexArgs, endpointCodexArgs, type CodexEndpointConfig } from "./codex-endpoint-config.ts";
+import type { CodexConfig } from "./coding-config.ts";
+export type { CodexConfig } from "./coding-config.ts";
+import { decodeRoutedCodexConfig, managedCodexArgs, endpointCodexArgs } from "./codex-endpoint-config.ts";
 export { managedCodexArgs, endpointCodexArgs } from "./codex-endpoint-config.ts";
 import { codexActionFailure } from "./codex-action-notice.ts";
 import { codexToolSurfaceArgs } from "./codex-tool-surface.ts";
@@ -75,14 +77,6 @@ export { decodeCodexSelection, readCodexModelCatalog, STATIC_CODEX_MODELS } from
 
 const DRIVER_KIND = "codex";
 
-export interface CodexConfig {
-  cli: string;
-  fullAuto: boolean;
-  preserveModelConfig?: boolean;
-  authMode?: "chatgpt-plan";
-  managed?: CodexEndpointConfig;
-  endpoint?: CodexEndpointConfig;
-}
 
 function decodeConfig(raw: unknown): CodexConfig {
   const o = (raw ?? {}) as Record<string, unknown>;

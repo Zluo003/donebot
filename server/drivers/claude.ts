@@ -1,3 +1,5 @@
+import type { ClaudeConfig } from "./coding-config.ts";
+export type { ClaudeConfig } from "./coding-config.ts";
 // Claude Code over stream-json both ways: prompt on stdin, one retained CLI process per thread,
 // each turn settled by the CLI's own `result` frame.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -262,19 +264,6 @@ const DRIVER_KIND = "claudeAgent";
 
 const NO_ANTHROPIC_KEY = "No Anthropic API key — open Settings → API keys.";
 
-export interface ClaudeConfig {
-  cli: string;
-  configDir?: string;
-  managed?: boolean;
-  managedModels?: string[];
-  /** A custom endpoint's own models: the whole catalog, first one the default. No Claude model is offered. */
-  endpointModels?: string[];
-  preserveModelConfig?: boolean;
-  permissionMode: "acceptEdits" | "auto" | "bypassPermissions";
-  tools?: string[];
-  disallowedTools?: string[];
-  requireApiKey?: boolean; bedrock?: boolean;
-}
 
 export { STATIC_CLAUDE_MODELS };
 

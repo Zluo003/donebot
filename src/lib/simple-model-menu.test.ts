@@ -353,14 +353,3 @@ describe("custom Claude endpoint", () => {
     expect(rows(menu([endpoint]), 0)).toEqual(["deepseek-chat", "deepseek-reasoner"]);
   });
 });
-
-it("keeps managed coding executors and billing sources explicit without API-key or shared-account labels", () => {
-  const gateways = ["codex", "claude"].flatMap(kind => [false, true].map(subscription => engine(`donebot-${kind}${subscription ? "-subscription" : ""}`,
-    kind === "codex" ? "codex" : "claudeAgent", `${kind} · ${subscription ? "Subscription" : "DoneBot gateway"}`, subscription ? "subscription" : "api", [{ id: "fixture-model", label: "Fixture model" }, { id: "fixture-alternative", label: "Alternative model" }])));
-  for (const instance of gateways) {
-    const selection = { instanceId: instance.instanceId, model: "fixture-model" };
-    const shown = menu(gateways, { selection, bot: { name: "Coding Bot", selection, follows: true } });
-    expect(shown.groups.find(group => group.instance.instanceId === instance.instanceId)?.label).toBe(instance.displayName);
-    expect(shown.current?.meta).toBe(instance.displayName);
-  }
-});

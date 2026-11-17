@@ -13,19 +13,18 @@ export const BACKGROUND_SETTINGS = JSON.stringify({ alwaysThinkingEnabled: false
 
 /** Isolated like a turn (no MCP servers, user or local settings) and with no built-in tools, each flag only where the CLI accepts it. */
 export function backgroundCallArgs(input: {
-  model?: string;
-  preserveModelConfig?: boolean;
+  model: string;
   outputFormat: "json" | "text";
   supports: (flag: BackgroundFlag) => boolean;
   /** False while DONEBOT_CLAUDE_INHERIT_USER_CONFIG asks for the person's own setup. */
   isolated: boolean;
 }): string[] {
-  const args = ["-p", ...(!input.preserveModelConfig && input.model ? ["--model", input.model] : []), "--output-format", input.outputFormat, "--settings", input.preserveModelConfig ? JSON.stringify({ disableAllHooks: true }) : BACKGROUND_SETTINGS];
+  const args = ["-p", "--model", input.model, "--output-format", input.outputFormat, "--settings", BACKGROUND_SETTINGS];
   if (input.supports("--tools")) args.push("--tools", "");
   if (input.supports("--no-session-persistence")) args.push("--no-session-persistence");
   if (input.isolated) {
     if (input.supports("--strict-mcp-config")) args.push("--strict-mcp-config");
-    if (input.supports("--setting-sources")) args.push("--setting-sources", input.preserveModelConfig ? "user,project,local" : "project");
+    if (input.supports("--setting-sources")) args.push("--setting-sources", "project");
   }
   return args;
 }

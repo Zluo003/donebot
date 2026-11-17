@@ -1,4 +1,3 @@
-import { isDoneBotCodingInstance } from "../../shared/donebot-coding";
 import type { InstanceInfo, ModelSelection } from "@/state/store";
 import { needsCli, needsSignIn } from "@/components/EngineSetup";
 import { t } from "./i18n";
@@ -133,7 +132,7 @@ function localFrom(rows: readonly MenuModelRow[], mixed: boolean): number | null
 function heading(instance: InstanceInfo, listed: readonly InstanceInfo[]): Pick<MenuGroup, "label" | "provider" | "account"> {
   const provider = providerName(instance);
   const family = signInFamily(instance);
-  if (isDoneBotCodingInstance(instance.instanceId) || instance.serverKind === "ollama") return { label: provider, provider };
+  if (instance.serverKind === "ollama") return { label: provider, provider };
   if (instance.access === "api") return { label: `${provider} · ${t("model.simple.apiKey")}`, provider };
   const several = family !== undefined && listed.filter((other) => signInFamily(other) === family).length > 1;
   const account = several && engineDisplayName(instance) !== provider ? engineDisplayName(instance) : undefined;
@@ -154,7 +153,6 @@ function currentRow(input: SimpleMenuInput): MenuCurrent {
   if (active.policy) return { ...row, meta: t("policy.managedBy", { organization: active.policy.organizationName }), warning: true };
   if (needsCli(active)) return { ...row, meta: t("model.setupRequired"), warning: true };
   if (needsSignIn(active) && !isCustomOnly(active) && !option?.custom) return { ...row, meta: t("model.signInRequired"), warning: true };
-  if (isDoneBotCodingInstance(active.instanceId)) return { ...row, meta: engineDisplayName(active) };
   if (bot.follows === true) return { ...row, meta: t(input.updatesBotDefault ? "model.simple.botsModelScope" : "model.simple.botsModel", { name: bot.name }) };
   const family = signInFamily(active);
   const accounts = family ? instances.filter((instance) => signInFamily(instance) === family).length : 0;

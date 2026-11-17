@@ -1,4 +1,3 @@
-import { isDoneBotCodingInstance, isExistingCodingInstance } from "../../shared/donebot-coding";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, Copy, Download, ExternalLink, KeyRound, Loader2, LogIn, TerminalSquare, X } from "lucide-react";
 import { api, type InstanceInfo, useStore } from "@/state/store";
@@ -404,7 +403,7 @@ function ManagedEngineSetup({ instance, signInOnly }: { instance: InstanceInfo; 
 }
 
 export function isApiKeyEngine(instance: InstanceInfo | undefined): boolean {
-  if (!instance || isDoneBotCodingInstance(instance.instanceId) || instance.access !== "api" || instance.managed) return false;
+  if (!instance || instance.access !== "api" || instance.managed) return false;
   return instance.driverKind !== "claudeAgent" || Boolean(instance.snapshot.version);
 }
 
@@ -428,7 +427,6 @@ export const openKeysFor = (instance?: InstanceInfo) =>
   openKeySettings(instance ? keyForInstance(instance.instanceId) ?? (instance.driverKind === "openai-compat" ? "openaiCompat" : undefined) : undefined);
 
 export function ApiKeyHint({ instance }: { instance: InstanceInfo }) {
-  if (isDoneBotCodingInstance(instance.instanceId)) return null;
   const key = window.ogb?.remoteClient?.active === true ? undefined : inlineKey(instance);
   return (
     <>
@@ -586,13 +584,6 @@ export function EngineSetup({
         <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{t("remote.client.setUpOnHost", { name: instance.displayName })}</p>
       </div>
     );
-  }
-
-  if (isExistingCodingInstance(instance.instanceId)) {
-    return <div className={cn("space-y-2 text-[12px] text-ink-secondary", className)}>
-      <p>维持现有 CLI 配置。请先在当前执行电脑或服务器上安装并配置 CLI，再检查状态。</p>
-      <CheckEnginesAgain />
-    </div>;
   }
 
   if (apiKeySetup(instance)) {

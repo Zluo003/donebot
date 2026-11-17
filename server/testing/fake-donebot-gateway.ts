@@ -26,9 +26,8 @@ export const FAKE_DONEBOT_CATALOG: DoneBotCatalog = {
 export const FAKE_DONEBOT_GIF_BASE64 = "R0lGODlhAgABAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAFAAAACwAAAAAAgABAAAIBQABAAgIACH5BAEUAAEALAAAAAACAAEAgQAA/wAAAAAAAAAAAAgFAAEACAgAOw==";
 
 export interface FakeDoneBotToolStep { name: string; arguments: Row }
-export interface FakeDoneBotRequest { codingEngine?: string; path: string; method: string; body: Row; authenticated: boolean; installation?: string; receiptId?: string; idempotencyKey?: string }
+export interface FakeDoneBotRequest { path: string; method: string; body: Row; authenticated: boolean; installation?: string; receiptId?: string; idempotencyKey?: string }
 export interface FakeDoneBotGateway {
-  setCodingModels(engine: "codex" | "claude", models: string[]): void;
   setAuthSettings(settings: Row): void;
   setAuthRequires2fa(required: boolean): void;
   setTemplateDocuments(documents: unknown[] | null): void;
@@ -62,8 +61,6 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
   let authSettings: Row = { registration_enabled: true }, requires2fa = false;
   let templateDocuments: unknown[] | null = [];
   const requests: FakeDoneBotRequest[] = [];
-  const codingModels = { codex: catalog.models.filter(model => model.interfaces.includes("openai.responses")).map(model => model.id),
-    claude: catalog.models.filter(model => model.interfaces.includes("anthropic.messages")).map(model => model.id) };
   let plan: FakeDoneBotToolStep[] = [], answer = "Synthetic DoneBot fixture complete.";
   const modelPlans = new Map<string, { steps: FakeDoneBotToolStep[]; answer: string; resumeAnswer: string; resumeSteps?: (prompt: string) => FakeDoneBotToolStep[] }>();
   const receiptPlans = new Map<string, FakeDoneBotToolStep[]>();
@@ -83,7 +80,7 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
     const authenticated = request.headers.authorization === "Bearer fixture-installation-key" || installation !== undefined;
     const login = request.headers.authorization === "Bearer fixture-access-token" || runtimeRead && installation !== undefined && installation === request.headers["x-donebot-installation"];
     const logged = { ...body, ...(body.password ? { password: "[fixture password omitted]" } : {}), ...(body.new_password ? { new_password: "[fixture password omitted]" } : {}) };
-    const recorded: FakeDoneBotRequest = { ...(typeof request.headers["x-donebot-coding-engine"] === "string" ? { codingEngine: request.headers["x-donebot-coding-engine"] } : {}), path: originalPath, method: request.method!, body: logged, authenticated,
+    const recorded: FakeDoneBotRequest = { path: originalPath, method: request.method!, body: logged, authenticated,
       ...(typeof request.headers["idempotency-key"] === "string" ? { idempotencyKey: request.headers["idempotency-key"] } : {}),
       ...(installation ? { installation } : typeof request.headers["x-donebot-installation"] === "string" ? { installation: request.headers["x-donebot-installation"] } : {}) };
     requests.push(recorded);
@@ -107,12 +104,6 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
     if (path === "/api/v1/auth/send-verify-code" || path === "/api/v1/auth/forgot-password") return send(response, { code: 0, data: { countdown: 60, expires_in: 900 } });
     if (path === "/api/v1/auth/reset-password") return body.email_code === "123456" ? send(response, { code: 0, data: { message: "Synthetic password updated." } }) : send(response, { reason: "INVALID_RESET_CODE" }, 400);
     if (path === "/api/v1/donebot/installations/claim") return login ? send(response, { credential: "fixture-installation-key" }) : send(response, {}, 401);
-    if (path === "/v1/models") {
-      if (!authenticated) return send(response, {}, 401);
-      const engine = request.headers["x-donebot-coding-engine"] === "codex" ? "codex" : "claude";
-      if (request.headers["x-donebot-coding-engine"]) response.setHeader("X-DoneBot-Coding-Engine", engine);
-      return send(response, { object: "list", data: codingModels[engine].map(id => ({ id })) });
-    }
     if (path === "/api/v1/donebot/models") return login ? send(response, catalog) : send(response, {}, 401);
     if (path === "/api/v1/donebot/templates" || path.startsWith("/api/v1/donebot/templates/")) {
       if (!login) return send(response, {}, 401);
@@ -250,7 +241,6 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return { origin, requests, cloud,
-    setCodingModels(engine, models) { codingModels[engine] = models; },
     setAuthSettings(settings) { authSettings = settings; },
     setAuthRequires2fa(required) { requires2fa = required; },
     setTemplateDocuments(documents) { templateDocuments = documents; },

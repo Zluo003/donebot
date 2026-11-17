@@ -1,4 +1,3 @@
-import type { DoneBotCodingEngine } from "../../shared/donebot-coding.ts";
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import { boundedResponseText } from "./bounded-response.ts";
@@ -111,7 +110,6 @@ export class DoneBotGateway {
   private session: DoneBotCredential | null = null;
   private pending2fa: string | null = null;
   private currentCatalog: DoneBotCatalog | null = null;
-  private codingCatalogs: Partial<Record<DoneBotCodingEngine, DoneBotCatalog>> = {};
   private etag: string | null = null;
   private accountSnapshot: { concurrency: number; at: number } | null = null;
   private accountFlight: Promise<number> | null = null;
@@ -181,7 +179,6 @@ export class DoneBotGateway {
   bindMediaActivity(read: (accountId: string) => number): void { this.mediaActivity = read; }
   activeModelCount(accountId: string): number { return this.activeModels.get(accountId) ?? 0; }
   models(): DoneBotCatalog | null { return this.currentCatalog; }
-  codingCatalog(engine: DoneBotCodingEngine): DoneBotCatalog | null { return this.codingCatalogs[engine] ?? null; }
   scope(): DoneBotScope | null {
     return this.session?.credential ? { accountId: this.session.user.id, installationId: this.session.installationId } : null;
   }
@@ -302,7 +299,6 @@ export class DoneBotGateway {
     for (const controller of this.controllers) controller.abort(new Error("DoneBot account changed."));
     this.controllers.clear();
     this.currentCatalog = null;
-    this.codingCatalogs = {};
     this.etag = null;
     this.accountSnapshot = null;
     this.accountFlight = null;
@@ -368,48 +364,14 @@ export class DoneBotGateway {
       headers: { authorization: `Bearer ${session.mode === "installation" ? session.credential : session.accessToken}`, "X-DoneBot-Installation": session.installationId,
         ...(this.etag ? { "If-None-Match": this.etag } : {}) }, signal: AbortSignal.timeout(30_000) });
     if (epoch !== this.epoch) throw new DoneBotGatewayError(409, "account_changed", "DoneBot account changed.");
-    if (res.status === 304 && this.currentCatalog) {
-      await this.refreshCodingCatalogs();
-      return this.currentCatalog;
-    }
+    if (res.status === 304 && this.currentCatalog) return this.currentCatalog;
     if (!res.ok) throw new DoneBotGatewayError(res.status, "catalog_unavailable", "DoneBot model list could not be loaded. Refresh or sign in again.");
     const next = catalog(await this.readGatewayJson(res));
     this.checkEpoch(epoch);
     this.currentCatalog = next;
     this.etag = res.headers.get("etag");
-    await this.refreshCodingCatalogs();
-    this.checkEpoch(epoch);
     this.changed();
     return next;
-  }
-
-  private async refreshCodingCatalogs(): Promise<void> {
-    const results = await Promise.allSettled((["codex", "claude"] as const).map(engine => this.refreshCodingCatalog(engine)));
-    for (const result of results) if (result.status === "rejected" && result.reason instanceof DoneBotGatewayError && result.reason.code === "account_changed") throw result.reason;
-  }
-
-  async refreshCodingCatalog(engine: DoneBotCodingEngine): Promise<void> {
-    const scope = this.scope(), epoch = this.epoch;
-    if (!scope) return;
-    try {
-      const response = await this.requestForScope(scope, "/v1/models", { signal: AbortSignal.timeout(30_000) }, engine);
-      if (!response.ok || response.headers.get("X-DoneBot-Coding-Engine") !== engine) throw new DoneBotGatewayError(response.ok ? 503 : response.status, "coding_catalog_unavailable", "The native coding group model list could not be loaded.");
-      const body = await this.readGatewayJson(response) as { data?: { id?: unknown }[] };
-      if (!Array.isArray(body?.data) || body.data.length > 10_000 || body.data.some(model => typeof model?.id !== "string" || !model.id || model.id.length > 256)) {
-        throw new DoneBotGatewayError(502, "coding_catalog_invalid", "Invalid native coding model list.");
-      }
-      const ids = [...new Set(body.data.map(model => model.id as string))];
-      this.checkEpoch(epoch);
-      this.codingCatalogs[engine] = { gateway_contract_version: 4, catalog_scope_id: `${scope.accountId}:${engine}`, catalog_version: "native",
-        defaults: { text: ids[0] ?? "" }, models: ids.map(id => ({ id, display_name: id, media_types: ["text"],
-          interfaces: [engine === "codex" ? "openai.responses" : "anthropic.messages"], platforms: [engine === "codex" ? "openai" : "anthropic"], capabilities: { tool_calling: true } })) };
-      this.changed();
-    } catch (error) {
-      this.checkEpoch(epoch);
-      delete this.codingCatalogs[engine];
-      this.changed();
-      throw error;
-    }
   }
 
   private async accountRequest(path: string, expected?: DoneBotScope, signal?: AbortSignal, maxBytes?: number): Promise<unknown> {
@@ -653,25 +615,18 @@ export class DoneBotGateway {
     }
   }
 
-  async requestForScope(scope: DoneBotScope, path: string, init: RequestInit = {}, codingEngine?: DoneBotCodingEngine): Promise<Response> {
+  async requestForScope(scope: DoneBotScope, path: string, init: RequestInit = {}): Promise<Response> {
     const url = doneBotRequestUrl(path, this.origin);
     const s = this.session;
     if (!s?.credential || s.user.id !== scope.accountId || s.installationId !== scope.installationId) {
       throw new DoneBotGatewayError(409, "account_changed", "This job belongs to another DoneBot account or installation.");
     }
-    const headers = new Headers(init.headers);
-    for (const key of ["authorization", "x-api-key", "x-goog-api-key", "cookie", "proxy-authorization", "x-donebot-coding-engine"]) headers.delete(key);
-    headers.set("authorization", `Bearer ${s.credential}`);
-    headers.set("X-DoneBot-Installation", s.installationId);
-    if (codingEngine) {
-      const method = (init.method ?? "GET").toUpperCase();
-      const allowed = method === "GET" && url.pathname === "/v1/models" || method === "POST" &&
-        (codingEngine === "codex" ? url.pathname === "/v1/responses" : ["/v1/messages", "/v1/messages/count_tokens"].includes(url.pathname));
-      if (!allowed) throw new DoneBotGatewayError(400, "coding_route_invalid", "Unsupported native coding route.");
-      headers.set("X-DoneBot-Coding-Engine", codingEngine);
-    }
     const controller = new AbortController();
     this.controllers.add(controller);
+    const headers = new Headers(init.headers);
+    for (const key of ["authorization", "x-api-key", "x-goog-api-key", "cookie", "proxy-authorization"]) headers.delete(key);
+    headers.set("authorization", `Bearer ${s.credential}`);
+    headers.set("X-DoneBot-Installation", s.installationId);
     const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
     const modelPost = (init.method ?? "GET").toUpperCase() === "POST" &&
       (["/v1/messages", "/v1/responses", "/v1/chat/completions", "/v1/systemone", "/v1/audio/speech"].includes(url.pathname) || geminiPath.test(url.pathname));

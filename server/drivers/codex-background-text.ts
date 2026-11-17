@@ -95,8 +95,7 @@ const BACKGROUND_FEATURES_OFF = [
 
 export interface CodexBackgroundArgsInput {
   /** A bare id, as `-m` takes it; a provider rides separately. */
-  model: string | null;
-  preserveModelConfig?: boolean;
+  model: string;
   modelProvider?: string | null;
   providerArgs: readonly string[];
   cwd: string;
@@ -108,10 +107,11 @@ export function codexBackgroundArgs(input: CodexBackgroundArgsInput): string[] {
     "--json",
     "--ephemeral",
     "--skip-git-repo-check",
-    ...(!input.preserveModelConfig ? ["--ignore-user-config"] : []),
+    "--ignore-user-config",
     "--sandbox", "read-only",
     "--cd", input.cwd,
-    ...(!input.preserveModelConfig && input.model ? ["--model", input.model, "-c", `model_reasoning_effort=${JSON.stringify(CODEX_BACKGROUND_EFFORT)}`] : []),
+    "--model", input.model,
+    "-c", `model_reasoning_effort=${JSON.stringify(CODEX_BACKGROUND_EFFORT)}`,
     "-c", 'approval_policy="never"',
     "-c", 'web_search="disabled"',
     ...(input.modelProvider ? ["-c", `model_provider=${JSON.stringify(input.modelProvider)}`] : []),
@@ -130,8 +130,7 @@ export interface CodexOneShotInput {
   cli: string;
   env: Record<string, string | undefined>;
   prompt: string;
-  model: string | null;
-  preserveModelConfig?: boolean;
+  model: string;
   modelProvider?: string | null;
   providerArgs: readonly string[];
   options?: TextGenerationOptions;
@@ -145,7 +144,7 @@ export async function runCodexOneShot(input: CodexOneShotInput): Promise<string>
   const cwd = mkdtempSync(join(tmpdir(), "omb-codex-background-"));
   try {
     return await new Promise<string>((resolve, reject) => {
-      const argv = codexBackgroundArgs({ model: input.model, modelProvider: input.modelProvider, providerArgs: input.providerArgs, cwd, preserveModelConfig: input.preserveModelConfig });
+      const argv = codexBackgroundArgs({ model: input.model, modelProvider: input.modelProvider, providerArgs: input.providerArgs, cwd });
       const child = input.spawn(input.cli, argv, { cwd, env: input.env, stdio: ["pipe", "pipe", "pipe"], botWork: true });
       const describe = input.describeError ?? ((message: string) => message.slice(0, 400));
       let settled = false;
@@ -201,7 +200,7 @@ export async function runCodexOneShot(input: CodexOneShotInput): Promise<string>
           const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined);
           // codex's input_tokens already includes the cached share.
           usage = {
-            model: input.model ?? "cli-configured",
+            model: input.model,
             input: count(reported.input_tokens),
             output: count(reported.output_tokens),
             ...(count(reported.cached_input_tokens) !== undefined ? { cachedInput: count(reported.cached_input_tokens) } : {}),

@@ -1,6 +1,4 @@
-import type { CodexConfig } from "./coding-config.ts";
-export type { CodexConfig } from "./coding-config.ts";
-import { decodeRoutedCodexConfig, managedCodexArgs, endpointCodexArgs } from "./codex-endpoint-config.ts";
+import { decodeRoutedCodexConfig, managedCodexArgs, endpointCodexArgs, type CodexEndpointConfig } from "./codex-endpoint-config.ts";
 export { managedCodexArgs, endpointCodexArgs } from "./codex-endpoint-config.ts";
 import { codexActionFailure } from "./codex-action-notice.ts";
 import { codexToolSurfaceArgs } from "./codex-tool-surface.ts";
@@ -77,6 +75,13 @@ export { decodeCodexSelection, readCodexModelCatalog, STATIC_CODEX_MODELS } from
 
 const DRIVER_KIND = "codex";
 
+export interface CodexConfig {
+  cli: string;
+  fullAuto: boolean;
+  authMode?: "chatgpt-plan";
+  managed?: CodexEndpointConfig;
+  endpoint?: CodexEndpointConfig;
+}
 
 function decodeConfig(raw: unknown): CodexConfig {
   const o = (raw ?? {}) as Record<string, unknown>;
@@ -86,7 +91,6 @@ function decodeConfig(raw: unknown): CodexConfig {
   return {
     cli: typeof o.cli === "string" ? o.cli : "codex",
     fullAuto: o.fullAuto === true,
-    ...(o.preserveModelConfig === true ? { preserveModelConfig: true } : {}),
     ...(o.authMode === "chatgpt-plan" ? { authMode: "chatgpt-plan" as const } : {}),
     ...(o.endpoint ? { endpoint: decodeRoutedCodexConfig(o.endpoint as object, "Direct API") } : {}),
     ...(o.managed && typeof o.managed === "object" ? { managed: decodeRoutedCodexConfig(o.managed) } : {}),
@@ -338,7 +342,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         NPM_CONFIG_LOGLEVEL: "error",
       };
       // A leaked API key silently flips Codex's own ChatGPT login to pay-as-you-go.
-      if (!config.preserveModelConfig) delete env.OPENAI_API_KEY;
+      delete env.OPENAI_API_KEY;
       stripWorkspaceCredentialEnv(env);
       delete env.OPENMAUSBOT_CHATGPT_TOKEN;
       delete env.OPENMAUSBOT_CODEX_API_KEY;
@@ -392,7 +396,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
     let startupModelRefresh: Promise<void> | null = null;
     if (routed) {
       await refreshModels();
-    } else if (!config.preserveModelConfig) {
+    } else {
       startupModelRefresh = (await openStartupModelCatalog({
         instanceId,
         use: (catalog) => { models = catalog; },
@@ -406,7 +410,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
     }
     // OpenAI can refuse Codex's own ChatGPT login while `codex login status` still reports it. Only a
     // stored ChatGPT login is marked: an API-key login cannot be fixed by a ChatGPT sign-in.
-    const ownLogin = !plan && !routed && !config.preserveModelConfig;
+    const ownLogin = !plan && !routed;
     const loginCheck = codexLoginCheck(config.cli);
     const loginMark = (): [string, string] | null => {
       const env = childEnv();
@@ -1536,7 +1540,6 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
     const warning = planWarning ?? (planAuth && !planRenewal.noteVersion(version) ? "Update Codex to 0.165.0 or newer to renew ChatGPT credentials during a running task." : undefined);
     if (planAuth) return { state: "available", version, chatgptPlan: true, billing: "subscription", ...await planAuth.snapshot(), update: await codexReleaseUpdate(version, config.cli),
       ...(warning ? { warning: { title: "Check ChatGPT connection", message: warning } } : {}) };
-    if (config.preserveModelConfig) return { state: "available", version };
     if (config.endpoint) return { state: "available", version, authenticated: Boolean(input.environment.OPENMAUSBOT_CODEX_API_KEY && input.environment.CODEX_HOME), billing: "metered" };
     if (config.managed) return { state: "available", version, authenticated: Boolean(input.environment.OPENMAUSBOT_COMPANY_API_KEY && input.environment.CODEX_HOME), billing: "metered" };
     const previousCliVersion = modelsCliVersion;
@@ -1591,8 +1594,6 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
       }
       providerArgs = managedCodexArgs(config.managed);
     }
-    if (config.preserveModelConfig) return runCodexOneShot({ spawn: spawnCli, kill: killCliTree, cli: config.cli, env, prompt,
-      model: null, providerArgs: [], options, preserveModelConfig: true });
     const route = codexBackgroundRoute(models, smallModelsUsable(), options.fallback, openaiUnreachable);
     if (!route) { authBridge?.close(); throw new Error("Codex lists no model for background calls. Refresh models in Settings → Model providers → Codex."); }
     try { return await runCodexBackgroundRoute(route, (id) => {

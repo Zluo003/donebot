@@ -11,7 +11,6 @@ import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { EXIT, HeadlessError } from "../server/headless/args.ts";
 import { runHeadlessCommand } from "../server/headless/main.ts";
 import type { handleToolCall, request } from "./mcp-server.ts";
-import { installFakeCodingClis } from "./testing/coding-clis.ts";
 import { launchUi, runControlOmbUi } from "./testing/control-omb-ui.ts";
 import { removeTempDir, waitForExit } from "../server/testing/cleanup.ts";
 import { hostTimeout } from "../server/testing/host-timeout.ts";
@@ -276,7 +275,7 @@ export async function launchVerificationServer(
   enterprise?: { dir: string; licenseKey: string },
   room?: { scripted: boolean },
   /** Optional repository-owned fake providers for multi-engine setup checks. */
-  extraProviders: Array<"codex" | "cline" | "copilot" | "customAcp" | "donebotCoding"> = [],
+  extraProviders: Array<"codex" | "cline" | "copilot" | "customAcp"> = [],
   /** Programmatic tests only: an owned loopback Boat provider, never a live account. */
   boatFixtureApi?: string,
   /** Programmatic web UI qualification against the fixture's static server. */
@@ -358,7 +357,6 @@ export async function launchVerificationServer(
 
   const log = openSync(logPath, "a", 0o600);
   const childEnv = verificationServerEnvironment(parentEnv, dataDir, port);
-  if (extraProviders.includes("donebotCoding")) childEnv.DONEBOT_EXTRA_PATH = installFakeCodingClis(dataDir);
   if (donebotDesktopSocket) childEnv.DONEBOT_CLOUD_DESKTOP_SOCKET = donebotDesktopSocket;
   // Opt-in live Local VM fixture: keep the temporary home and fake engine,
   // granting only the explicitly selected machine connection and static UI.

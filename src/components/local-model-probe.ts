@@ -1,5 +1,4 @@
 // The model picker looks for an engine's local models with a refresh that never holds it past the timeout.
-import { isDoneBotCodingInstance } from "../../shared/donebot-coding";
 import type { InstanceInfo } from "@/state/store";
 import { needsCli } from "./EngineSetup";
 
@@ -22,6 +21,6 @@ export function probeLocalModels(
 }
 
 export function offersLocalModels(instance: InstanceInfo | undefined, localCount: number): boolean {
-  if (!instance || isDoneBotCodingInstance(instance.instanceId)) return false;
+  if (!instance) return false;
   return localCount > 0 || (instance.driverKind === "claudeAgent" && !needsCli(instance) && !instance.policy);
 }

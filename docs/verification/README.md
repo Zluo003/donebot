@@ -50,7 +50,6 @@ Use only mapped, tested commands:
 - [Work summaries and engine hooks](digests.md)
 - [OpenAI-compatible structured tools](openai-tools.md)
 - [DoneBot unified gateway, account flows and media](donebot-gateway.md)
-- [Managed Codex and Claude Code executors](donebot-coding.md)
 - [DoneBot mobile hub, encrypted relay and notifications](donebot-mobile.md)
 - [Mobile attachment transfer and resume](mobile-file-resume.md)
 - [DoneBot media capabilities and input limits](donebot-media-capabilities.md)
@@ -183,10 +182,8 @@ The [DoneBot Cloud reconnect checks](donebot-cloud-reconnect.md) cover native
 Cookie reuse and renewal, cached conversations while loading, and interrupted
 media downloads through an isolated production request handler.
 
-The [published Cloud image record](cloud-images-2026-11-17-native-coding.md) identifies the
-verified coding executor images and the controlled upgrade procedure for existing nodes;
-the [Bot artifact image record](cloud-images-2026-11-17-artifacts.md),
-the [attachment reuse image record](cloud-images-2026-11-17-attachments.md),
+The [published Cloud image record](cloud-images-2026-11-17-attachments.md) identifies the
+verified image digests and the controlled upgrade procedure for existing nodes;
 the [attachment resume image record](cloud-images-2026-11-17.md) and the
 [earlier image record](cloud-images-2026-11-16.md) remain available for history.
 

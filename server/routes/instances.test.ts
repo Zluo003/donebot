@@ -358,14 +358,3 @@ describe("looking for Ollama", () => {
     expect((await fetch(`${hosted.base}/api/instances/ollama`)).status).toBe(403);
   });
 });
-
-it("permits only explicitly managed coding actions for the owner on a hosted model workspace", async () => {
-  const { base } = await serve({ hostedModels: true, managedInstanceAction: (path, method) => method === "POST" && path === "/api/instances/a/refresh-models" });
-  expect((await fetch(base + "/api/instances/a/refresh-models", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(200);
-  expect((await fetch(base + "/api/instances/a/auth/start", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(403);
-});
-
-it("denies managed coding changes to a non-admin paired client", async () => {
-  const { base } = await serve({ hostedModels: true, managedInstanceAction: () => true }, { kind: "loopback", trust: "service", scopes: [] });
-  expect((await fetch(base + "/api/instances/a/refresh-models", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(403);
-});

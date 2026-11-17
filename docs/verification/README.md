@@ -183,7 +183,7 @@ The [DoneBot Cloud reconnect checks](donebot-cloud-reconnect.md) cover native
 Cookie reuse and renewal, cached conversations while loading, and interrupted
 media downloads through an isolated production request handler.
 
-The [published Cloud image record](cloud-images-2026-11-17-coding.md) identifies the
+The [published Cloud image record](cloud-images-2026-11-17-native-coding.md) identifies the
 verified coding executor images and the controlled upgrade procedure for existing nodes;
 the [Bot artifact image record](cloud-images-2026-11-17-artifacts.md),
 the [attachment reuse image record](cloud-images-2026-11-17-attachments.md),

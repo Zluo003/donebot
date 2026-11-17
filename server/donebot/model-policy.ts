@@ -1,5 +1,8 @@
+import { codingInstanceAction } from "../../shared/donebot-coding.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { DONEBOT_MODEL_CREDENTIAL_RULE } from "./credential-policy.ts";
+
+export { codingInstanceAction };
 
 const PROVIDER_CONFIG = new Set(["instances", "anthropic", "openai", "openrouter", "openaiCompat", "xai", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "opencodeGo", "deepseek", "imageGen"]);
 
@@ -14,7 +17,7 @@ export function doneBotConfigRefusal(body: Record<string, unknown>): string | un
 }
 
 export const doneBotModelRoutes: RouteHandler = async ({ res, path, method, json }) => {
-  if ((path.startsWith("/api/instances/") && method !== "GET") || path === "/api/instances/ollama" || path === "/api/images/openrouter-models" || path === "/api/images/test") return json(res, 403, { error: DONEBOT_MODEL_CREDENTIAL_RULE });
+  if ((path.startsWith("/api/instances/") && method !== "GET" && !codingInstanceAction(path, method)) || path === "/api/instances/ollama" || path === "/api/images/openrouter-models" || path === "/api/images/test") return json(res, 403, { error: DONEBOT_MODEL_CREDENTIAL_RULE });
   if (path === "/api/tts/transcribe" || path === "/api/live/start") return json(res, 409, { error: "当前网关尚未开放语音识别或实时通话模型。" });
   return PASS;
 };

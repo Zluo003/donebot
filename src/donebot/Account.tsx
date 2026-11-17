@@ -10,6 +10,7 @@ import { useDesktopCapabilities } from "@/components/DesktopCapabilities";
 import { DoneBotSignIn } from "./SignIn";
 import { isDoneBotCloudBrowser } from "./services";
 import { DoneBotCloudAccess } from "./CloudAccess";
+import { DoneBotCodingSettings } from "./CodingSettings";
 import { DoneBotMediaSettingsPanel } from "./MediaSettings";
 
 const buttonClass = "ui-button inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -68,6 +69,7 @@ export function DoneBotAccountSettings() {
     <Card title="DoneBot Cloud" subtitle="使用同一个 DoneBot 账号，开通或管理你的专属云实例。">
       {isDoneBotCloudBrowser() ? <p className="text-[13px] text-ink-secondary">请在本机 DoneBot 客户端管理 Cloud 订阅。</p> : <DoneBotCloudAccess key={state.config?.donebot?.user?.id} heading={false} />}
     </Card>
+    <DoneBotCodingSettings />
     <DoneBotMediaSettingsPanel key={state.config?.donebot?.user?.id} />
     <Card title="可用模型" subtitle="账号可使用的模型将自动同步。">
       <button type="button" disabled={busy} onClick={() => void refresh()} className={buttonClass}><RefreshCw size={14} className={busy ? "animate-spin" : ""} />刷新模型</button>

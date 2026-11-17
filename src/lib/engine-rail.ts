@@ -1,3 +1,4 @@
+import { isDoneBotCodingInstance } from "../../shared/donebot-coding";
 import type { InstanceInfo } from "@/state/store";
 
 export { engineDisplayName } from "@/lib/engine-name";
@@ -21,8 +22,8 @@ export function modelsAwaitEngine(instance: Pick<InstanceInfo, "modelsUnconfirme
 
 export type SignInFamily = "claude" | "openai";
 
-export function signInFamily(instance: { driverKind: string; access?: InstanceInfo["access"] } | undefined): SignInFamily | undefined {
-  if (!instance || instance.access === "api") return undefined;
+export function signInFamily(instance: { instanceId?: string; driverKind: string; access?: InstanceInfo["access"] } | undefined): SignInFamily | undefined {
+  if (!instance || instance.access === "api" || (instance.instanceId !== undefined && isDoneBotCodingInstance(instance.instanceId))) return undefined;
   if (instance.driverKind === "claudeAgent") return "claude";
   if (instance.driverKind === "codex") return "openai";
   return undefined;
@@ -30,7 +31,7 @@ export function signInFamily(instance: { driverKind: string; access?: InstanceIn
 
 export const SIGN_IN_FAMILY_LABEL: Record<SignInFamily, string> = { claude: "Claude", openai: "OpenAI" };
 
-export function isClaudeAccount(instance: { driverKind: string; access?: InstanceInfo["access"] } | undefined): boolean {
+export function isClaudeAccount(instance: { instanceId?: string; driverKind: string; access?: InstanceInfo["access"] } | undefined): boolean {
   return signInFamily(instance) === "claude";
 }
 

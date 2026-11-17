@@ -1,3 +1,4 @@
+import { isDoneBotCodingInstance } from "../../shared/donebot-coding";
 import { Check, KeyRound, Plus, Search } from "lucide-react";
 import type { InstanceInfo } from "@/state/store";
 import { engineDisplayName, isClaudeAccount, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail, type SignInFamily } from "@/lib/engine-rail";
@@ -168,7 +169,7 @@ export function ModelEngineRail({ instances, selectedInstance, claudeInstance, o
     <div className="flex w-14 shrink-0 flex-col gap-1 overflow-y-auto border-r-[0.5px] border-ink/10 p-2">
       {subscription.length > 0 && <div className={cn(RAIL_LABEL, "pt-0.5")}>{t("model.rail.cloud")}</div>}
       {subscription.map(railButton)}
-      {(api.length > 0 || onAddApiKeys) && <div className={cn(RAIL_LABEL, subscription.length > 0 ? "pt-2" : "pt-0.5")}>{t("model.rail.apiKeys")}</div>}
+      {(api.length > 0 || onAddApiKeys) && <div className={cn(RAIL_LABEL, subscription.length > 0 ? "pt-2" : "pt-0.5")}>{api.length > 0 && api.every(({ instance }) => instance.instanceId === "donebot" || isDoneBotCodingInstance(instance.instanceId)) ? "DoneBot" : t("model.rail.apiKeys")}</div>}
       {api.map(railButton)}
       {onAddApiKeys && (
         <button

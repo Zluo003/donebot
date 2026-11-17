@@ -50,6 +50,7 @@ Use only mapped, tested commands:
 - [Work summaries and engine hooks](digests.md)
 - [OpenAI-compatible structured tools](openai-tools.md)
 - [DoneBot unified gateway, account flows and media](donebot-gateway.md)
+- [Managed Codex and Claude Code executors](donebot-coding.md)
 - [DoneBot mobile hub, encrypted relay and notifications](donebot-mobile.md)
 - [Mobile attachment transfer and resume](mobile-file-resume.md)
 - [DoneBot media capabilities and input limits](donebot-media-capabilities.md)

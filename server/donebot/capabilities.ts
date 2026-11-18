@@ -5,15 +5,17 @@ import { SUNO_FIELDS, SUNO_FIXED_PARAMETERS, SUNO_FORMATS, SUNO_LIMITS, SUNO_VAR
 import { seedance, seedanceParameterRules, SEEDANCE_FIELDS, SEEDANCE_RATIOS, type SeedanceReferenceConstraints } from "./seedance-capabilities.ts";
 import { museVideo, museParameterRules, validateMuseParameters } from "./muse-capabilities.ts";
 
-type Modality = "text" | "image" | "audio" | "video";
+type Modality = "text" | "image" | "audio" | "video" | "pdf";
 export interface NativeModel {
   officialId: string;
   kind: DoneBotModelKind;
   protocol?: DoneBotProtocol;
+  nativeInterfaceOnly?: boolean;
   tools: boolean;
   input: Modality[];
   output: Modality[];
   contextWindow?: number;
+  maxInput?: number;
   maxOutput?: number;
   outputLimits?: { sharedWithInput: boolean; streamingRequest: number; nonStreamingRequest: number; continuation?: { apiVersion: string; field: string } };
   structuredOutput?: boolean;
@@ -75,6 +77,7 @@ export interface NativeModel {
 }
 
 const VERIFIED = "2026-11-05";
+const LATEST_LLM_VERIFIED = "2026-11-18";
 const OPENAI = "https://developers.openai.com/api/docs/";
 const CLAUDE = "https://platform.claude.com/docs/en/";
 const GOOGLE = "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/";
@@ -98,6 +101,27 @@ function claude(id: string, defaultEffort: string, modes: string[], restrictions
 function gpt(id: string, none = false): NativeModel {
   return text(id, "responses", 1_050_000, 128_000, [`${OPENAI}models/${id}`, `${OPENAI}guides/function-calling`], {
     reasoning: { field: "reasoning.effort", levels: none ? ["none", ...effort] : effort, ...(id === "gpt-6-astra" ? {} : { default: "medium" }) },
+  });
+}
+export function isGpt62(id: string): boolean {
+  return id === "gpt-6.2-astra" || id === "gpt-6.2-sol";
+}
+function gpt62(id: string): NativeModel {
+  return text(id, "responses", 1_050_000, 128_000, [`${OPENAI}models/${id}`, `${OPENAI}guides/latest-model?model=${id}`], {
+    verifiedAt: LATEST_LLM_VERIFIED, nativeInterfaceOnly: true, maxInput: 922_000,
+    reasoning: { field: "reasoning.effort", levels: effort, restrictions: ["none and minimal are unsupported."] },
+  });
+}
+function gemini4(id: "gemini-4-carbon" | "gemini-4-hydrogen"): NativeModel {
+  const hydrogen = id === "gemini-4-hydrogen";
+  return text(id, "gemini", 1_048_576, 1_048_576, [
+    `${GOOGLE}${hydrogen ? "gemini/4-hydrogen" : "guides/gemini-4-carbon"}`, `${GOOGLE}thinking`,
+  ], {
+    verifiedAt: LATEST_LLM_VERIFIED, nativeInterfaceOnly: true, input: ["text", "image", "audio", "video", "pdf"],
+    outputLimits: { sharedWithInput: true, streamingRequest: 65_536, nonStreamingRequest: hydrogen ? 65_536 : 32_768,
+      continuation: { apiVersion: "v1beta1", field: "continuation_token" } },
+    reasoning: { field: "generationConfig.thinkingConfig.thinkingLevel", levels: ["LOW", "MEDIUM", "HIGH", ...(hydrogen ? ["XHIGH"] : [])],
+      default: hydrogen ? "HIGH" : "MEDIUM", restrictions: ["MINIMAL and thinkingBudget are unsupported."] },
   });
 }
 function gemini(id: string): NativeModel {
@@ -140,6 +164,15 @@ function gptImage26(id: string): NativeModel {
 const MODELS: Readonly<Record<string, NativeModel>> = {
   "muse-video": museVideo,
   "claude-fable-5-1": claude("claude-fable-5-1", "high", ["adaptive"], ["Thinking cannot be disabled; legacy enabled/budget_tokens is unsupported."]),
+  "claude-fable-5-2": {
+    ...claude("claude-fable-5-2", "high", ["adaptive"], [
+      "Thinking cannot be disabled; legacy enabled/budget_tokens is unsupported.",
+      "Omit sampling controls and forced tool_choice. Preserve signed thinking and its request prefix during tool continuation.",
+      "Thinking is bound to the upstream account or linked accounts. Claude API requires 30-day retention unless Anthropic authorizes an exception.",
+    ]),
+    verifiedAt: LATEST_LLM_VERIFIED, nativeInterfaceOnly: true,
+    sources: [`${CLAUDE}models/fable-5-2/migration-guide`, `${CLAUDE}build-with-claude/effort`],
+  },
   "claude-haiku-5-5": claude("claude-haiku-5-5", "medium", ["adaptive", "disabled"], ["disabled is accepted only at high effort or below."]),
   "claude-opus-5-5": claude("claude-opus-5-5", "medium", ["adaptive"], ["Thinking cannot be disabled; legacy enabled/budget_tokens is unsupported."]),
   "claude-sonnet-5-5": claude("claude-sonnet-5-5", "high", ["adaptive", "between_tools"], ["disabled is unsupported; between_tools is accepted only at high effort or below."]),
@@ -149,6 +182,8 @@ const MODELS: Readonly<Record<string, NativeModel>> = {
     }),
   "gemini-3.8-flash": gemini("gemini-3.8-flash"),
   "gemini-4-argon": gemini("gemini-4-argon"),
+  "gemini-4-carbon": gemini4("gemini-4-carbon"),
+  "gemini-4-hydrogen": gemini4("gemini-4-hydrogen"),
   "glm-5.3-flash": text("glm-5.3-flash", "chat", 1_000_000, 131_072,
     ["https://docs.z.ai/guides/llm/glm-5.3-flash"], {
       verifiedAt: "2026-11-11",
@@ -157,6 +192,8 @@ const MODELS: Readonly<Record<string, NativeModel>> = {
   "gpt-6-astra": gpt("gpt-6-astra"),
   "gpt-6.1-sol": gpt("gpt-6.1-sol"),
   "gpt-6.1-terra": gpt("gpt-6.1-terra", true),
+  "gpt-6.2-astra": gpt62("gpt-6.2-astra"),
+  "gpt-6.2-sol": gpt62("gpt-6.2-sol"),
   "gpt-image-2.5-flare": gptImage("gpt-image-2.5-flare"),
   "gpt-image-2.5-sunburst": gptImage("gpt-image-2.5-sunburst"),
   "gpt-image-2.6-flare": gptImage26("gpt-image-2.6-flare"),
@@ -195,7 +232,14 @@ export function nativeModel(id: string): NativeModel | undefined {
 
 const record = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 const strings = (value: unknown): string[] | undefined => Array.isArray(value) && value.every(item => typeof item === "string") ? value : undefined;
-const interfaces: Record<DoneBotProtocol, string> = { messages: "anthropic.messages", gemini: "gemini.generate_content", responses: "openai.responses", chat: "openai.chat_completions" };
+const protocolInterfaces = { messages: "anthropic.messages", gemini: "gemini.generate_content", responses: "openai.responses", chat: "openai.chat_completions" } as const;
+export function textModelProtocol(model: DoneBotGatewayModel, native = nativeModel(model.id)): DoneBotProtocol | undefined {
+  if (!model.media_types.includes("text")) return undefined;
+  const registered = native?.protocol;
+  if (registered && model.interfaces.includes(protocolInterfaces[registered])) return registered;
+  if (native?.nativeInterfaceOnly) return undefined;
+  return (["messages", "gemini", "responses", "chat"] as const).find(protocol => model.interfaces.includes(protocolInterfaces[protocol]));
+}
 export const registeredMediaAdapters: Readonly<Record<string, string>> = {
   "muse-video": "muse.videos.v1",
   "gpt-image-2.5-flare": "donebot.images.async.v1",
@@ -258,7 +302,7 @@ function parameterRules(native: NativeModel, adapter: unknown) {
 function registeredModelCapabilities(model: DoneBotGatewayModel) {
   const native = nativeModel(model.id);
   const adapter = record(model.media_parameters?.protocol)?.adapter;
-  const matched = native && model.media_types.includes(native.kind) && (native.kind === "text" ? Object.values(interfaces).some(iface => model.interfaces.includes(iface)) : model.interfaces.includes(expectedMediaInterface[native.kind]!));
+  const matched = native && model.media_types.includes(native.kind) && (native.kind === "text" ? textModelProtocol(model, native) !== undefined : model.interfaces.includes(expectedMediaInterface[native.kind]!));
   const supported = Boolean(matched && (native?.kind === "text" ? true : typeof adapter === "string" && registeredMediaAdapters[model.id] === adapter));
   const clientInput = native?.input.filter(modality => native.kind === "text" ? modality === "text" || modality === "image" : native.kind !== "music" || modality === "text") ?? [];
   const operations = native?.kind === "text" ? ["conversation", ...(model.capabilities?.tool_calling === true ? ["tool_calling"] : [])] : native?.kind === "music" ? ["generate", "custom_lyrics", "instrumental"] : native?.media?.operations.filter(x => !["mask_edit", "markup_edit"].includes(x) && !(model.id === "seedance-2-5" && x === "edit")) ?? [];
@@ -295,7 +339,7 @@ export function modelCapabilities(model: DoneBotGatewayModel) {
   const mediaKinds = { "donebot.images.async.v1": "image", "apimart.images.v1": "image", "apimart.music.v1": "music", "seedance.videos.v1": "video", "apimart.speech.v1": "audio" } as const;
   const adapter = record(model.media_parameters?.protocol)?.adapter;
   const kind = typeof adapter === "string" && Object.hasOwn(mediaKinds, adapter) ? mediaKinds[adapter as keyof typeof mediaKinds] : undefined;
-  const text = model.media_types.includes("text") && Object.values(interfaces).some(iface => model.interfaces.includes(iface));
+  const text = textModelProtocol(model) !== undefined;
   const supported = text || Boolean(kind && model.media_types.includes(kind) && model.interfaces.includes(expectedMediaInterface[kind]!));
   return { ...base,
     client: { ...base.client, implemented: supported, input: ["text"], operations: supported ? [text ? "conversation" : "generate"] : [], delivery: text || kind === "audio" ? "streaming" : "async" },

@@ -5,17 +5,23 @@ import { modelCapabilities, nativeModel, validateMediaParameters } from "./capab
 
 const textModels = [
   ["claude-fable-5-1", "messages", "anthropic.messages"],
+  ["claude-fable-5-2", "messages", "anthropic.messages"],
   ["claude-haiku-5-5", "messages", "anthropic.messages"],
   ["claude-opus-5-5", "messages", "anthropic.messages"],
   ["claude-sonnet-5-5", "messages", "anthropic.messages"],
   ["deepseek-flash", "chat", "openai.chat_completions"],
   ["gemini-3.8-flash", "gemini", "gemini.generate_content"],
   ["gemini-4-argon", "gemini", "gemini.generate_content"],
+  ["gemini-4-carbon", "gemini", "gemini.generate_content"],
+  ["gemini-4-hydrogen", "gemini", "gemini.generate_content"],
   ["glm-5.3-flash", "chat", "openai.chat_completions"],
   ["gpt-6-astra", "responses", "openai.responses"],
   ["gpt-6.1-sol", "responses", "openai.responses"],
   ["gpt-6.1-terra", "responses", "openai.responses"],
+  ["gpt-6.2-astra", "responses", "openai.responses"],
+  ["gpt-6.2-sol", "responses", "openai.responses"],
 ] as const;
+const nativeOnlyModels = ["claude-fable-5-2", "gemini-4-carbon", "gemini-4-hydrogen", "gpt-6.2-astra", "gpt-6.2-sol"];
 const mediaModels = [
   ["gpt-image-2.5-flare", "image", "openai.images", "donebot.images.async.v1"],
   ["gpt-image-2.5-sunburst", "image", "openai.images", "donebot.images.async.v1"],
@@ -46,7 +52,6 @@ const reference = (type: "image" | "video" | "audio", role: string) => ({ type: 
 
 describe("DoneBot local model registration", () => {
   it("keeps registered media constraints and accepts public text IDs by their gateway interface", () => {
-    expect(models).toHaveLength(22);
     for (const entry of models) {
       const result = modelCapabilities(entry);
       expect(result.availability).toMatchObject({ locallyVerified: true, usable: true });
@@ -66,6 +71,37 @@ describe("DoneBot local model registration", () => {
     expect(doneBotProtocol(id)).toBe(protocol);
     expect(modelCapabilities(media(id)).native).toMatchObject({ protocol, tools: true, structuredOutput: true });
   });
+
+  it.each(nativeOnlyModels)("offers %s only when the account advertises its native route", (id) => {
+    const entry = media(id), wrong = { ...entry, interfaces: ["openai.chat_completions"] };
+    const existing = media("gpt-6.1-sol");
+    expect(doneBotTextModels(catalog([existing])).options.map(option => option.id)).not.toContain(id);
+    expect(doneBotTextModels(catalog([wrong, existing]))).toMatchObject({ default: existing.id, options: [{ id: existing.id }] });
+    expect(modelCapabilities(wrong).availability).toMatchObject({ locallyVerified: true, usable: false });
+    expect(() => doneBotProtocol(id, catalog([wrong]))).toThrow("supported text interface");
+    expect(doneBotTextModels(catalog([entry, existing]))).toMatchObject({ default: existing.id, options: [{ id }, { id: existing.id }] });
+  });
+
+  it.each(["gpt-6.2-astra", "gpt-6.2-sol"])("registers the GPT-6.2 limits without inventing a default for %s", (id) => {
+    const native = nativeModel(id)!;
+    expect(native).toMatchObject({ contextWindow: 1_050_000, maxInput: 922_000, maxOutput: 128_000,
+      reasoning: { field: "reasoning.effort", levels: ["low", "medium", "high", "xhigh", "max"] } });
+    expect(native.reasoning).not.toHaveProperty("default");
+  });
+
+  it("registers Fable 5.2 adaptive effort and its native output limit", () => {
+    expect(nativeModel("claude-fable-5-2")).toMatchObject({ contextWindow: 1_000_000, maxOutput: 128_000,
+      reasoning: { field: "output_config.effort", levels: ["low", "medium", "high", "xhigh", "max"], default: "high", modes: ["adaptive"] } });
+  });
+
+  it.each([["gemini-4-carbon", 32_768, "MEDIUM", []], ["gemini-4-hydrogen", 65_536, "HIGH", ["XHIGH"]]] as const)(
+    "separates %s native input and decoding limits from current client support", (id, nonStreamingRequest, defaultLevel, extraLevels) => {
+      expect(modelCapabilities(media(id))).toMatchObject({
+        native: { contextWindow: 1_048_576, input: ["text", "image", "audio", "video", "pdf"], outputLimits: { sharedWithInput: true, streamingRequest: 65_536, nonStreamingRequest },
+          reasoning: { levels: ["LOW", "MEDIUM", "HIGH", ...extraLevels], default: defaultLevel } },
+        client: { input: ["text", "image"], longDecoding: false, reasoningOverride: false, maxOutputPerRequest: 65_536 },
+      });
+    });
 
   it("offers GLM-5.3-Flash through the existing Chat Completions route", () => {
     const entry = model("glm-5.3-flash", "text", "openai.chat_completions");

@@ -22,6 +22,11 @@ describe("sidebar previews", () => {
 
   const step = (name: string) => message({ kind: "activity", tool: { name, ok: true } } as Partial<Message>);
 
+  it("skips tool directory notices in the preview", () => {
+    const visible = [message({ text: "Hello" }), step(`notice: To fit the model's 128-tool limit, the tools of "calendar" are reached through the tool search this turn.`)];
+    expect(botPreview(bot, visible, [], true)).toBe("Hello");
+  });
+
   it("quotes the bot in Simple mode when its newest line is a step that went fine, and keeps the step in Advanced", () => {
     const visible = [message({ role: "user", text: "Tidy my inbox" }), message({ text: "Archived 31 newsletters." }), step("Bash")];
     expect(botPreview(bot, visible, [], false)).toBe("Archived 31 newsletters.");

@@ -89,6 +89,17 @@ afterEach(() => {
 });
 
 describe("Simple mode's working line", () => {
+  it.each([true, false])("keeps tool-budget diagnostics out of the transcript and status (advanced=%s)", (advanced) => {
+    mode.advanced = advanced;
+    const name = `notice: "browser" listed 31 of 32 tools, "data" listed 0 of 5 tools to fit the model's 128-tool limit; the rest are left out of this turn.`;
+    engine({ type: "turn.started" });
+    render(busyBot([ask, { id: "budget", at: started, role: "bot", kind: "activity", tool: { name, ok: true } }]));
+    expect(host.textContent).not.toContain("128-tool limit");
+    expect(statusLine()).toBe(advanced ? "Working · 1m 12s" : "Thinking it through");
+    engine({ type: "turn.progress", activity: "web", target: "weather" } as Partial<RuntimeEvent>);
+    expect(statusLine()).toContain("Searching the web for “weather”");
+  });
+
   it("is the bot's 28px avatar and one quiet friendly phrase, with the timer and size kept in its tooltip", () => {
     mode.advanced = false;
     engine({ type: "turn.started" });

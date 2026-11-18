@@ -18,11 +18,11 @@ const sse = (events: unknown[]) => {
 };
 
 describe("DoneBot native LLM transports", () => {
-  it("keeps Messages thinking signatures and multiple tool identities unchanged for replay", async () => {
+  it.each(["推理", ""])("preserves signed Messages thinking for tool continuation (thinking=%j)", async thinking => {
     const events = [
       { type: "message_start", message: { usage: { input_tokens: 3, cache_read_input_tokens: 10, cache_creation_input_tokens: 2 } } },
       { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
-      { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "推理" } },
+      ...(thinking ? [{ type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking } }] : []),
       { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "opaque-signature" } },
       { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "native-1", name: "first", input: {} } },
       { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"path":' } },
@@ -31,16 +31,16 @@ describe("DoneBot native LLM transports", () => {
       { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 7 } },
       { type: "message_stop" },
     ];
-    const request = vi.fn(async (_path: string, _init: RequestInit) => sse(events)), turn = input();
+    const request = vi.fn(async (_path: string, _init: RequestInit) => sse(events)), turn = input({ model: thinking ? "claude-sonnet-5-5" : "claude-fable-5-2" });
     const result = await createDoneBotCompletion(request, () => "messages")(turn);
     expect(request.mock.calls[0]![0]).toBe("/v1/messages");
     expect(result.toolCalls.map((call) => call.id)).toEqual(["native-1", "native-2"]);
-    expect(result.reasoning).toBe("推理");
+    expect(result.reasoning).toBe(thinking);
     expect(result.usage).toEqual({ input: 15, output: 7 });
-    expect(turn.onUsage).toHaveBeenCalledWith({ model: "fixture-model", input: 15, output: 7, cachedInput: 10 });
+    expect(turn.onUsage).toHaveBeenCalledWith({ model: turn.model, input: 15, output: 7, cachedInput: 10 });
     const assistant: OpenAIChatMessage = { role: "assistant", content: null, tool_calls: result.toolCalls };
     const replayed = messagesRequest(input({ messages: [assistant, { role: "tool", tool_call_id: "native-1", content: "receipt" }], replay: () => result.nativeOutput }));
-    expect(replayed.messages[0]!.content[0]).toEqual({ type: "thinking", thinking: "推理", signature: "opaque-signature" });
+    expect(replayed.messages[0]!.content[0]).toEqual({ type: "thinking", thinking, signature: "opaque-signature" });
     expect(replayed.messages[0]!.content[1]).toMatchObject({ type: "tool_use", id: "native-1", input: { path: "fixture.txt" } });
     expect(replayed.messages[1]!.content[0]).toEqual({ type: "tool_result", tool_use_id: "native-1", content: "receipt" });
   });
@@ -82,10 +82,31 @@ describe("DoneBot native LLM transports", () => {
     const body = JSON.parse(request.mock.calls[0]![1].body as string);
     expect(request.mock.calls[0]![0]).toBe("/v1/responses");
     expect(body).toMatchObject({ stream: true, store: false, include: ["reasoning.encrypted_content"] });
+    expect(body.instructions).toBe("Fixture system");
     expect(body.reasoning).toBeUndefined();
     expect(result.text).toBe("Fixture result");
     expect(result.nativeOutput).toEqual({ protocol: "responses", content: output });
     expect(turn.onUsage).toHaveBeenCalledWith({ model: "fixture-model", input: 5, output: 8 });
+  });
+
+  it.each(["gpt-6.2-astra", "gpt-6.2-sol"])("puts %s stable instructions before the original tool transcript", async model => {
+    const nativeOutput = [
+      { type: "reasoning", encrypted_content: "opaque-reasoning", summary: [] },
+      { type: "function_call", call_id: "call-1", name: "read", arguments: "{}" },
+    ];
+    const request = vi.fn(async (_path: string, _init: RequestInit) => sse([{ type: "response.completed", response: { output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "Fixture result" }] }] } }]));
+    const turn = input({ model });
+    const assistant: OpenAIChatMessage = { role: "assistant", content: null };
+    await createDoneBotCompletion(request, () => "responses")({ ...turn, messages: [...turn.messages, assistant, { role: "tool", tool_call_id: "call-1", content: "receipt" }], replay: message => message === assistant ? { protocol: "responses", content: nativeOutput } : undefined });
+    const [path, init] = request.mock.calls[0]!;
+    const body = JSON.parse(init.body as string);
+    expect(path).toBe("/v1/responses");
+    expect(body).not.toHaveProperty("instructions");
+    expect(body).not.toHaveProperty("reasoning");
+    expect(body).toMatchObject({ model, store: false, stream: true, include: ["reasoning.encrypted_content"], input: [
+      { role: "developer", content: "Fixture system" }, { role: "user", content: "Fixture prompt" }, ...nativeOutput,
+      { type: "function_call_output", call_id: "call-1", output: "receipt" },
+    ] });
   });
 
   it("preserves Chat reasoning and tool call fragments", async () => {

@@ -3,9 +3,70 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
-import { startFakeDoneBotGateway } from "./testing/fake-donebot-gateway.ts";
+import type { DoneBotGatewayModel } from "../shared/donebot.ts";
+import { FAKE_DONEBOT_CATALOG, startFakeDoneBotGateway } from "./testing/fake-donebot-gateway.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { MediaJobStore } from "./donebot/media-store.ts";
+
+it("runs all nine Claude, GPT and Gemini models through the installation gateway", async () => {
+  const suites = [
+    { platform: "anthropic", iface: "anthropic.messages", ids: ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"], path: () => "/v1/messages" },
+    { platform: "openai", iface: "openai.responses", ids: ["gpt-6.2-astra", "gpt-6.2-sol"], path: () => "/v1/responses" },
+    { platform: "gemini", iface: "gemini.generate_content", ids: ["gemini-4-hydrogen", "gemini-4-carbon", "gemini-4-argon"], path: (id: string) => `/v1beta/models/${id}:streamGenerateContent` },
+  ];
+  const models = suites.flatMap(({ platform, iface, ids }) => ids.map((id): DoneBotGatewayModel => ({ id, display_name: id, media_types: ["text"], platforms: [platform], interfaces: [iface], capabilities: { tool_calling: true } })));
+  const gateway = await startFakeDoneBotGateway({ ...FAKE_DONEBOT_CATALOG, models: [...FAKE_DONEBOT_CATALOG.models.filter(model => !models.some(({ id }) => id === model.id)), ...models] });
+  try {
+    const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, [], undefined, undefined, gateway.origin);
+    try {
+      const api = async (method: string, path: string, body?: unknown) => {
+        const response = await fetch(fixture.info.url + path, { method, headers: { origin: fixture.info.url, "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
+        const value = await response.json() as { authenticated?: boolean; models?: DoneBotGatewayModel[] };
+        expect(response.ok, JSON.stringify(value)).toBe(true);
+        return value;
+      };
+      const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+      expect((await api("POST", "/api/donebot/login", { email: "fixture@example.invalid", password: "synthetic-fixture-password" })).authenticated).toBe(true);
+      expect((await api("GET", "/api/donebot/catalog")).models).toEqual(expect.arrayContaining(models.map(({ id }) => expect.objectContaining({ id }))));
+      for (const { platform, ids, path } of suites) for (const id of ids) {
+        const { bot } = await control("new-bot", "--name", id);
+        await api("PATCH", `/api/bots/${bot.id}`, { cwd: fixture.info.dataDir, approvalMode: "full", toolScope: { allow: ["native:workspace_write"] } });
+        await control("set-model", "--bot", bot.id, "--instance", "donebot", "--model", id);
+        const file = `${id}.txt`;
+        gateway.setPlan([{ name: "workspace_write", arguments: { path: file, text: id } }]);
+        const start = gateway.requests.length;
+        await control("send", "--bot", bot.id, "--text", `Write the ${id} receipt.`);
+        expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("settled");
+        expect(await readFile(join(fixture.info.dataDir, file), "utf8")).toBe(id);
+        const calls = gateway.requests.slice(start).filter(request => request.path === path(id));
+        expect(calls).toHaveLength(2);
+        expect(calls.every(call => call.authenticated)).toBe(true);
+        const [first, next] = calls.map(({ body }) => body);
+        if (platform === "openai") {
+          expect(next).toMatchObject({ model: id, stream: true, store: false, include: ["reasoning.encrypted_content"] });
+          expect(next).not.toHaveProperty("instructions");
+          expect(next!.input).toEqual([...(first!.input as unknown[]), expect.objectContaining({ type: "reasoning", encrypted_content: "fixture-opaque-reasoning" }), expect.objectContaining({ type: "function_call", call_id: "fixture-call-0" }), expect.objectContaining({ type: "function_call_output", call_id: "fixture-call-0" })]);
+          expect((first!.input as unknown[])[0]).toMatchObject({ role: "developer" });
+        } else if (platform === "anthropic") {
+          const { messages, ...prefix } = first!;
+          expect(next).toMatchObject({ ...prefix, model: id, stream: true });
+          expect(next!.messages).toEqual([...(messages as unknown[]),
+            { role: "assistant", content: [
+              { type: "thinking", thinking: id === "claude-fable-5-2" ? "" : "Fixture thought", signature: "fixture-opaque-signature" },
+              expect.objectContaining({ type: "tool_use", id: "fixture-call-0" }),
+            ] },
+            { role: "user", content: [expect.objectContaining({ type: "tool_result", tool_use_id: "fixture-call-0" })] },
+          ]);
+        } else {
+          expect(next!.contents).toEqual([...(first!.contents as unknown[]),
+            { role: "model", parts: [expect.objectContaining({ thoughtSignature: "fixture-opaque-signature", functionCall: expect.objectContaining({ id: "fixture-call-0" }) })] },
+            { role: "user", parts: [{ functionResponse: expect.objectContaining({ id: "fixture-call-0" }) }] },
+          ]);
+        }
+      }
+    } finally { await fixture.close(); }
+  } finally { await gateway.close(); }
+}, hostTimeout(180_000));
 
 it("signs in to a loopback gateway, preserves native protocols and platform tools, delivers async media and streamed speech, and blocks model bypasses", async () => {
   const gateway = await startFakeDoneBotGateway();

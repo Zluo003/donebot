@@ -5,6 +5,13 @@ import { formatServerText, isReferenceParam, type ServerTextParams } from "../..
 
 type NoticeTool = Pick<NonNullable<Message["tool"]>, "nameCode" | "nameParams">;
 
+export function isToolBudgetNotice(message?: { kind: string; tool?: { name: string; ok?: boolean } }): boolean {
+  if (message?.kind !== "activity" || !message.tool || message.tool.ok === false) return false;
+  const name = message.tool.name;
+  return /^notice:\s*".+" listed \d+ of \d+ tools to fit the model's \d+-tool limit; the rest are left out of this turn\.$/.test(name)
+    || /^notice:\s*To fit the model's \d+-tool limit, the tools of ".+" are reached through the tool search this turn\.$/.test(name);
+}
+
 export function isNoticeCode(code: string | undefined): code is string {
   return code?.startsWith("chat.notice.") === true;
 }

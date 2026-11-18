@@ -234,8 +234,30 @@ export async function startFakeDoneBotGateway(catalog: DoneBotCatalog = FAKE_DON
     if (step && typeof name !== "string") return send(response, { error: "Fixture tool not offered", tool: step.name }, 422);
     const callId = `fixture-call-${results.length}`;
     if (native === "responses") return stream(response, [{ type: "response.completed", response: { output: step ? [{ type: "reasoning", id: "fixture-reasoning", encrypted_content: "fixture-opaque-reasoning", summary: [] }, { type: "function_call", id: callId, call_id: callId, name, arguments: JSON.stringify(step.arguments) }] : [{ type: "message", id: "fixture-reply", role: "assistant", content: [{ type: "output_text", text: reply }] }], usage: { input_tokens: 10, output_tokens: 5 } } }]);
+    if (native === "messages" && body.model === "claude-fable-5-2" && body.stream === true) {
+      return stream(response, [
+        { type: "message_start", message: { usage: { input_tokens: 10 } } },
+        ...(step ? [
+          { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
+          { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "fixture-opaque-signature" } },
+          { type: "content_block_stop", index: 0 },
+          { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: callId, name, input: {} } },
+          { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: JSON.stringify(step.arguments) } },
+          { type: "content_block_stop", index: 1 },
+        ] : [
+          { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+          { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: reply } },
+          { type: "content_block_stop", index: 0 },
+        ]),
+        { type: "message_delta", delta: { stop_reason: step ? "tool_use" : "end_turn" }, usage: { output_tokens: 5 } },
+        { type: "message_stop" },
+      ]);
+    }
     if (native === "messages") return send(response, { content: step ? [{ type: "thinking", thinking: "Fixture thought", signature: "fixture-opaque-signature" }, { type: "tool_use", id: callId, name, input: step.arguments }] : [{ type: "text", text: reply }], stop_reason: step ? "tool_use" : "end_turn", usage: { input_tokens: 10, output_tokens: 5 } });
-    if (native === "gemini") return send(response, { candidates: [{ index: 0, content: { role: "model", parts: step ? [{ functionCall: { id: callId, name, args: step.arguments }, thoughtSignature: "fixture-opaque-signature" }] : [{ text: reply }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } });
+    if (native === "gemini") {
+      const output = { candidates: [{ index: 0, content: { role: "model", parts: step ? [{ functionCall: { id: callId, name, args: step.arguments }, thoughtSignature: "fixture-opaque-signature" }] : [{ text: reply }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } };
+      return /\/(gemini-4-(carbon|hydrogen)):streamGenerateContent$/.test(path) ? stream(response, [output]) : send(response, output);
+    }
     return send(response, { choices: [{ message: step ? { content: null, tool_calls: [{ id: callId, type: "function", function: { name, arguments: JSON.stringify(step.arguments) } }] } : { content: reply }, finish_reason: step ? "tool_calls" : "stop" }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
   })().catch(() => { if (!response.headersSent) send(response, { error: "Fixture gateway failed" }, 500); else response.destroy(); }); });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

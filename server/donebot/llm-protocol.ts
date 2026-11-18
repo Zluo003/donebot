@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Completion, CompletionTransportInput, OpenAIChatMessage } from "../drivers/openai-chat.ts";
 import { ChatProtocolError, ChatReasoningDetails, ChatToolCalls, object } from "../drivers/openai-chat-protocol.ts";
 import { readResponsesStream, responsesRequest, type ResponseItem } from "../drivers/openai-responses.ts";
+import { isGpt62 } from "./capabilities.ts";
 
 export type DoneBotLlmProtocol = "messages" | "gemini" | "responses" | "chat";
 export type DoneBotLlmRequest = (path: string, init: RequestInit) => Promise<Response>;
@@ -128,6 +129,15 @@ export function geminiRequest(input: CompletionTransportInput) {
   const system = input.messages.filter((message) => message.role === "system" && typeof message.content === "string").map((message) => message.content).join("\n\n");
   return { contents, ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     ...(input.tools.length ? { tools: [{ functionDeclarations: input.tools.map(({ function: fn }) => ({ name: fn.name, description: fn.description, parametersJsonSchema: fn.parameters })) }] } : {}) };
+}
+
+function doneBotResponsesRequest(input: CompletionTransportInput): Row {
+  const request = responsesRequest({ ...input, summaries: false, replay: (message) => replay(input, message, "responses") as ResponseItem[] | undefined });
+  const body = { ...request, include: ["reasoning.encrypted_content"] };
+  if (!isGpt62(input.model)) return body;
+  // GPT-6.2 serializes top-level instructions after input.
+  const { instructions, input: items, ...rest } = body as Row;
+  return { ...rest, input: [...(typeof instructions === "string" && instructions ? [{ role: "developer", content: instructions }] : []), ...rows(items)] };
 }
 
 async function readEvents(response: Response, input: CompletionTransportInput, consume: (data: Row) => boolean | void): Promise<boolean> {
@@ -416,7 +426,7 @@ export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: 
     let path: string, body: Row;
     if (protocol === "messages") { path = "/v1/messages"; body = messagesRequest(input); }
     else if (protocol === "gemini") { path = `/v1beta/models/${encodeURIComponent(input.model)}:${input.stream ? "streamGenerateContent?alt=sse" : "generateContent"}`; body = geminiRequest(input); }
-    else if (protocol === "responses") { path = "/v1/responses"; body = { ...responsesRequest({ ...input, summaries: false, replay: (message) => replay(input, message, "responses") as ResponseItem[] | undefined }), include: ["reasoning.encrypted_content"] }; }
+    else if (protocol === "responses") { path = "/v1/responses"; body = doneBotResponsesRequest(input); }
     else if (protocol === "chat") { path = "/v1/chat/completions"; body = { model: input.model, messages: input.messages, stream: input.stream, ...(input.stream ? { stream_options: { include_usage: true } } : {}), ...(input.tools.length ? { tools: input.tools } : {}) }; }
     else throw new ChatProtocolError("The selected model has no registered native LLM protocol");
     const response = await request(path, { method: "POST", headers: { "content-type": "application/json", ...(protocol === "messages" ? { "anthropic-version": "2023-06-01" } : {}) }, body: JSON.stringify(body), signal: input.signal, redirect: "error" });

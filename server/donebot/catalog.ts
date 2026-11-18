@@ -1,6 +1,6 @@
 import type { DoneBotCatalog, DoneBotModelKind, DoneBotProtocol } from "../../shared/donebot.ts";
 import type { ModelCatalog } from "../contracts.ts";
-import { nativeModel, modelCapabilities, validateMediaParameters } from "./capabilities.ts";
+import { nativeModel, modelCapabilities, textModelProtocol, validateMediaParameters } from "./capabilities.ts";
 import type { MediaKind, MediaResolvedModel } from "./media.ts";
 import { MEDIA_ADAPTERS } from "./media-adapters.ts";
 import { seedream55ReferencePolicy } from "./seedream-capabilities.ts";
@@ -8,27 +8,24 @@ import { normalizeSeedanceParameters, seedanceReferencePolicy } from "./seedance
 import { SUNO_FIXED_PARAMETERS } from "./suno-capabilities.ts";
 import { normalizeMuseParameters, museReferencePolicy } from "./muse-capabilities.ts";
 
-const protocolInterfaces = { messages: "anthropic.messages", gemini: "gemini.generate_content", responses: "openai.responses", chat: "openai.chat_completions" } as const;
-
 export function doneBotProtocol(id: string, catalog?: DoneBotCatalog | null): DoneBotProtocol {
   const model = catalog?.models.find(model => model.id === id);
-  const registered = nativeModel(id)?.protocol;
   if (model) {
-    if (registered && model.interfaces.includes(protocolInterfaces[registered])) return registered;
-    for (const protocol of ["messages", "gemini", "responses", "chat"] as const) {
-      if (model.interfaces.includes(protocolInterfaces[protocol])) return protocol;
-    }
+    const protocol = textModelProtocol(model);
+    if (protocol) return protocol;
     throw new Error("The gateway has not advertised a supported text interface for this model.");
   }
-  if (registered && catalog === undefined) return registered;
+  const registered = catalog === undefined ? nativeModel(id)?.protocol : undefined;
+  if (registered) return registered;
   throw new Error("This model is not available in your DoneBot catalog.");
 }
 
 export function doneBotTextModels(catalog: DoneBotCatalog | null): ModelCatalog {
   const options = (catalog?.models ?? []).flatMap(model => {
-    if (!model.media_types.includes("text") || !model.interfaces.some(iface => Object.values(protocolInterfaces).includes(iface as never))) return [];
+    const native = nativeModel(model.id);
+    if (!textModelProtocol(model, native)) return [];
     const window = model.capabilities?.context_window_tokens;
-    const contextWindow = typeof window === "number" && Number.isSafeInteger(window) && window > 0 ? window : nativeModel(model.id)?.contextWindow;
+    const contextWindow = typeof window === "number" && Number.isSafeInteger(window) && window > 0 ? window : native?.contextWindow;
     return [{ id: model.id, label: model.display_name || model.id, ...(contextWindow ? { contextWindow } : {}) }];
   });
   return { default: options.find(model => model.id === catalog?.defaults.text)?.id ?? options[0]?.id ?? "", options };

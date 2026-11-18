@@ -3,6 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { DoneBotMediaService, type DoneBotMediaDeps, type MediaContext } from "./media.ts";
+import { doneBotMediaModel } from "./catalog.ts";
+import { doneBotClientMediaCatalog } from "./media-registry.ts";
+import { FAKE_DONEBOT_CATALOG } from "../testing/fake-donebot-gateway.ts";
+import { UNIFIED_MEDIA_PROTOCOL } from "./unified-media.ts";
 
 const context: MediaContext = { botId: "fixture-bot", threadId: "fixture-thread", turnId: "fixture-turn", active: () => true };
 const scope = { accountId: "fixture-user", installationId: "fixture-installation" };
@@ -62,6 +66,23 @@ it("validates backup parameters before any primary paid request", async () => {
     validate: parameters => { if (id === "backup" && parameters.prompt === "invalid") throw new Error("Invalid backup prompt"); } }) });
   await expect(f.service.submit(context, { ...input, fallback: { model: "backup", parameters: { prompt: "invalid" } } })).rejects.toThrow("Invalid backup prompt");
   expect(f.posts).toHaveLength(0);
+});
+
+it.each(["resolution", "reference"])("keeps the unified primary when the fallback cannot accept its %s", async mismatch => {
+  const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
+  for (const id of ["muse-video", "seedance-2-5-flash"]) catalog.models.push({ id, display_name: id, media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
+  const local = doneBotClientMediaCatalog(catalog)!;
+  const parameters = { protocol: UNIFIED_MEDIA_PROTOCOL, mode: mismatch === "reference" ? "reference" : "text", prompt: "Same scene", duration: 6,
+    resolution: mismatch === "resolution" ? "1080p" : "720p", aspect_ratio: "16:9",
+    ...(mismatch === "reference" ? { references: [{ type: "video", role: "reference", url: { local_path: "/fixture.mp4" } }] } : {}) };
+  const f = await fixture({ resolveModel: async (id, kind) => doneBotMediaModel(local, id, kind),
+    resolveReference: async () => ({ bytes: Buffer.from("synthetic video"), mime: "video/mp4", name: "fixture.mp4" }) });
+  f.state("processing");
+  const job = await f.service.submit(context, { kind: "video", model: "seedance-2-5", parameters,
+    fallback: { model: mismatch === "resolution" ? "seedance-2-5-flash" : "muse-video", parameters } });
+  await f.submitted(job.id);
+  expect(await f.service.status(context, job.id)).toMatchObject({ model: "seedance-2-5", fallbackUnavailable: expect.any(String) });
+  expect(f.posts.map(post => post.model)).toEqual(["seedance-2-5"]);
 });
 
 it("does not repeat the primary generation when only the backup plan changes", async () => {

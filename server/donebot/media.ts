@@ -1,3 +1,4 @@
+import { unifiedAdapter, unifiedMedia, unifiedOperation } from "./unified-media.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { doneBotMediaConcurrency } from "../../shared/donebot.ts";
 import { publicArtifactResponse, safeMediaArtifact, saveMediaArtifact } from "./media-download.ts";
@@ -192,9 +193,10 @@ export class DoneBotMediaService {
     if (input.variationKey && !/^[A-Za-z0-9_-]{1,80}$/.test(input.variationKey)) throw jobError(400, "variation_key must be 1–80 letters, digits, underscores or hyphens.");
     if (input.parameters.model !== undefined && input.parameters.model !== input.model) throw jobError(400, "A media operation does not match its requested model.");
     const requestedTaskType = input.parameters.omni_reference_task_type;
-    const operation = input.operation ?? (requestedTaskType === "edit" || requestedTaskType === "extend" ? requestedTaskType : "generate");
+    const operation = input.operation ?? (unifiedMedia(input.parameters) ? unifiedOperation(input.parameters) : requestedTaskType === "edit" || requestedTaskType === "extend" ? requestedTaskType : "generate");
     const model = await this.deps.resolveModel(input.model, input.kind);
-    const adapter = ADAPTERS[model.adapter];
+    const adapterId = unifiedAdapter(input.kind, model.adapter, input.parameters);
+    const adapter = ADAPTERS[adapterId];
     if (model.id !== input.model || model.kind !== input.kind || !adapter || adapter.kind !== input.kind) throw jobError(400, "This media model has no supported local adapter.");
     if (operation === "edit" && input.kind === "image" && !adapter.edit) throw jobError(400, "This model adapter does not support image editing.");
     if (operation === "edit" && input.kind !== "image" && input.kind !== "video") throw jobError(400, "This media model does not support editing.");
@@ -206,12 +208,15 @@ export class DoneBotMediaService {
     const parameters = { ...input.parameters, ...model.fixedParameters };
     const normalized = model.normalizeParameters?.(parameters, operation) ?? parameters;
     if (Buffer.byteLength(canonical(normalized)) > 1_000_000) throw jobError(413, "Media parameters exceed the local limit.");
-    const authorizedInput: MediaSubmission = { kind: input.kind, model: input.model, operation, parameters: normalized, variationKey: input.variationKey, fallback: input.fallback };
+    const fallbackInput = input.fallback && unifiedMedia(normalized) && input.kind === "video"
+      ? { ...input.fallback, parameters: { ...input.fallback.parameters, duration: normalized.duration, resolution: normalized.resolution, aspect_ratio: normalized.aspect_ratio } } : input.fallback;
+    const authorizedInput: MediaSubmission = { kind: input.kind, model: input.model, operation, parameters: normalized, variationKey: input.variationKey, fallback: fallbackInput };
     await this.deps.authorize(context, authorizedInput);
     if (!context.active() || !await this.sameScope(scope)) throw jobError(409, "This turn or DoneBot account changed before submission.");
     const prepared = await this.assets.prepare(context, scope, normalized, undefined, model.referencePolicy);
     model.validate?.(prepared.parameters, operation);
-    const fallback = await prepareMediaFallback(authorizedInput, context, scope, this.assets, this.deps.resolveModel, value => digest(canonical(value)), prepared.fingerprint);
+    let fallbackUnavailable: string | undefined;
+    const fallback = await prepareMediaFallback(authorizedInput, context, scope, this.assets, this.deps.resolveModel, value => digest(canonical(value)), prepared.fingerprint, reason => { fallbackUnavailable = reason; });
     if (!context.active() || !await this.sameScope(scope)) throw jobError(409, "This turn or DoneBot account changed before submission.");
     const fingerprint = digest(canonical({ kind: input.kind, model: input.model, operation, parameters: prepared.fingerprint }));
     const operationKey = digest(JSON.stringify([context.botId, context.threadId, context.turnId, fingerprint, input.variationKey ?? ""]));
@@ -219,8 +224,8 @@ export class DoneBotMediaService {
     if (duplicate) return duplicate;
     const now = this.now();
     const job: MediaJob = { version: 1, id: randomUUID(), operationKey, fingerprint, scope, botId: context.botId, threadId: context.threadId,
-      turnId: context.turnId, ...(context.assignmentId ? { assignmentId: context.assignmentId } : {}), kind: input.kind, model: input.model, adapter: model.adapter, operation, status: "queued",
-      parameters: structuredClone(normalized), referenceFingerprint: prepared.fingerprint, fallback, artifacts: [],
+      turnId: context.turnId, ...(context.assignmentId ? { assignmentId: context.assignmentId } : {}), kind: input.kind, model: input.model, adapter: adapterId, operation, status: "queued",
+      parameters: structuredClone(normalized), referenceFingerprint: prepared.fingerprint, fallback, fallbackUnavailable, artifacts: [],
       waitingStopped: false, createdAt: now, updatedAt: now, nextPollAt: now, attempts: 0 };
     this.store.put(job);
     void this.dispatchQueued().catch(() => {});
@@ -254,7 +259,7 @@ export class DoneBotMediaService {
       const modelId = job.model, adapterId = job.adapter;
       if (!modelId || !adapterId) { this.save(job, { status: "failed", error: "The queued media model is unavailable; no generation was submitted." }); return; }
       const model = await this.deps.resolveModel(modelId, job.kind);
-      if (model.adapter !== adapterId) throw new Error("The media model adapter changed while queued.");
+      if (unifiedAdapter(job.kind, model.adapter, job.parameters) !== adapterId) throw new Error("The media model adapter changed while queued.");
       const context: MediaContext = { botId: job.botId, threadId: job.threadId, turnId: job.turnId, active: () => !this.closed && this.store.get(job.id)?.status === "queued" };
       const prepared = await this.assets.prepare(context, scope, job.parameters, job.referenceFingerprint, model.referencePolicy);
       if (!context.active()) return;

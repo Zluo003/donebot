@@ -6,6 +6,7 @@ import { MEDIA_ADAPTERS } from "./media-adapters.ts";
 import { seedream55ReferencePolicy } from "./seedream-capabilities.ts";
 import { normalizeSeedanceParameters, seedanceReferencePolicy } from "./seedance-capabilities.ts";
 import { SUNO_FIXED_PARAMETERS } from "./suno-capabilities.ts";
+import { unifiedMedia, normalizeUnifiedMedia, validateUnifiedMedia, unifiedImageCapabilityParameters } from "./unified-media.ts";
 import { normalizeMuseParameters, museReferencePolicy } from "./muse-capabilities.ts";
 
 export function doneBotProtocol(id: string, catalog?: DoneBotCatalog | null): DoneBotProtocol {
@@ -70,10 +71,16 @@ export function doneBotMediaModel(catalog: DoneBotCatalog | null, id: string, ki
   return { id, kind, adapter, capabilities, fixedParameters: id === "suno" ? SUNO_FIXED_PARAMETERS : capabilities.client.fixedParameters,
     ...(id === "seedream-5-5" ? { referencePolicy: seedream55ReferencePolicy } : {}),
     ...(id === "suno" ? { normalizeParameters: (parameters: Record<string, unknown>) => ({ ...parameters, audio_format: parameters.audio_format ?? "mp3" }) } : {}),
-    ...(id === "muse-video" ? { normalizeParameters: normalizeMuseParameters, referencePolicy: museReferencePolicy } : {}),
-    ...(adapter === "seedance.videos.v1" ? { normalizeParameters: (parameters: Record<string, unknown>, operation: "generate" | "edit" | "extend") => normalizeSeedanceParameters(native,
-      { resolution: "720p", ratio: "adaptive", duration: 6, ...parameters }, operation), referencePolicy: seedanceReferencePolicy(native) } : {}),
+    ...(id === "muse-video" ? { referencePolicy: museReferencePolicy } : {}),
+    ...(adapter === "seedance.videos.v1" ? { referencePolicy: seedanceReferencePolicy(native) } : {}),
+    ...((kind === "image" || kind === "video") ? { normalizeParameters: (parameters: Record<string, unknown>, operation: "generate" | "edit" | "extend") => unifiedMedia(parameters) ? normalizeUnifiedMedia(model, parameters, operation)
+      : id === "muse-video" ? normalizeMuseParameters(parameters) : adapter === "seedance.videos.v1" ? normalizeSeedanceParameters(native, { resolution: "720p", ratio: "adaptive", duration: 6, ...parameters }, operation) : parameters } : {}),
     validate: (parameters, operation: "generate" | "edit" | "extend") => {
+      if (unifiedMedia(parameters)) {
+        validateUnifiedMedia(model, parameters);
+        if (kind === "image") validateMediaParameters(model, unifiedImageCapabilityParameters(parameters, capabilities.client.imageEditEndpoint), capabilities.client.imageEditEndpoint && parameters.mode !== "text" ? "edit" : "generate");
+        return;
+      }
       if (id === "suno" && parameters.custom_model_id !== undefined) throw new Error("DoneBot music generation uses Suno v6 only.");
       if (adapter === "seedance.videos.v1" && (typeof parameters.duration !== "number" || !Number.isSafeInteger(parameters.duration) || parameters.duration <= 0)) throw new Error("The DoneBot gateway requires a positive integer video duration; automatic duration and Seedance 2.5 edit are unavailable.");
       validateMediaParameters(model, parameters, operation);

@@ -27,6 +27,16 @@ describe("sidebar previews", () => {
     expect(botPreview(bot, visible, [], true)).toBe("Hello");
   });
 
+  it.each([false, true])("hides slow-reply notices but preserves final failure in advanced=%s", advanced => {
+    const reply = message({ text: "Here is the plan." });
+    for (const rescue of [{ provider: "DoneBot" }, { settled: true }]) {
+      const notice = message({ kind: "activity", tool: { name: "notice: Ada hasn't heard back from DoneBot yet.", rescue } } as Partial<Message>);
+      expect(botPreview(bot, [reply, notice], [], advanced)).toBe(reply.text);
+    }
+    const failure = message({ kind: "activity", tool: { name: "notice: The request failed.", ok: false, rescue: { over: true } } } as Partial<Message>);
+    expect(lastPreviewable([reply, failure])).toBe(failure);
+  });
+
   it("quotes the bot in Simple mode when its newest line is a step that went fine, and keeps the step in Advanced", () => {
     const visible = [message({ role: "user", text: "Tidy my inbox" }), message({ text: "Archived 31 newsletters." }), step("Bash")];
     expect(botPreview(bot, visible, [], false)).toBe("Archived 31 newsletters.");

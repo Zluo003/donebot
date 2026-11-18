@@ -5,6 +5,10 @@ import { formatServerText, isReferenceParam, type ServerTextParams } from "../..
 
 type NoticeTool = Pick<NonNullable<Message["tool"]>, "nameCode" | "nameParams">;
 
+export function isHiddenActivityNotice(message?: { kind: string; tool?: { name: string; ok?: boolean; rescue?: { over?: true } } }): boolean {
+  return isToolBudgetNotice(message) || message?.kind === "activity" && message.tool?.rescue !== undefined && message.tool.rescue.over !== true && message.tool.ok !== false;
+}
+
 export function isToolBudgetNotice(message?: { kind: string; tool?: { name: string; ok?: boolean } }): boolean {
   if (message?.kind !== "activity" || !message.tool || message.tool.ok === false) return false;
   const name = message.tool.name;

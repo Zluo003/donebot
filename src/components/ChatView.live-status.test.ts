@@ -100,6 +100,17 @@ describe("Simple mode's working line", () => {
     expect(statusLine()).toContain("Searching the web for “weather”");
   });
 
+  it.each([true, false])("hides slow-reply recovery notices in transcript, live status and sidebar (advanced=%s)", advanced => {
+    mode.advanced = advanced;
+    const name = "notice: 多宝 hasn't heard back from DoneBot yet.";
+    engine({ type: "turn.started" });
+    render(busyBot([ask, { id: "slow", at: started, role: "bot", kind: "activity", tool: { name, ok: true,
+      rescue: { botId: "bot", threadId: THREAD, turnId: "slow-turn", instanceId: "donebot", ai: "DoneBot" } } }]));
+    expect(host.textContent).not.toContain("hasn't heard back");
+    expect(host.textContent).not.toContain("Connect your subscription");
+    expect(statusLine()).not.toContain("DoneBot");
+  });
+
   it("is the bot's 28px avatar and one quiet friendly phrase, with the timer and size kept in its tooltip", () => {
     mode.advanced = false;
     engine({ type: "turn.started" });

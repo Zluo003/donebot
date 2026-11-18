@@ -1,7 +1,7 @@
 import type { Message } from "@/state/store";
 import { formatElapsed } from "@/lib/working-time";
 import { t } from "@/lib/i18n";
-import { activityText, isToolBudgetNotice } from "@/lib/activity-text";
+import { activityText, isHiddenActivityNotice } from "@/lib/activity-text";
 import { failedTurnCause } from "../../shared/failed-turn";
 import { isStoppedTurnName } from "../../shared/client-cancel";
 import { localDay } from "@/lib/transcript-derivations";
@@ -146,7 +146,7 @@ function group(messages: Message[], foldAssistantTurns: boolean): TranscriptItem
       items.push(turn);
       continue;
     }
-    if (folds.hiddenIds.has(message.id) || message.reaction || isToolBudgetNotice(message)) continue;
+    if (folds.hiddenIds.has(message.id) || message.reaction || isHiddenActivityNotice(message)) continue;
     if (foldable(message)) {
       const first = run[0];
       if (

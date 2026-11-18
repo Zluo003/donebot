@@ -5,14 +5,14 @@
 
 ```sh
 pnpm exec vitest run server/donebot/media-settings.e2e.test.ts server/donebot/media-providers.e2e.test.ts server/donebot-media-selection.e2e.test.ts --maxWorkers=1
-pnpm exec vitest run server/donebot/media-fallback.test.ts server/donebot/media-approval.test.ts server/donebot/media-confirmation.test.ts server/donebot/media-preferences.test.ts server/donebot/muse-capabilities.test.ts server/donebot/media-guidance.test.ts server/donebot/media-routes.test.ts src/donebot/MediaSettings.dom.test.ts --maxWorkers=1
+pnpm exec vitest run server/donebot/unified-media.test.ts server/donebot/media-fallback.test.ts server/donebot/media-approval.test.ts server/donebot/media-confirmation.test.ts server/donebot/media-preferences.test.ts server/donebot/muse-capabilities.test.ts server/donebot/media-guidance.test.ts server/donebot/media-routes.test.ts src/donebot/MediaSettings.dom.test.ts --maxWorkers=1
 pnpm typecheck
 ```
 
 `server/donebot/media-settings.e2e.test.ts` 启动真实隔离服务，通过 `/api/donebot/media-settings` 读取
 启用模型、拒绝错误账号与未启用选择、保存图片和视频的首选／备用。原版 control 工具
-创建 Bot、发送消息并等待；真实工具链提交 Muse，模拟其明确失败后只派发一次
-Seedance 备用，校验先写失败说明、两份幂等键不同且视频附件回到原会话。另以真实
+创建 Bot、发送消息并等待；Gemini 工具链以同一公共 schema 提交 Muse→Flash、
+Flash→Seedance 2.5 两种首备组合，模拟首选明确失败后只派发一次备用，校验先写失败说明、两份幂等键不同且视频附件回到原会话。另以真实
 `/api/threads/{id}/respond` 验证：图片告知后继续且没有二次确认卡；视频告知后保持
 一份生成请求，允许后才提交备用，拒绝后不提交。已有 Full Access 的视频不再确认。
 证据写入
@@ -22,7 +22,9 @@ Seedance 备用，校验先写失败说明、两份幂等键不同且视频附�
 不改一次性指定后的长期偏好，不开放 LLM 直连。默认 Seedream 专项继续验证无需
 能力发现、重复调用复用工作、异步查询和原会话图片交付。
 
-备用单元覆盖首选与备用收据保留、重启、最多一次备用、创建前备用校验、参考文件
+统一协议专项覆盖 Muse／Seedance／Flash 共用输入形状、首尾帧角色、图片参考／编辑、
+未知字段及不支持模式拒绝。备用单元覆盖首选与备用收据保留、重启、最多一次备用、
+创建前备用校验、备用不接受 1080p 或视频参考时首选仍正常提交、参考文件
 保留和变更拒绝、确认卡恢复与拒绝、等待中新增免确认授权、停止等待、会话删除、账号变化、取消，以及 uncertain、结算中、
 下载 409 时继续原任务。Muse 参数专项覆盖 4／10 秒边界与非法时长、720p、比例、
 参考图片数、音视频参考拒绝、edit／extend 拒绝。设置组件 DOM 检查四个下拉、按媒体
@@ -38,3 +40,18 @@ Seedance 备用，校验先写失败说明、两份幂等键不同且视频附�
 这些检查证明接线、参数边界和本地恢复；不证明线上供应商质量、真实延迟、价格、
 退款／补扣金额或第三方模型是否理解自然语言偏好。生产开通与部署要求见
 [使用说明](../donebot-media-models.md)。
+
+## 统一协议的网关配套验证
+
+协议与新模型适配指引位于 donebot-api 仓库的 `docs/donebot/media-protocol.md`、
+`docs/donebot/media-model-adapter-guide.md`。网关测试使用内存 mock，覆盖别名到原生参数转换、
+持久协议标记恢复、统一图片／视频结果、拆层元数据保留、普通 Key 的任务包装及归属拒绝；
+不访问真实供应商。网关先部署，客户端随后发布。
+
+## 2026-11-18 统一协议回归记录
+
+- 客户端协议、首备、工具指导与路由，加上慢推理 notice 的聊天／状态／侧栏过滤：8 个测试文件、143 项通过。
+- `media-settings.e2e.test.ts`：6 项通过；临时 HOME／工作区中启动真实服务和 Gemini 工具传输，loopback 合成网关创建任务并返回原会话附件，没有真实收费调用。运行证据保存在上述 result.json，含 fixture 的独立日志路径。
+- `pnpm typecheck` 通过。
+- 网关 service／handler 专项命令通过，包含普通 Key 图片创建→统一结果→越权拒绝、普通 Key 视频创建→查询→下载等待→越权拒绝、持久任务协议标记恢复与图层元数据。
+- 本记录不表示生产网关或已安装桌面已更新，不证明真实供应商接受了请求。

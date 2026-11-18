@@ -31,7 +31,7 @@ const jobSchema = z.object({
   referenceFingerprint: z.record(z.string(), z.unknown()).optional(),
   taskId: z.string().optional(), receiptId: z.string().optional(), error: z.string().optional(),
   dispatchKey: z.string().optional(), fallback: fallbackSchema.optional(), fallbackEligible: z.boolean().optional(),
-  fallbackDecision: z.enum(["pending", "approved", "declined"]).optional(),
+  fallbackUnavailable: z.string().optional(), fallbackDecision: z.enum(["pending", "approved", "declined"]).optional(),
   previousAttempts: z.array(z.object({ model: z.string(), taskId: z.string().optional(), receiptId: z.string().optional(), error: z.string().optional() })).max(1).optional(),
   diagnostic: mediaDiagnosticSchema.optional(),
   generationEndedAt: z.number().optional(),

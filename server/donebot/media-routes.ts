@@ -1,3 +1,4 @@
+import { UNIFIED_MEDIA_PROTOCOL, unifiedOperation } from "./unified-media.ts";
 import { z } from "zod";
 import type { HelperToolContext } from "../routes/helper-tools.ts";
 import { PASS } from "../routes/table.ts";
@@ -16,7 +17,7 @@ const capabilitySchema = z.object({ model: z.string().min(1).max(256).optional()
 
 export function publicMediaJob(job: MediaJob) {
   return { id: job.id, kind: job.kind, model: job.model, operation: job.operation, status: job.status,
-    previous_attempts: job.previousAttempts, fallback_model: job.fallback?.model, fallback_waiting_confirmation: job.fallbackDecision === "pending",
+    previous_attempts: job.previousAttempts, fallback_model: job.fallback?.model, fallback_unavailable: job.fallbackUnavailable, fallback_waiting_confirmation: job.fallbackDecision === "pending",
     task_id: job.taskId, receipt_id: job.receiptId, error: job.error, diagnostic: job.diagnostic, artifacts: job.artifacts,
     waiting_stopped: job.waitingStopped, created_at: job.createdAt, updated_at: job.updatedAt,
     ...(job.waitingStopped ? { notice: job.status === "cancelled" ? "Further local dispatch is cancelled. Automatic follow-up is stopped." : "Automatic follow-up is stopped. An existing provider task can still finish; stopping the wait does not establish cancellation or billing." }
@@ -42,13 +43,22 @@ export function createDoneBotMediaRoutes(service: DoneBotMediaService, contextFo
       const body = await ctx.readBody();
       if (!context.active()) return ctx.json(ctx.res, 403, { error: "This turn ended before the media request was read." });
       if (action === "capabilities") {
-        return ctx.json(ctx.res, 200, { models: await service.capabilities(capabilitySchema.parse(body)), reference_rule: "Use local_path objects at native reference URL positions. DoneBot uploads reference files to its gateway; raw URLs and asset:// references are unavailable." });
+        return ctx.json(ctx.res, 200, { models: await service.capabilities(capabilitySchema.parse(body)), reference_rule: "For unified images/videos, use references:[{type:'image',role:'reference',url:{local_path:'/allowed/file'}}]. DoneBot uploads local files; raw URLs and asset:// references are unavailable." });
       }
       if (action === "generate") {
         const input = submitSchema.parse(body);
         const selected = modelsFor?.(input.kind) ?? { primary: input.model ?? DONEBOT_MEDIA_MODELS[input.kind], fallback: "" };
         if (!selected.primary || input.model && input.model !== selected.primary) return ctx.json(ctx.res, 409, { error: "Media defaults changed or are unavailable. Use the current generation tool schema." });
-        if ((input.fallback_model ?? "") !== selected.fallback) return ctx.json(ctx.res, 409, { error: "The configured fallback changed. Use the current generation tool schema." });
+        if (input.fallback_model !== undefined && input.fallback_model !== selected.fallback || typeof input.parameters.mode !== "string" && (input.fallback_model ?? "") !== selected.fallback) return ctx.json(ctx.res, 409, { error: "The configured fallback changed. Use the current generation tool schema." });
+        if ((input.kind === "image" || input.kind === "video") && typeof input.parameters.mode === "string") {
+          if (input.fallback_parameters !== undefined || input.fallback_operation !== undefined || input.fallback_reason !== undefined) return ctx.json(ctx.res, 400, { error: "Unified media uses one request for both models; omit fallback parameters." });
+          const parameters = { ...input.parameters, protocol: UNIFIED_MEDIA_PROTOCOL };
+          const operation = unifiedOperation(parameters);
+          if (input.operation !== undefined && input.operation !== operation) return ctx.json(ctx.res, 400, { error: "Operation does not match mode." });
+          const job = await service.submit(context, { kind: input.kind, model: selected.primary, parameters, operation, variationKey: input.variation_key,
+            ...(selected.fallback ? { fallback: { model: selected.fallback, parameters: structuredClone(parameters), operation } } : {}) });
+          return ctx.json(ctx.res, 202, { job: publicMediaJob(job), reply_context: mediaReplyContext(job, action), ...(job.fallbackUnavailable ? { fallback_unavailable: job.fallbackUnavailable } : {}) });
+        }
         if (selected.fallback && input.fallback_parameters === undefined || input.fallback_parameters === null && !input.fallback_reason) return ctx.json(ctx.res, 400, { error: "Provide the configured fallback's native parameters, or explain why this request is unsupported by that fallback." });
         if (!selected.fallback && input.fallback_parameters) return ctx.json(ctx.res, 409, { error: "The fallback model is no longer available." });
         const job = await service.submit(context, { kind: input.kind, model: selected.primary, parameters: input.parameters, operation: input.operation, variationKey: input.variation_key,

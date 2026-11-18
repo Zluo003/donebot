@@ -14,6 +14,7 @@ export interface MediaReferencePolicy {
 export const MAX_MEDIA_REFERENCE_FILES = 32;
 export const MAX_MEDIA_REFERENCE_BYTES = 32 * 1024 * 1024;
 export class MediaReferenceChanged extends Error {}
+export class MediaReferenceUnsupported extends Error {}
 
 export function mediaReferenceMime(mime: string, name: string): string {
   if (mime !== "application/octet-stream") return mime;
@@ -100,14 +101,15 @@ export class MediaAssetCache {
           typeof data.type === "string" && ["image", "video", "audio"].includes(data.type);
         if (!(Object.keys(data).length === 1 || intentReference) || typeof data.local_path !== "string" || !data.local_path.trim() || data.local_path.length > 8192) throw new Error("A media reference must be exactly {local_path: '/allowed/file'}.");
         if (!this.deps.resolveReference) throw new Error("Local reference media is unavailable in this context.");
-        if (++references > (policy?.maxFiles ?? MAX_MEDIA_REFERENCE_FILES)) throw new Error("Too many reference media files.");
+        if (++references > (policy?.maxFiles ?? MAX_MEDIA_REFERENCE_FILES)) throw new MediaReferenceUnsupported("Too many reference media files.");
         if (!context.active()) throw new Error("This turn ended before uploading reference media.");
         const file = await this.deps.resolveReference(context, data.local_path, maxBytes);
         if (!context.active()) throw new Error("This turn ended before uploading reference media.");
-        if (!file.bytes.byteLength || file.bytes.byteLength > maxBytes || !/^(image|video|audio)\/[a-zA-Z0-9.+-]+$/.test(file.mime)) throw new Error("Reference media has an unsupported type or size.");
+        if (file.bytes.byteLength > maxBytes) throw new MediaReferenceUnsupported("Reference media exceeds this model’s file-size limit.");
+        if (!file.bytes.byteLength || !/^(image|video|audio)\/[a-zA-Z0-9.+-]+$/.test(file.mime)) throw new Error("Reference media has an unsupported type or size.");
         if (modality && !file.mime.startsWith(`${modality}/`)) throw new Error(`The reference file does not match its native ${modality} field.`);
         if (intentReference && !file.mime.startsWith(`${data.type}/`)) throw new Error(`The reference file does not match its declared ${data.type} type.`);
-        policy?.validateFile?.(file);
+        try { policy?.validateFile?.(file); } catch (error) { throw new MediaReferenceUnsupported(error instanceof Error ? error.message : String(error)); }
         const hash = createHash("sha256").update(file.bytes).digest("hex");
         if (previous !== undefined && (record(previous)?.sha256 !== hash || record(previous)?.mime !== file.mime ||
             intentReference && record(previous)?.type !== data.type)) throw new MediaReferenceChanged("A queued reference changed after authorization; no generation was submitted.");
@@ -132,7 +134,7 @@ export class MediaAssetCache {
         const valueEntries: [string, unknown][] = [];
         const fingerprintEntries: [string, unknown][] = [];
         for (const [key, part] of Object.entries(data)) {
-          const nativeModality = /^(image|video|audio)(?:_urls?|s)?$/.exec(key)?.[1] ?? modality;
+          const nativeModality = /^(image|video|audio)(?:_urls?|s)?$/.exec(key)?.[1] ?? (key === "url" && ["image", "video", "audio"].includes(String(data.type)) ? String(data.type) : modality);
           const entry = await visit(part, key, isReference || referenceFields.has(key), depth + 1, record(previous)?.[key], nativeModality);
           valueEntries.push([key, entry.value]);
           fingerprintEntries.push([key, entry.fingerprint]);

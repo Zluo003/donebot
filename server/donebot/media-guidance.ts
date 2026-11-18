@@ -20,6 +20,14 @@ export function guideDoneBotMedia(input: CompletionTransportInput, catalog: Done
     if (!model) return [];
     const contract = mediaModelSchema(model);
     const backup = local?.models.find(entry => entry.id === selected.fallback);
+
+    if (kind === "image" || kind === "video") {
+      const { variation_key } = tool.function.parameters.properties as Record<string, unknown>;
+      return [{ ...tool, function: { ...tool.function,
+        description: `${tool.function.description} Primary: ${selected.primary}. ${contract.guidance} ${backup ? `Configured backup: ${backup.id}. The client reuses this same structured request, checks its registered capabilities, and dispatches at most once after confirmed failure. Image backup proceeds after reporting the failure; video backup requires confirmation unless already authorized.` : ""}`,
+        parameters: { type: "object", additionalProperties: false, properties: { model: { type: "string", enum: [selected.primary] }, parameters: contract.parameters, variation_key }, required: ["parameters", "model"] },
+      } }];
+    }
     const backupContract = backup ? mediaModelSchema(backup) : undefined;
     const schema = tool.function.parameters;
     const original = schema.properties as Record<string, Record<string, unknown>>;
@@ -39,7 +47,7 @@ export function guideDoneBotMedia(input: CompletionTransportInput, catalog: Done
     } }];
   });
   const gatewayAvailable = tools.some(tool => ["agents_generate_image", "agents_generate_video", "agents_generate_audio"].includes(tool.function.name));
-  const gatewayGuidance = gatewayAvailable ? "The built-in gateway uses the workspace's selected primary and backup models from the account's enabled model list. For this route, submit directly using the matching DoneBot tool; its current schema supplies exact model IDs and native parameters for each attempt. Do not query capabilities or run discovery before gateway generation. Use only documented native parameters; reason is not a native field. The gateway forwards native requests and bills them. A saved asynchronous job runs in the background and delivers files in this same conversation. Acknowledge once; do not poll, resubmit or claim completion before the receipt. Only confirmed generation failure can trigger one configured backup; uncertain, timed out, pending settlement or download status continues the same task. These schemas supersede older fixed-model instructions while preserving the user's explicit and remembered provider preference." : "";
+  const gatewayGuidance = gatewayAvailable ? "The built-in gateway uses the workspace's selected primary and backup models from the account's enabled model list. For this route, submit directly using the matching DoneBot tool; its current schema supplies exact model IDs and registered parameters. Images and videos use the same structured protocol across suppliers: prompt, mode, references, output controls and options. Supply one request only; the client validates and reuses it for the configured backup. Do not query capabilities or run discovery before gateway generation. Use only registered parameters. The gateway converts structured image/video fields into the selected supplier's format and bills the task. A saved asynchronous job runs in the background and delivers files in this same conversation. Acknowledge once; do not poll, resubmit or claim completion before the receipt. Only confirmed generation failure can trigger one configured backup; uncertain, timed out, pending settlement or download status continues the same task. These schemas supersede older fixed-model instructions while preserving the user's explicit and remembered provider preference." : "";
   const guidance = `${MEDIA_PROVIDER_GUIDANCE} ${DONEBOT_MODEL_CREDENTIAL_RULE} Use the existing voice tools for streaming text-to-speech.${gatewayGuidance ? ` ${gatewayGuidance}` : ""}`;
   return { ...input, tools, messages: [{ role: "system", content: guidance }, ...input.messages] };
 }

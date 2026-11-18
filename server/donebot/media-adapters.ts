@@ -15,6 +15,11 @@ export interface MediaAdapter {
 const nativeTaskId = (body: Record<string, unknown>) => mediaTaskId(body.id ?? body.task_id);
 
 export const MEDIA_ADAPTERS: Readonly<Record<string, MediaAdapter>> = {
+  "donebot.media.images.v1": {
+    kind: "image", submit: "/v1/images/generations/async", edit: "/v1/images/generations/async", poll: id => `/v1/images/tasks/${id}`,
+    taskId: nativeTaskId, results: body => { const data = mediaObject(body.result)?.data; return Array.isArray(data) ? data : []; },
+  },
+  "donebot.media.videos.v1": { kind: "video", submit: "/v1/videos", poll: id => `/v1/videos/${id}`, taskId: nativeTaskId, results: () => [] },
   "muse.videos.v1": {
     kind: "video", submit: "/v1/videos", poll: id => `/v1/videos/${id}`,
     taskId: nativeTaskId, results: () => [],

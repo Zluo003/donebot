@@ -8,7 +8,7 @@ import { t } from "@/lib/i18n";
 import { sidebarConnectorPreview, sidebarGoalRunPreview } from "@/lib/sidebar-layout";
 import { citationPreviewText } from "@/lib/citations";
 import { plainPreviewText } from "@/lib/plain-preview";
-import { isToolBudgetNotice } from "@/lib/activity-text";
+import { isHiddenActivityNotice } from "@/lib/activity-text";
 import { isClientCancellation, isStoppedTurnName } from "../../shared/client-cancel";
 import { roomWorkingPreview } from "@/lib/room-threads";
 import { localizedCard } from "@/lib/widget-text";
@@ -16,7 +16,7 @@ import { widgetToText } from "../../shared/widget";
 
 /** The newest message a preview can show. A receipt or a screen frame says nothing about the conversation on its own. */
 export function lastPreviewable<T extends { kind: string }>(messages: readonly T[] | undefined): T | undefined {
-  return messages?.findLast((message) => !isReceipt(message) && message.kind !== "screen" && !isToolBudgetNotice(message));
+  return messages?.findLast((message) => !isReceipt(message) && message.kind !== "screen" && !isHiddenActivityNotice(message));
 }
 
 export function botPreview(bot: Bot, visible: Message[], instances: InstanceInfo[], advanced: boolean): string {

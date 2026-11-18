@@ -12,16 +12,15 @@ const input = (): CompletionTransportInput => ({ model: "gemini-4-argon", stream
 });
 
 describe("DoneBot configured local media contracts", () => {
-  it("includes Muse and its backup's distinct native contracts in the first tool schema", () => {
+  it("advertises one structured request for Muse and its configured backup", () => {
     const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
     catalog.models.push({ id: "muse-video", display_name: "Muse", media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
     const guided = guideDoneBotMedia(input(), catalog, { ...DEFAULT_DONEBOT_MEDIA_PREFERENCES, video: { primary: "muse-video", fallback: "seedance-2-5" } });
     const video = guided.tools.find(tool => tool.function.name === "agents_generate_video")!.function;
-    expect(video.parameters).toMatchObject({ required: ["parameters", "model", "fallback_model", "fallback_parameters"], properties: {
-      model: { enum: ["muse-video"] }, operation: { enum: ["generate"] }, fallback_model: { enum: ["seedance-2-5"] },
-      parameters: { properties: { prompt: { type: "string" }, resolution: { enum: ["720p"] }, duration: { minimum: 4, maximum: 10 } } },
-      fallback_parameters: { anyOf: [{ properties: { content: { type: "array" }, duration: { minimum: 4, maximum: 30 } } }, { type: "null" }] },
+    expect(video.parameters).toMatchObject({ required: ["parameters", "model"], properties: {
+      model: { enum: ["muse-video"] }, parameters: { properties: { mode: { enum: ["text", "reference"] }, prompt: { type: "string" }, resolution: { enum: ["720p"] }, duration: { minimum: 4, maximum: 10 }, references: { type: "array" } } },
     } });
+    expect(video.parameters.properties).not.toHaveProperty("fallback_parameters");
     expect(video.description).toContain("at most once");
     expect(String(guided.messages[0]!.content)).toContain("remembered third-party preference, use it first");
     expect(String(guided.messages[0]!.content)).toContain("Never fall back while an external submission is pending");
@@ -48,7 +47,7 @@ describe("DoneBot configured local media contracts", () => {
     const image = guided.tools[0]!.function;
     expect(image.description).toContain("seedream-5-5");
     expect(image.parameters).toMatchObject({ properties: { parameters: { additionalProperties: false,
-      properties: { layer_decomposition_options: { properties: { max_images: { maximum: 100 } } } } } } });
+      properties: { options: { properties: { layer_decomposition_options: { properties: { max_images: { maximum: 100 } } } } } } } } });
   });
 
   it.each([FAKE_DONEBOT_CATALOG, null])("preserves external media tools, CLI execution and saved instructions with catalog %j", catalog => {

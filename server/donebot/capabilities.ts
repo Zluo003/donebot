@@ -313,6 +313,7 @@ function registeredModelCapabilities(model: DoneBotGatewayModel) {
   return { model: model.id, native: native ?? null,
     gateway: { capabilities: model.capabilities ?? {}, parameters: model.media_parameters ?? {}, ...(adapter === "apimart.images.v1" ? { adapterSources: [model.id === "seedream-5-5" ? SEEDREAM55_SOURCE : APIMART_SEEDREAM] } : adapter === "apimart.music.v1" ? { adapterSources: [APIMART_SUNO] } : {}), ...(native?.media?.mask === true ? { maskEditing: false, restriction: "DoneBot gateway forbids GPT Image mask edits.", responseFormatCompatibility: ["url", "b64_json"] } : {}) },
     client: { implemented: supported, input: clientInput, operations: supported ? operations : [],
+      ...((native?.kind === "image" || native?.kind === "video") ? { requestProtocol: "donebot.media.v1", submitEndpoint: native.kind === "image" ? "/v1/images/generations/async" : "/v1/videos" } : {}),
       delivery: native?.kind === "text" || native?.kind === "audio" ? "streaming" : "async", referenceTransport: "gateway_asset_url",
       imageEditEndpoint: native?.kind === "image" && adapter === "donebot.images.async.v1", videoEditAndExtend: supported && native?.kind === "video" && operations.includes("edit") && operations.includes("extend"),
       ...(native?.media?.operations.includes("markup_edit") ? { markupOverlay: false, annotatedReferenceEdits: supported } : {}),

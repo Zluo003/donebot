@@ -1,3 +1,4 @@
+import { unifiedMediaSchema } from "./unified-media.ts";
 import { nativeModel, modelCapabilities } from "./capabilities.ts";
 import type { DoneBotGatewayModel } from "../../shared/donebot.ts";
 import { DONEBOT_MEDIA_PARAMETER_GUIDANCE, DONEBOT_MEDIA_PARAMETER_SCHEMAS } from "./media-parameter-schemas.ts";
@@ -7,7 +8,7 @@ import { seedream55ParameterRules } from "./seedream-capabilities.ts";
 const localFile = { type: "object", additionalProperties: false, properties: { local_path: { type: "string" } }, required: ["local_path"] };
 const text = { type: "string" };
 
-export function mediaModelSchema(model: DoneBotGatewayModel): { parameters: Record<string, unknown>; guidance: string; operations: string[] } {
+export function nativeMediaModelSchema(model: DoneBotGatewayModel): { parameters: Record<string, unknown>; guidance: string; operations: string[] } {
   const native = nativeModel(model.id)!;
   const capabilities = modelCapabilities(model);
   const rules = capabilities.client.parameterRules;
@@ -45,4 +46,9 @@ export function mediaModelSchema(model: DoneBotGatewayModel): { parameters: Reco
   };
   return { parameters: { type: "object", additionalProperties: false, properties, required: gpt ? ["prompt"] : [] },
     guidance: `${model.display_name}: ${rules && "references" in rules ? rules.references : ""} ${rules?.rules.join(" ") ?? ""}`, operations };
+}
+
+export function mediaModelSchema(model: DoneBotGatewayModel) {
+  const kind = nativeModel(model.id)?.kind;
+  return kind === "video" || kind === "image" ? unifiedMediaSchema(model) : nativeMediaModelSchema(model);
 }

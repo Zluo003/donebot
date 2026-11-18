@@ -120,11 +120,11 @@ describe("with the switch put back", () => {
     expect(values.get("omb-new-look")).toBe("none");
   });
 
-  it("keeps the old default for a browser the move never reached", async () => {
+  it("defaults to Simple when no mode was saved", async () => {
     values.set("omb-skin", "midnight");
     const rolled = await boot(false);
-    expect(rolled.mode.readAdvancedMode()).toBe(true);
-    expect(values.get("omb-advanced-mode")).toBe("1");
+    expect(rolled.mode.readAdvancedMode()).toBe(false);
+    expect(values.get("omb-advanced-mode")).toBe("0");
     expect(values.has("omb-new-look")).toBe(false);
   });
 });

@@ -1,0 +1,16 @@
+{
+  "id": "skill-creator",
+  "name": "skill-creator",
+  "version": "1.0.0",
+  "description": "Create, evaluate and improve reusable skills for a bot.",
+  "defaultEnabled": true,
+  "chiefOnly": true,
+  "alwaysAvailable": true,
+  "triggerTerms": [
+    "skill-creator",
+    "技能"
+  ],
+  "requiredCapabilities": [
+    "skillAuthoring"
+  ]
+}

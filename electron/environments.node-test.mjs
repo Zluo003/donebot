@@ -106,11 +106,39 @@ test("native workspace choices use saved IDs and connect opens settings without 
   const items = env.workspaceMenuTemplate(state, { onSwitch: (id) => calls.push(["switch", id]), onConnect: () => calls.push(["settings"]), onForget: (id) => calls.push(["forget", id]) });
   assert.equal(items.find((item) => item.id === "workspace-cloud").checked, true);
   assert.equal(items.find((item) => item.id === "workspace-connect").label, "Connect to a server…");
+  assert.equal(items.find((item) => item.id === "workspace-connect").visible, false);
+  assert.equal(items.find((item) => item.id === "workspace-forget").visible, false);
   items.find((item) => item.id === "workspace-local").click();
   items.find((item) => item.id === "workspace-connect").click();
   items.find((item) => item.id === "workspace-forget").click();
   assert.deepEqual(calls, [["switch", "local"], ["settings"], ["forget", "cloud"]]);
   assert.equal(state.activeId, "cloud");
+});
+
+test("DoneBot Cloud's switcher uses the app language, hides addresses and purchase after connection, and keeps server actions hidden", () => {
+  const origin = "https://11861a47-7240-4f99-bf19-bd01d411596f.cloud.donebot.cn";
+  const base = { onSwitch() {}, onConnect() {}, onForget() {}, onAddCloud() {} };
+  for (const [language, label, add] of [["en", "DoneBot Cloud", "Add a Cloud…"], ["zh", "我的云服务器", "添加云服务器"], ["zh-tw", "我的雲伺服器", "新增雲伺服器"]]) {
+    const text = createNativeText({ saved: language });
+    const empty = env.workspaceMenuTemplate({ environments: [], activeId: "local" }, { ...base, text });
+    assert.equal(empty.find(item => item.id === "workspace-add-cloud").label, add);
+    assert.equal(empty.filter(item => item.visible !== false).at(-1).id, "workspace-add-cloud");
+    for (const managed of [false, true]) {
+      const cloud = { id: "cloud", origin, name: managed ? "Custom name" : "DoneBot Cloud", ...(managed ? { donebotCloud: { id: origin.split("//")[1].split(".")[0], accountId: "101" } } : {}) };
+      const state = { environments: [cloud], activeId: "cloud" };
+      assert.equal(env.workspaceSummary(state, text.t).name, label);
+      assert.equal(env.workspaceSummary(state, text.t).donebotCloud, true);
+      assert.equal(env.workspaceWindowTitle(state, null, null, text.t), `DoneBot — ${label}`);
+      for (const activeId of ["local", "cloud"]) for (const homeOrigin of [null, origin]) {
+        const menu = env.workspaceMenuTemplate({ ...state, activeId }, { ...base, text, homeOrigin });
+        const visible = menu.filter(item => item.visible !== false);
+        assert.equal(visible.find(item => item.id === "workspace-cloud").label, label);
+        assert.equal(visible.find(item => item.id === "workspace-cloud").sublabel, undefined);
+        assert.ok(!visible.some(item => ["workspace-connect", "workspace-forget", "workspace-add-cloud"].includes(item.id)));
+        assert.ok(!JSON.stringify(visible).includes("cloud.donebot.cn"));
+      }
+    }
+  }
 });
 
 test("Add a Cloud… sits just under the saved servers only where main offers it, and My Cloud's line can say Always on", () => {

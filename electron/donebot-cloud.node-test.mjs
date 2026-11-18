@@ -1,9 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDoneBotCloudConnection, doneBotCloudEntry, installDoneBotCloud } from "./donebot-cloud.mjs";
+import { createDoneBotCloudConnection, doneBotCloudEntry, hasDoneBotCloud, installDoneBotCloud } from "./donebot-cloud.mjs";
 import environments from "./environments.cjs";
 
 const id = "11861a47-7240-4f99-bf19-bd01d411596f", origin = `https://${id}.cloud.donebot.cn`;
+test("the cloud menu checks purchases before a first connection and uses saved Cloud entries offline", async () => {
+  const state = { environments: [], activeId: "local" };
+  const calls = [];
+  const request = value => async (path, init) => {
+    calls.push(path); assert.equal(init.method, undefined);
+    return Response.json(value);
+  };
+  assert.equal(await hasDoneBotCloud(request({ instance: { paid_until: "2026-12-17T00:00:00Z" } }), state), true);
+  assert.equal(await hasDoneBotCloud(request({ instance: null }), state), false);
+  assert.equal(await hasDoneBotCloud(request({ instance: { paid_until: null } }), state), false);
+  assert.equal(await hasDoneBotCloud(async () => new Response("Unauthorized", { status: 401 }), state), false);
+  state.environments.push({ id: "saved", name: "DoneBot Cloud", origin });
+  assert.equal(await hasDoneBotCloud(() => { throw new Error("must not request"); }, state), true);
+  assert.deepEqual(calls, Array(3).fill("/api/donebot/cloud"));
+});
 function fixture() {
   let owner = "101", signedIn = false, live = true, probeFailed = false;
   let state = { environments: [], activeId: "local" };

@@ -3,6 +3,13 @@ const { englishText } = require("./native-text.cjs");
 
 const LOCAL_ID = "local";
 const MAX_NAME = 60;
+const cloudInstanceId = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+function doneBotCloudEntry(entry) {
+  if (entry?.donebotCloud) return true;
+  try { return entry?.name === "DoneBot Cloud" && cloudInstanceId.test(new URL(entry.origin).hostname.split(".")[0]); }
+  catch { return false; }
+}
+const workspaceName = (entry, t = englishText.t) => doneBotCloudEntry(entry) ? t("native.donebotCloud.name") : entry.name;
 /** A saved server's colour: one of these names, never a value a page could style with. The renderer maps each to its skin's tone. */
 const ENTRY_COLORS = Object.freeze(["blue", "teal", "purple", "orange", "red", "yellow"]);
 const cleanColor = (value) => (ENTRY_COLORS.includes(value) ? value : null);
@@ -34,11 +41,11 @@ function normalizeOrigin(input) {
 }
 
 /** Remote renderers learn only their current workspace, never the local list. */
-function workspaceSummary(state) {
+function workspaceSummary(state, t = englishText.t) {
   const active = activeEnvironment(state);
   if (!active) return { local: true, name: "This computer" };
   if (active.kind === "local") return { local: true, name: active.name, localPath: active.dataDir, missing: active.missing === true };
-  return { local: false, name: active.name, origin: active.origin, ...(cleanColor(active.color) ? { color: active.color } : {}),
+  return { local: false, name: workspaceName(active, t), origin: active.origin, ...(doneBotCloudEntry(active) ? { donebotCloud: true } : {}), ...(cleanColor(active.color) ? { color: active.color } : {}),
     ...(active.team ? { role: teamRoleLabel(active.team.role) } : {}) };
 }
 
@@ -47,6 +54,7 @@ function workspaceSummary(state) {
 function workspaceWindowTitle(state, companion, homeOrigin = null, t = englishText.t) {
   if (companion) return t("native.title.connected", { server: companion.serverName, host: new URL(companion.endpoint).host });
   const active = activeEnvironment(state);
+  if (doneBotCloudEntry(active)) return `DoneBot — ${workspaceName(active, t)}`;
   if (listedPlace(active)) return `DoneBot — ${active.name}`;
   if (active && active.kind !== "local" && active.origin !== homeOrigin) return t("native.title.hosted", { name: active.name, host: new URL(active.origin).host });
   if (active && homeOrigin && active.origin === homeOrigin && otherPlaces(state, homeOrigin) > 0) return `DoneBot — ${active.name}`;
@@ -87,19 +95,19 @@ function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddClou
     ...own,
     ...[...state.environments].sort((a, b) => listedPlace(b) - listedPlace(a)).map((entry) => {
       const icon = iconFor && cleanColor(entry.color) ? iconFor(entry.color) : null;
-      const status = Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
+      const status = doneBotCloudEntry(entry) ? null : Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
       return {
-        id: `workspace-${entry.id}`, label: foldSublabels && status ? `${entry.name} · ${status}` : entry.name,
-        sublabel: status ?? (entry.kind === "local" ? entry.dataDir : new URL(entry.origin).host),
+        id: `workspace-${entry.id}`, label: foldSublabels && status ? `${workspaceName(entry, t)} · ${status}` : workspaceName(entry, t),
+        ...(!doneBotCloudEntry(entry) ? { sublabel: status ?? (entry.kind === "local" ? entry.dataDir : new URL(entry.origin).host) } : {}),
         ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
       };
     }),
     ...(copyToCloud ? [{ id: "workspace-copy-to-cloud", label: copyToCloud.label, click: copyToCloud.click }] : []),
-    ...(onAddCloud ? [{ id: "workspace-add-cloud", label: t("native.menu.addCloud"), sublabel: t("native.switcher.addCloudSub"), click: onAddCloud }] : []),
-    { type: "separator" },
+    ...(onAddCloud && !state.environments.some(doneBotCloudEntry) ? [{ id: "workspace-add-cloud", label: t("native.menu.addCloud"), sublabel: t("native.switcher.addCloudSub"), click: onAddCloud }] : []),
+    { type: "separator", visible: fresh.length > 0 },
     ...fresh,
-    { id: "workspace-connect", label: t("native.menu.connect"), click: onConnect },
-    ...(active && !listedPlace(active) ? [{ id: "workspace-forget", label: t("native.switcher.forgetNamed", { name: active.name }), click: () => onForget(active.id) }] : []),
+    { id: "workspace-connect", label: t("native.menu.connect"), visible: false, click: onConnect },
+    ...(active && !listedPlace(active) ? [{ id: "workspace-forget", label: t("native.switcher.forgetNamed", { name: workspaceName(active, t) }), visible: false, click: () => onForget(active.id) }] : []),
   ];
 }
 
@@ -114,14 +122,15 @@ function homeMenuTemplate(state, { onSwitch, onForget, sublabels, iconFor, foldS
     ...own,
     ...places.map((entry) => {
       const icon = iconFor && cleanColor(entry.color) ? iconFor(entry.color) : null;
-      const status = Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
+      const status = doneBotCloudEntry(entry) ? null : Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
       return {
-        id: `workspace-${entry.id}`, label: foldSublabels && status ? `${entry.name} · ${status}` : entry.name, sublabel: status ?? new URL(entry.origin).host,
+        id: `workspace-${entry.id}`, label: foldSublabels && status ? `${workspaceName(entry, t)} · ${status}` : workspaceName(entry, t),
+        ...(!doneBotCloudEntry(entry) ? { sublabel: status ?? new URL(entry.origin).host } : {}),
         ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId && !shown, click: () => onSwitch(entry.id),
       };
     }),
     ...(fresh.length ? [{ type: "separator" }, ...fresh] : []),
-    ...(active && active.origin !== homeOrigin && !listedPlace(active) ? [{ type: "separator" }, { id: "workspace-forget", label: t("native.switcher.forgetNamed", { name: active.name }), click: () => onForget(active.id) }] : []),
+    ...(active && active.origin !== homeOrigin && !listedPlace(active) ? [{ type: "separator", visible: false }, { id: "workspace-forget", label: t("native.switcher.forgetNamed", { name: workspaceName(active, t) }), visible: false, click: () => onForget(active.id) }] : []),
   ];
 }
 
@@ -496,4 +505,6 @@ module.exports = {
   workspaceSenderAllowed,
   workspaceSummary,
   workspaceWindowTitle,
+  workspaceName,
+  doneBotCloudEntry,
 };

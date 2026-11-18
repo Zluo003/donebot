@@ -53,9 +53,11 @@ export function createBotSkillsRoutes(deps: BotSkillsRouteDeps): RouteHandler {
       const threadId = asked && store.taskByThread(bot.id, asked) ? asked : bot.threadId;
       if (skillsLibraryEnabled(cfg)) {
         const { skills, library } = listBotSkillsWithOrigin(m[1]!, store.bot(m[1])!.assignedSkills);
+        const available = listBotSkills(bot, threadId);
+        const builtins = new Map(available.filter((skill) => skill.source?.startsWith("builtin:")).map((skill) => [skill.name, skill]));
         const names = new Set(skills.map((skill) => skill.name));
         return json(res, 200, {
-          skills: [...skills, ...listBotSkills(bot, threadId).filter((skill) => !names.has(skill.name))],
+          skills: [...skills, ...available.filter((skill) => !names.has(skill.name))].map((skill) => builtins.get(skill.name) ?? skill),
           library,
           assignedSkills: store.bot(m[1])!.assignedSkills,
           staged: listStagedSkillWrites(m[1]).map(stagedSkillListing),
@@ -90,6 +92,7 @@ export function createBotSkillsRoutes(deps: BotSkillsRouteDeps): RouteHandler {
       const parsed = z.object({ enabled: z.boolean() }).safeParse(await readBody(req));
       if (!parsed.success) return json(res, 400, { error: "enabled must be true or false" });
       const bot = store.bot(m[1]);
+      if (bot && listBotSkills(bot).some((skill) => skill.name === m![2] && skill.source?.startsWith("builtin:"))) return json(res, 409, { error: "This skill is built into the Chief and stays enabled." });
       // A skill from this computer that none of the bot's own or library skills shadows: this bot's switch for it.
       if (bot && listBotSkills(bot).some((skill) => skill.name === m![2] && (skill as { origin?: string }).origin === "imported")) {
         const result = setImportedSkillEnabled(bot.id, m[2]!, parsed.data.enabled);
@@ -111,6 +114,7 @@ export function createBotSkillsRoutes(deps: BotSkillsRouteDeps): RouteHandler {
       const bot = store.bot(m[1]!);
       if (!bot) return json(res, 404, { error: "no such bot" });
       const name = m[2]!;
+      if (listBotSkills(bot).some((skill) => skill.name === name && skill.source?.startsWith("builtin:"))) return json(res, 409, { error: "This skill is built into the Chief and cannot be removed." });
       const removed = removeSkill(bot.id, name);
       if (!("error" in removed)) return json(res, 200, { ok: true });
       if (skillsLibraryEnabled(cfg)) {

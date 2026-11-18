@@ -19,6 +19,7 @@ import { BotAvatar } from "./Avatar";
 import { useAvatarImage } from "./avatar-editing";
 import { MausBotCustomize } from "./MausBotCustomize";
 import { usePrefersReducedMotion } from "./mascot-clock";
+import { chiefSetupBot } from "@/donebot/chief-setup";
 
 const LOOK = ["name", "color", "mascotBody", "avatarUrl", "avatarCrop", "avatarZoom", "avatarFocusX", "avatarFocusY"] as const;
 export type WelcomeDraft = Pick<Bot, (typeof LOOK)[number]>;
@@ -55,14 +56,17 @@ export const teamQuiet = (state: { config?: { team?: unknown } | null; bots: Rea
  * for a launch the notices queue has not already used. The notices queue asks this too, so the card goes first. */
 export function useMausBotWelcomeDue(viewer: WelcomeViewer | null): { bot: Bot | undefined; due: boolean } {
   const { state } = useStore();
-  const bot = myDefaultBot(state.bots, useViewerEmail());
+  const email = useViewerEmail();
+  const bot = myDefaultBot(state.bots, email);
+  const setup = chiefSetupBot({ bots: state.bots, config: state.config, connected: state.connected, hydrated: state.hydrated,
+    viewer, email, remote: window.ogb?.remoteClient?.active === true });
   // The app tour runs only when Settings starts it; one never taken does not hold this back.
   const touring = state.tourOpen;
   const onboardingDue = !viewer || welcomeDue(state.config, {
     remoteClient: window.ogb?.remoteClient?.active === true, legacyDone: emailGateDone(),
     hosted: viewer.hosted, canSave: viewer.canSave, cloudHome: viewer.cloudHome,
   });
-  const due = Boolean(state.config) && mausBotWelcomeDue({ bot, onboardingDue, welcomeOpen: state.welcomeOpen, tourOpen: touring })
+  const due = !setup && Boolean(state.config) && mausBotWelcomeDue({ bot, onboardingDue, welcomeOpen: state.welcomeOpen, tourOpen: touring })
     && firstReplyPending(state) === false && !welcomeFinishedThisLaunch() && launchDialogShown() !== "notices" && !teamQuiet(state);
   return { bot, due };
 }

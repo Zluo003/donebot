@@ -8,6 +8,8 @@ export interface DoneBotCloudInstance {
   paid_until: string | null;
   subscription_state: string;
   purge_locked: boolean;
+  /** Renewal preference, independent of the paid service period. Absent on older gateways. */
+  auto_renew?: boolean;
 }
 export interface DoneBotCloudOperation { id: string; action: string; state: string; error: string }
 export interface DoneBotCloudMutationResult { instance: DoneBotCloudInstance; operation: DoneBotCloudOperation }
@@ -21,7 +23,7 @@ export interface DoneBotCloudSnapshot {
   operations: DoneBotCloudOperation[];
   connection_available: boolean;
 }
-export type DoneBotCloudAction = "start" | "stop" | "cancel";
+export type DoneBotCloudAction = "start" | "stop" | "cancel" | "keep";
 export interface DoneBotCloudMutation {
   account_id: string;
   id?: string;

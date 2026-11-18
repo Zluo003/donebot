@@ -4,6 +4,7 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale, t } from "@/lib/i18n";
+import { UPSTREAM_SETTINGS } from "@/donebot/services";
 import type { AppSettingsSection } from "@/state/store";
 import type { Switch } from "./SettingsPrimitives";
 import { SECTIONS, SIMPLE_FOLDED, SIMPLE_HIDDEN_SECTIONS, SIMPLE_PAGES, SettingsModal, revealSettingsBlock } from "./SettingsModal";
@@ -60,6 +61,7 @@ vi.mock("./ServerPairingCard", () => ({ ServerPairingCard: () => null }));
 vi.mock("./ConnectedWorkspacesSettings", () => ({ ConnectedWorkspacesSettings: marker("desktopWorkspaces") }));
 vi.mock("./LocalComputerSection", () => ({ LocalComputerSection: marker("computer") }));
 vi.mock("./CloudAccountSettings", () => ({ CloudAccountSettings: marker("cloudAccount") }));
+vi.mock("@/donebot/Payments", () => ({ DoneBotPayments: marker("purchase") }));
 vi.mock("./OrganizationSettings", () => ({ OrganizationSettings: marker("organization") }));
 vi.mock("./PeopleSection", () => ({ PeopleSection: marker("people") }));
 vi.mock("./ActivitySection", () => ({ ActivitySection: marker("activity") }));
@@ -130,10 +132,33 @@ const placement = (html: string, needle: string): "shown" | "folded" | "missing"
 const open = (section: AppSettingsSection) => { fixture.section = section; return render(); };
 
 describe("Settings in Simple mode", () => {
+  it("offers Buy credits as a separate page when the DoneBot gateway is enabled", () => {
+    fixture.config = { ...fixture.config, donebot: { enabled: true, user: { id: "fixture-user" } } };
+    const html = open("purchase");
+    expect(pages(html)).toContain("purchase");
+    expect(currentPage(html)).toBe("purchase");
+    expect(markers(html)).toContain("purchase");
+  });
+  it("hides DoneBot's retired settings, including stale Computer and API key links", () => {
+    for (const key of Object.keys(UPSTREAM_SETTINGS) as Array<keyof typeof UPSTREAM_SETTINGS>) UPSTREAM_SETTINGS[key] = false;
+    fixture.rail = { available: true, hidden: true };
+    fixture.updater = { status: "idle" };
+    vi.stubGlobal("window", { ogb: { ...desktop.ogb, updater: { check: vi.fn(), install: vi.fn(), onState: vi.fn() } } });
+    for (const section of ["general", "appearance", "engines", "updates", "connections", "computer", "companion", "desktopWorkspaces", "logins", "remote"] as const) {
+      const html = open(section);
+      expect(pages(html)).toEqual(["general", "ai", "billing", "updates"]);
+      expect(blocks(html)).not.toContain("connections");
+      expect(blocks(html)).not.toContain("computer");
+      for (const hidden of ["Show your computers", "Send usage analytics", "More settings", "Advanced mode", "Replay welcome tour", "Diagnostics", "MARKER:apiKey;", "MARKER:computer;"]) expect(html).not.toContain(hidden);
+    }
+    expect(open("updates")).toContain("Check for updates");
+    expect(open("engines")).toContain("Defaults for new bots");
+  });
+
   it("draws five pages on the desktop, General, AI, Computer, Usage & billing and Updates, and none of the Advanced-only ones", () => {
     const html = render();
     expect(pages(html)).toEqual(["general", "ai", "computer", "billing", "updates"]);
-    expect(SIMPLE_PAGES.map((page) => page.id)).toEqual(["general", "botAccess", "ai", "computer", "billing", "updates"]);
+    expect(SIMPLE_PAGES.map((page) => page.id)).toEqual(["general", "botAccess", "ai", "computer", "billing", "purchase", "updates"]);
     expect(html).toMatch(/General<\/span>[\s\S]*AI<\/span>[\s\S]*Computer<\/span>[\s\S]*Usage &amp; billing<\/span>[\s\S]*Updates<\/span>/);
     expect(html).not.toContain("data-settings-group=");
     expect(html).not.toContain("data-settings-section=");

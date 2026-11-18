@@ -2,6 +2,26 @@ import type { RailAddChoices } from "../../electron/cloud-rail.mjs";
 
 export const DONEBOT_CLOUD_URL = "https://donebot.cn/cloud";
 export const DONEBOT_PRIVATE_DESKTOP_ENABLED = false;
+export const DONEBOT_TEMPLATES_ENABLED = false;
+
+export const UPSTREAM_SETTINGS = {
+  computerRail: false,
+  analytics: false,
+  grokImport: false,
+  more: false,
+  advanced: false,
+  computers: false,
+  apiKeys: false,
+  welcomeTour: false,
+  diagnostics: false,
+  profilePhone: false,
+  profileSupport: false,
+};
+
+export function doneBotSettingsSectionVisible(id: string): boolean {
+  if (!UPSTREAM_SETTINGS.computers && ["computer", "companion", "remote", "desktopWorkspaces", "logins"].includes(id)) return false;
+  return id !== "connections" || UPSTREAM_SETTINGS.apiKeys;
+}
 
 export function rememberDoneBotCloud(response: Response): void {
   if (response.headers.get("x-donebot-cloud") === "1") {

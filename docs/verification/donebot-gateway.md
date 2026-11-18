@@ -1,5 +1,34 @@
 # DoneBot 统一网关验证
 
+## Cloud 自动续费与付费期限（2026-11-17）
+
+取消自动续费只关闭下次到期扣款，Cloud 在已付费期限内保持可用；有效期内显示
+“自动续费”，恢复时不扣款、不改变到期时间。到期后显示“购买 Cloud 云主机”，
+重新购买才开始新的付费周期。客户端和网关网页均移除“停机并保留数据”按钮，
+仍明确展示到期停机后有限保留、随后永久删除的规则。本节取代下文旧版取消后
+重新扣款的行为说明，历史验证记录不代表当前取消语义。
+
+```sh
+pnpm exec vitest run src/donebot/CloudAccess.dom.test.ts server/donebot/cloud.test.ts server/donebot-cloud.e2e.test.ts --maxWorkers=1
+pnpm exec tsc -b --pretty false
+pnpm exec tsc -p tsconfig.server.json --pretty false
+```
+
+上述 3 文件 24 项测试、前后端类型检查及修改文件 oxlint 通过。E2E 启动真实隔离
+DoneBot 服务和回环合成网关，验证取消后仍可连接、恢复自动续费转发 `keep`、
+付费期限不变且仍只有一笔合成扣款。DOM 测试覆盖有效期内和到期后的按钮、
+确认说明及取消后连接；本轮未验收打包客户端 GUI。
+
+donebot-api 网页专项 7 项、vue-tsc 及修改文件 ESLint 通过。主控计费、handler
+和路由 Go 测试通过；私有 PostgreSQL 加两个真实节点 worker/agent 的集成 fixture
+验证运行租约、HTTP、网页会话 Cookie 和已有 WebSocket 在续费切换后继续可用，
+并验证到期停机、保留期和回收。迁移 269 专项验证旧取消状态只恢复未退款的
+付费订阅及运行意图，不恢复已退款服务、不增加扣款。具体命令和范围见
+[Cloud 验证记录](../../../DoneBot-Cloud/docs/verification.md)。
+
+本轮没有访问生产账号、余额或实例，也没有部署网关或重新打包客户端。
+生效需要发布包含迁移 269 的网关后端、网页前端和新版客户端；节点生产协议不变。
+
 ## 媒体并发与结算恢复（2026-11-14）
 
 客户端使用账号完整并发，当前活动的文本、语音与媒体共同计数。网关返回本地准入
@@ -263,6 +292,22 @@ fixture 仍为首轮直接提交、能力查询 0 次、图片付费 POST 1 次�
 网关 config/service/handler 的 Asset、DoneBotStorage 及 APIMartSunoNative 专项测试通过，
 证明默认上传容量和显式旧限制保留、歌曲原生字段透传。未部署或进行线上付费生成。
 
+## 软件内购买算力（2026-11-18）
+
+设置中的「购买算力」复用 DoneBot-api 的账号 JWT 和 `/api/v1/payment/` 接口，仅开放支付宝和微信。服务端读取 `config`、`checkout-info` 和余额充值订单；真实 `methods` 响应通过是否包含对应支付方式表示启用状态，不要求 `available` 或 `daily_remaining` 字段。金额、手续费、优惠和最终入账仍由网关结算。
+
+```sh
+pnpm exec vitest run server/donebot/payments.test.ts src/donebot/Payments.dom.test.ts src/components/SettingsModal.simple.test.ts server/donebot-payments.e2e.test.ts src/components/SettingsModal.groups.test.ts --maxWorkers=1
+pnpm build
+node --experimental-strip-types scripts/verify-donebot-payments-ui.ts
+```
+
+专项测试 5 文件、64 项通过；网关、Cloud 和设置搜索/语言相关回归通过，前后端类型检查、生产构建、变更文件 oxlint 和语言目录检查通过。HTTP 端到端测试使用 `launchVerificationServer` 的临时数据目录与回环合成网关，覆盖支付配置、两种方式下单、取消、到账、重复核验只入账一次、账号不匹配、非法字段与创建响应丢失后的订单恢复。单账号创建流程在查历史之前串行化，待支付或入账中的订单必须先处理；创建请求不会自动重试。二维码在客户端生成，JWT 和支付商私有字段不会进入页面、付款码或公开日志。
+
+浏览器验证启动器挂载真实设置窗口，打印专属预览 URL 和日志路径；`/__fixture/payments/complete` 仅在该隔离预览中模拟支付完成，`/__fixture/payments/evidence` 返回合成订单证据。Playwright 检查了设置导航、支付宝生成付款码并取消、微信到账后余额自动从 0 更新至 110、订单历史，以及 390 像素宽窗口下的纵向二维码布局。证据在 `.omb-scratch/verify-evidence/donebot-payments/result.json`，截图在 `output/playwright/donebot-purchase-*.png`。Ctrl-C 退出启动器，回收其临时服务和数据。
+
+这些检查不证明真实支付商收款、通知回调和生产结算已成功。当前页面消费网关返回的 `qr_code` 或 `pay_url`；仅返回 Stripe `client_secret` 的支付方式不能在该扫码页面完成支付。安装凭据与 Cloud 浏览器不开放账号充值操作，需在本机登录管理账号。未修改网关支付实现、部署生产服务或执行真实充值。
+
 
 ## Cloud 模型读取与网络故障（2026-11-13）
 
@@ -271,3 +316,23 @@ Cloud 账号邮箱来自隔离安装文件，模型列表和账号并发需要�
 `server/donebot-cloud-models.e2e.test.ts` 使用既有隔离启动器、临时 Cloud 安装文件、回环合成网关和专属回环代理。先检查无需用户 JWT 的模型/并发读取，再断开代理连接：身份仍在，两个读取均返回 `gateway_unreachable`；恢复代理后无需重新登录即可重新读取。仅发 GET，检查日志与公开响应没有安装凭据。
 
 `pnpm exec vitest run server/donebot/gateway.test.ts server/donebot/cloud-credential.test.ts server/donebot-cloud-models.e2e.test.ts --maxWorkers=1`：3 文件、22 项通过；服务端类型检查及变更文件 oxlint 通过。这不证明生产节点连通或模型计费成功。同机宿主网关被拒绝需在 Cloud 节点配置受限 HTTPS 例外；客户端错误文案改进不能代替节点规则修复。
+
+## 九款原生 LLM 接入（2026-11-18）
+
+DoneBot 能力表已登记以下 ID。所列接口是 DoneBot 调用网关使用的协议；模型可选仍取决于账号目录，不改变现有默认模型。
+
+| 网关接口 | 模型 ID |
+| --- | --- |
+| `anthropic.messages` | `claude-fable-5-2`、`claude-opus-5-5`、`claude-sonnet-5-5`、`claude-haiku-5-5` |
+| `openai.responses` | `gpt-6.2-astra`、`gpt-6.2-sol` |
+| `gemini.generate_content` | `gemini-4-hydrogen`、`gemini-4-carbon`、`gemini-4-argon` |
+
+Gemini 4 的 GenerateContent 请求使用 `generationConfig.thinkingConfig.thinkingLevel`，不使用 `thinkingBudget`。Hydrogen 支持 `LOW`、`MEDIUM`、`HIGH`（默认）和 `XHIGH`；Carbon、Argon 只支持 `LOW`、`MEDIUM`（默认）和 `HIGH`。见 [Google Thinking 文档](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking)。这是上游能力登记，不是 DoneBot 可选项；当前调用不传手选档位。若开放档位，需同时修改 DoneBot 请求组装和网关 Gemini 参数校验，并验证 `XHIGH` 只对 Hydrogen 放行且不绕过分组限制。
+
+使用上游默认推理档位时，接入不需要修改网关生产代码；启用前检查以下网关配置：
+
+- 上游走 API 凭据；核对精确模型映射、可用分组、`donebot.model_capabilities.v4` 的原生接口声明以及 CNY 计费配置。用目标账号的安装凭据核对实际目录。不要使用本地订阅或订阅转接。
+- GPT‑6.2 的工具调用须走原生 Responses。Gemini 三款须由所选上游账号和端点明确提供，不能仅凭 Google Cloud 文档推断 AI Studio 凭据也能调用。
+- Fable 5.2 使用已验证的 Anthropic API Key 透传路径（`anthropic_passthrough: true`），完整保留签名块和请求前缀。工具续接使用同一上游账号，或用已验证可共享签名的账号池。启用前确认符合 [Anthropic 的 30 天数据留存要求](https://platform.claude.com/docs/en/models/fable-5-2/migration-guide)。
+
+客户端专项 5 文件、134 项通过，并通过 `pnpm typecheck`。九模型端到端测试使用临时数据目录和回环合成网关，验证安装凭据、原生路径、实际工具执行与工具结果续接，覆盖 Fable 空 thinking 签名、GPT 加密推理及 Gemini thought signature 回放。网关仅新增 `TestGatewayService_AnthropicAPIKeyPassthrough_PreservesFable52SignedPrefix`，专项已通过。未修改生产配置、部署或发起真实上游请求；这些测试不证明生产账号已开通。

@@ -160,7 +160,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   // Advanced gets the word that it is back there instead.
   const promptSeen = useSimpleModePromptSeen(), newLookDue = useNewLookDue(), backDue = useAdvancedBackDue(), advanced = useAdvancedMode();
   const advancedBack = backDue && advanced;
-  const simpleDue = SIMPLE_ONLY ? newLookDue : advancedBack || !promptSeen;
+  const simpleDue = DONEBOT_ONBOARDING.showInterfaceModePrompt && (SIMPLE_ONLY ? newLookDue : advancedBack || !promptSeen);
   const simpleBlocked = useOtherDialogOpen(simpleDue) || Boolean(state.liveCall && state.liveCall.status !== "ended");
   const boatHere = UPSTREAM_SERVICES.promotions && UPSTREAM_SERVICES.boat && boatOfferRuns(now()) && brandStatus().source !== "file";
   const modelgoHere = modelgoOfferable(state.config?.managedPolicy);

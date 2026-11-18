@@ -37,6 +37,9 @@ it("anywhere else keeps the switcher as it was", async () => {
   expect(host.querySelector("button")?.getAttribute("aria-haspopup")).toBe("menu");
   await show({ local: true, name: "This computer" });
   expect(host.querySelector("button")?.textContent).toContain("This computer");
+  await show({ local: false, name: "DoneBot Cloud", origin: "https://fixture.cloud.donebot.cn", donebotCloud: true });
+  expect(host.querySelector("button")?.getAttribute("title")).toBe("DoneBot Cloud");
+  expect(host.innerHTML).not.toContain("fixture.cloud.donebot.cn");
 });
 
 it("says always on only when My Cloud's verified plan never sleeps, on its pages and its pair page alike", async () => {

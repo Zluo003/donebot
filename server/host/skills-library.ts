@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { chiefLevel } from "../chief-level.ts";
+import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 import { skillCalls, skillCommandTurnText } from "../../shared/skill-command.ts";
@@ -15,7 +16,7 @@ import { disabledNativeSkillNames, isNativeSkillEnabled } from "../native-skill-
 import { nativeSkillListing, nativeSkills, readNativeSkillFile } from "../native-skills.ts";
 import { redactSecretsInText } from "../redact.ts";
 import { readSectionContext } from "../section-context.ts";
-import { librarySkillOptOuts, listLibrarySkills, readLibrarySkillFile, readSkillLibraryIndex, skillsLibraryEnabled } from "../skill-library.ts";
+import { librarySkillOptOuts, listLibrarySkills, loadBundledSkills, readBundledSkillReference, readLibrarySkillFile, readSkillLibraryIndex, skillsLibraryEnabled } from "../skill-library.ts";
 import {
   conversationAssignedSkills,
   prepareShareNote,
@@ -79,6 +80,8 @@ const NO_TURN_NOTE: TurnShareNote = { text: "", after: (dispatch) => dispatch };
 export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
   const { store, cfg } = deps;
   const mode = () => shareLearnedSkillsMode(cfg);
+  const bundled = loadBundledSkills().filter((skill) => skill.manifest.chiefOnly && skill.manifest.alwaysAvailable);
+  const builtinsFor = (bot: BotRecord) => chiefLevel(bot) ? bundled : [];
 
   /** The bot's own skills, and its library skills while the library is on; an imported skill of the same name yields. */
   const ownSkills = (bot: BotRecord) =>
@@ -90,12 +93,21 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
     return [live.name, live.description, live.soul, live.section, readSectionContext(live.section)?.text].filter(Boolean).join("\n");
   };
   const listBotSkills = (bot: BotRecord, threadId = bot.threadId): SkillListing[] => {
-    const own = ownSkills(bot);
+    const builtins = builtinsFor(bot).map(({ manifest, instructions }): SkillListing => ({
+      name: manifest.id, description: manifest.description, enabled: true, editable: false,
+      source: `builtin:${manifest.id}`, sha256: createHash("sha256").update(instructions).digest("hex"),
+      importedAt: "", warnings: [], skippedFiles: [],
+    }));
+    const reserved = new Set(builtins.map((skill) => skill.name));
+    const own = [...builtins, ...ownSkills(bot).filter((skill) => !reserved.has(skill.name))];
     const listed = [...own, ...importedSkillListings(bot.id, new Set(own.map((skill) => skill.name)), aboutBot(bot))];
     const names = new Set(listed.map((skill) => skill.name));
     return [...listed, ...nativesFor(bot, threadId).filter((skill) => !names.has(skill.name)).map((skill) => nativeSkillListing(skill, isNativeSkillEnabled(bot.id, skill.name)))];
   };
-  const readBotSkillFile = (bot: BotRecord, name: string): string | null => {
+  const readBotSkillFile = (bot: BotRecord, name: string, reference?: string): string | null => {
+    const builtin = builtinsFor(bot).find((skill) => skill.manifest.id === name);
+    if (reference !== undefined) return builtin ? readBundledSkillReference(builtin, reference) : null;
+    if (builtin) return builtin.instructions;
     const own = readSkillFile(bot.id, name);
     if (own !== null) return own;
     // Private wins collisions: a private skill that no longer verifies must not fall through to a same-named shared one.
@@ -157,8 +169,11 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
     return engine ? nativeSkills(engine, { claudeUserSkills: claudeUserSkillsEnabled(cfg), cwd: threadFolder(bot, threadId) }) : [];
   };
 
-  const editable = (botId: string, name: string): boolean =>
-    mode() !== "off" && sharedSkillEditable(botId, store.bot(botId)?.assignedSkills, name);
+  const editable = (botId: string, name: string): boolean => {
+    const bot = store.bot(botId);
+    return Boolean(bot && !builtinsFor(bot).some((skill) => skill.manifest.id === name) &&
+      mode() !== "off" && sharedSkillEditable(botId, bot.assignedSkills, name));
+  };
 
   function summaryLine(share: SkillShareRecord): string {
     const mates = share.assigned.map((bot) => bot.name);
@@ -370,6 +385,7 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
       if (!card.autoApplied || card.answered !== "allow" || card.undone || isSkillSwitchAction(request.action)) {
         return { ok: false, status: 409, error: "only a new or updated skill that applied and was not undone can be shared" };
       }
+      if (request.targetBotId) return { ok: false, status: 409, error: "A skill configured for a teammate stays with that bot. Share it from the target bot's own settings." };
       if (request.shared) return { ok: true, shared: request.shared };
       const botId = message.from?.botId ?? store.botByThread(threadId)?.id;
       if (!botId || botId !== request.botId) return { ok: false, status: 403, error: "this skill belongs to a different bot" };

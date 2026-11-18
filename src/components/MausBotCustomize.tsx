@@ -7,7 +7,7 @@ import { colorSwatch, MAUS_COLOR_LABEL, MAUS_COLOR_NAMES } from "@/lib/mascot";
 import { bodyName } from "@/lib/mascot-names";
 import type { Bot } from "@/state/store";
 import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile";
-import { MASCOT_BODY_IDS } from "../../shared/mascot-bodies";
+import { PICKABLE_BOT_BODIES } from "@/donebot/avatars";
 import { MausAvatar } from "./Avatar";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import type { AvatarPatch, useAvatarImage } from "./avatar-editing";
@@ -63,7 +63,7 @@ export function MausBotCustomize({ preview, name, nameRef, image, onName, onPatc
       <div>
         <span className={LABEL}>{t("mausbotWelcome.look")}</span>
         <div className="mt-1.5 grid grid-cols-5 gap-1">
-          {MASCOT_BODY_IDS.map((id) => (
+          {PICKABLE_BOT_BODIES.map((id) => (
             <button
               key={id}
               type="button"

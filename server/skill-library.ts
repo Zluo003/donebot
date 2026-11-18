@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { basename, join } from "node:path";
+import { existsSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { basename, isAbsolute, join, relative } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdirSync, renameSync } from "node:fs";
@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR, type AppConfig } from "./config.ts";
-import { githubSkillOriginSchema, skillFolderDigest, skillFolderRecordSchema, writeSkillFolder } from "./skill-folder.ts";
+import { githubSkillOriginSchema, skillFilePathProblem, skillFolderDigest, skillFolderRecordSchema, writeSkillFolder } from "./skill-folder.ts";
 import { entryExistsWithoutFollowing } from "./skill-storage.ts";
 import type { GitHubSkillOrigin } from "../shared/skill-import.ts";
 import { isSkillName, parseSkillMd, SKILL_FILE_MAX_BYTES } from "../shared/skill-md.ts";
@@ -25,6 +25,8 @@ export interface SkillManifest {
   defaultEnabled: boolean;
   triggerTerms: string[];
   requiredCapabilities: string[];
+  chiefOnly?: boolean;
+  alwaysAvailable?: boolean;
 }
 
 export interface BundledSkill {
@@ -62,6 +64,8 @@ export function parseSkillManifest(value: unknown, directory: string): SkillMani
     defaultEnabled: raw.defaultEnabled,
     triggerTerms,
     requiredCapabilities,
+    ...(raw.chiefOnly === true ? { chiefOnly: true } : {}),
+    ...(raw.alwaysAvailable === true ? { alwaysAvailable: true } : {}),
   };
 }
 
@@ -84,6 +88,17 @@ export function loadBundledSkills(root = process.env.DONEBOT_SKILLS_DIR || join(
     if (skill) skills.push(skill);
   }
   return skills;
+}
+
+/** Reads a packaged Markdown reference without granting access outside the selected skill. */
+export function readBundledSkillReference(skill: BundledSkill, path: string): string | null {
+  if (!path.startsWith("references/") || !path.endsWith(".md") || skillFilePathProblem(path)) return null;
+  try {
+    const file = realpathSync(join(skill.directory, path));
+    const within = relative(realpathSync(skill.directory), file);
+    if (isAbsolute(within) || within === ".." || within.startsWith("../") || within.startsWith("..\\")) return null;
+    return readFileSync(file, "utf8");
+  } catch { return null; }
 }
 
 export function loadUserSkills(root: string): BundledSkill[] {
@@ -117,13 +132,15 @@ export function selectBundledSkills(
   text: string,
   capabilities: Iterable<string>,
   skills: readonly BundledSkill[],
+  { chief = false }: { chief?: boolean } = {},
 ): BundledSkill[] {
   const haystack = text.toLowerCase();
   const available = new Set(capabilities);
   return skills.filter(({ manifest }) =>
     manifest.defaultEnabled &&
+    (!manifest.chiefOnly || chief) &&
     manifest.requiredCapabilities.every((capability) => available.has(capability)) &&
-    manifest.triggerTerms.some((term) => haystack.includes(term.toLowerCase())),
+    (manifest.alwaysAvailable || manifest.triggerTerms.some((term) => haystack.includes(term.toLowerCase()))),
   );
 }
 

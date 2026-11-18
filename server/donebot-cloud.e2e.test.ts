@@ -46,7 +46,13 @@ it("opens Cloud inside an isolated DoneBot service using account billing and nat
     await request("/api/donebot/cloud", { ...retry, user_id: "other-fixture-user" }, 400);
     await request("/api/donebot/cloud/connect", { id: running.instance.id, account_id: "other-fixture-user" }, 409);
     await request("/api/donebot/cloud", { ...retry, action: "cancel", key: randomUUID() }, 202);
-    expect((await request<DoneBotCloudSnapshot>("/api/donebot/cloud")).instance?.subscription_state).toBe("cancelled");
+    const cancelled = await request<DoneBotCloudSnapshot>("/api/donebot/cloud");
+    expect(cancelled.instance).toMatchObject({ actual: "running", desired: "running", subscription_state: "active", auto_renew: false });
+    expect(cancelled.instance?.paid_until).toBe(running.instance.paid_until);
+    await request("/api/donebot/cloud/connect", { id: running.instance.id, account_id: snapshot.account_id });
+    const kept = await request<DoneBotCloudMutationResult>("/api/donebot/cloud", { ...retry, action: "keep", key: randomUUID() }, 202);
+    expect(kept.instance).toMatchObject({ auto_renew: true, actual: "running", paid_until: running.instance.paid_until });
+    expect(master.cloud.charges).toBe(1); expect(master.cloud.balanceCents).toBe(3750);
     await request("/api/donebot/logout", {});
     const before = master.requests.length;
     await request("/api/donebot/cloud", undefined, 401);

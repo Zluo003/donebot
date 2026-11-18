@@ -1,6 +1,12 @@
 # Welcome flow and guided tour
 
-The first run shows "Meet DoneBot" with the DoneBot logo, a composer typing
+Fresh local and Cloud personal workspaces now use the
+[five-step coordinator setup](donebot-chief-setup.md). Use that fixture for
+first-use acceptance. The flow and dated records below describe the preserved
+legacy welcome and Settings replay; `verify-onboarding-ui.ts` is not the
+acceptance script for a fresh coordinator setup.
+
+The legacy welcome shows "Meet DoneBot" with the DoneBot logo, a composer typing
 one sentence and Next. With no AI working, the same pill signs one in, with
 "Other ways to connect · Set up later" under it. Next reuses the existing
 default bot and Chief setup, then opens its chat directly without the Chief

@@ -363,17 +363,19 @@ test("production wiring: main answers this computer's page, My Cloud's own page 
   assert.equal(await load(`${LOCAL}/`), false, "no window");
 });
 
-test("the window's rail of places is shown until the person hides it, and the choice survives a restart", () => {
+test("the window's rail defaults to hidden, and an explicit choice survives a restart", () => {
   let saved = null, writes = 0;
   const prefs = createDesktopPrefs({ read: () => saved, write: value => { saved = structuredClone(value); writes++; } });
-  assert.equal(prefs.railHidden(), false);
+  assert.equal(prefs.railHidden(), true);
+  prefs.setRailHidden(true);
+  assert.equal(writes, 0, "hiding a rail that is hidden writes nothing");
   prefs.setRailHidden(false);
-  assert.equal(writes, 0, "showing a rail that shows writes nothing");
+  assert.equal(createDesktopPrefs({ read: () => saved, write: () => {} }).railHidden(), false);
   prefs.setRailHidden(true);
   assert.equal(createDesktopPrefs({ read: () => saved, write: () => {} }).railHidden(), true);
   prefs.setRailHidden("no");
   assert.equal(createDesktopPrefs({ read: () => saved, write: () => {} }).railHidden(), false, "only true hides it");
-  assert.equal(createDesktopPrefs({ read: () => ({ railHidden: "yes" }), write: () => {} }).railHidden(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ railHidden: "yes" }), write: () => {} }).railHidden(), true);
 });
 
 test("the talk shortcut stays off until chosen, and the choice survives a restart", () => {

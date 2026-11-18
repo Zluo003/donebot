@@ -1,4 +1,5 @@
 import { pageIsThisComputer } from "@/lib/companion-bridge";
+import { UPSTREAM_SETTINGS } from "@/donebot/services";
 import type { ReactNode } from "react";
 import type { AppSettingsSection } from "@/state/store";
 import { t } from "@/lib/i18n";
@@ -116,7 +117,7 @@ export function SimpleGeneralPage({ has, peopleOpen, onLooks, onMore }: { has: H
       {has("import") && <SettingsGroup label={t("settings.section.import")} block="import"><AdminOnly><ImportSettings /></AdminOnly></SettingsGroup>}
       {has("organization") && <SettingsGroup label={t("settings.section.organization")} block="organization"><OrganizationSettings /></SettingsGroup>}
       {has("activity") && <SettingsGroup label={t("settings.section.activity")} block="activity"><ActivitySection /></SettingsGroup>}
-      {onMore && (
+      {UPSTREAM_SETTINGS.more && onMore && (
         <div data-settings-block="more" className="scroll-mt-4">
           <SettingsRows>
             <SettingRow title={t("settings.simple.more.title")} subtitle={t("settings.simple.more.subtitle")}>
@@ -125,7 +126,7 @@ export function SimpleGeneralPage({ has, peopleOpen, onLooks, onMore }: { has: H
           </SettingsRows>
         </div>
       )}
-      {!SIMPLE_ONLY && <div data-settings-block="advanced-mode" className="scroll-mt-4">
+      {UPSTREAM_SETTINGS.advanced && !SIMPLE_ONLY && <div data-settings-block="advanced-mode" className="scroll-mt-4">
         <SettingsRows><AdvancedModeRow simple /></SettingsRows>
       </div>}
     </>
@@ -197,7 +198,7 @@ export function SimpleAiPage({ has, disclose, connections, engines }: { has: Has
           </AdminOnly>
         </div>
       )}
-      {has("connections") && (
+      {UPSTREAM_SETTINGS.apiKeys && has("connections") && (
         <AdminOnly>
           <SettingsDisclosureRow title={t("settings.section.connections")} block="connections" {...disclose("ai-keys")}>
             {connections}
@@ -285,8 +286,8 @@ export function SimpleUpdatesPage({ remoteActive }: { remoteActive: boolean }) {
       <SettingsRows>
         {window.ogb?.updater ? <UpdatesRow title={versionTitle()} /> : <ServerUpdatesRow />}
         <UpdatesConsentRow />
-        {!remoteActive && <ReplayTourRow />}
-        <DiagnosticsRow simple />
+        {UPSTREAM_SETTINGS.welcomeTour && !remoteActive && <ReplayTourRow />}
+        {UPSTREAM_SETTINGS.diagnostics && <DiagnosticsRow simple />}
       </SettingsRows>
     </SettingsGroup>
   );

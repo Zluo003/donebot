@@ -1,0 +1,16 @@
+{
+  "id": "find-skills",
+  "name": "find-skills",
+  "version": "1.0.0",
+  "description": "Find and recommend professional skills for a bot.",
+  "defaultEnabled": true,
+  "chiefOnly": true,
+  "alwaysAvailable": true,
+  "triggerTerms": [
+    "find-skills",
+    "技能"
+  ],
+  "requiredCapabilities": [
+    "skillAuthoring"
+  ]
+}

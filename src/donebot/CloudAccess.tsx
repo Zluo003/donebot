@@ -41,11 +41,13 @@ export function DoneBotCloudAccess({ heading = true }: { heading?: boolean }) {
 
   const instance = snapshot?.instance;
   const paid = !!instance?.paid_until && Date.parse(instance.paid_until) > Date.now();
+  const renewable = paid && (instance?.subscription_state === "active" || instance?.subscription_state === "pending");
+  const autoRenew = instance?.auto_renew ?? instance?.subscription_state !== "cancelled";
   const ready = !!instance && instance.actual === "running" && instance.desired === "running" && instance.subscription_state === "active" && paid && !instance.purge_locked;
   const failed = instance?.actual === "error" && snapshot?.operations[0]?.action === "start" && snapshot.operations[0].state === "failed";
   const failure = instance?.error || (snapshot?.operations[0]?.state === "failed" ? snapshot.operations[0].error : "");
   const status = !instance ? "尚未开通" : instance.purge_locked ? "正在永久删除" : failed ? "开通未完成" : !paid ? "已到期，等待续费或回收"
-    : ready ? "运行中" : instance.desired === "stopped" && instance.actual === "stopped" ? "已停机，数据保留中" : instance.actual === "error" ? "需要恢复" : "正在准备，请稍候";
+    : ready ? "运行中" : instance.desired === "stopped" && instance.actual === "stopped" ? "已停机" : instance.actual === "error" ? "需要恢复" : "正在准备，请稍候";
   const confirm = (action: DoneBotCloudAction) => {
     if (!snapshot || flight.current || pending) return;
     setError(""); setNotice("");
@@ -100,27 +102,28 @@ export function DoneBotCloudAccess({ heading = true }: { heading?: boolean }) {
         <div><dt className="text-ink-secondary">月费（账户余额单位）</dt><dd className="mt-1 font-semibold text-ink" data-cloud-price>{snapshot.plan.monthly_price} / 月</dd></div>
         <div><dt className="text-ink-secondary">可用余额</dt><dd className="mt-1 font-semibold text-ink" data-cloud-balance>{snapshot.balance_cents === null ? "暂不可用" : (Number(snapshot.balance_cents) / 100).toLocaleString(undefined, { maximumFractionDigits: 10 })}</dd></div>
       </dl>
-      <p className="text-[12px] leading-relaxed text-ink-secondary">按月预付，到期从同一账号余额自动续费。余额不足不开通、不续期；到期停机后保留 {snapshot.plan.retention_days} 天，之后永久删除实例与数据。</p>
+      <p className="text-[12px] leading-relaxed text-ink-secondary">按月预付，启用自动续费后到期从同一账号余额扣款。取消自动续费后可继续使用至已付费期限结束。余额不足不开通、不续期；到期停机后保留 {snapshot.plan.retention_days} 天，之后永久删除实例与数据。</p>
       {instance && <div className="space-y-1 text-[13px] text-ink-secondary">
         <p role="status">{status}</p>
         <p>已付费至：{instance.paid_until ? new Date(instance.paid_until).toLocaleString() : "尚未开通"}</p>
+        {renewable && <p>{autoRenew ? "自动续费已开启" : "自动续费已关闭，到期后停止服务"}</p>}
         {failure && <p role="alert" className="text-danger">{operationProblems[failure] ?? "最近的操作未完成，请刷新状态后重试。"}</p>}
       </div>}
       <div className="flex flex-wrap gap-2">
-        {(!instance || instance.desired !== "running" || failed) && !instance?.purge_locked && <button type="button" disabled={busy || loading || !!pending || !instance && !snapshot.plan.enabled} onClick={() => confirm("start")} className={`${button} ui-button-primary`}>
-          {!instance ? "开通 DoneBot Cloud" : failed ? "重试开通" : instance.subscription_state === "cancelled" ? "重新开通" : "启动 Cloud"}
+        {(!instance || !paid || instance.desired !== "running" || failed) && !instance?.purge_locked && <button type="button" disabled={busy || loading || !!pending || !renewable && !snapshot.plan.enabled} onClick={() => confirm("start")} className={`${button} ui-button-primary`}>
+          {failed ? "重试开通" : !renewable ? "购买 Cloud 云主机" : "启动 Cloud"}
         </button>}
         {ready && <button type="button" disabled={busy || loading || !!pending || !snapshot.connection_available} onClick={() => void connect()} className={`${button} ui-button-primary`}>连接 Cloud</button>}
-        {instance?.desired === "running" && !instance.purge_locked && <button type="button" disabled={busy || loading || !!pending} onClick={() => confirm("stop")} className={button}>停机并保留数据</button>}
-        {instance && instance.subscription_state !== "cancelled" && !instance.purge_locked && <button type="button" disabled={busy || loading || !!pending} onClick={() => confirm("cancel")} className={button}>取消自动续费</button>}
+        {instance && renewable && !instance.purge_locked && <button type="button" disabled={busy || loading || !!pending} onClick={() => confirm(autoRenew ? "cancel" : "keep")} className={button}>{autoRenew ? "取消自动续费" : "自动续费"}</button>}
       </div>
       {!snapshot.plan.enabled && !instance && <p className="text-[13px] text-ink-secondary">Cloud 暂未开放开通。</p>}
       {ready && !snapshot.connection_available && <p className="text-[13px] text-ink-secondary">云实例连接尚未配置，请联系管理员。</p>}
       {pending && <div role="group" aria-label="Cloud 操作确认" className="w-full space-y-3 rounded-lg border border-hairline bg-inset p-4 text-[13px]">
-        <h4 className="font-semibold text-ink">{pending.action === "start" ? instance ? "确认启动 Cloud？" : "确认开通 Cloud？" : pending.action === "stop" ? "确认停机？" : "确认取消自动续费？"}</h4>
-        <p className="leading-relaxed text-ink-secondary">{pending.action === "start" ? `月费 ${pending.monthly_price}，从当前 DoneBot 账号余额按月预付。确认后开通并开启自动续费；${instance?.subscription_state === "cancelled" ? "取消后重新开通将重新扣款并开始新的月付周期" : "有效订阅的已付周期内启动不重复收费"}。余额不足无法开通或续期。`
-          : pending.action === "stop" ? "实例将停机并关闭连接，独立数据保留。已付周期和自动续费继续生效。"
-            : "实例将立即停机并取消自动续费。已激活的本月费用不退；到期后保留期结束将永久删除实例和数据。"}</p>
+        <h4 className="font-semibold text-ink">{pending.action === "keep" ? "确认开启自动续费？" : pending.action === "cancel" ? "确认取消自动续费？" : renewable ? "确认启动 Cloud？" : "确认购买 Cloud 云主机？"}</h4>
+        <p className="leading-relaxed text-ink-secondary">{pending.action === "keep" ? `开启后将在已付费期限结束时，从当前账号余额扣除届时的月费（当前 ${pending.monthly_price} / 月）。本次不扣款，不改变当前到期时间。`
+          : pending.action === "cancel" ? `仅关闭到期自动续费，Cloud 继续运行至 ${new Date(instance!.paid_until!).toLocaleString()}。到期停机后保留 ${snapshot.plan.retention_days} 天，之后永久删除实例与数据。`
+            : renewable ? "当前已付费期限内启动不重复收费，也不改变自动续费设置。"
+              : `月费 ${pending.monthly_price}，确认后从当前 DoneBot 账号余额扣款，购买一个月 Cloud 服务并开启自动续费。余额不足无法购买或续期。`}</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={busy} onClick={() => { setPending(null); setError(""); }} className={button}>返回</button>
           <button type="button" disabled={busy} onClick={() => void submit()} className={`${button} ui-button-primary`}>{busy ? "正在处理…" : error ? "重试确认" : "确认"}</button>

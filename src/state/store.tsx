@@ -524,6 +524,7 @@ export type AppSettingsSection =
   | "computer"
   | "logins"
   | "usage"
+  | "purchase"
   | "people" | "botAccess"
   | "activity"
   | "backups"

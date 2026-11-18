@@ -20,7 +20,7 @@ describe("isolated creation draft", () => {
       name: "Status", prompt: "Check status", schedule: { type: "daily", time: "09:00", weekdays: [1] } }) });
     const template = draft.export();
     expect(network).not.toHaveBeenCalled();
-    expect(template.profile).toEqual({ name: "Ada", approvalMode: "full" });
+    expect(template.profile).toEqual({ name: "Ada", approvalMode: "full", mascotBody: "circle" });
     expect(template.memory).toEqual({ "MEMORY.md": "A synthetic preference" });
     expect(template.routines[0]).not.toHaveProperty("botId");
     expect(template.routines[0]).not.toHaveProperty("id");

@@ -31,6 +31,9 @@ export interface SkillRequestCardData {
   version: 1;
   requestId: string;
   botId: string;
+  /** A Chief's scoped change to a teammate; botId and threadId remain the requesting conversation. */
+  targetBotId?: string;
+  targetBotName?: string;
   threadId: string;
   stagedId: string;
   action: SkillRequestAction;

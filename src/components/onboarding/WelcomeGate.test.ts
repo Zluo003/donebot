@@ -22,6 +22,7 @@ vi.mock("react", async (original) => ({
 const store = vi.hoisted(() => ({ state: {} as Record<string, unknown>, dispatch: vi.fn(), api: vi.fn() }));
 vi.mock("@/state/store", () => ({ api: store.api, useStore: () => ({ state: store.state, dispatch: store.dispatch }) }));
 vi.mock("@/lib/analytics", () => ({ emailGateDone: () => false }));
+vi.mock("@/lib/default-bot", async original => ({ ...await original<typeof import("@/lib/default-bot")>(), useViewerEmail: () => null }));
 // The gate's job is choosing; the flow itself has its own recipe.
 vi.mock("./WelcomeFlow", () => ({ WelcomeFlow: () => null }));
 vi.mock("@/components/Avatar", () => ({ MausAvatar: () => null }));
@@ -65,7 +66,7 @@ beforeEach(() => {
   fixture.effects = [];
   store.dispatch.mockReset();
   store.api.mockReset();
-  store.state = { config: fresh, welcomeOpen: false, appSettingsOpen: false, appSettingsSection: "general", bots: [] };
+  store.state = { config: fresh, hydrated: true, welcomeOpen: false, appSettingsOpen: false, appSettingsSection: "general", bots: [] };
   vi.stubGlobal("window", {});
   vi.stubGlobal("localStorage", storage());
   vi.stubGlobal("fetch", vi.fn());
@@ -76,6 +77,13 @@ afterEach(() => {
 });
 
 describe("who gets the welcome flow", () => {
+  it("waits for the first workspace snapshot before choosing a first-run flow", () => {
+    store.state = { ...store.state, hydrated: undefined };
+    expect(gate(LOCAL_VIEWER).tree).toBeNull();
+    store.state = { ...store.state, hydrated: true };
+    expect(gate(LOCAL_VIEWER).tree?.type).toBe(WelcomeFlow);
+  });
+
   it("opens the desktop flow for the desktop app's own window, exactly as before", () => {
     vi.stubGlobal("window", LOCAL_PAGE);
     const { tree } = gate(LOCAL_VIEWER);

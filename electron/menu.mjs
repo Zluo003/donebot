@@ -1,6 +1,7 @@
 // Electron has no role for the macOS Preferences… item, so it is built explicitly.
 import { Menu, app } from "electron";
 import nativeText from "./native-text.cjs";
+import { workspaceName, doneBotCloudEntry } from "./environments.cjs";
 
 const role = (t, name, key, params) => ({ role: name, label: t(key, params) });
 
@@ -92,7 +93,7 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
     submenu: [
       { id: "back-to-my-cloud", label: t("native.menu.backToMyCloud"), enabled: away, click: () => home?.onBack() },
       { type: "separator" },
-      ...others.map((e) => ({ label: `${e.name} — ${new URL(e.origin).host}`, type: "radio", checked: e.id === activeId, click: () => onSwitch(e.id) })),
+      ...others.map((e) => ({ label: doneBotCloudEntry(e) ? workspaceName(e, t) : `${e.name} — ${new URL(e.origin).host}`, type: "radio", checked: e.id === activeId, click: () => onSwitch(e.id) })),
       { type: "separator" },
       { label: t("native.menu.addFromLink"), click: () => onAddFromClipboard() },
       { label: away ? t("native.menu.forgetNamed", { name: active.name }) : t("native.menu.forgetServer"), enabled: away, click: () => away && onForget(active.id) },
@@ -103,7 +104,7 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
     submenu: [
       { label: t("place.local"), type: "radio", checked: !active, click: () => onSwitch("local") },
       ...environments.map((e) => ({
-        label: `${e.name} — ${Object.hasOwn(sublabels, e.id) ? sublabels[e.id] : whereItLives(e)}`,
+        label: doneBotCloudEntry(e) ? workspaceName(e, t) : `${e.name} — ${Object.hasOwn(sublabels, e.id) ? sublabels[e.id] : whereItLives(e)}`,
         type: "radio",
         checked: e.id === activeId,
         click: () => onSwitch(e.id),

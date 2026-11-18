@@ -1,4 +1,5 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
+import { DONEBOT_TEMPLATES_ENABLED } from "@/donebot/services";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, LayoutTemplate, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, Plus, Search, SquarePen, TextQuote, Trash2, Users, X } from "lucide-react";
@@ -989,7 +990,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
   usePopoverDismiss(plusOpen, plusMenuRef, () => setPlusOpen(false));
 
   useEffect(() => {
-    if (remoteClient) return;
+    if (remoteClient || !DONEBOT_TEMPLATES_ENABLED) return;
     return window.ogb?.onPackageInstall?.((url) => {
       setTeamInstallUrl(url);
       setTeamLibraryOpen(true);
@@ -1168,7 +1169,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
             <FolderPlus size={16} className="text-ink-secondary" /> {t("team.create")}
           </button>}
           {!remoteClient && <>
-          {teamSettingsAllowed !== false && <button
+          {DONEBOT_TEMPLATES_ENABLED && teamSettingsAllowed !== false && <button
             onClick={() => { setPlusOpen(false); setTeamLibraryOpen(true); }}
             role="menuitem"
             className={plusItem}
@@ -1602,7 +1603,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
           onRestored={(message) => setTeamFeedback({ error: false, text: message })}
         />
       )}
-      {!remoteClient && teamLibraryOpen && (
+      {DONEBOT_TEMPLATES_ENABLED && !remoteClient && teamLibraryOpen && (
         <TeamLibraryPanel
           returnFocusRef={importReturnRef}
           initialUrl={teamInstallUrl ?? undefined}

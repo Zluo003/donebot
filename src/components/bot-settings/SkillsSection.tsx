@@ -499,10 +499,10 @@ export function SkillsSection({ bot }: { bot: Bot }) {
                   <Switch
                     checked={skillSwitchOn(skill)}
                     aria-label={t(skillSwitchOn(skill) ? "skills.disableName" : "skills.enableName", { name: skill.name })}
-                    disabled={Boolean(working)}
+                    disabled={Boolean(working) || skill.source.startsWith("builtin:")}
                     onClick={() => void toggle(skill)}
                   />
-                  {skill.origin !== "imported" && skill.origin !== "native" && (
+                  {!skill.source.startsWith("builtin:") && skill.origin !== "imported" && skill.origin !== "native" && (
                     <button
                       aria-label={t("skills.removeName", { name: skill.name })}
                       title={t("skills.remove")}

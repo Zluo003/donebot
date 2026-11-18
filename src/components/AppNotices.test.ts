@@ -45,7 +45,7 @@ import { TwoPlacesCard } from "./TwoPlacesCard";
 import { BOAT_OFFER_NOTICE, CLOUD_INTRO, GROK_MOVE_NOTICE, launchNotice, localDay, MODELGO_OFFER_NOTICE, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, STAR_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
 import { BOAT_OFFER, boatClaimMailto } from "@/lib/boat-offer";
 import { track } from "@/lib/analytics";
-import { ADVANCED_MODE_KEY, setAdvancedMode } from "@/lib/interface-mode";
+import { ADVANCED_MODE_KEY, readAdvancedMode, setAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_MODE_PROMPT_KEY } from "@/lib/simple-mode-prompt";
 import { ADVANCED_BACK_KEY } from "@/lib/new-look";
 import { api } from "@/state/store";
@@ -145,6 +145,7 @@ const hints = () => f.state.config.onboarding.hintsSeen as string[];
 
 beforeEach(() => {
   DONEBOT_ONBOARDING.showGrokMovePrompt = false;
+  DONEBOT_ONBOARDING.showInterfaceModePrompt = true;
   vi.clearAllMocks(); vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   storage = new Map(); f.values = []; f.index = 0; f.effects = []; f.updater = null; f.brand = "default"; f.dispatch = vi.fn(); now = NOW; desk = desktopMachine();
   setLocale("en"); viewer = LOCAL_VIEWER; account = signedOut; snapshot = { status: "none" }; offer = TRIAL_OFFER;
@@ -170,7 +171,7 @@ beforeEach(() => {
   showWindow(LOCAL_ORIGIN);
   vi.stubGlobal("document", { activeElement: null, body: null, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] });
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); setLocale("en"); });
+afterEach(() => { DONEBOT_ONBOARDING.showInterfaceModePrompt = false; vi.unstubAllGlobals(); vi.useRealTimers(); setLocale("en"); });
 
 it("suppresses upstream offers on a returning DoneBot install without asking cloud services for account, plan or prices", async () => {
   for (const key of Object.keys(UPSTREAM_SERVICES) as Array<keyof typeof UPSTREAM_SERVICES>) UPSTREAM_SERVICES[key] = false;
@@ -1172,13 +1173,21 @@ describe("the Simple mode popup after the update", () => {
     expect(prompts()).toEqual([{ action: "shown", mode: "simple" }]);
   });
 
-  it("asks on the Cloud's own page and in a plain browser too, not only on this computer's", async () => {
+  it("keeps DoneBot's Cloud and browser pages on Simple without a mode popup across launches", async () => {
+    DONEBOT_ONBOARDING.showInterfaceModePrompt = false;
+    setAdvancedMode(false);
     snapshot = { status: "none" }; viewer = { hosted: false, canSave: true, cloudHome: true }; f.state.config.cloudHome = true;
     f.state.config.onboarding.hintsSeen = [...withTourFinished(undefined), "cloud-setup-hidden"]; showWindow(MY_CLOUD);
-    expect(await launch()).toContain(TITLE);
+    expect(await launch()).not.toContain("data-simple-mode-prompt");
+    expect(await relaunch()).not.toContain("data-simple-mode-prompt");
+    expect(readAdvancedMode()).toBe(false);
     vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
     viewer = { hosted: true, canSave: true }; f.state.config.cloudHome = false;
-    expect(await launch()).toContain(TITLE);
+    expect(await launch()).not.toContain("data-simple-mode-prompt");
+    expect(await relaunch()).not.toContain("data-simple-mode-prompt");
+    expect(readAdvancedMode()).toBe(false);
+    expect(prompts()).toEqual([]);
+    expect(storage.has(SIMPLE_MODE_PROMPT_KEY)).toBe(false);
   });
 
   it("waits during the welcome, the tour, Settings, the quiet first chat, another dialog or a call, and skips the launch its welcome finished in", async () => {

@@ -2,6 +2,8 @@ import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import type { DoneBotCloudMutation } from "../../shared/donebot-cloud.ts";
+import { createPaymentOrder, paymentOrder, paymentSnapshot } from "./payments.ts";
+import type { DoneBotPaymentInput } from "../../shared/donebot-payments.ts";
 
 const proofKeys = ["turnstile_token", "captcha_token", "captcha_ticket", "captcha_randstr", "captcha_verify_param", "tencent_ticket", "tencent_randstr", "tencent_captcha_ticket", "tencent_captcha_randstr", "aliyun_captcha_verify_param"];
 function text(body: Record<string, unknown>, key: string, max = 1000): string {
@@ -24,10 +26,24 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
       if (method === "GET" && path === "/api/donebot/account") return json(res, 200, await gateway.account());
       if (method === "GET" && path === "/api/donebot/catalog") return json(res, 200, await gateway.refreshCatalog());
       if (method === "GET" && path === "/api/donebot/cloud") return json(res, 200, await gateway.cloudSnapshot());
+      if (method === "GET" && path === "/api/donebot/payments") return json(res, 200, await paymentSnapshot(gateway));
       if (method !== "POST") return PASS;
       if (process.env.DONEBOT_CLOUD_CREDENTIAL_FILE) return json(res, 403, { error: "请在 DoneBot Cloud 控制台管理此账号。" });
       const body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) throw new DoneBotGatewayError(400, "invalid_input", "Expected an account JSON object.");
+      if (path === "/api/donebot/payments/orders") {
+        if (Object.keys(body).some(key => !["account_id", "amount", "payment_type"].includes(key)) || typeof body.amount !== "number") throw new DoneBotGatewayError(400, "payment_input", "无效的充值订单。");
+        return json(res, 201, await createPaymentOrder(gateway, { account_id: text(body, "account_id", 200), amount: body.amount,
+          payment_type: text(body, "payment_type", 20) as DoneBotPaymentInput["payment_type"] }));
+      }
+      const payment = path.match(/^\/api\/donebot\/payments\/orders\/([1-9]\d{0,14})\/(status|verify|cancel)$/);
+      if (payment) {
+        if (Object.keys(body).some(key => key !== "account_id")) throw new DoneBotGatewayError(400, "payment_input", "无效的充值操作。");
+        const accountID = text(body, "account_id", 200), orderPath = `orders/${payment[1]}`;
+        if (payment[2] === "cancel") await gateway.paymentRequest(`${orderPath}/cancel`, {}, accountID);
+        const order = paymentOrder(await gateway.paymentRequest(orderPath, undefined, accountID));
+        return json(res, 200, payment[2] === "verify" ? paymentOrder(await gateway.paymentRequest("orders/verify", { out_trade_no: order.out_trade_no }, accountID)) : order);
+      }
       if (path === "/api/donebot/cloud") {
         if (Object.keys(body).some(key => !["id", "action", "key", "account_id", "monthly_price"].includes(key))) throw new DoneBotGatewayError(400, "invalid_input", "Invalid Cloud fields.");
         return json(res, 202, await gateway.cloudMutate({ id: text(body, "id", 36) || undefined, action: text(body, "action", 10) as DoneBotCloudMutation["action"],

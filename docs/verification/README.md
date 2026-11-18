@@ -50,6 +50,7 @@ Use only mapped, tested commands:
 - [Work summaries and engine hooks](digests.md)
 - [OpenAI-compatible structured tools](openai-tools.md)
 - [DoneBot unified gateway, account flows and media](donebot-gateway.md)
+- [Account and first-use light/dark themes](donebot-auth-theme.md)
 - [DoneBot mobile hub, encrypted relay and notifications](donebot-mobile.md)
 - [Mobile attachment transfer and resume](mobile-file-resume.md)
 - [DoneBot media capabilities and input limits](donebot-media-capabilities.md)
@@ -63,6 +64,7 @@ Use only mapped, tested commands:
 - [OpenCode model variants through ACP](opencode-variants.md)
 - [Bot setup, model scope, and file continuity](bot-continuity.md)
 - [Reviewed Chief team setup and scoped deletion](team-setup.md)
+- [Built-in coordinator skills and specialist setup](bot-skill-setup.md)
 - [DoneBot, everyone's helper](mausbot.md)
 - [Profile proposal and credential-card lifecycle](proposal-cards.md)
 - [Full Access without duplicate approvals](full-access.md)
@@ -128,6 +130,10 @@ The [switchable local environments recipe](local-environments.md) verifies
 creating, switching between and recovering named local environments by hand on
 a packaged desktop install; the control surface cannot drive it, so it is not
 in the map above.
+
+The [first-use coordinator setup fixture](donebot-chief-setup.md) checks the
+local and Cloud five-step setup, resumable drafts, saved runtime preferences
+and non-triangle defaults through the real renderer in disposable workspaces.
 
 The [talk shortcut recipe](talk-shortcut.md) checks hold-to-talk from any app, the
 reply box and the Quick asks chat by hand on a packaged side-by-side build; the

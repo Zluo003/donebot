@@ -32,6 +32,18 @@ describe("Store", () => {
     rmSync(DATA_DIR, { recursive: true, force: true });
   });
 
+  it("creates circular avatars while retaining explicit and existing shapes", () => {
+    const store = new Store(selection);
+    const fresh = store.createBot({ name: "Circle fixture" });
+    const existing = store.createBot({ name: "Existing triangle", mascotBody: "cursor" });
+    const chosen = store.createBot({ name: "Chosen star", mascotBody: "star" });
+    expect(fresh.mascotBody).toBe("circle");
+    const loaded = new Store(selection);
+    expect(loaded.bot(fresh.id)?.mascotBody).toBe("circle");
+    expect(loaded.bot(existing.id)?.mascotBody).toBe("cursor");
+    expect(loaded.bot(chosen.id)?.mascotBody).toBe("star");
+  });
+
   it("retains tool selection across restarts and distinguishes clearing from no tools", () => {
     const store = new Store(selection);
     const bot = store.createBot({ name: "Scoped drafter" });
@@ -2581,7 +2593,7 @@ describe("soul", () => {
       ] };
     store.applyTeamSetup(request);
     expect(new Store(selection).bot("created-by-chief")?.visibility).toEqual({ people: ["hr@example.test"] });
-    expect(new Store(selection).bot("created-by-chief")).toMatchObject({ autoApprove: false });
+    expect(new Store(selection).bot("created-by-chief")).toMatchObject({ autoApprove: false, mascotBody: "circle" });
     const open = new Store(selection);
     const everyoneChief = open.createBot({ name: "Ops", section: "Ops" });
     open.patchBot(everyoneChief.id, { chiefOfStaff: true });

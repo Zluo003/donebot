@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { UPSTREAM_SETTINGS } from "@/donebot/services";
 import { analyticsEnabled, setAnalyticsEnabled } from "@/lib/analytics";
 import { t } from "@/lib/i18n";
 import { SettingRow, Switch } from "./SettingsPrimitives";
@@ -7,6 +8,7 @@ const ANALYTICS_DOC_URL = "https://github.com/milind-soni/OpenMausBot/blob/main/
 
 export function AnalyticsRow({ simple = false }: { simple?: boolean }) {
   const [on, setOn] = useState(analyticsEnabled);
+  if (!UPSTREAM_SETTINGS.analytics) return null;
   const subtitle = (
     <>
       {t(simple ? "settings.simple.analytics" : "settings.analytics.subtitle")}{" "}

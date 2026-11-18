@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { APP_LIMITS } from "../shared/app.ts";
 import { JSX_PAGE_LIBRARIES, JSX_PAGE_MODULES } from "../shared/app-frame/jsx-page.ts";
 import { BOT_HTML_CDNS } from "../shared/app-frame/csp.ts";
-import { loadBundledSkills, loadUserSkills, mergeSkills, parseSkillManifest, renderSkillInstructions, selectBundledSkills, type BundledSkill } from "./skill-library.ts";
+import { loadBundledSkills, loadUserSkills, mergeSkills, parseSkillManifest, readBundledSkillReference, renderSkillInstructions, selectBundledSkills, type BundledSkill } from "./skill-library.ts";
 
 const instructionsFor = (text: string, capabilities: string[], skills: BundledSkill[], options?: { includeRoot?: boolean }) =>
   renderSkillInstructions(selectBundledSkills(text, capabilities, skills), options);
@@ -26,6 +26,35 @@ const phone: BundledSkill = {
 };
 
 describe("bundled skill library", () => {
+  it.skipIf(process.platform === "win32")("reads only Markdown references inside the selected bundle", () => {
+    const root = mkdtempSync(join(tmpdir(), "donebot-builtin-reference-"));
+    try {
+      const directory = join(root, "skill");
+      mkdirSync(join(directory, "references"), { recursive: true });
+      writeFileSync(join(directory, "references", "guide.md"), "Packaged guide.");
+      writeFileSync(join(root, "private.md"), "Outside this skill.");
+      symlinkSync(join(root, "private.md"), join(directory, "references", "outside.md"));
+      const bundled = { ...phone, directory };
+      expect(readBundledSkillReference(bundled, "references/guide.md")).toBe("Packaged guide.");
+      for (const path of ["references/../../private.md", join(root, "private.md"), "references/outside.md", "references/missing.md", "manifest.json"]) {
+        expect(readBundledSkillReference(bundled, path)).toBeNull();
+      }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("mounts both coordinator skills for Chiefs without relying on task keywords, and respects the authoring capability", () => {
+    const skills = loadBundledSkills(join(process.cwd(), "skills"));
+    const ids = (chief: boolean, capabilities: string[]) => selectBundledSkills("Prepare the new bot", capabilities, skills, { chief }).map((skill) => skill.manifest.id);
+    for (const id of ["find-skills", "skill-creator"]) {
+      expect(ids(true, ["skillAuthoring"])).toContain(id);
+      expect(ids(false, ["skillAuthoring"])).not.toContain(id);
+      expect(ids(true, [])).not.toContain(id);
+      const bundled = skills.find((skill) => skill.manifest.id === id)!;
+      expect(readFileSync(join(bundled.directory, "LICENSE.txt"), "utf8").length).toBeGreaterThan(100);
+      expect(readFileSync(join(bundled.directory, "references", "upstream.md"), "utf8")).toContain(`name: ${id}`);
+    }
+  });
+
   it("selects a skill only when both its trigger and capability are present", () => {
     const rendered = instructionsFor("Open Uber on my Android", ["phoneMcp"], [phone]);
     expect(rendered).toContain("Use phone tools");

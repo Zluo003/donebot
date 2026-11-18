@@ -33,8 +33,8 @@ export class FakeDoneBotCloud {
     const cached = this.receipts.get(key);
     if (cached) { send(cached, 202); return true; }
     const action = route === "instances" ? "start" : route.split("/").at(-1);
-    if (request.method !== "POST" || !["start", "stop", "cancel"].includes(action ?? "")) { send({}, 404); return true; }
-    const instance = this.instance ?? { id: randomUUID(), desired: "stopped", actual: "missing", error: "", paid_until: null, subscription_state: "unpaid", purge_locked: false };
+    if (request.method !== "POST" || !["start", "stop", "cancel", "keep"].includes(action ?? "")) { send({}, 404); return true; }
+    const instance = this.instance ?? { id: randomUUID(), desired: "stopped", actual: "missing", error: "", paid_until: null, subscription_state: "unpaid", purge_locked: false, auto_renew: false };
     const operation: DoneBotCloudOperation = { id: randomUUID(), action: action!, state: "succeeded", error: "" };
     if (action === "start") {
       const charged = instance.subscription_state === "active" && !!instance.paid_until && Date.parse(instance.paid_until) > Date.now();
@@ -43,12 +43,13 @@ export class FakeDoneBotCloud {
         instance.actual = "error"; instance.error = failure;
         operation.state = "failed"; operation.error = failure;
       } else {
-        if (!charged) { this.balanceCents -= 1250; this.charges++; }
-        Object.assign(instance, { desired: "running", actual: "running", error: "", subscription_state: "active", paid_until: new Date(Date.now() + 30 * 86400000).toISOString() });
+        if (!charged) { this.balanceCents -= 1250; this.charges++; instance.auto_renew = true; instance.paid_until = new Date(Date.now() + 30 * 86400000).toISOString(); }
+        Object.assign(instance, { desired: "running", actual: "running", error: "", subscription_state: "active" });
       }
+    } else if (action === "cancel" || action === "keep") {
+      instance.auto_renew = action === "keep";
     } else {
       instance.desired = "stopped"; instance.actual = "stopped";
-      if (action === "cancel") instance.subscription_state = "cancelled";
     }
     this.instance = instance; this.operations.unshift(operation);
     const result = structuredClone({ instance, operation });

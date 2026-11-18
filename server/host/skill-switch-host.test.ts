@@ -26,17 +26,20 @@ function setup() {
   const dataDir = mkdtempSync(join(tmpdir(), "skill-switch-host-"));
   dirs.push(dataDir);
   const bot = { id: "b1", name: "Bot", color: "blue" } as BotRecord;
+  const recipient = { id: "b2", name: "Specialist", color: "red" } as BotRecord;
+  let managesTarget = true;
   const messages: Array<{ id: string; card: OptionCardData }> = [];
   let file = skillMd("A");
   let enabled = true;
   let appendFails = false;
   const host = createSkillSwitchHost({
     store: {
-      bot: () => bot,
+      bot: (id) => id === bot.id ? bot : id === recipient.id ? recipient : null,
       appendMessage: ((_threadId: string, message: { card: OptionCardData }) => { if (appendFails) throw new Error("disk full"); messages.push({ id: `m${messages.length}`, card: message.card }); }) as never,
       patchMessage: ((_threadId: string, id: string, patch: { card: OptionCardData }) => { messages.find((message) => message.id === id)!.card = patch.card; }) as never,
     },
     dataDir,
+    targetProblem: (from, to) => from === bot.id && to === recipient.id && managesTarget ? null : "target authority revoked",
     persistence: () => ({ ok: true }),
     listBotSkills: () => [{ name: "lookup", enabled, source: "imported", description: "Looks things up", origin: "imported" } as never],
     readBotSkillFile: () => file,
@@ -54,7 +57,12 @@ function setup() {
     const request = shown.skillRequest as SkillRequestCardData & { action: SkillSwitchAction };
     return host.undo(bot.id, "t1", { id, card: shown } as never, request);
   };
-  return { bot, host, card, approve, undo, pins, edit: (next: string) => { file = next; }, failAppend: () => { appendFails = true; }, setEnabled: (next: boolean) => { enabled = next; } };
+  const deny = () => {
+    const { id, card: shown } = messages.at(-1)!;
+    const request = shown.skillRequest as SkillRequestCardData & { action: SkillSwitchAction };
+    return host.resolve({ botId: bot.id, threadId: "t1", requestId: request.requestId, behavior: "deny" }, id, shown, request);
+  };
+  return { bot, recipient, host, card, approve, deny, undo, pins, revoke: () => { managesTarget = false; }, edit: (next: string) => { file = next; }, failAppend: () => { appendFails = true; }, setEnabled: (next: boolean) => { enabled = next; } };
 }
 
 beforeEach(() => {
@@ -68,6 +76,37 @@ afterEach(async () => {
 });
 
 describe("skill switch cards", () => {
+  it("reviews a managed target's skill in the requester's conversation and applies only to that target", () => {
+    const { bot, recipient, host, card, approve } = setup();
+    expect(host.stage(bot, "t1", "disable", { skill_name: "lookup" }, null, recipient).body.state).toBe("pending");
+    expect(card().skillRequest).toMatchObject({ botId: bot.id, threadId: "t1", targetBotId: recipient.id, targetBotName: recipient.name });
+    expect(mocks.setImportedSkillEnabled).not.toHaveBeenCalled();
+    expect(approve()).toMatchObject({ outcome: "allowed-once" });
+    expect(mocks.setImportedSkillEnabled).toHaveBeenCalledExactlyOnceWith(recipient.id, "lookup", false);
+  });
+
+  it("refuses stale target authority on approval but still permits denying and cleaning up the pending card", () => {
+    const { bot, recipient, host, approve, deny, pins, revoke } = setup();
+    host.stage(bot, "t1", "disable", { skill_name: "lookup" }, null, recipient);
+    revoke();
+    expect(approve()).toMatchObject({ status: 403 });
+    expect(mocks.setImportedSkillEnabled).not.toHaveBeenCalled();
+    expect(deny()).toMatchObject({ outcome: "rejected" });
+    expect(pins()).toHaveLength(0);
+    expect(host.stage(bot, "t1", "disable", { skill_name: "lookup" }, "full-access", recipient).status).toBe(403);
+  });
+
+  it("checks current target authority before Undo without changing either bot", () => {
+    const { bot, recipient, host, undo, revoke, setEnabled } = setup();
+    host.stage(bot, "t1", "disable", { skill_name: "lookup" }, "full-access", recipient);
+    expect(mocks.setImportedSkillEnabled).toHaveBeenCalledExactlyOnceWith(recipient.id, "lookup", false);
+    setEnabled(false);
+    mocks.setImportedSkillEnabled.mockClear();
+    revoke();
+    expect(undo()).toMatchObject({ status: 403 });
+    expect(mocks.setImportedSkillEnabled).not.toHaveBeenCalled();
+  });
+
   it("turns off an imported skill only after the person approves when changes wait for the owner", () => {
     const { bot, host, card, approve, pins } = setup();
     expect(host.stage(bot, "t1", "disable", { skill_name: "lookup" }, null)).toMatchObject({ status: 201, body: { state: "pending" } });

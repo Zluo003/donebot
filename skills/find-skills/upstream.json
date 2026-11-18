@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/vercel-labs/skills",
+  "commit": "57217cf86ba38148a57af9e90d14a4c049558330",
+  "path": "skills/find-skills",
+  "adaptation": "DoneBot native skill discovery, installation, authoring and review; no external CLI required."
+}

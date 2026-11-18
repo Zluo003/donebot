@@ -21,6 +21,30 @@ function context(overrides: Partial<ToolCallContext> = {}): ToolCallContext {
   };
 }
 
+describe("scoped skill tools", () => {
+  it("preserves the requesting identity and the separate managed target through listing, inspection and writes", async () => {
+    const calls: Array<{ path: string; body?: any }> = [];
+    const toolContext = context({ client: {
+      api: async (path, init) => { calls.push({ path, body: init?.body ? JSON.parse(String(init.body)) : undefined }); return { skills: [], staged: [], text: "skill content", state: "applied" }; },
+      apiResponse: async () => ({ ok: true, status: 200, body: {} }),
+    } });
+    await callTool("skills_list", { bot_id: "specialist", skill_name: "report-check", reference: "references/grader.md" }, toolContext);
+    const url = new URL(calls[0]!.path, "http://fixture");
+    expect(Object.fromEntries(url.searchParams)).toEqual({ fromBotId: "bot-voice", fromThreadId: "thread-voice", bot_id: "specialist", skillName: "report-check", reference: "references/grader.md" });
+    await callTool("skill_manage", { bot_id: "specialist", action: "enable", skill_name: "report-check" }, toolContext);
+    expect(calls.at(-1)?.body).toMatchObject({ fromBotId: "bot-voice", fromThreadId: "thread-voice", bot_id: "specialist", action: "enable" });
+    await callTool("skill_manage", { bot_id: "specialist", action: "create", skill_md: "---\nname: new-report\ndescription: Format reports.\n---\nUse a heading.", source: "conversation" }, toolContext);
+    expect(calls.at(-1)?.body).toMatchObject({ fromBotId: "bot-voice", bot_id: "specialist", action: "create" });
+    for (const [name, args, path] of [
+      ["skill_find", { bot_id: "specialist", query: "report", online: false }, "/api/internal/skills/find"],
+      ["skill_import", { bot_id: "specialist", source: "/fixture/SKILL.md", preview: false }, "/api/internal/skills/import"],
+    ] as const) {
+      await callTool(name, args, toolContext);
+      expect(calls.at(-1)).toEqual({ path, body: args });
+    }
+  });
+});
+
 describe("send_voice_note", () => {
   it("refuses a missing or blank note with the shape a retry needs", async () => {
     for (const args of [{}, { text: "   " }]) {

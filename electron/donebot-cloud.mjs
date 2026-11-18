@@ -5,10 +5,14 @@ import { createDoneBotCloudLoading } from "./donebot-cloud-loading.mjs";
 
 const instanceId = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
-export function doneBotCloudEntry(entry) {
-  if (entry?.donebotCloud) return true;
-  try { return entry?.name === "DoneBot Cloud" && instanceId.test(new URL(entry.origin).hostname.split(".")[0]); }
-  catch { return false; }
+export const doneBotCloudEntry = environments.doneBotCloudEntry;
+
+export async function hasDoneBotCloud(request, state) {
+  if (state.environments.some(doneBotCloudEntry)) return true;
+  try {
+    const response = await request("/api/donebot/cloud", { signal: AbortSignal.timeout(3_000) });
+    return response.ok && Boolean((await response.json()).instance?.paid_until);
+  } catch { return false; }
 }
 
 export function createDoneBotCloudConnection({ request, fetch: cookieFetch, saved, remember, activate }) {

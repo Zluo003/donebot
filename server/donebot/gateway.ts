@@ -58,9 +58,11 @@ function cloudPlan(value: DoneBotCloudPlan): DoneBotCloudPlan {
 function cloudInstance(value: DoneBotCloudInstance): DoneBotCloudInstance {
   if (!value || !cloudInputText(value.id, cloudID) || !cloudState(value.desired) || !cloudState(value.actual) ||
     !(value.subscription_state === "" || cloudState(value.subscription_state)) || typeof value.purge_locked !== "boolean" ||
+    value.auto_renew !== undefined && typeof value.auto_renew !== "boolean" ||
     value.paid_until !== null && (typeof value.paid_until !== "string" || !Number.isFinite(Date.parse(value.paid_until)))) return cloudInvalid();
   return { id: value.id, desired: value.desired, actual: value.actual, error: cloudProblem(value.error),
-    paid_until: value.paid_until, subscription_state: value.subscription_state, purge_locked: value.purge_locked };
+    paid_until: value.paid_until, subscription_state: value.subscription_state, purge_locked: value.purge_locked,
+    auto_renew: value.auto_renew ?? value.subscription_state !== "cancelled" };
 }
 function cloudOperation(value: DoneBotCloudOperation): DoneBotCloudOperation {
   if (!value || !cloudInputText(value.id, cloudID) || !cloudState(value.action) || !cloudState(value.state)) return cloudInvalid();
@@ -418,6 +420,36 @@ export class DoneBotGateway {
     return account;
   }
 
+  async paymentRequest(path: string, body?: Record<string, unknown>, accountId?: string): Promise<unknown> {
+    const epoch = this.epoch;
+    const session = await this.validSession();
+    this.checkEpoch(epoch);
+    if (session.mode === "installation") throw new DoneBotGatewayError(403, "payment_login_required", "请在本机 DoneBot 客户端登录后购买算力。");
+    if (!accountId || accountId !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重新确认。");
+    const allowed = body === undefined ? ["config", "checkout-info", "orders/my?page=1&page_size=20&order_type=balance"].includes(path) || /^orders\/[1-9]\d{0,14}$/.test(path)
+      : path === "orders" || path === "orders/verify" || /^orders\/[1-9]\d{0,14}\/cancel$/.test(path);
+    if (!allowed) throw new DoneBotGatewayError(400, "payment_path", "无效的充值操作。");
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    try {
+      const response = await this.readGateway(`/api/v1/payment/${path}`, {
+        method: body === undefined ? "GET" : "POST", redirect: "error", credentials: "omit",
+        headers: { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json", "Accept-Language": "zh" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
+      });
+      const result = await this.readGatewayJson(response) as { code?: number; data?: unknown; reason?: string };
+      this.checkEpoch(epoch);
+      if (!response.ok || result.code !== undefined && result.code !== 0) {
+        const messages: Record<string, string> = { PAYMENT_DISABLED: "充值服务暂未开放。", BALANCE_PAYMENT_DISABLED: "算力充值暂未开放。",
+          INVALID_AMOUNT: "充值金额不在允许范围内。", TOO_MANY_PENDING_ORDERS: "待支付订单过多，请先处理已有订单。",
+          DAILY_LIMIT_EXCEEDED: "已达到今日充值限额。", PAYMENT_METHOD_UNAVAILABLE: "该支付方式暂不可用。" };
+        throw new DoneBotGatewayError(response.status >= 400 ? response.status : 502, "payment_rejected", messages[result.reason ?? ""] ??
+          (response.status === 401 ? "登录已过期，请重新登录后查询订单。" : "充值请求未完成，请刷新订单状态后重试。"));
+      }
+      return result.code === 0 && "data" in result ? result.data : result;
+    } finally { this.controllers.delete(controller); }
+  }
+
   private async cloudRequest(method: "GET" | "POST", path: string, accountId?: string, key?: string): Promise<unknown> {
     const epoch = this.epoch;
     if (!this.session) throw new DoneBotGatewayError(401, "login_required", "请先在应用内登录 DoneBot 账号，再刷新 Cloud。");
@@ -427,7 +459,7 @@ export class DoneBotGateway {
     if (accountId && accountId !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重新确认。");
     const id = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
     const allowed = method === "GET" ? path === "plan" || path === "instances" || new RegExp(`^instances/${id}/operations$`).test(path)
-      : path === "instances" || new RegExp(`^instances/${id}/(?:start|stop|cancel|desktop-launch)$`).test(path);
+      : path === "instances" || new RegExp(`^instances/${id}/(?:start|stop|cancel|keep|desktop-launch)$`).test(path);
     if (!allowed) throw new DoneBotGatewayError(400, "cloud_path_invalid", "无效的 Cloud 操作。");
     const controller = new AbortController();
     this.controllers.add(controller);
@@ -533,7 +565,7 @@ export class DoneBotGateway {
   }
 
   async cloudMutate(input: DoneBotCloudMutation): Promise<DoneBotCloudMutationResult> {
-    if (!input || !["start", "stop", "cancel"].includes(input.action) || !cloudInputText(input.key, /^[A-Za-z0-9_-]{1,100}$/) ||
+    if (!input || !["start", "stop", "cancel", "keep"].includes(input.action) || !cloudInputText(input.key, /^[A-Za-z0-9_-]{1,100}$/) ||
       !cloudInputText(input.account_id, /^.{1,200}$/) || !cloudInputText(input.monthly_price, /^\d{1,20}(?:\.\d{1,6})?$/) ||
       (input.id !== undefined && !cloudInputText(input.id, cloudID)) ||
       (!input.id && input.action !== "start")) throw new DoneBotGatewayError(400, "cloud_operation_invalid", "无效的 Cloud 操作。");

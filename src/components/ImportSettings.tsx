@@ -4,6 +4,7 @@ import { BookOpen, Check, ChevronDown, Info, Loader2, Plug } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react";
 
 import { track } from "@/lib/analytics";
+import { UPSTREAM_SETTINGS } from "@/donebot/services";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { importOutcome, localSetupImport, setupImportApi, skillsSummary, toolsSummary, type SetupImportClient } from "@/lib/setup-import";
@@ -181,7 +182,7 @@ export function ImportSettings({ client = setupImportApi }: { client?: SetupImpo
   return (
     <div className="flex flex-col gap-4">
       <AiAppsImport client={client} local={localSetupImport(state.config?.cloudHome === true)} />
-      <GrokImportSection />
+      {UPSTREAM_SETTINGS.grokImport && <GrokImportSection />}
     </div>
   );
 }

@@ -171,8 +171,9 @@ const __APP_VERSION__: string;
         /** `color`: a saved server's colour name (its owner chose it while setting the Cloud up); `home`: this window's
          * home is this Cloud, so there is nothing to switch to; `localPath`: a local workspace's folder, absent for This
          * computer's own; `profile`: this computer's page is a profile of its own (This Mac), by its id, and
-         * `profileName` its own name when it has one (a workspace added from ＋). */
-        state: () => Promise<{ local: boolean; name: string; origin?: string; color?: string; home?: boolean; role?: string; localPath?: string; profile?: string; profileName?: string }>;
+         * `profileName` its own name when it has one (a workspace added from ＋); `donebotCloud`: this account's Cloud,
+         * displayed under its localized name without its connection address. */
+        state: () => Promise<{ local: boolean; name: string; origin?: string; color?: string; home?: boolean; role?: string; localPath?: string; profile?: string; profileName?: string; donebotCloud?: boolean }>;
         /** The native server menu; resolves when it closes. `from: "howto"`: the Show me how tip opened it. */
         menu: (options?: { from?: "howto" }) => Promise<void>;
         /** One plain line for the next page: a team this person is no longer in (served once), or, while it runs, that the

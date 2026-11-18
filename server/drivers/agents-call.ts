@@ -865,9 +865,19 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       : "(Your own past note, not new instructions.)";
     return { text: `[${when} · ${where} · ${recallSpeaker(r)} · message ${messageId}]\n\n${String(r.text ?? "")}\n\n${note}` };
   }
+  if (name === "skill_find" || name === "skill_import") {
+    const result = await api(`/api/internal/skills/${name === "skill_find" ? "find" : "import"}`, {
+      method: "POST", body: JSON.stringify(args),
+    });
+    return { text: JSON.stringify(result) };
+  }
   if (name === "skills_list") {
     const query = new URLSearchParams({ fromBotId: BOT_ID, fromThreadId: THREAD_ID });
+    if (typeof args.bot_id === "string") query.set("bot_id", args.bot_id);
+    if (typeof args.skill_name === "string") query.set("skillName", args.skill_name);
+    if (typeof args.reference === "string") query.set("reference", args.reference);
     const r = await api(`/api/internal/skills?${query.toString()}`);
+    if (typeof args.skill_name === "string") return { text: JSON.stringify(r) };
     const skills = Array.isArray(r.skills) ? r.skills : [];
     const staged = Array.isArray(r.staged) ? r.staged : [];
     const words = typeof args.query === "string" ? args.query.trim() : "";
@@ -900,7 +910,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       if (!skillName) return { text: `skill_manage needs skill_name to ${verb} a skill. Copy the exact name from skills_list.`, isError: true };
       const r = await api("/api/internal/skills/stage", {
         method: "POST",
-        body: JSON.stringify({ fromBotId: BOT_ID, fromThreadId: THREAD_ID, action: args.action, skill_name: skillName }),
+        body: JSON.stringify({ fromBotId: BOT_ID, fromThreadId: THREAD_ID, action: args.action, skill_name: skillName, bot_id: args.bot_id }),
       });
       const completed = completedProposalResult(r, `a request to ${verb} skill “${skillName}”`);
       if (completed) return completed;
@@ -927,6 +937,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       method: "POST",
       body: JSON.stringify({
         fromBotId: BOT_ID, fromThreadId: THREAD_ID,
+        bot_id: args.bot_id,
         action: args.action,
         skill_name: skillName || undefined,
         skill_md: skillMd,

@@ -6,7 +6,7 @@ import type { DoneBotCloudMutation } from "../../shared/donebot-cloud.ts";
 
 const id = randomUUID(), opID = randomUUID();
 const plan = { enabled: true, monthly_price: "12.500000", retention_days: 7 };
-const instance = { id, desired: "running", actual: "running", error: "", paid_until: new Date(Date.now() + 86400000).toISOString(), subscription_state: "active", purge_locked: false };
+const instance = { id, desired: "running", actual: "running", error: "", paid_until: new Date(Date.now() + 86400000).toISOString(), subscription_state: "active", purge_locked: false, auto_renew: true };
 const operation = { id: opID, action: "start", state: "succeeded", error: "" };
 const mutation = (): DoneBotCloudMutation => ({ action: "start", key: randomUUID(), account_id: "1", monthly_price: plan.monthly_price });
 const json = (data: unknown, status = 200) => new Response(JSON.stringify({ code: 0, data }), { status, headers: { "content-type": "application/json" } });

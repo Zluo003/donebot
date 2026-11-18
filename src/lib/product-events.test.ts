@@ -29,6 +29,7 @@ vi.stubGlobal("localStorage", {
 
 beforeEach(() => {
   store.clear();
+  store.set("omb-analytics-opt-out", "0");
   ph.captured = [];
 });
 

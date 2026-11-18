@@ -25,6 +25,7 @@ export function useWindowPlace(): WorkspaceState | null {
 const CLOUD_HOME_NAME = "My Cloud";
 
 export function windowPlaceName(place: WorkspaceState, team: string | undefined): string {
+  if (place.donebotCloud) return t("native.donebotCloud.name");
   if (place.home) return team || (place.name && place.name !== CLOUD_HOME_NAME ? place.name : t("cloudSetup.myCloud"));
   if (place.profile) return place.profileName || computerName({ profile: place.profile });
   if (place.local && !place.localPath) return t("rail.thisComputer");

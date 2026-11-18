@@ -4,6 +4,7 @@ import type { BotUpdatePatch } from "@/state/bot-patch-queue";
 import type { Routine, RoutineInput } from "./routines";
 import type { ChosenPreset } from "./bot-presets";
 import { t } from "@/lib/i18n";
+import { newBotBody } from "@/donebot/avatars";
 import { randomUuid } from "./random-uuid";
 
 export const EMPTY_BOT_DEFAULTS: NewBotDefaults = { profile: {}, memory: {}, skills: [], routines: [] };
@@ -27,6 +28,7 @@ export class BotCreationDraft {
 
   constructor(defaults: NewBotDefaults, readonly changed: () => void, private network: typeof api = api) {
     this.template = structuredClone(defaults);
+    this.template.profile.mascotBody = newBotBody(this.template.profile.mascotBody);
     this.routines = defaults.routines.map(routine => this.routine({ ...routine, botId: this.id }));
   }
 

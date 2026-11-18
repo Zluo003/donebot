@@ -31,7 +31,7 @@ it("shows the same account's plan and balance and never charges before explicit 
   await mount();
   expect(host.textContent).toContain("fixture@example.invalid");
   expect(host.querySelector("[data-cloud-balance]")?.textContent).toBe("50");
-  await click("开通 DoneBot Cloud"); expect(posts()).toHaveLength(0);
+  await click("购买 Cloud 云主机"); expect(posts()).toHaveLength(0);
   await click("返回"); expect(posts()).toHaveLength(0); expect(external).not.toHaveBeenCalled();
   expect(host.querySelector('[aria-label="Cloud 操作确认"]')).toBeNull();
 });
@@ -45,7 +45,7 @@ it("retries an uncertain submission with the same key and blocks a double click"
     }
     return structuredClone(snapshot);
   });
-  await mount(); await click("开通 DoneBot Cloud"); await click("确认"); await click("重试确认");
+  await mount(); await click("购买 Cloud 云主机"); await click("确认"); await click("重试确认");
   const buttons = [...host.querySelectorAll<HTMLButtonElement>("button")];
   expect(buttons.find(button => button.textContent === "正在处理…")?.disabled).toBe(true);
   await act(async () => buttons.find(button => button.textContent === "正在处理…")!.click());
@@ -63,7 +63,7 @@ it.each(["billing_insufficient_balance", "capacity_unavailable"])("shows a defin
     }
     return structuredClone(snapshot);
   });
-  await mount(); await click("开通 DoneBot Cloud"); await click("确认");
+  await mount(); await click("购买 Cloud 云主机"); await click("确认");
   expect(host.textContent).toContain("Cloud 未开通且未扣款");
   await click("重试开通"); await click("确认");
   expect(JSON.parse(posts()[0]![1].body).key).not.toBe(JSON.parse(posts()[1]![1].body).key);
@@ -71,18 +71,18 @@ it.each(["billing_insufficient_balance", "capacity_unavailable"])("shows a defin
 });
 it("does not allow a disabled plan to be purchased", async () => {
   snapshot.plan.enabled = false; await mount();
-  expect([...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "开通 DoneBot Cloud")?.disabled).toBe(true);
+  expect([...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "购买 Cloud 云主机")?.disabled).toBe(true);
   expect(posts()).toHaveLength(0);
 });
 it.each(["account", "price"])("discards a confirmation after the %s changes", async changed => {
-  await mount(); await click("开通 DoneBot Cloud");
+  await mount(); await click("购买 Cloud 云主机");
   if (changed === "account") snapshot.account_id = "other-fixture-user";
   else snapshot.plan.monthly_price = "25.000000";
   await click("刷新 Cloud");
   expect(host.querySelector('[aria-label="Cloud 操作确认"]')).toBeNull(); expect(posts()).toHaveLength(0);
 });
 function running() {
-  snapshot.instance = { id: "fixture-id", desired: "running", actual: "running", error: "", subscription_state: "active", paid_until: new Date(Date.now() + 86400000).toISOString(), purge_locked: false };
+  snapshot.instance = { id: "fixture-id", desired: "running", actual: "running", error: "", auto_renew: true, subscription_state: "active", paid_until: new Date(Date.now() + 86400000).toISOString(), purge_locked: false };
 }
 it("connects through the existing desktop pairing bridge without opening a website", async () => {
   running();
@@ -109,11 +109,33 @@ it("refuses to pair when the account switches during the connection request", as
   await mount(); await click("连接 Cloud");
   expect(add).not.toHaveBeenCalled(); expect(host.textContent).toContain("连接 Cloud 未完成");
 });
-it.each(["stop", "cancel"])("requires confirmation for %s and submits the current instance", async action => {
-  running(); await mount(); await click(action === "stop" ? "停机并保留数据" : "取消自动续费");
+it("cancels renewal without offering an immediate stop and keeps the Cloud connected", async () => {
+  running(); await mount();
+  expect(host.textContent).not.toContain("停机并保留数据");
+  await click("取消自动续费");
+  expect(host.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("Cloud 继续运行至");
   expect(posts()).toHaveLength(0);
+  fixture.api.mockImplementation(async (_path, init) => {
+    if (init?.method === "POST") { snapshot.instance!.auto_renew = false; return { operation: { state: "succeeded" } }; }
+    return structuredClone(snapshot);
+  });
+  await click("确认");
+  expect(JSON.parse(posts()[0]![1].body)).toMatchObject({ id: "fixture-id", action: "cancel" });
+  expect(host.textContent).toContain("连接 Cloud");
+  expect([...host.querySelectorAll("button")].some(button => button.textContent === "自动续费")).toBe(true);
+});
+it("enables renewal during a paid period without buying a new period", async () => {
+  running(); snapshot.instance!.auto_renew = false; await mount();
+  await click("自动续费");
+  expect(host.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("本次不扣款，不改变当前到期时间");
   fixture.api.mockImplementation(async (_path, init) => init?.method === "POST" ? { operation: { state: "succeeded" } } : structuredClone(snapshot));
-  await click("确认"); expect(JSON.parse(posts()[0]![1].body)).toMatchObject({ id: "fixture-id", account_id: "fixture-user", action });
+  await click("确认"); expect(JSON.parse(posts()[0]![1].body)).toMatchObject({ id: "fixture-id", action: "keep" });
+});
+it("offers a purchase after expiry even when the runtime has not stopped yet", async () => {
+  running(); snapshot.instance!.auto_renew = false; snapshot.instance!.paid_until = new Date(Date.now() - 1000).toISOString(); await mount();
+  const labels = [...host.querySelectorAll("button")].map(button => button.textContent);
+  expect(labels).toContain("购买 Cloud 云主机"); expect(labels).not.toContain("自动续费"); expect(labels).not.toContain("连接 Cloud");
+  await click("购买 Cloud 云主机"); expect(host.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("确认后从当前 DoneBot 账号余额扣款");
 });
 it("does not apply an old read after the account view was replaced", async () => {
   let release!: (value: unknown) => void;

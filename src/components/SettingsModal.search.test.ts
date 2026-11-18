@@ -6,6 +6,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
+import { UPSTREAM_SETTINGS } from "@/donebot/services";
 
 const fixture = vi.hoisted(() => ({ dispatch: vi.fn(), scrolled: [] as Element[], section: "general" }));
 vi.mock("@/lib/scroll-within", () => ({ scrollWithin: (_scroller: unknown, target: Element) => { fixture.scrolled.push(target); }, scrollParent: () => null }));
@@ -65,6 +66,16 @@ const type = (value: string) => {
 };
 
 describe("Settings search in Simple mode", () => {
+  it("does not expose hidden controls through search with DoneBot settings", () => {
+    for (const key of Object.keys(UPSTREAM_SETTINGS) as Array<keyof typeof UPSTREAM_SETTINGS>) UPSTREAM_SETTINGS[key] = false;
+    for (const words of ["font", "recovery", "backups", "parallel", "api key", "browser", "advanced mode", "diagnostics"]) {
+      type(words);
+      expect(document.querySelector("[data-settings-advanced-only], [data-settings-more-result], [data-settings-key-result], [data-settings-more]")).toBeNull();
+      expect(document.querySelector('[data-settings-page="computer"]')).toBeNull();
+      expect(document.querySelector('[data-settings-block="connections"]')).toBeNull();
+    }
+  });
+
   it("opens on the dialog itself, and a typed letter moves into search", () => {
     expect(document.activeElement).toBe(dialog());
     flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true, cancelable: true })));

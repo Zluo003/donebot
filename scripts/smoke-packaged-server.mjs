@@ -2,11 +2,11 @@
 // copied out of the repo first: inside it, a bare import still resolves by
 // walking up to ./node_modules.
 import { execFile, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { Worker } from "node:worker_threads";
 import { PNG } from "pngjs";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -53,6 +53,7 @@ async function freePorts(count) {
 
 const staging = mkdtempSync(join(tmpdir(), "omb-smoke-"));
 const home = mkdtempSync(join(tmpdir(), "omb-smoke-home-"));
+const skillBotId = randomUUID();
 const [port, webhookPort] = await freePorts(2);
 
 // DONEBOT_SMOKE_DIST lets the release workflow aim this at a packaged app's
@@ -61,6 +62,13 @@ try {
   // A desktop install can live beneath a user's CommonJS package scope.
   writeFileSync(join(staging, "package.json"), '{"type":"commonjs"}\n');
   cpSync(process.env.DONEBOT_SMOKE_DIST ?? join(root, "dist-server"), join(staging, "server"), { recursive: true });
+  cpSync(join(process.env.DONEBOT_SMOKE_DIST ? dirname(resolve(process.env.DONEBOT_SMOKE_DIST)) : root, "skills"), join(staging, "skills"), { recursive: true });
+  mkdirSync(join(home, ".donebot"), { mode: 0o700 });
+  writeFileSync(join(home, ".donebot", "bots.json"), JSON.stringify([{
+    id: skillBotId, threadId: randomUUID(), name: "Bundled skills fixture", section: "Package smoke", chiefOfStaff: true,
+    color: "blue", modelSelection: { instanceId: "", model: "" }, soul: "Verify local bundled skills.",
+    createdAt: Date.now(), busy: false, activity: "idle", autoApprove: false, approvalMode: "ask", tasks: [], resumeCursors: {},
+  }]), { mode: 0o600 });
   if (browserBundle) cpSync(resolve(browserBundle), join(staging, "browser-engine"), { recursive: true });
 } catch (error) {
   for (const directory of [staging, home]) rmSync(directory, { recursive: true, force: true });
@@ -132,6 +140,32 @@ if (listening) {
   try {
     versionReport = (await (await fetch(`http://127.0.0.1:${port}/.well-known/donebot/environment`, { signal: AbortSignal.timeout(5_000) })).json()).version;
   } catch (error) { versionReport = String(error); }
+}
+
+let skillsReport = null;
+if (listening) {
+  try {
+    const base = `http://127.0.0.1:${port}`;
+    const api = async (method, path, body) => {
+      const response = await fetch(base + path, { method, headers: { "content-type": "application/json", origin: base },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(10_000) });
+      const result = await response.json();
+      assert(response.ok, `Bundled skill fixture: ${method} ${path} returned ${response.status}: ${JSON.stringify(result)}`);
+      return result;
+    };
+    const { skills } = await api("GET", `/api/bots/${skillBotId}/skills`);
+    for (const id of ["find-skills", "skill-creator"]) {
+      assert(skills.some((skill) => skill.name === id && skill.enabled && skill.source === `builtin:${id}`));
+      const { text } = await api("GET", `/api/bots/${skillBotId}/skills/${id}`);
+      assert(text.includes(`name: ${id}`));
+      assert(readFileSync(join(staging, "skills", id, "LICENSE.txt"), "utf8").length > 100);
+      assert(readFileSync(join(staging, "skills", id, "references", "upstream.md"), "utf8").includes(`name: ${id}`));
+    }
+    for (const name of ["grader", "comparator", "analyzer", "schemas"]) {
+      assert(readFileSync(join(staging, "skills", "skill-creator", "references", `${name}.md`), "utf8").length > 100);
+    }
+    skillsReport = { ok: true };
+  } catch (error) { skillsReport = { error: String(error) }; }
 }
 
 let imageWorkerReport = null;
@@ -474,6 +508,11 @@ if (!listening) {
   process.exit(1);
 }
 
+if (!skillsReport?.ok) {
+  console.error("the packaged server could not load its built-in coordinator skills and references:", skillsReport);
+  process.exit(1);
+}
+
 const repoVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
 if (!process.env.DONEBOT_SMOKE_DIST && versionReport !== repoVersion) {
   console.error(`The packaged server reports version ${JSON.stringify(versionReport)}, not ${repoVersion}.`);
@@ -542,6 +581,7 @@ if (!serviceTrustReport || serviceTrustReport.error || serviceTrustReport.servin
   process.exit(1);
 }
 console.log(`packaged server started with no node_modules in reach (port ${port}) ✓`);
+console.log("packaged coordinator skills, licenses and references loaded locally without installation ✓");
 console.log(`all ${count} spawned proxy paths resolve inside the packaged server dir ✓`);
 console.log("packaged MCP stdio server reached the API and flushed its final frames ✓");
 console.log("packaged donebot doctor and bots answered from the bundle ✓");

@@ -19,6 +19,7 @@ import type { BotRecord, Message, Store } from "../store.ts";
 export interface SkillSwitchHostDeps {
   store: Pick<Store, "bot" | "appendMessage" | "patchMessage">;
   dataDir: string;
+  targetProblem?(fromId: string, targetId: string): string | null;
   /** The checks every skill change passes; opensCard adds the open-card limit. */
   persistence(botId: string, threadId: string, opensCard: boolean): { ok: true } | { ok: false; status: number; error: string };
   listBotSkills(bot: BotRecord): Array<{ name: string; enabled: boolean; source: string; description: string }>;
@@ -55,10 +56,11 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
 
   /** The skill a bot asked to turn on, turn off or delete, as it is now. */
   function switchableSkill(bot: BotRecord, name: string): SwitchableSkill | undefined {
+    const seen = deps.listBotSkills(bot).find((skill) => skill.name === name);
+    if (seen?.source.startsWith("builtin:")) return { kind: "fixed", enabled: true, text: null, source: seen.source, description: seen.description };
     const own = listSkills(bot.id).find((skill) => skill.name === name);
     // Org skills an Admin pushed stay the person's to change, like library skills.
     if (own) return { kind: own.source.startsWith("org:") ? "fixed" : "own", enabled: own.enabled, text: readSkillFile(bot.id, name), source: own.source, description: own.description };
-    const seen = deps.listBotSkills(bot).find((skill) => skill.name === name);
     if (!seen) return undefined;
     const imported = (seen as { origin?: string }).origin === "imported";
     return { kind: imported ? "imported" : "fixed", enabled: seen.enabled, text: imported ? deps.readBotSkillFile(bot, name) : null, source: seen.source, description: seen.description };
@@ -73,7 +75,7 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
   }
 
   function appendCard(args: {
-    requestId: string; botId: string; threadId: string; action: SkillSwitchAction; name: string; target: SkillSwitchTarget;
+    requestId: string; botId: string; threadId: string; targetBotId?: string; targetBotName?: string; action: SkillSwitchAction; name: string; target: SkillSwitchTarget;
     applied?: { previous?: SkillRequestCardData["previous"] };
   }): { title: string; done: string } {
     const { requestId, applied } = args;
@@ -82,6 +84,7 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
       version: 1,
       requestId,
       botId: args.botId,
+      ...(args.targetBotId ? { targetBotId: args.targetBotId, targetBotName: args.targetBotName } : {}),
       threadId: args.threadId,
       // Nothing is staged: approval binds to the SKILL.md digest pinned on the server.
       stagedId: `switch-${requestId}`,
@@ -102,7 +105,7 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
       from: from ? { botId: from.id, name: from.name, color: from.color } : undefined,
       card: {
         title: copy.title,
-        subtitle: copy.subtitle,
+        subtitle: `${args.targetBotId ? `Target bot: ${args.targetBotName} (${args.targetBotId})\n\n` : ""}${copy.subtitle}`,
         options: applied ? [] : [copy.option, "Deny"],
         ...(applied ? { answered: "allow" as const, autoApplied: true, title: copy.done } : {}),
         requestId,
@@ -119,20 +122,22 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
   }
 
   /** Where the bot's own skill writes apply directly, so does this, with a receipt; otherwise the person decides on a card. */
-  function stage(from: BotRecord, threadId: string, action: SkillSwitchAction, body: Record<string, unknown>, direct: DirectApply | null): { status: number; body: Record<string, unknown> } {
+  function stage(from: BotRecord, threadId: string, action: SkillSwitchAction, body: Record<string, unknown>, direct: DirectApply | null, recipient: BotRecord = from): { status: number; body: Record<string, unknown> } {
+    const problem = recipient.id !== from.id ? (deps.targetProblem ? deps.targetProblem(from.id, recipient.id) : "Cross-bot skill management is unavailable.") : null;
+    if (problem) return { status: 403, body: { error: problem } };
     const name = typeof body.skill_name === "string" ? body.skill_name.trim() : "";
     if (!name) return { status: 400, body: { error: `skill_name is required when action is ${action}` } };
     const persistence = deps.persistence(from.id, threadId, !direct);
     if (!persistence.ok) return { status: persistence.status, body: { error: persistence.error } };
-    const current = switchableSkill(from, name);
+    const current = switchableSkill(recipient, name);
     const target = skillSwitchTarget(name, action, current);
     if ("error" in target) return { status: 422, body: { error: target.error } };
     const requestId = randomUUID();
     if (direct) {
-      const previous = action === "delete" && current ? deletedSkillFiles(from.id, name, current) : undefined;
-      const applied = apply(from.id, name, action, current?.kind);
+      const previous = action === "delete" && current ? deletedSkillFiles(recipient.id, name, current) : undefined;
+      const applied = apply(recipient.id, name, action, current?.kind);
       if ("error" in applied) return { status: 422, body: { state: "failed", error: applied.error } };
-      const { done } = appendCard({ requestId, botId: from.id, threadId, action, name, target, applied: { previous } });
+      const { done } = appendCard({ requestId, botId: from.id, threadId, ...(recipient.id !== from.id ? { targetBotId: recipient.id, targetBotName: recipient.name } : {}), action, name, target, applied: { previous } });
       appendDecision(deps.dataDir, { threadId, requestId, botId: from.id, botName: from.name,
         tool: "stage_skill", summary: done, decision: "auto-approved", source: direct });
       deps.noteSkillChange(from.id, threadId);
@@ -142,7 +147,7 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
     writeFileAtomic(pinPath(requestId), target.contentSha256, { mode: 0o600 });
     let summary: string;
     try {
-      summary = appendCard({ requestId, botId: from.id, threadId, action, name, target }).title;
+      summary = appendCard({ requestId, botId: from.id, threadId, ...(recipient.id !== from.id ? { targetBotId: recipient.id, targetBotName: recipient.name } : {}), action, name, target }).title;
     } catch (error) {
       dropPin(requestId);
       throw error;
@@ -175,10 +180,13 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
     if (request.requestId !== args.requestId || request.threadId !== args.threadId) {
       return { claimed: true, status: 422, error: "this approval card no longer matches its skill" };
     }
-    const bot = store.bot(args.botId);
+    const targetId = request.targetBotId ?? args.botId;
+    const problem = request.targetBotId ? (deps.targetProblem ? deps.targetProblem(args.botId, targetId) : "Cross-bot skill management is unavailable.") : null;
+    if (problem) return { claimed: true, status: 403, error: problem };
+    const bot = store.bot(targetId);
     const current = bot ? switchableSkill(bot, request.name) : undefined;
     const still = skillSwitchStillMatches(request.name, request.action, current, readPin(request.requestId));
-    const applied = "error" in still ? still : apply(args.botId, request.name, request.action, current?.kind);
+    const applied = "error" in still ? still : apply(targetId, request.name, request.action, current?.kind);
     if ("error" in applied) {
       store.patchMessage(args.threadId, messageId, { card: { ...card, held: applied.error } });
       return { claimed: true, status: 422, error: applied.error };
@@ -216,18 +224,21 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
   /** Undo from the receipt of a change that applied on its own; refuses, changing nothing, once the skill moved on since. */
   function undo(botId: string, threadId: string, message: Message, request: SkillRequestCardData & { action: SkillSwitchAction }): SkillSwitchUndo {
     const card = message.card!;
-    const bot = store.bot(botId);
+    const targetId = request.targetBotId ?? botId;
+    const problem = request.targetBotId ? (deps.targetProblem ? deps.targetProblem(botId, targetId) : "Cross-bot skill management is unavailable.") : null;
+    if (problem) return { claimed: true, state: "invalid", status: 403, error: problem };
+    const bot = store.bot(targetId);
     if (!bot) return { claimed: true, state: "invalid", error: "this change has no valid owner", status: 400 };
     const current = switchableSkill(bot, request.name);
     let undone: { ok: true } | { error: string } | { stale: true };
     if (request.action === "delete") {
       if (!request.previous) return { claimed: true, state: "invalid", error: "This change can't be undone here.", status: 409 };
-      undone = current ? { stale: true } : recreate(botId, request.previous, request.gist);
+      undone = current ? { stale: true } : recreate(targetId, request.previous, request.gist);
     } else {
       const back = UNDO_ACTION[request.action];
       if (!current || current.kind === "fixed" || current.enabled !== (request.action === "enable")) undone = { stale: true };
       else {
-        const flipped = apply(botId, request.name, back, current.kind);
+        const flipped = apply(targetId, request.name, back, current.kind);
         undone = "error" in flipped ? flipped : { ok: true };
       }
     }

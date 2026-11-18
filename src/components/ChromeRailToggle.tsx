@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { UPSTREAM_SETTINGS } from "@/donebot/services";
 import { cn } from "@/lib/cn";
 import { setChromeRailHidden, useChromeRail } from "@/lib/chrome-rail";
 import { t } from "@/lib/i18n";
@@ -34,7 +35,7 @@ export function ChromeRailToggle({ advanced = false, icons = false, bar, style }
 /** Settings' switch for the same rail, while this window has one. */
 export function ChromeRailRow() {
   const rail = useChromeRail();
-  if (!rail?.available) return null;
+  if (!UPSTREAM_SETTINGS.computerRail || !rail?.available) return null;
   return <div data-rail-switch>
     <SettingRow title={t("rail.show")} subtitle={t("rail.showSub")}>
       <Switch checked={!rail.hidden} aria-label={t("rail.show")} onClick={() => setChromeRailHidden(!rail.hidden)} />

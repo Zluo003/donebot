@@ -1,3 +1,5 @@
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 // The trap is module scope: SECTIONS is built once at import time, and a label resolved there would keep the boot
 // language.
 import { createElement } from "react";
@@ -57,6 +59,10 @@ describe("Settings → General", () => {
       expect(ja, key).toContain(locales.ja[key]!);
     }
     expect(ja).not.toContain("Provedores de modelos");
+    for (const key of Object.keys(en).filter(key => key.startsWith("settings.attachments.")) as Array<keyof typeof en>) {
+      expect(locales.zh[key], key).toBeTruthy();
+      expect(locales.zh[key], key).not.toBe(en[key]);
+    }
   });
 
   it("stays English when no language is picked", async () => {

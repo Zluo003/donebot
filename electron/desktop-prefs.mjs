@@ -129,11 +129,10 @@ export function createDesktopPrefs({ read, write }) {
       const parsed = typeof server === "string" ? parseChat(chat) : null;
       if (parsed) save({ ...current(), quickAsks: { ...current().quickAsks, [server]: parsed } });
     },
-    /** The window's rail of places is shown until the person hides it. */
-    railHidden: () => current().railHidden === true,
+    railHidden: () => current().railHidden !== false,
     setRailHidden(hidden) {
       const railHidden = hidden === true;
-      if ((current().railHidden === true) !== railHidden) save({ ...current(), railHidden });
+      if ((current().railHidden !== false) !== railHidden) save({ ...current(), railHidden });
     },
     /** The window draws its own frame until the person turns it off. */
     windowFrame: () => current().windowFrame !== false,

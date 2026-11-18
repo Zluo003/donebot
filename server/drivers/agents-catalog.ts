@@ -382,13 +382,13 @@ const TOOL_DEFINITIONS = [
   {
     name: "create_bot",
     description:
-      "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
+      "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its SOUL.md: include purpose, responsibilities, boundaries, deliverables and result checks. After creation offer skills or adding them later. Unless the user supplies a specific skill or explicitly requests custom creation, first find and inspect high-quality existing skills, then recommend suitable choices for the user's decision. Offer custom creation only if no suitable candidate was found; respect an already stated choice. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
     inputSchema: {
       type: "object",
       properties: {
         name: { type: "string", description: "Short, unique display name for the specialist." },
         role: { type: "string", description: "The specialist's job title or role." },
-        instructions: { type: "string", description: "What this specialist is responsible for and how it should work." },
+        instructions: { type: "string", minLength: 1, description: "Concise SOUL.md: identity, responsibilities, scope, deliverables, quality checks and reporting. Put detailed reusable procedures in skills." },
         modelSelection: { type: "object", additionalProperties: false, properties: {
           instanceId: { type: "string" }, model: { type: "string" },
           effort: { type: "string" }, variant: { type: "string" },
@@ -763,23 +763,47 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "skill_find",
+    description: "Find skills matching a concrete role or task. Use this first when adding skills unless the user chose a specific skill or explicitly requested custom creation. Searches local skills and skills.sh without an external CLI; network failure returns local matches. Inspect quality, task fit and dependencies before recommending choices; install counts alone do not establish quality. Let the user decide before installation.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {
+      query: { type: "string", minLength: 1, maxLength: 300 },
+      bot_id: { type: "string", description: "Omit for yourself; a Chief may target a managed bot." },
+      online: { type: "boolean", description: "False searches local skills only. Defaults true." },
+    }, required: ["query"] },
+  },
+  {
+    name: "skill_import",
+    description: "Preview a skill's contents and files, or import the user-selected skill into the specified bot, disabled. Supports GitHub/skills.sh URLs, owner/repo and a local SKILL.md or folder in this conversation. Preview defaults true; set preview=false to install, then skill_manage enable with the same bot_id. Preserves bundled scripts/assets, reports skipped files and never executes them.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {
+      source: { type: "string", minLength: 1, maxLength: 2000 },
+      bot_id: { type: "string", description: "Omit for yourself; a Chief may target a managed bot." },
+      preview: { type: "boolean", description: "Defaults true (read only). False imports the selected skill, disabled." },
+    }, required: ["source"] },
+  },
+  {
     name: "skills_list",
     description:
-      "List this bot's skills (enabled and disabled) and any staged skill writes still waiting for the user's decision; pass query to find enabled skills for a task. Use this before skill_manage to avoid duplicate names. Listing does not enable anything.",
+      "List your skills, or a managed bot's when a Chief passes bot_id (enabled and disabled) and any staged skill writes still waiting for the user's decision; pass query to find enabled skills for a task. Use this before skill_manage to avoid duplicate names. Listing does not enable anything.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      properties: { query: { type: "string", maxLength: 300, description: "Words about the task; returns the best matches and where to read each." } },
+      properties: {
+        bot_id: { type: "string", description: "Omit for yourself. A Chief may name an exact bot it manages from list_team_setup." },
+        query: { type: "string", maxLength: 300, description: "Words about the task; returns the best matches and where to read each." },
+        skill_name: { type: "string", description: "Return the exact skill's full SKILL.md for inspection or a user-requested update, including on a managed bot." },
+        reference: { type: "string", description: "For a built-in skill, read this packaged Markdown reference instead of SKILL.md, e.g. references/grader.md. Requires skill_name. Omit bot_id to read your own built-in skill's references." },
+      },
     },
   },
   {
     name: "skill_manage",
     description:
-      "Submit a new or updated reusable SKILL.md, or turn one of your own skills on or off, or delete it. Never change a skill unless the user explicitly asked for that named skill. If the result is pending, a create stays inactive and an update leaves the current version unchanged." + APPLIES_OUTCOME,
+      "Submit a reusable SKILL.md, or enable, disable or delete a skill. Omit bot_id for yourself; a Chief may target a bot it manages. For a new skill, first search and inspect existing skills with skill_find unless the user explicitly requested custom creation. User-requested new bot setup authorizes creating a chosen skill for that bot. Never change a skill unless the user explicitly asked for that named skill. If the result is pending, a create stays inactive and an update leaves the current version unchanged." + APPLIES_OUTCOME,
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
+        bot_id: { type: "string", description: "Exact managed target bot from list_team_setup; omit for yourself." },
         action: {
           type: "string",
           enum: ["create", "update", "enable", "disable", "delete"],
@@ -901,7 +925,7 @@ const TOOL_DEFINITIONS = [
   return annotations ? { ...tool, annotations } : tool;
 });
 
-const SKILL_TOOL_NAMES = new Set(["skills_list", "skill_manage"]);
+const SKILL_TOOL_NAMES = new Set(["skills_list", "skill_manage", "skill_find", "skill_import"]);
 // Never advertised when sharing is off: a model shown a tool it cannot use spends turns finding out.
 export const SHARED_COMPUTER_TOOL_NAMES = new Set(["list_shared_computers", "shared_computer"]);
 const VOICE_TOOL_NAMES = new Set(["send_voice_note"]);

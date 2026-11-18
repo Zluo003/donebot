@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { UPSTREAM_SETTINGS } from "@/donebot/services";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { builtInBrowserEnabled, showToolCallsEnabled, skillAuthoringEnabled } from "@/lib/feature-flags";
 import { localeChoices } from "@/locales";
@@ -282,7 +283,7 @@ export function ColorUserBubblesRow({ simple = false }: { simple?: boolean }) {
 
 export function AdvancedModeRow({ simple = false }: { simple?: boolean }) {
   const enabled = useAdvancedMode();
-  if (SIMPLE_ONLY) return null;
+  if (!UPSTREAM_SETTINGS.advanced || SIMPLE_ONLY) return null;
   return (
     <SettingRow className={simple ? undefined : "rounded-2xl border border-accent-border/40 bg-raised-hover/40 py-4"} title={t("settings.advancedMode.title")}
       subtitle={t(simple ? "settings.simple.advancedMode" : "settings.advancedMode.subtitle")}>

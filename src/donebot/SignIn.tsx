@@ -159,7 +159,7 @@ export function DoneBotSignIn() {
   return <section data-donebot-sign-in className="db-auth" aria-label="DoneBot 账号">
     <aside className="db-auth-brand">
       <div className="db-auth-wordmark"><img src="/app-icon-192.png" alt="" width="42" height="42" /><span>DoneBot</span></div>
-      <div className="db-auth-intro"><img className="db-auth-mark" src={brandMark} alt="" width="160" height="134" /><h1>把事交出去。</h1><p>你定方向，多宝和团队推进工作。</p></div>
+      <div className="db-auth-intro"><span className="db-auth-mark" aria-hidden style={{ maskImage: `url("${brandMark}")` }} /><h1>把事交出去。</h1><p>你定方向，多宝和团队推进工作。</p></div>
       <a className="db-auth-site" href="https://donebot.cn" target="_blank" rel="noreferrer">donebot.cn<ArrowRight size={13} aria-hidden /></a>
     </aside>
     <div className="db-auth-form-area"><div className="db-auth-form">

@@ -67,12 +67,12 @@ describe("with the switch back", () => {
     expect((await fresh()).readAdvancedMode()).toBe(false);
   });
 
-  it("defaults an existing install to Advanced so an update hides nothing", async () => {
+  it("defaults an existing install without a saved mode to Simple", async () => {
     local.setItem("omb-skin", "lagoon");
     const { readAdvancedMode, settleAdvancedModeDefault, ADVANCED_MODE_KEY } = await fresh();
-    expect(readAdvancedMode()).toBe(true);
+    expect(readAdvancedMode()).toBe(false);
     settleAdvancedModeDefault();
-    expect(local.getItem(ADVANCED_MODE_KEY)).toBe("1");
+    expect(local.getItem(ADVANCED_MODE_KEY)).toBe("0");
   });
 
   it("keeps an explicit choice over the existing-install default", async () => {

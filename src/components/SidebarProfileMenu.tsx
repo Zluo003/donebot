@@ -1,4 +1,4 @@
-import { UPSTREAM_SERVICES } from "@/donebot/services";
+import { UPSTREAM_SERVICES, UPSTREAM_SETTINGS } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import {
   Archive,
@@ -509,12 +509,13 @@ export function profileMenuItems({
     icon: <Gauge size={18} />,
     onSelect: onUsage,
   } : null;
-  const support: SidebarMenuItem = { key: "support", label: t("sidebar.menu.support"), icon: <LifeBuoy size={18} />, submenu: help, onSelect: () => {} };
+  const visiblePhone = UPSTREAM_SETTINGS.profilePhone ? phone : [];
+  const support: SidebarMenuItem | null = UPSTREAM_SETTINGS.profileSupport ? { key: "support", label: t("sidebar.menu.support"), icon: <LifeBuoy size={18} />, submenu: help, onSelect: () => {} } : null;
   const settings: SidebarMenuItem = { key: "settings", label: t("sidebar.menu.settings"), icon: <SettingsIcon size={18} />, onSelect: onSettings };
   const accountItem: SidebarMenuItem | null = account ? { key: "account", label: account, icon: <CircleUserRound size={18} />, onSelect: onAccount } : null;
   const present = (...items: Array<SidebarMenuItem | null | false>) => items.filter((item): item is SidebarMenuItem => Boolean(item));
   if (!simple) {
-    const rest = [...present(usageItem), ...phone, support, settings, ...present(update), ...(accountItem ? [{ ...accountItem, separatorBefore: true }] : []), ...accounts.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item))];
+    const rest = [...present(usageItem), ...visiblePhone, ...present(support), settings, ...present(update), ...(accountItem ? [{ ...accountItem, separatorBefore: true }] : []), ...accounts.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item))];
     return [...move, ...rest.map((item, index) => (move.length && index === 0 ? { ...item, separatorBefore: true } : item))];
   }
   const raised: SidebarMenuItem | null = update && updateTop ? {
@@ -527,10 +528,9 @@ export function profileMenuItems({
   const groups = [
     move,
     present(raised),
-    // Places you go first, then the app's own settings, then getting the phone app and help.
     simple.tools,
-    [...present(usageItem), settings],
-    [...phone, { ...support, submenu: raised ? help : [...help, ...present(update)] }],
+    [...present(usageItem), settings, ...present(!support && !raised && update)],
+    [...visiblePhone, ...present(support && { ...support, submenu: raised ? help : [...help, ...present(update)] })],
     [...simple.places, ...present(accountItem)],
     accounts,
   ].filter((group) => group.length > 0);

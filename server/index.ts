@@ -11,7 +11,7 @@ import { rm as removeDirectory } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { finishStartedResponse } from "./donebot/http-failure.ts";
 import { ToolResults, TOOL_RESULT_MAX_CHARS } from "./tool-results.ts";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { authorizeExternalRuntime, externalRuntimeIsActive, type ExternalRuntimeGrant } from "./external-runtime.ts";
 import { z } from "zod";
 import { selectReplay, replayToolCalls, DEFAULT_REBUILD_BYTES, MAX_SUMMARY_BYTES } from "./context-rebuild.ts";
@@ -392,6 +392,9 @@ import {
   undoSkillWrite,
 } from "./skills.ts";
 import { fetchSkillFromSource } from "./skill-fetch.ts";
+import { discoverSkills } from "./skill-discovery.ts";
+import { fetchLocalSkill } from "./skill-import-local.ts";
+import { skillImportSummary } from "./skill-folder.ts";
 import { ensureTaskWorkspaceWithSkills, harnessSkillLinks } from "./skill-task-links.ts"; import { changedWords, createLendingLifts, handedInSince } from "./host/lending-lifts.ts"; import { deviceWord } from "./lent-computers.ts";
 import { parseSkillManageReferences, previousSkillVersion, skillCardCopy, skillRequestReferences } from "./skill-request-card.ts";
 import { skillReferencesSha256 } from "./skill-storage.ts";
@@ -7917,6 +7920,7 @@ async function beginTurn(
           ...(skillAuthoring ? ["skillAuthoring"] : []),
         ],
         skills,
+        { chief: chiefLevel(bot) },
       );
       if (phoneOffered) integrations.phone = phoneIntegration(bot.id, threadId, dispatchClaimId);
       if (bot.composio !== false && composio.configured(cfg) && instance.adapter.capabilities.composioMcp === true) {
@@ -9445,9 +9449,16 @@ function undoSkillCard(botId: string, threadId: string, messageId: string): Undo
     return { claimed: true, state: "invalid", error: "Only a change that applied on its own can be undone here.", status: 409 };
   }
   if (request.botId !== botId || request.threadId !== threadId) return { claimed: true, state: "invalid", error: "this skill request belongs to a different bot", status: 403 };
+  const targetId = request.targetBotId ?? botId;
+  if (request.targetBotId) {
+    const from = store.bot(botId);
+    if (!from) return { claimed: true, state: "invalid", status: 403, error: "the requesting bot is unavailable" };
+    const target = skillTarget(from, targetId);
+    if ("error" in target) return { claimed: true, state: "invalid", status: 403, error: target.error };
+  }
   const action = request.action; if (isSkillSwitchAction(action)) return skillSwitch.undo(botId, threadId, message, { ...request, action });
   if (request.shared) return skillsHost.undoReceipt(botId, threadId, message, { ...request, action, shared: request.shared });
-  const undone = undoSkillWrite(botId, { stagedId: request.stagedId, name: request.name, action,
+  const undone = undoSkillWrite(targetId, { stagedId: request.stagedId, name: request.name, action,
     ...(request.previous ? { previous: { skillMd: request.previous.preview, source: request.previous.source, references: request.previous.references ?? [] } } : {}),
   });
   if ("stale" in undone) return { claimed: true, state: "invalid", error: UNDO_STALE, status: 409, stale: true };
@@ -9828,6 +9839,7 @@ async function runClaimedGroupMemberTurn(
       latestUser?.text ?? "",
       skillAuthoring ? ["skillAuthoring"] : [],
       skills,
+      { chief: chiefLevel(bot) },
     ),
   );
   if (phoneOffered) integrations.phone = phoneIntegration(bot.id, threadId, internalGeneration);
@@ -11203,6 +11215,15 @@ function proposalPersistence(botId: string, threadId: string, opensCard = true) 
     : { ok: true as const };
 }
 
+function skillTarget(from: BotRecord, requested: unknown): BotRecord | { error: string } {
+  if (requested !== undefined && (typeof requested !== "string" || !requested.trim())) return { error: "bot_id must name an exact bot" };
+  const id = typeof requested === "string" ? requested.trim() : from.id;
+  const target = store.bot(id);
+  if (!target || target.hidden) return { error: "that bot is unavailable" };
+  const problem = id === from.id ? null : chiefPeerTargetRule("skills")(from.id, id);
+  return problem ? { error: problem } : target;
+}
+
 function skillProposalPersistence(botId: string, threadId: string, opensCard = true) {
   if (!store.bot(botId)) {
     return { ok: false as const, status: 403, error: "unknown sender" };
@@ -11228,15 +11249,16 @@ function stagedSkillListing(staged: ReturnType<typeof listStagedSkillWrites>[num
   return listing;
 }
 
-/** Ownership comes from the server-authored sender, never the card payload. */
+/** Only a matching server-authored receipt may bind a teammate's staged storage to this conversation. */
 function stagedSkillCleanupsForThread(threadId: string): Array<{ botId: string; stagedId: string }> {
   const directOwner = store.botByThread(threadId)?.id;
   const seen = new Set<string>();
   const cleanups: Array<{ botId: string; stagedId: string }> = [];
   for (const message of store.messagesFor(threadId)) {
     const request = message.card?.skillRequest;
-    const botId = message.from?.botId ?? directOwner;
-    if (!request || !botId) continue;
+    const requester = message.from?.botId ?? directOwner;
+    if (!request || !requester || request.botId !== requester || request.threadId !== threadId) continue;
+    const botId = request.targetBotId ?? requester;
     const key = `${botId}:${request.stagedId}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -11254,19 +11276,22 @@ function applyOwnStagedSkill(
   threadId: string,
   staged: Exclude<ReturnType<typeof stageSkillWrite>, { error: string }>,
   direct: DirectApply,
+  target: BotRecord = from,
 ): ReturnType<typeof applySkillWriteWithReceipt> & { shared?: string; shareError?: string } {
-  const previous = previousSkillVersion(from.id, staged);
-  const applied = applySkillWriteWithReceipt(from.id, staged, () => {
-    const receipt = appendSkillRequestCard({ botId: from.id, threadId, staged, applied: true, previous });
+  const previous = previousSkillVersion(target.id, staged);
+  const applied = applySkillWriteWithReceipt(target.id, staged, () => {
+    const receipt = appendSkillRequestCard({ botId: from.id, threadId, staged, applied: true, previous, ...(target.id !== from.id ? { targetBotId: target.id, targetBotName: target.name } : {}) });
     appendDecision(DATA_DIR, { threadId, requestId: receipt.requestId, botId: from.id, botName: from.name,
       tool: "stage_skill", summary: receipt.summary, decision: "auto-approved", source: direct });
   });
-  if ("error" in applied) rejectStagedSkillWrite(from.id, staged.id);
-  return "error" in applied ? applied : skillsHost.afterOwnApply(from.id, threadId, staged, applied);
+  if ("error" in applied) rejectStagedSkillWrite(target.id, staged.id);
+  return "error" in applied || target.id !== from.id ? applied : skillsHost.afterOwnApply(from.id, threadId, staged, applied);
 }
 
 function appendSkillRequestCard(args: {
   botId: string;
+  targetBotId?: string;
+  targetBotName?: string;
   threadId: string;
   applied?: boolean;
   previous?: SkillRequestCardData["previous"];
@@ -11288,6 +11313,7 @@ function appendSkillRequestCard(args: {
     version: 1,
     requestId,
     botId: args.botId,
+    ...(args.targetBotId ? { targetBotId: args.targetBotId, targetBotName: args.targetBotName } : {}),
     threadId: args.threadId,
     stagedId: args.staged.id,
     action: args.staged.action,
@@ -11309,7 +11335,7 @@ function appendSkillRequestCard(args: {
     from: from ? { botId: from.id, name: from.name, color: from.color } : undefined,
     card: {
       title: copy.title,
-      subtitle: copy.subtitle,
+      subtitle: `${args.targetBotId ? `Target bot: ${args.targetBotName} (${args.targetBotId})\n\n` : ""}${copy.subtitle}`,
       options: args.applied ? [] : [args.staged.action === "create" ? "Enable" : "Update", "Deny"],
       ...(args.applied ? { answered: "allow", autoApplied: true, title: `Skill "${args.staged.name}" ${args.staged.action === "create" ? "enabled" : "updated"}` } : {}),
       requestId,
@@ -11323,7 +11349,7 @@ function appendSkillRequestCard(args: {
   };
 }
 
-const skillSwitch = createSkillSwitchHost({ store, dataDir: DATA_DIR, persistence: skillProposalPersistence, listBotSkills, readBotSkillFile, noteSkillChange: (botId, threadId) => skillReview.noteSkillChange(botId, threadId) });
+const skillSwitch = createSkillSwitchHost({ store, dataDir: DATA_DIR, persistence: skillProposalPersistence, listBotSkills, readBotSkillFile, noteSkillChange: (botId, threadId) => skillReview.noteSkillChange(botId, threadId), targetProblem: (fromId, targetId) => chiefPeerTargetRule("skills")(fromId, targetId) });
 function resolveSkillRequest(args: {
   botId: string;
   botName?: string;
@@ -11344,9 +11370,16 @@ function resolveSkillRequest(args: {
   if (request.botId !== args.botId) {
     return { claimed: true, status: 403, error: "this skill request belongs to a different bot" };
   }
+  const targetId = request.targetBotId ?? args.botId;
+  if (args.behavior === "allow" && request.targetBotId) {
+    const from = store.bot(args.botId);
+    if (!from) return { claimed: true, status: 403, error: "the requesting bot is unavailable" };
+    const target = skillTarget(from, targetId);
+    if ("error" in target) return { claimed: true, status: 403, error: target.error };
+  }
   if (isSkillSwitchAction(request.action)) return skillSwitch.resolve(args, message.id, card, { ...request, action: request.action });
   if (card.answered || card.dismissed) {
-    const cleanup = rejectStagedSkillWrite(args.botId, request.stagedId);
+    const cleanup = rejectStagedSkillWrite(targetId, request.stagedId);
     if ("applied" in cleanup && cleanup.applied && card.answered !== "allow") {
       store.patchMessage(args.threadId, message.id, {
         card: { ...card, answered: "allow", dismissed: false, held: undefined },
@@ -11356,7 +11389,7 @@ function resolveSkillRequest(args: {
     return { claimed: true, outcome: card.answered === "allow" ? "allowed-once" : "rejected", alreadySettled: true };
   }
   if (args.behavior !== "allow") {
-    const rejected = rejectStagedSkillWrite(args.botId, request.stagedId);
+    const rejected = rejectStagedSkillWrite(targetId, request.stagedId);
     if ("error" in rejected && rejected.error !== "no such staged skill") {
       return { claimed: true, status: 409, error: rejected.error };
     }
@@ -11409,9 +11442,9 @@ function resolveSkillRequest(args: {
   if (previewSha256 !== request.sha256 || skillReferencesSha256(request.references ?? []) !== request.referencesSha256) {
     return { claimed: true, status: 422, error: "the skill preview changed after review — deny and recreate it" };
   }
-  const staged = getStagedSkillWrite(args.botId, request.stagedId);
+  const staged = getStagedSkillWrite(targetId, request.stagedId);
   if (!staged) {
-    const replayed = applyStagedSkillWrite(args.botId, request.stagedId, {
+    const replayed = applyStagedSkillWrite(targetId, request.stagedId, {
       expectedSha256: request.sha256,
       expectedReferencesSha256: request.referencesSha256 ?? null,
     });
@@ -11455,7 +11488,7 @@ function resolveSkillRequest(args: {
   ) {
     return { claimed: true, status: 422, error: "the staged skill no longer matches this approval card" };
   }
-  const applied = applyStagedSkillWrite(args.botId, request.stagedId, {
+  const applied = applyStagedSkillWrite(targetId, request.stagedId, {
     expectedSha256: request.sha256,
     expectedReferencesSha256: request.referencesSha256 ?? null,
     onApplied: () => {
@@ -13664,6 +13697,50 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           task: store.taskByThread(from.id, threadId)?.title,
         });
       }
+      if (method === "POST" && (path === "/api/internal/skills/find" || path === "/api/internal/skills/import")) {
+        if (!skillAuthoringEnabled(cfg) || !internalCapability.skillAuthoring) return json(res, 403, { error: "skill authoring is not enabled for this turn" });
+        const from = internalSender;
+        const threadId = internalCapability.threadId;
+        if (!connectorThread(from.id, threadId)) return json(res, 403, { error: "source conversation does not belong to sender" });
+        const body = await readInternalBody();
+        const target = skillTarget(from, body.bot_id);
+        if ("error" in target) return json(res, 403, target);
+        if (path.endsWith("/find")) {
+          if (typeof body.query !== "string" || !body.query.trim() || body.query.length > 300 || (body.online !== undefined && typeof body.online !== "boolean")) return json(res, 400, { error: "query must contain 1–300 characters and online must be a boolean" });
+          const result = await discoverSkills(body.query.trim(), listBotSkills(target), body.online !== false);
+          requireActiveInternalCapability();
+          const current = skillTarget(internalSender, target.id);
+          return "error" in current ? json(res, 403, current) : json(res, 200, { botId: target.id, botName: target.name, ...result });
+        }
+        if (typeof body.source !== "string" || !body.source.trim() || body.source.length > 2000 || (body.preview !== undefined && typeof body.preview !== "boolean")) return json(res, 400, { error: "source must be a skill URL or local path, and preview must be a boolean" });
+        const source = body.source.trim();
+        const roots = messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR);
+        const attached = store.messagesFor(threadId).flatMap((message) => message.attachments?.map((file) => file.path) ?? []);
+        const fetched = isAbsolute(source) ? fetchLocalSkill(source, roots, attached) : await fetchSkillFromSource(source);
+        requireActiveInternalCapability();
+        const current = skillTarget(internalSender, target.id);
+        if ("error" in current) return json(res, 403, current);
+        if ("error" in fetched) return json(res, 422, fetched);
+        const summaries = fetched.skills.map((skill) => {
+          const text = skill.files.find((file) => file.path === "SKILL.md")?.content.toString("utf8") ?? "";
+          const parsed = parseSkillMd(text);
+          return { source: skill.source, ...(skill.github ? { github: skill.github } : {}),
+            error: "error" in parsed ? parsed.error : undefined,
+            description: "error" in parsed ? undefined : parsed.description, skill_md: text,
+            ...skillImportSummary("error" in parsed ? "invalid" : parsed.name, skill.files, skill.skipped) };
+        });
+        if (body.preview !== false) return json(res, 200, { botId: target.id, botName: target.name, preview: true, skills: summaries });
+        if (fetched.skills.length !== 1) return json(res, 422, { error: "Select one specific skill folder or skills.sh skill URL before installing.", skills: summaries });
+        const skill = fetched.skills[0]!;
+        const name = summaries[0]!.name;
+        if (summaries[0]!.error) return json(res, 422, { error: summaries[0]!.error });
+        if (name && listBotSkills(current).some((entry) => entry.name === name && entry.source.startsWith("builtin:"))) return json(res, 409, { error: "This skill is built into the Chief and cannot be replaced." });
+        const installed = installSkill(current.id, skill.source, skill.files, skill.github);
+        if ("error" in installed) return json(res, 422, installed);
+        return json(res, 201, { botId: current.id, botName: current.name, installed, enabled: false,
+          imported: skillImportSummary(installed.name, skill.files, skill.skipped),
+          summary: `Imported ${installed.name} into ${current.name}, disabled. Enable it with skill_manage using this same bot_id.` });
+      }
       if (method === "GET" && path === "/api/internal/skills") {
         if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
         if (!internalCapability.skillAuthoring) return json(res, 403, { error: store.groupByThread(internalCapability.threadId) ? roomSkillsRefusal(Boolean(internalCapability.roomHandoffId)) : "skill authoring is not enabled for this turn" });
@@ -13672,9 +13749,18 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (!connectorThread(from.id, fromThreadId)) {
           return json(res, 403, { error: "source conversation does not belong to sender" });
         }
+        const target = skillTarget(from, url.searchParams.get("bot_id") ?? undefined);
+        if ("error" in target) return json(res, 403, target);
+        const skillName = url.searchParams.get("skillName");
+        if (url.searchParams.has("reference") && !skillName) return json(res, 400, { error: "skillName is required to read a bundled reference" });
+        if (skillName) {
+          const text = readBotSkillFile(target, skillName, url.searchParams.get("reference") ?? undefined);
+          return text === null ? json(res, 404, { error: "no such skill" }) : json(res, 200, { botId: target.id, botName: target.name, name: skillName, text });
+        }
         return json(res, 200, {
-          skills: skillsHost.harnessListing(from.id, listBotSkills(from)),
-          staged: listStagedSkillWrites(from.id).map(stagedSkillListing),
+          botId: target.id, botName: target.name,
+          skills: skillsHost.harnessListing(target.id, listBotSkills(target)),
+          staged: listStagedSkillWrites(target.id).map(stagedSkillListing),
         });
       }
       if (method === "POST" && path === "/api/internal/skills/stage") {
@@ -13686,8 +13772,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (!connectorThread(from.id, fromThreadId)) {
           return json(res, 403, { error: "source conversation does not belong to sender" });
         }
+        const target = skillTarget(from, body.bot_id);
+        if ("error" in target) return json(res, 403, target);
         const direct = appliesDirectly(from.id, fromThreadId);
-        if (isSkillSwitchAction(body.action)) { const staged = skillSwitch.stage(from, fromThreadId, body.action, body, direct); return json(res, staged.status, staged.body); }
+        if (isSkillSwitchAction(body.action)) { const staged = skillSwitch.stage(from, fromThreadId, body.action, body, direct, target); return json(res, staged.status, staged.body); }
         const persistence = skillProposalPersistence(from.id, fromThreadId, !direct);
         if (!persistence.ok) return json(res, persistence.status, { error: persistence.error });
         const action = body.action === "create" || body.action === "update" ? body.action : "";
@@ -13704,8 +13792,11 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         }
         const references = parseSkillManageReferences(body.references);
         if ("error" in references) return json(res, 400, references);
-        if (action === "update" && skillsHost.editable(from.id, targetName)) return references.length ? json(res, 400, { error: "A skill shared through the team library cannot keep reference files yet; put that guidance in SKILL.md." }) : json(res, ...skillsHost.harnessUpdate(from, fromThreadId, targetName, skillMd, body.gist, body.base_revision, direct));
-        const staged = stageSkillWrite(from.id, {
+        if (target.id !== from.id && action === "update" && skillsHost.editable(target.id, targetName)) return json(res, 422, { error: "Ask the skill's author to update the shared team skill, or create a separately named tailored skill for this bot." });
+        if (action === "update" && skillsHost.editable(target.id, targetName)) return references.length ? json(res, 400, { error: "A skill shared through the team library cannot keep reference files yet; put that guidance in SKILL.md." }) : json(res, ...skillsHost.harnessUpdate(from, fromThreadId, targetName, skillMd, body.gist, body.base_revision, direct));
+        const parsedSkill = parseSkillMd(skillMd);
+        if (!("error" in parsedSkill) && listBotSkills(target).some((entry) => entry.name === parsedSkill.name && entry.source.startsWith("builtin:"))) return json(res, 409, { error: "This skill is built into the Chief; create a separately named tailored skill instead." });
+        const staged = stageSkillWrite(target.id, {
           action,
           targetName: targetName || undefined,
           files: [{ path: "SKILL.md", content: skillMd }, ...references],
@@ -13714,16 +13805,16 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         });
         if ("error" in staged) return json(res, 422, { error: staged.error });
         if (direct) {
-          const applied = applyOwnStagedSkill(from, fromThreadId, staged, direct);
+          const applied = applyOwnStagedSkill(from, fromThreadId, staged, direct, target);
           if ("error" in applied) return json(res, 422, { state: "failed", error: applied.error });
           return json(res, 201, { state: "applied", stagedId: staged.id, name: staged.name, action: staged.action,
             gist: staged.gist, warnings: staged.warnings, ...applied, summary: `Skill ${staged.name} ${staged.action === "create" ? "enabled" : "updated"}.` });
         }
         let card: ReturnType<typeof appendSkillRequestCard>;
         try {
-          card = appendSkillRequestCard({ botId: from.id, threadId: fromThreadId, staged });
+          card = appendSkillRequestCard({ botId: from.id, threadId: fromThreadId, staged, ...(target.id !== from.id ? { targetBotId: target.id, targetBotName: target.name } : {}) });
         } catch (error) {
-          rejectStagedSkillWrite(from.id, staged.id);
+          rejectStagedSkillWrite(target.id, staged.id);
           throw error;
         }
         appendDecision(DATA_DIR, {

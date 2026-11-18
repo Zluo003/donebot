@@ -39,6 +39,7 @@ const memoryStorage = {
 
 beforeEach(() => {
   storage.clear();
+  storage.set("omb-analytics-opt-out", "0");
   ph.captured = [];
   vi.stubGlobal("localStorage", memoryStorage);
 });
@@ -238,7 +239,8 @@ describe("the daily usage snapshot", () => {
   });
 
   it("sends once per page load when storage throws, through the page's own memory", async () => {
-    const { snapshot } = await freshModules();
+    const { analytics, snapshot } = await freshModules();
+    analytics.setAnalyticsEnabled(true);
     vi.stubGlobal("localStorage", { getItem: () => { throw new Error("denied"); }, setItem: () => { throw new Error("denied"); } });
     expect(await snapshot.sendDailySnapshot(hostileState(), hostileSources(), DAY)).toBe(true);
     expect(await snapshot.sendDailySnapshot(hostileState(), hostileSources(), DAY + 1_000)).toBe(false);

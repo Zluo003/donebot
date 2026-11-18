@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
 
-import { hasPriorRun } from "./prior-run";
 import { SIMPLE_ONLY } from "./simple-only";
 
 export const ADVANCED_MODE_KEY = "omb-advanced-mode";
@@ -24,7 +23,7 @@ export function readAdvancedMode(): boolean {
     const stored = store?.getItem(ADVANCED_MODE_KEY);
     if (stored === "1") return true;
     if (stored === "0") return false;
-    return hasPriorRun(store);
+    return false;
   } catch {
     return false;
   }

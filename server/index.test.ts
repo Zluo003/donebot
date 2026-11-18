@@ -1258,6 +1258,8 @@ beforeAll(async () => {
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
       USERPROFILE: home,
+      NODE_ENV: "test",
+      DONEBOT_UPSTREAM_FIXTURE: "1",
       DONEBOT_PORT: String(PORT),
       DONEBOT_WEBHOOK_PORT: String(WEBHOOK_PORT),
       DONEBOT_EXTRA_PATH: fakeDockerDir,

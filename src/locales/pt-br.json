@@ -9240,6 +9240,7 @@
   "native.menu.forgetNamed": "Esquecer “{name}”",
   "native.menu.forgetServer": "Esquecer servidor",
   "native.menu.addCloud": "Adicionar um Cloud…",
+  "native.donebotCloud.name": "DoneBot Cloud",
   "native.menu.orgSignIn": "Entrar com a conta da sua organização…",
   "native.menu.connect": "Conectar a um servidor…",
   "native.menu.newLocal": "Novo espaço de trabalho neste computador…",

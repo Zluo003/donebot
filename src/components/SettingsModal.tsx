@@ -1,5 +1,5 @@
 import { DoneBotMobileAccess } from "../donebot/MobileAccess";
-import { UPSTREAM_SERVICES, doneBotKeyVisible } from "@/donebot/services";
+import { UPSTREAM_SERVICES, UPSTREAM_SETTINGS, doneBotKeyVisible, doneBotSettingsSectionVisible } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import { Archive, Cloud, Gauge, CloudDownload, Coins, Download, FlaskConical, KeyRound, LockKeyhole, Monitor, Palette, ScrollText, Search, Settings, Sparkles, TabletSmartphone, Terminal, User, Users, X, Building2, Zap, BookOpen, ImagePlus } from "lucide-react";
 import { useStore, type AppSettingsSection } from "@/state/store";
@@ -73,6 +73,8 @@ import { Select } from "./Select";
 import { SavedStepsRow } from "./SavedStepsRow";
 import { BrowserProfilesRow, ColorUserBubblesRow, AdvancedModeRow, ExperimentalFeaturesRow, LanguageRow, NewBotEffortRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, FollowUpRow, SendKeyRow, ShowThreadsRow, ToolCallsRow, UniversalPinsRow, UpdatesRow } from "./AppSettingsRows";
 import { DoneBotAccountSettings } from "@/donebot/Account";
+import { DoneBotPayments } from "@/donebot/Payments";
+import { isDoneBotCloudBrowser } from "@/donebot/services";
 import { SIMPLE_ADVANCED_ONLY, SIMPLE_MORE_LIMITS, SimpleAiPage, SimpleBillingPage, SimpleComputerPage, SimpleGeneralPage, SimpleLooksPage, SimpleMorePage, SimpleUpdatesPage, type Disclose, type SimpleDisclosureId } from "./SettingsSimplePages";
 
 // labelKey, not a label: t() reads the active pack when called, so a label resolved at module scope would freeze the
@@ -108,6 +110,7 @@ export const SECTIONS: Array<{
   { id: "cloudAccount", group: "account", labelKey: "settings.section.cloudAccount", icon: Cloud, keywords: ["cloud", "my cloud", "account", "personal", "sign in", "pro", "subscription", "billing", "sync", "send", "this computer", "bots", "logins", "1password"] },
   { id: "organization", group: "account", labelKey: "settings.section.organization", icon: Building2, keywords: ["company", "organization", "organisation", "sign in", "enroll", "managed", "models", "disconnect"] },
   { id: "usage", group: "account", labelKey: "settings.section.usage", icon: Coins, keywords: ["tokens", "cost", "billing", "plan", "quota", "remaining", "weekly", "5-hour", "model", "used"] },
+  { id: "purchase", group: "account", labelKey: "settings.section.purchase", icon: Coins, keywords: ["购买", "算力", "充值", "支付", "支付宝", "微信", "purchase", "credits", "recharge", "payment", "alipay", "wechat"] },
   { id: "backups", group: "account", labelKey: "settings.section.backups", icon: Archive, keywords: ["export", "import", "restore", "full backup", "password", "recovery"] },
   { id: "import", group: "account", labelKey: "settings.section.import", icon: Download, keywords: ["import", "grok", "grok bot", "move", "cursor", "claude code", "codex", "gemini", "skills", "mcp", "tools", "bring"] },
   { id: "people", group: "account", labelKey: "settings.section.people", icon: Users, keywords: ["people", "users", "invite", "sign in", "members", "admins", "access"] },
@@ -132,6 +135,7 @@ export const SIMPLE_PAGES: SimpleSettingsPage[] = [
   { id: "ai", labelKey: "settings.group.ai", icon: Sparkles, sections: ["engines", "connections"], keywords: ["new bots", "defaults", "effort"] },
   { id: "computer", labelKey: "settings.simple.page.computer", icon: Monitor, sections: ["companion", "desktopWorkspaces", "computer", "logins"] },
   { id: "billing", labelKey: "settings.simple.page.billing", icon: Gauge, sections: ["usage", "cloudAccount"], keywords: ["billing", "included", "allowance", "cloud hours", "voice"] },
+  { id: "purchase", labelKey: "settings.section.purchase", icon: Coins, sections: ["purchase"] },
   { id: "updates", labelKey: "settings.simple.page.updates", icon: CloudDownload, sections: ["updates"],
     keywords: ["update", "version", "release", "product updates", "newsletter", "email updates", "welcome", "tour", "diagnostics", "logs", "support"] },
 ];
@@ -147,7 +151,7 @@ export const SIMPLE_FOLDED: Partial<Record<AppSettingsSection, SimpleDisclosureI
 
 export function simpleSettingsPages(available: ReadonlySet<AppSettingsSection>, open: AppSettingsSection): SimpleSettingsPage[] {
   const pages = SIMPLE_PAGES
-    .map((page) => ({ ...page, sections: page.sections.filter((id) => available.has(id)) }))
+    .map((page) => ({ ...page, sections: page.sections.filter((id) => available.has(id) && doneBotSettingsSectionVisible(id)) }))
     .filter((page) => page.sections.length > 0);
   const hidden = SIMPLE_HIDDEN_SECTIONS.includes(open) && available.has(open) ? SECTIONS.find((entry) => entry.id === open) : undefined;
   if (hidden) pages.push({ id: hidden.id, labelKey: hidden.labelKey, icon: hidden.icon, sections: [hidden.id] });
@@ -174,13 +178,14 @@ function simplePageMatches(page: SimpleSettingsPage, query: string): boolean {
 }
 
 export function sectionMatches(section: (typeof SECTIONS)[number], query: string): boolean {
+  if (!doneBotSettingsSectionVisible(section.id)) return false;
   if (!query) return true;
   if (section.id === "connections" && KEY_CATALOG.some((entry) => doneBotKeyVisible(entry.id) && keyMatches(entry, query))) return true;
   return [t(section.labelKey), ...section.keywords].some((part) => part.toLowerCase().includes(query));
 }
 
 export function keySearchResults(query: string): KeyEntry[] {
-  return query ? KEY_CATALOG.filter((entry) => doneBotKeyVisible(entry.id) && keyMatches(entry, query)).slice(0, 8) : [];
+  return UPSTREAM_SETTINGS.apiKeys && query ? KEY_CATALOG.filter((entry) => doneBotKeyVisible(entry.id) && keyMatches(entry, query)).slice(0, 8) : [];
 }
 
 export const openKeyResult = (entry: KeyEntry) => entry.uses ? openKeySettings(entry.uses, entry.id) : openKeySettings(entry.id);
@@ -194,11 +199,11 @@ function SettingsDialog() {
   const { state, dispatch } = useStore();
   const advanced = useAdvancedMode();
   const remoteActive = window.ogb?.remoteClient?.active === true;
-  const requested = !UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection) ? "general" : state.appSettingsSection;
+  const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) ? "general" : state.appSettingsSection;
   const section: AppSettingsSection =
     advanced && requested === "remote" && window.ogb?.environments
       ? "desktopWorkspaces"
-      : (remoteActive && !["appearance", "desktopWorkspaces"].includes(requested)) || requested === "remote"
+      : (UPSTREAM_SETTINGS.computers && remoteActive && !["appearance", "desktopWorkspaces"].includes(requested)) || requested === "remote"
       ? "companion"
       : advanced && requested === "updates" ? "general" : requested;
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -213,7 +218,9 @@ function SettingsDialog() {
   const sectionsHere = SECTIONS.map((entry) => entry.id === "companion"
     ? { ...entry, labelKey: thisComputer ? "settings.section.phoneDevices" as const : "settings.section.thisServer" as const }
     : entry);
-  const baseSections = sectionsHere.filter((entry) => !remoteActive || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
+  const baseSections = sectionsHere.filter((entry) => doneBotSettingsSectionVisible(entry.id))
+    .filter((entry) => entry.id !== "purchase" || (state.config?.donebot?.enabled === true && !isDoneBotCloudBrowser() && ownerOrAdmin !== false))
+    .filter((entry) => !remoteActive || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
     .filter((entry) => entry.id !== "desktopWorkspaces" || Boolean(window.ogb?.environments))
     .filter((entry) => entry.id !== "organization" || (UPSTREAM_SERVICES.cloud && Boolean(window.ogb?.organization)))
     .filter((entry) => entry.id !== "cloudAccount" || (UPSTREAM_SERVICES.cloud && Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true))))
@@ -254,7 +261,7 @@ function SettingsDialog() {
   const setSubPage = (view: "looks" | "more" | null, at: AppSettingsSection = requested) => setOpenSubPage(view && { view, for: at });
   useEffect(() => { setOpenSubPage((current) => current?.for === requested ? current : null); }, [requested]);
   const [reveal, setReveal] = useState<string | null>(null);
-  const advancedMatches = advanced || SIMPLE_ONLY || !q ? [] : SIMPLE_ADVANCED_ONLY.filter((key) => t(key).toLowerCase().includes(q));
+  const advancedMatches = !UPSTREAM_SETTINGS.advanced || advanced || SIMPLE_ONLY || !q ? [] : SIMPLE_ADVANCED_ONLY.filter((key) => t(key).toLowerCase().includes(q));
   const moreSections = availableSections.filter((entry) => SIMPLE_HIDDEN_SECTIONS.includes(entry.id));
   const keyResults = remoteActive || !availableSections.some((entry) => entry.id === "connections") ? [] : keySearchResults(q);
   const keyResultButtons = (className: string) => keyResults.map((entry) => (
@@ -346,6 +353,7 @@ function SettingsDialog() {
 
   const renderSection = (id: AppSettingsSection) => {
     switch (id) {
+      case "purchase": return <DoneBotPayments key={state.config?.donebot?.user?.id} />;
       case "desktopWorkspaces":
         return <><ConnectedWorkspacesSettings />{remoteAccess.client}</>;
       case "organization":
@@ -392,9 +400,9 @@ function SettingsDialog() {
             <AttachmentStorageSettings />
             <PinnedPanelsSettings />
 
-            {!remoteActive && <ReplayTourRow />}
+            {UPSTREAM_SETTINGS.welcomeTour && !remoteActive && <ReplayTourRow />}
             <UpdatesRow />
-            <DiagnosticsRow />
+            {UPSTREAM_SETTINGS.diagnostics && <DiagnosticsRow />}
           </>
         );
       case "appearance":
@@ -467,6 +475,7 @@ function SettingsDialog() {
       case "ai": return <SimpleAiPage has={has} disclose={disclose} connections={renderSection("connections")} engines={state.config?.donebot?.enabled ? <DoneBotAccountSettings /> : undefined} />;
       case "computer": return <SimpleComputerPage has={has} remoteAccess={remoteAccess} servers={<ConnectedWorkspacesSettings />} disclose={disclose} />;
       case "billing": return <SimpleBillingPage has={has} disclose={disclose} cloudAccount={renderSection("cloudAccount")} />;
+      case "purchase": return renderSection("purchase");
       case "updates": return <SimpleUpdatesPage remoteActive={remoteActive} />;
       default:
         return <>
@@ -503,7 +512,7 @@ function SettingsDialog() {
     const subOpen = currentPage?.id === "general" ? subPage : null;
     const resultClass = "flex min-h-8 shrink-0 cursor-pointer items-center rounded-lg px-[9px] py-1.5 text-left text-[13px] leading-[18px] text-ink transition-colors hover:bg-ink/[0.06] motion-reduce:transition-none";
     const goTo = (id: AppSettingsSection) => { setSubPage(null); openSection(id); };
-    const moreMatches = !q ? [] : [
+    const moreMatches = !UPSTREAM_SETTINGS.more || !q ? [] : [
       ...moreSections.filter((entry) => sectionMatches(entry, q)).map((entry) => ({ key: entry.id, labelKey: entry.labelKey, open: () => goTo(entry.id) })),
       ...(simpleAvailable.has("general") ? SIMPLE_MORE_LIMITS : []).filter((key) => t(key).toLowerCase().includes(q))
         .map((key) => ({ key, labelKey: key, open: () => { openMore(); setReveal("limits"); } })),

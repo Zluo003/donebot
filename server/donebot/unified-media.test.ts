@@ -6,7 +6,8 @@ import { FAKE_DONEBOT_CATALOG } from "../testing/fake-donebot-gateway.ts";
 import { UNIFIED_MEDIA_PROTOCOL } from "./unified-media.ts";
 
 const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
-for (const id of ["muse-video", "seedance-2-5-flash"]) catalog.models.push({ id, display_name: id, media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
+const seedanceModels = ["seedance-2-0", "seedance-2-0-fast", "seedance-2-0-mini", "seedance-2-5", "seedance-2-5-flash"];
+for (const id of ["muse-video", ...seedanceModels]) if (!catalog.models.some(model => model.id === id)) catalog.models.push({ id, display_name: id, media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
 const local = doneBotClientMediaCatalog(catalog)!;
 const video = { protocol: UNIFIED_MEDIA_PROTOCOL, mode: "text", prompt: "Waves", duration: 6, resolution: "720p", aspect_ratio: "16:9" };
 const ref = (type = "image", role = "reference") => ({ type, role, url: "https://assets.invalid/reference" });
@@ -29,6 +30,25 @@ describe("client registered unified media", () => {
     expect(validate("seedance-2-5", { ...video, mode: "reference", references: [ref()] })).toMatchObject({ mode: "reference" });
     expect(() => validate("seedance-2-5", { ...video, aspect_ratio: "adaptive", mode: "first_last_frame", references: [ref("image", "first_frame"), ref("image", "last_frame")] })).not.toThrow();
     expect(() => validate("seedance-2-5", { ...video, aspect_ratio: "adaptive", mode: "first_last_frame", references: [ref("image", "last_frame")] })).toThrow("roles");
+  });
+  it.each(seedanceModels)("preserves reference and explicit frame modes for %s", id => {
+    for (const references of [[ref()], [ref(), ref()], [ref("video")]]) {
+      expect(validate(id, { ...video, mode: "reference", output_format: "mp4", references })).toMatchObject({ mode: "reference", references, output_format: "mp4" });
+    }
+    for (const [mode, references] of [["first_frame", [ref("image", "first_frame")]], ["first_last_frame", [ref("image", "first_frame"), ref("image", "last_frame")]]] as const) {
+      expect(validate(id, { ...video, mode, references, aspect_ratio: "adaptive" })).toMatchObject({ mode, references });
+      expect(() => validate(id, { ...video, mode, references })).toThrow("adaptive");
+    }
+    const parameters = mediaModelSchema(local.models.find(model => model.id === id)!).parameters as any;
+    expect(parameters.properties.mode.description).toContain("image count never selects a frame mode");
+    expect(parameters.properties.mode.description).toContain("图生视频/image-to-video/i2v");
+    expect(parameters.properties.mode.description).toContain("首尾帧/first and last frames");
+    for (const patch of [{ mode: "reference" }, { mode: "text", references: [ref()] }, { mode: "first_frame", references: [ref()] },
+      { mode: "first_last_frame", references: [ref("image", "last_frame")] }, { output_format: "webm" }]) {
+      expect(() => validate(id, { ...video, ...patch })).toThrow();
+    }
+    if (id.startsWith("seedance-2-0")) expect(() => validate(id, { ...video, output_format: "mov" })).toThrow();
+    else expect(validate(id, { ...video, output_format: "mov" })).toMatchObject({ output_format: "mov" });
   });
   it("rejects unsupported controls and modes without dropping references or reducing resolution", () => {
     for (const patch of [{ resolution: "1080p" }, { mode: "extend", references: [ref("video")] }, { options: { generate_audio: false } }, { content: [] }]) {

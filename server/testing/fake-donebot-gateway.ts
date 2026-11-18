@@ -51,7 +51,7 @@ const read = async (request: IncomingMessage): Promise<Row> => {
   if (request.headers["content-type"]?.startsWith("multipart/form-data")) {
     const form = await new Request("http://127.0.0.1/fixture-upload", { method: "POST", headers: { "content-type": request.headers["content-type"] }, body: Uint8Array.from(Buffer.concat(chunks)) }).formData();
     const file = form.get("file");
-    return file instanceof File ? { name: file.name, mime: file.type, bytes: file.size } : {};
+    return file instanceof File ? { name: file.name, mime: file.type, bytes: file.size, sha256: createHash("sha256").update(new Uint8Array(await file.arrayBuffer())).digest("hex") } : {};
   }
   return size ? row(JSON.parse(Buffer.concat(chunks).toString("utf8"))) : {};
 };

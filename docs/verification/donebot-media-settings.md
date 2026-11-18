@@ -5,6 +5,7 @@
 
 ```sh
 pnpm exec vitest run server/donebot/media-settings.e2e.test.ts server/donebot/media-providers.e2e.test.ts server/donebot-media-selection.e2e.test.ts --maxWorkers=1
+pnpm exec vitest run server/donebot/seedance-modes.e2e.test.ts --maxWorkers=1
 pnpm exec vitest run server/donebot/unified-media.test.ts server/donebot/media-fallback.test.ts server/donebot/media-approval.test.ts server/donebot/media-confirmation.test.ts server/donebot/media-preferences.test.ts server/donebot/muse-capabilities.test.ts server/donebot/media-guidance.test.ts server/donebot/media-routes.test.ts src/donebot/MediaSettings.dom.test.ts --maxWorkers=1
 pnpm typecheck
 ```
@@ -33,6 +34,14 @@ Flash→Seedance 2.5 两种首备组合，模拟首选明确失败后只派发�
 确认恢复专项从临时 SQLite 读取已有工作，在第一次后台轮询之前允许回答原确认卡；
 同时检查拒绝、停止等待、账号退出、撤销工具选择及已授权免确认后的明确拒绝。
 
+Seedance 模式专项在一个隔离真实服务中创建独立会话，覆盖 2.0、2.0 Fast、2.0 Mini、
+2.5 和 2.5 Flash 各六种场景：文生、单图参考、双图参考、明确图生、明确首帧、
+明确首尾帧，共 30 个场景。检查模式指导到达 LLM、统一请求的 `mode`／角色／MP4
+完整保留、每场景只提交一次、轮询下载后视频附件回到原会话；参考 WebP 上传
+核对原始文件名、MIME、字节数和 SHA-256，并检查重复内容复用上传。
+证据位于 `.omb-scratch/verify-evidence/seedance-modes/result.json`。
+LLM 输出是脚本化参数，这证明工具和传输接线，不证明真实模型必定理解用户意图。
+
 2026-11-15 扩展检查发现 `scripts/testing/index-route-ratchet.test.ts` 在改动前的
 `97e3eae` 已不通过：`path === "/` 有 85 处，基线为 84；本轮改动前后均为 85。
 本轮设置路由位于独立模块，未增加入口文件的路径判断或放宽该校验。
@@ -55,3 +64,11 @@ Flash→Seedance 2.5 两种首备组合，模拟首选明确失败后只派发�
 - `pnpm typecheck` 通过。
 - 网关 service／handler 专项命令通过，包含普通 Key 图片创建→统一结果→越权拒绝、普通 Key 视频创建→查询→下载等待→越权拒绝、持久任务协议标记恢复与图层元数据。
 - 本记录不表示生产网关或已安装桌面已更新，不证明真实供应商接受了请求。
+
+## 2026-11-19 Seedance 提交回归记录
+
+- 先用 Flash＋双图参考＋`output_format=mp4` 重现网关 `DONEBOT_MEDIA_INVALID`；目录校验遗漏输出格式白名单和枚举，在转发上游前拒绝了合法请求。修复后同一回归通过。
+- 客户端 10 个测试文件、149 项通过，包括 Seedance 模式专项的 30 个隔离会话场景、图片／第三方媒体接线和首选／备用确认流程；`pnpm typecheck` 与改动 TypeScript 文件的 oxlint 检查通过。
+- 网关 service、handler、middleware、routes 四个包的专项通过，命令为适配指南的最少回归；覆盖五个 Seedance 型号、公开 ID／自定义别名、格式、参考角色、非法参数、幂等、任务恢复、归属和结算。
+- WebP 上传的文件名、MIME、字节数及 SHA-256 与原始合成素材一致；没有新增转码。
+- 全部使用脚本化 LLM 和假上游，不提交真实收费任务。这是本地接线验收，不表示生产已经部署，也不证明真实模型的语义遵循或供应商生成结果。

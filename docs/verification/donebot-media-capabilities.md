@@ -34,6 +34,25 @@ TTS 本轮不调整。
 本地检查原生字段、组合、数量、声明格式和字节数。真实解码格式和输入像素由上游
 检查。输入参考图单独计费；拆分按实际返回图层计费，不能按 max_images 保证产量。
 
+## Seedance 全系列模式选择
+
+以下规则适用于已登记的 2.0、2.0 Fast、2.0 Mini、2.5 和 2.5 Flash，
+同时写入首次 LLM 请求的工具说明与 `mode` 字段说明；不是由网关分析提示词：
+
+| 用户输入与明确要求 | `mode` | 素材角色 |
+| --- | --- | --- |
+| 没有参考素材 | `text` | 无 |
+| 有参考素材，包括一张图或两张图，没有指定帧模式 | `reference` | 全部 `reference`，保留顺序 |
+| 一张图，明确要求“图生视频 / image-to-video / i2v”或指定为首帧 | `first_frame` | `first_frame` |
+| 两张图，明确指定首尾帧 | `first_last_frame` | 按指定顺序使用 `first_frame`、`last_frame` |
+
+不能仅根据图片数量推断首帧或首尾帧。帧模式要求 `adaptive`，不能混合普通参考角色。
+编辑、延长仍要求用户明确指定且所选型号支持。
+
+保留所选模型支持的原始素材格式，不强制转 JPG。WebP 支持登记与其他文件限制
+继续生效；不支持的格式报错，不改扩展名伪装格式。隔离上传测试核对文件名、MIME
+和 SHA-256，确认 WebP 字节未被转换。
+
 ## Seedance 2.5 Flash（2026-11-18）
 
 公开 ID `seedance-2-5-flash`，NewToken 上游 `doubao-seedance-2-5-flash-261115`。按[方舟模型教程](https://www.volcengine.com/docs/82379/2420481)与[创建任务 API](https://www.volcengine.com/docs/82379/1520757)登记原生能力，按 [NewToken 文档](https://doc.newtoken.club/api-docs/seedance-official.html)约束可提交请求。

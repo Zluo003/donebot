@@ -58,7 +58,8 @@ LLM 图片／视频工具只填写一次 `parameters`，首选和备用来自设
 - 图片：`text`、`reference`、`edit`，仅登记支持拆层的型号开放 `layers`。
 - 视频：`text`、`reference`、`first_frame`、`first_last_frame`、`edit`、`extend`，逐型号开放。
 - 普通参考全部使用 `role=reference`；首帧／尾帧分别用 `first_frame`／`last_frame`，类型只能是 image，不能混用。编辑／延长需要视频参考。
-- Seedance 有参考默认 `reference`，单图不自动转首帧；仅用户明确要求才切模式。Muse 只有文生和图片参考，不接音视频参考、编辑或延长。
+- 所有 Seedance 有参考默认 `reference`，一张或两张图都不按数量自动转首帧／首尾帧；无素材使用 `text`。一张图且明确要求“图生视频 / image-to-video / i2v”或首帧，才用 `first_frame`；两张图且明确指定首尾帧，才用 `first_last_frame`。Muse 只有文生和图片参考，不接音视频参考、编辑或延长。
+- 素材保留模型支持的原始格式，包括 WebP；不强制转 JPG，不通过改文件名伪装格式。
 - Seedance 2.5 的自动时长编辑未开放；Flash 的编辑／延长未开放。不能因为协议有 edit 就宣称所有模型可编辑。
 - 视频工具要求整数时长、输出分辨率；发送前默认 6 秒、720p，Muse 比例默认 16:9，Seedance adaptive。字段必须在该型号登记范围内。
 - 图片使用 `prompt`、`size`、`resolution`、`count`、`output_format`、`references` 和 `options`。拆层 count 不是层数；透明背景、尺寸等继续复用专用校验。
@@ -97,7 +98,8 @@ LLM 图片／视频工具只填写一次 `parameters`，首选和备用来自设
 pnpm typecheck
 pnpm exec vitest run server/donebot/unified-media.test.ts \
   server/donebot/media-guidance.test.ts server/donebot/media-routes.test.ts \
-  server/donebot/media-fallback.test.ts server/donebot/media-settings.e2e.test.ts --maxWorkers=1
+  server/donebot/media-fallback.test.ts server/donebot/media-settings.e2e.test.ts \
+  server/donebot/seedance-modes.e2e.test.ts --maxWorkers=1
 ```
 
 必须证明真实工具 schema→隔离网关→异步轮询→原会话交付；至少覆盖跨供应商首备、

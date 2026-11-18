@@ -47,6 +47,7 @@ export interface SeedanceReferenceConstraints {
 
 export const SEEDANCE_25 = "doubao-seedance-2-5-260628";
 export const SEEDANCE_25_FLASH = "doubao-seedance-2-5-flash-261115";
+export const SEEDANCE_MODE_GUIDANCE = "Seedance mode selection: without reference material use text. With any supplied image/video/audio material use reference by default, including one image or two images; image count never selects a frame mode. Only an explicit request for 图生视频/image-to-video/i2v or 首帧/first frame selects first_frame with one image. Only an explicit request for 首尾帧/first and last frames selects first_last_frame with two images, ordered as the requested start and end. An ordinary request to make a video using an image is reference mode. Never infer first/last frames from two supplied images. Frame modes cannot mix with reference roles; use adaptive aspect_ratio. Explicit edit/extend requires a supported model and the user's request.";
 
 export function seedanceGatewayResolutions(native: NativeModel): string[] {
   return native.media!.resolutions!.filter(r => native.officialId !== SEEDANCE_25 || r !== "4k");
@@ -152,7 +153,8 @@ export function seedanceReferenceGuidance(native: NativeModel): string {
 export function seedanceParameterRules(native: NativeModel) {
   return { fields: SEEDANCE_FIELDS.filter(x => x !== "model" && (x !== "omni_reference_task_type" || native.officialId === SEEDANCE_25) && (x !== "output_format" || native.media?.formats?.includes("mov"))), required: ["content", "resolution"],
     references: "content:[{type:'text',text:'Animate 图片1'},{type:'image_url',image_url:{url:{local_path:'/allowed/reference.png'}},role:'reference_image'}]. Video/audio use video_url/audio_url and reference_video/reference_audio roles.",
-    rules: ["Default to 全能参考 (multimodal reference). Use reference_image/reference_video/reference_audio, even for one image. Switch to first_frame, first/last frames, edit or extend only when explicitly requested by the person. Do not infer first_frame from a single image or edit from a reference video.",
+    rules: [SEEDANCE_MODE_GUIDANCE,
+      "In the native request, reference mode uses reference_image/reference_video/reference_audio, even for one image. Do not infer edit from a reference video.",
       "DoneBot normalizes omitted image roles to reference_image. A text prompt and an explicitly available resolution are required. Without any reference, use text-to-video; never invent a reference file.",
       "DoneBot always sends generate_audio=true; audio cannot be disabled. Quote dialogue in the prompt when relevant. Do not use weak --parameter suffixes; send supported controls in the JSON body.",
       `Duration=${native.media!.duration!.min}..${native.media!.duration!.max} integer seconds, default 6. The DoneBot gateway does not accept automatic duration -1. Output format=${native.media!.formats!.join("/")} (default mp4); ratios=${SEEDANCE_RATIOS.join("/")}. Resolutions=${seedanceGatewayResolutions(native).join("/")}.`,

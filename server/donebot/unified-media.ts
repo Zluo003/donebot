@@ -1,6 +1,6 @@
 import type { DoneBotGatewayModel } from "../../shared/donebot.ts";
 import { nativeModel, modelCapabilities } from "./capabilities.ts";
-import { seedanceReferenceGuidance } from "./seedance-capabilities.ts";
+import { SEEDANCE_MODE_GUIDANCE, seedanceReferenceGuidance } from "./seedance-capabilities.ts";
 import { nativeMediaModelSchema } from "./media-model-schema.ts";
 import type { ValidateFunction } from "ajv";
 import { compileToolSchema } from "../mcp-schema-validator.ts";
@@ -37,12 +37,14 @@ export function unifiedMediaSchema(model: DoneBotGatewayModel) {
     ...(capabilities.client.operations.includes("first_frame") ? ["first_frame", "first_last_frame"] : []),
     ...legacy.operations.filter(x => x !== "generate")]
     : ["text", "reference", "edit", ...(native.media?.layerDecomposition ? ["layers"] : [])];
-  properties.mode = { type: "string", enum: modes, description: "Without references use text; with any references default to reference. Use first_frame, first_last_frame, edit, extend or layers only when explicitly requested." };
-  properties.references = { type: "array", maxItems: capabilities.client.referenceLimits.maxFiles, items: referenceSchema };
+  const modeGuidance = native.media?.referenceMedia ? SEEDANCE_MODE_GUIDANCE : "Without references use text; with any references default to reference. Use first_frame, first_last_frame, edit, extend or layers only when explicitly requested.";
+  properties.mode = { type: "string", enum: modes, description: modeGuidance };
+  properties.references = { type: "array", maxItems: capabilities.client.referenceLimits.maxFiles, items: referenceSchema,
+    description: "Preserve the user's reference order. Default every supplied material's role to reference, including one or two images. first_frame/last_frame roles require an explicit request for that frame mode." };
   properties.options = { type: "object", additionalProperties: false, properties: fields };
   const required = native.kind === "video" ? ["mode", "prompt", "duration", "resolution"] : ["mode"];
   const guidance = native.kind === "video"
-    ? `Use the unified prompt, mode, duration, resolution, aspect_ratio, output_format, references and options fields. Duration ${native.media!.duration!.min}..${native.media!.duration!.max} seconds, default 6. References use {type:'image'|'video'|'audio',role:'reference'|'first_frame'|'last_frame',url:{local_path:'/allowed/file'}}. A single image defaults to reference, never first_frame. ${native.media?.referenceMedia ? seedanceReferenceGuidance(native) : "Only image references are supported."}`
+    ? `Use the unified prompt, mode, duration, resolution, aspect_ratio, output_format, references and options fields. Duration ${native.media!.duration!.min}..${native.media!.duration!.max} seconds, default 6. References use {type:'image'|'video'|'audio',role:'reference'|'first_frame'|'last_frame',url:{local_path:'/allowed/file'}}. ${modeGuidance} ${native.media?.referenceMedia ? seedanceReferenceGuidance(native) : "Only image references are supported."}`
     : `Use unified mode, prompt, size, resolution, count, output_format, references and options. References use {type:'image',role:'reference',url:{local_path:'/allowed/image'}}. Use layers only for explicit layer decomposition; prompt may be omitted for layers. ${native.media?.referenceImage ? JSON.stringify(native.media.referenceImage) : ""}`;
   return { parameters: { type: "object", additionalProperties: false, properties, required }, guidance, operations: ["generate", ...legacy.operations.filter(x => x !== "generate")] };
 }

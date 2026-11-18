@@ -2,7 +2,7 @@ import type { DoneBotGatewayModel, DoneBotModelKind, DoneBotProtocol } from "../
 import { MAX_MEDIA_REFERENCE_BYTES, MAX_MEDIA_REFERENCE_FILES } from "./media-assets.ts";
 import { SEEDREAM55_SOURCE, seedream55, seedream55ParameterRules, SEEDREAM55_FIELDS, SEEDREAM55_RATIOS } from "./seedream-capabilities.ts";
 import { SUNO_FIELDS, SUNO_FIXED_PARAMETERS, SUNO_FORMATS, SUNO_LIMITS, SUNO_VARIETIES, sunoParameterRules, sunoV6 } from "./suno-capabilities.ts";
-import { seedance, seedanceParameterRules, SEEDANCE_FIELDS, SEEDANCE_RATIOS, type SeedanceReferenceConstraints } from "./seedance-capabilities.ts";
+import { seedance, seedanceGatewayResolutions, seedanceParameterRules, SEEDANCE_25, SEEDANCE_25_FLASH, SEEDANCE_FIELDS, SEEDANCE_RATIOS, type SeedanceReferenceConstraints } from "./seedance-capabilities.ts";
 import { museVideo, museParameterRules, validateMuseParameters } from "./muse-capabilities.ts";
 
 type Modality = "text" | "image" | "audio" | "video" | "pdf";
@@ -201,7 +201,8 @@ const MODELS: Readonly<Record<string, NativeModel>> = {
   "seedance-2-0": seedance("doubao-seedance-2-0-260128", ["480p", "720p", "1080p", "4k"]),
   "seedance-2-0-fast": seedance("doubao-seedance-2-0-fast-260128", ["480p", "720p"]),
   "seedance-2-0-mini": seedance("doubao-seedance-2-0-mini-260615", ["480p", "720p"]),
-  "seedance-2-5": seedance("doubao-seedance-2-5-260628", ["480p", "720p", "1080p"], true),
+  "seedance-2-5": seedance(SEEDANCE_25, ["480p", "720p", "1080p", "4k"]),
+  "seedance-2-5-flash": seedance(SEEDANCE_25_FLASH, ["480p", "720p"]),
   "seedream-5-5": seedream55,
   "seedream-5-0-flash": { officialId: "doubao-seedream-5-0-flash-260915", kind: "image", tools: false, input: ["text", "image"], output: ["image"], streaming: false,
     verifiedAt: "2026-11-07", sources: [`${VOLC}image-generation-api?lang=zh`, `${VOLC}seedream-5-0-pro?lang=zh`, `${VOLC}seedream-5-0-pro-editing-guide?lang=zh`],
@@ -252,6 +253,7 @@ export const registeredMediaAdapters: Readonly<Record<string, string>> = {
   "seedance-2-0-fast": "seedance.videos.v1",
   "seedance-2-0-mini": "seedance.videos.v1",
   "seedance-2-5": "seedance.videos.v1",
+  "seedance-2-5-flash": "seedance.videos.v1",
   suno: "apimart.music.v1",
   "gpt-4o-mini-tts": "apimart.speech.v1",
 };
@@ -305,7 +307,7 @@ function registeredModelCapabilities(model: DoneBotGatewayModel) {
   const matched = native && model.media_types.includes(native.kind) && (native.kind === "text" ? textModelProtocol(model, native) !== undefined : model.interfaces.includes(expectedMediaInterface[native.kind]!));
   const supported = Boolean(matched && (native?.kind === "text" ? true : typeof adapter === "string" && registeredMediaAdapters[model.id] === adapter));
   const clientInput = native?.input.filter(modality => native.kind === "text" ? modality === "text" || modality === "image" : native.kind !== "music" || modality === "text") ?? [];
-  const operations = native?.kind === "text" ? ["conversation", ...(model.capabilities?.tool_calling === true ? ["tool_calling"] : [])] : native?.kind === "music" ? ["generate", "custom_lyrics", "instrumental"] : native?.media?.operations.filter(x => !["mask_edit", "markup_edit"].includes(x) && !(model.id === "seedance-2-5" && x === "edit")) ?? [];
+  const operations = native?.kind === "text" ? ["conversation", ...(model.capabilities?.tool_calling === true ? ["tool_calling"] : [])] : native?.kind === "music" ? ["generate", "custom_lyrics", "instrumental"] : native?.media?.operations.filter(x => !["mask_edit", "markup_edit"].includes(x) && !(native.officialId === SEEDANCE_25 && x === "edit") && !(native.officialId === SEEDANCE_25_FLASH && (x === "edit" || x === "extend"))) ?? [];
   const fixedParameters: Record<string, unknown> | undefined = native?.kind === "music" ? SUNO_FIXED_PARAMETERS : adapter === "seedance.videos.v1" ? { generate_audio: true } : native?.media?.complexity ? { complexity: "high" } : undefined;
   const referenceBytes = native?.media?.referenceMedia ? native.media.referenceMedia.video.maxMegabytes * 1024 * 1024 : native?.media?.referenceImage?.maxBytes ?? MAX_MEDIA_REFERENCE_BYTES;
   return { model: model.id, native: native ?? null,
@@ -315,6 +317,7 @@ function registeredModelCapabilities(model: DoneBotGatewayModel) {
       imageEditEndpoint: native?.kind === "image" && adapter === "donebot.images.async.v1", videoEditAndExtend: supported && native?.kind === "video" && operations.includes("edit") && operations.includes("extend"),
       ...(native?.media?.operations.includes("markup_edit") ? { markupOverlay: false, annotatedReferenceEdits: supported } : {}),
       fixedParameters,
+      ...(native && adapter === "seedance.videos.v1" ? { outputResolutions: seedanceGatewayResolutions(native).filter(r => !strings(model.media_parameters?.resolutions)?.length || strings(model.media_parameters?.resolutions)!.includes(r)) } : {}),
       ...(native?.media?.complexity ? { svgOutput: false,
         outputFormats: ["png", "jpeg", "webp", "gif"].filter(format => !strings(model.media_parameters?.formats)?.length || strings(model.media_parameters?.formats)!.includes(format)),
         staticSizePolicy: { ...gptImage25Size } } : {}),
@@ -534,7 +537,7 @@ function validateSeedance(native: NativeModel, p: Record<string, unknown>): void
   const limits = native.media!.maxReferences!;
   if (images > limits.image || videos > limits.video || audios > limits.audio) fail("Seedance reference count exceeds this model's official limit.");
   if (audios && !images && !videos && !native.media!.audioOnlyReference) fail("This Seedance model requires a visual reference with audio.");
-  choice(p.resolution, native.media!.resolutions!, "resolution");
+  choice(p.resolution, seedanceGatewayResolutions(native), "resolution");
   requiredText(p.resolution, "resolution");
   choice(p.ratio, SEEDANCE_RATIOS, "ratio");
   const duration = native.media!.duration!;
@@ -543,9 +546,9 @@ function validateSeedance(native: NativeModel, p: Record<string, unknown>): void
   integer(p.priority, 0, 9, "priority");
   optionalText(p.safety_identifier, "safety_identifier", 64);
   if (typeof p.safety_identifier === "string" && !/^[ -~]*$/.test(p.safety_identifier)) fail("safety_identifier must be an ASCII identifier.");
-  if (p.output_format !== undefined && !native.media?.explicitTaskTypes) fail("output_format selection is only documented for Seedance 2.5; Seedance 2.0 outputs MP4.");
+  if (p.output_format !== undefined && !native.media?.formats?.includes("mov")) fail("output_format selection is only documented for Seedance 2.5; Seedance 2.0 outputs MP4.");
   choice(p.output_format, native.media?.formats ?? [], "output_format");
-  if (p.omni_reference_task_type !== undefined && !native.media?.explicitTaskTypes) fail("omni_reference_task_type is a Seedance 2.5 parameter.");
+  if (p.omni_reference_task_type !== undefined && native.officialId !== SEEDANCE_25) fail("NewToken only supports omni_reference_task_type on Seedance 2.5 standard.");
   choice(p.omni_reference_task_type, native.media?.explicitTaskTypes ?? [], "omni_reference_task_type");
   if (first + last && p.omni_reference_task_type !== undefined) fail("Frame mode cannot use omni_reference_task_type.");
   if (first + last && native.media!.audioOnlyReference && p.ratio !== "adaptive") fail("Seedance 2.5 frame mode requires ratio=adaptive.");
@@ -587,6 +590,7 @@ export function validateMediaParameters(model: DoneBotGatewayModel, parameters: 
   }
   if (operation === "edit" && native.kind === "image" && record(model.media_parameters?.protocol)?.adapter !== "donebot.images.async.v1") fail("This image adapter has no image edit endpoint.");
   if (operation === "extend" && native.kind !== "video") fail("Only video tasks can be extended.");
+  if (native.officialId === SEEDANCE_25_FLASH && operation !== "generate") fail("NewToken Flash does not expose explicit edit or extend tasks.");
   gatewayChoices(model, parameters);
   if (native.kind === "image" && native.media?.mask === true) validateGptImage(native, parameters, operation);
   else if (native.officialId === "seedream-5-5") validateSeedream55(parameters);

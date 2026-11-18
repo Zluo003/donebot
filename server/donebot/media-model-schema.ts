@@ -21,13 +21,14 @@ export function mediaModelSchema(model: DoneBotGatewayModel): { parameters: Reco
     const properties = parameters.properties as Record<string, unknown>;
     const duration = native.media!.duration!;
     properties.duration = { type: "integer", minimum: duration.min, maximum: duration.max, default: 6 };
-    properties.resolution = { type: "string", enum: native.media!.resolutions };
+    properties.resolution = { type: "string", enum: capabilities.client.outputResolutions };
     properties.output_format = { type: "string", enum: native.media!.formats };
-    if (model.id !== "seedance-2-5") { delete properties.omni_reference_task_type; delete properties.output_format; }
+    if (!native.media!.formats?.includes("mov")) delete properties.output_format;
+    if (model.id !== "seedance-2-5") delete properties.omni_reference_task_type;
     else properties.omni_reference_task_type = { type: "string", enum: ["auto", "reference", "extend"], description: "Default reference with any reference media; omit for text-only or explicit first/last frames. Extend only when explicitly requested." };
     parameters.required = ["content", "duration", "resolution"];
     const videoRules = rules?.rules.filter(rule => !rule.startsWith("Duration="));
-    return { parameters, guidance: `${model.display_name}: ${videoRules?.join(" ") ?? ""} Submit an explicit integer duration from ${duration.min} to ${duration.max} seconds; default 6. The gateway requires positive submitted duration; automatic -1 duration is unavailable. Seedance 2.5 edit requires native -1 duration, so that operation is unavailable through this gateway. Extend uses a reference video, adaptive ratio and final total output duration.`, operations };
+    return { parameters, guidance: `${model.display_name}: ${videoRules?.join(" ") ?? ""} Submit an explicit integer duration from ${duration.min} to ${duration.max} seconds; default 6. The gateway requires positive submitted duration; automatic -1 duration is unavailable.`, operations };
   }
   const gpt = capabilities.client.imageEditEndpoint;
   const properties: Record<string, unknown> = {

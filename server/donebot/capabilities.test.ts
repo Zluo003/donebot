@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DoneBotCatalog, DoneBotGatewayModel, DoneBotModelKind } from "../../shared/donebot.ts";
 import { doneBotMediaModel, doneBotProtocol, doneBotTextModels } from "./catalog.ts";
 import { modelCapabilities, nativeModel, validateMediaParameters } from "./capabilities.ts";
+import { mediaModelSchema } from "./media-model-schema.ts";
 
 const textModels = [
   ["claude-fable-5-1", "messages", "anthropic.messages"],
@@ -32,6 +33,7 @@ const mediaModels = [
   ["seedance-2-0-fast", "video", "openai.videos", "seedance.videos.v1"],
   ["seedance-2-0-mini", "video", "openai.videos", "seedance.videos.v1"],
   ["seedance-2-5", "video", "openai.videos", "seedance.videos.v1"],
+  ["seedance-2-5-flash", "video", "openai.videos", "seedance.videos.v1"],
   ["suno", "music", "openai.music", "apimart.music.v1"],
   ["gpt-4o-mini-tts", "audio", "openai.audio.speech", "apimart.speech.v1"],
 ] as const;
@@ -405,6 +407,29 @@ describe("DoneBot media parameters", () => {
     expect(() => validate(id, { content: [prompt], resolution: "720p", generate_audio: true })).not.toThrow();
     if (newer) expect(() => validate(id, { content: [prompt], resolution: "720p", output_format: "mp4", generate_audio: true })).not.toThrow();
     else for (const output_format of ["mp4", "mov"]) expect(() => validate(id, { content: [prompt], resolution: "720p", output_format })).toThrow("output_format");
+  });
+
+  it("separates Flash reference inputs, native outputs and NewToken submission limits", () => {
+    const entry = media("seedance-2-5-flash"), flash = doneBotMediaModel(catalog([entry]), entry.id, "video");
+    const schema = mediaModelSchema(entry);
+    expect(schema.operations).toEqual(["generate"]);
+    expect(schema.parameters.properties).toMatchObject({ resolution: { enum: ["480p", "720p"] }, output_format: { enum: ["mp4", "mov"] } });
+    expect(schema.parameters.properties).not.toHaveProperty("omni_reference_task_type");
+    expect(nativeModel(entry.id)!.media!.referenceMedia!.video.resolutions).toContain("4k");
+    expect(nativeModel(entry.id)!.media!.draft).toBeUndefined();
+    const audio = reference("audio", "reference_audio"), image = reference("image", "reference_image"), video = reference("video", "reference_video");
+    const p = { content: [prompt, audio], resolution: "720p", duration: 30, output_format: "mov" };
+    expect(flash.normalizeParameters!(p, "generate")).not.toHaveProperty("omni_reference_task_type");
+    expect(flash.normalizeParameters!({ content: [prompt, { ...image, role: undefined }] }, "generate")).toMatchObject({ content: [prompt, image] });
+    expect(() => flash.validate!(p, "generate")).not.toThrow();
+    const max = [prompt, ...Array(10).fill(image), ...Array(5).fill(video), ...Array(5).fill(audio)];
+    expect(() => flash.validate!({ ...p, content: max }, "generate")).not.toThrow();
+    for (const extra of [image, video, audio]) expect(() => flash.validate!({ ...p, content: [...max, extra] }, "generate")).toThrow();
+    for (const extra of [{ resolution: "1080p" }, { resolution: "4k" }, { duration: 31 }, { duration: -1 }, { draft: true }, { omni_reference_task_type: "reference" }]) expect(() => flash.validate!({ ...p, ...extra }, "generate")).toThrow();
+    expect(() => flash.validate!(p, "extend")).toThrow();
+    const standard = media("seedance-2-5");
+    expect(nativeModel(standard.id)!.media!.resolutions).toContain("4k");
+    expect(() => validate(standard.id, { ...p, resolution: "4k" })).toThrow("resolution");
   });
 
   it("validates frame modes, model-specific resolution and reference modality/count limits", () => {

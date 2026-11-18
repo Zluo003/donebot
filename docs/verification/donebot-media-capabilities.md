@@ -34,7 +34,14 @@ TTS 本轮不调整。
 本地检查原生字段、组合、数量、声明格式和字节数。真实解码格式和输入像素由上游
 检查。输入参考图单独计费；拆分按实际返回图层计费，不能按 max_images 保证产量。
 
-## Seedance 2.5
+## Seedance 2.5 Flash（2026-11-18）
+
+公开 ID `seedance-2-5-flash`，NewToken 上游 `doubao-seedance-2-5-flash-261115`。按[方舟模型教程](https://www.volcengine.com/docs/82379/2420481)与[创建任务 API](https://www.volcengine.com/docs/82379/1520757)登记原生能力，按 [NewToken 文档](https://doc.newtoken.club/api-docs/seedance-official.html)约束可提交请求。
+
+- 输入文本、图片、视频、音频。全模态参考最多 10 张图、5 段视频、5 段音频；视频和音频分别合计最多 30 秒。参考视频可达 4K，允许只有音频作为参考，NewToken 请求仍需非空文本。
+- 成片 480p 或 720p（默认），4–30 秒，MP4 或 MOV。Flash 不支持 Draft。方舟原生的自动时长、编辑、延长不作为当前网关 Flash 参数开放。单图默认是 `reference_image`，不用标准版的 `omni_reference_task_type`。
+
+## Seedance 2.5 标准版
 
 有参考素材时默认全能参考（omni_reference_task_type=reference），图片、视频、音频
 分别使用 reference_image/reference_video/reference_audio；单张图片也不自动设为首帧。
@@ -53,7 +60,7 @@ TTS 本轮不调整。
 | 人像 | 普通上传不等于授权。直接真人人脸图/视频需遵守官方已授权人像、预置虚拟人像或可信原始生成产物规则；可信原始产物有同上游账号、30 天等来源限制 |
 
 文档中的 MB 在客户端字节校验中按 1024² 字节处理。模型登记保留原文单位及开闭边界。
-输出 480p/720p/1080p，默认 720p；24 FPS、双声道；MP4（默认）或 MOV；
+原生输出 480p/720p/1080p/4K，当前 NewToken 只列到 1080p，客户端拒绝提交 4K，不自动降档。默认 720p；24 FPS、双声道；MP4（默认）或 MOV；
 MOV 为 H.264/yuv444p/PCM。输出宽高比为 16:9/9:16/1:1/21:9/4:3/3:4/adaptive，
 默认 adaptive；时长 4–30 整数秒，默认 6 秒，实际结果可能不同。原生自动时长 -1
 不提交网关。客户端固定 generate_audio=true。首尾帧仅 adaptive；extend 需要参考

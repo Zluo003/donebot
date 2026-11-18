@@ -19,7 +19,7 @@ describe("DoneBot configured local media contracts", () => {
     const video = guided.tools.find(tool => tool.function.name === "agents_generate_video")!.function;
     expect(video.parameters).toMatchObject({ required: ["parameters", "model", "fallback_model", "fallback_parameters"], properties: {
       model: { enum: ["muse-video"] }, operation: { enum: ["generate"] }, fallback_model: { enum: ["seedance-2-5"] },
-      parameters: { properties: { prompt: { type: "string" }, resolution: { enum: ["720p"] }, duration: { minimum: 4, maximum: 30 } } },
+      parameters: { properties: { prompt: { type: "string" }, resolution: { enum: ["720p"] }, duration: { minimum: 4, maximum: 10 } } },
       fallback_parameters: { anyOf: [{ properties: { content: { type: "array" }, duration: { minimum: 4, maximum: 30 } } }, { type: "null" }] },
     } });
     expect(video.description).toContain("at most once");

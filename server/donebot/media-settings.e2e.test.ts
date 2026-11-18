@@ -5,9 +5,10 @@ import { launchVerificationServer, runControlOmb } from "../../scripts/control-o
 import { FAKE_DONEBOT_CATALOG, startFakeDoneBotGateway } from "../testing/fake-donebot-gateway.ts";
 import { hostTimeout } from "../testing/host-timeout.ts";
 
-it("saves enabled model defaults and delivers a video in the original conversation after Muse fails and its backup succeeds", async () => {
+it("saves enabled model defaults and delivers a Flash video in the original conversation after Muse fails", async () => {
   const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
   catalog.models.push({ id: "muse-video", display_name: "Muse", media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
+  catalog.models.push({ id: "seedance-2-5-flash", display_name: "Seedance 2.5 Flash", media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
   const gateway = await startFakeDoneBotGateway(catalog);
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, [], undefined, undefined, gateway.origin);
   const request = (method: string, path: string, body?: unknown) => fetch(fixture.info.url + path, { method,
@@ -23,7 +24,7 @@ it("saves enabled model defaults and delivers a video in the original conversati
     await api("POST", "/api/donebot/login", { email: "fixture@example.invalid", password: "synthetic-fixture-password" });
     const initial = await api("GET", "/api/donebot/media-settings");
     expect(initial.models).toContainEqual({ id: "muse-video", name: "Muse", kind: "video" });
-    const preferences = { image: { primary: "gpt-image-2.6-flare", fallback: "seedream-5-5" }, video: { primary: "muse-video", fallback: "seedance-2-5" } };
+    const preferences = { image: { primary: "gpt-image-2.6-flare", fallback: "seedream-5-5" }, video: { primary: "muse-video", fallback: "seedance-2-5-flash" } };
     expect((await request("PUT", "/api/donebot/media-settings", { accountId: "previous-account", preferences })).status).toBe(409);
     expect((await request("PUT", "/api/donebot/media-settings", { accountId: "fixture-user", preferences: { ...preferences, video: { primary: "not-enabled", fallback: "" } } })).status).toBe(400);
     const saved = await api("PUT", "/api/donebot/media-settings", { accountId: "fixture-user", preferences });
@@ -34,7 +35,7 @@ it("saves enabled model defaults and delivers a video in the original conversati
     await control("set-model", "--bot", bot.id, "--instance", "donebot", "--model", "deepseek-flash");
     const { task } = await api("POST", `/api/bots/${bot.id}/tasks`, { title: "Muse fallback", select: false });
     gateway.setMediaStatus("processing");
-    gateway.setPlan([{ name: "generate_video", arguments: { model: "muse-video", fallback_model: "seedance-2-5", parameters: { prompt: "Synthetic waves", duration: 6, resolution: "720p", aspect_ratio: "16:9" },
+    gateway.setPlan([{ name: "generate_video", arguments: { model: "muse-video", fallback_model: preferences.video.fallback, parameters: { prompt: "Synthetic waves", duration: 6, resolution: "720p", aspect_ratio: "16:9" },
       fallback_parameters: { content: [{ type: "text", text: "Synthetic waves" }], duration: 6, resolution: "720p", ratio: "16:9" }, fallback_operation: "generate" } }]);
     await control("send", "--bot", bot.id, "--task", task.threadId, "--text", "生成一段海浪视频，首选失败后使用备用模型。");
     await vi.waitFor(async () => expect((await api("GET", "/api/bots?messages=0")).bots.find((value: any) => value.id === bot.id)?.busy).toBe(false), { timeout: 15_000 });
@@ -43,7 +44,8 @@ it("saves enabled model defaults and delivers a video in the original conversati
     expect(posts()[0]!.body).toMatchObject({ model: "muse-video", prompt: "Synthetic waves", duration: 6, resolution: "720p" });
     gateway.setMediaStatus("failed");
     await vi.waitFor(() => expect(posts()).toHaveLength(2), { timeout: 20_000 });
-    expect(posts()[1]!.body).toMatchObject({ model: "seedance-2-5", duration: 6, generate_audio: true });
+    expect(posts()[1]!.body).toMatchObject({ model: "seedance-2-5-flash", duration: 6, generate_audio: true });
+    expect(posts()[1]!.body).not.toHaveProperty("omni_reference_task_type");
     expect(posts()[1]!.idempotencyKey).not.toBe(posts()[0]!.idempotencyKey);
     gateway.setMediaStatus("completed");
     let messages: any[] = [];
@@ -52,7 +54,7 @@ it("saves enabled model defaults and delivers a video in the original conversati
       expect(messages.some(message => message.attachments?.some((file: any) => file.mime === "video/mp4"))).toBe(true);
     }, { timeout: 20_000 });
     expect(messages.some(message => typeof message.text === "string" && message.text.includes("muse-video") && message.text.includes("备用"))).toBe(true);
-    expect(posts().map(entry => entry.body.model)).toEqual(["muse-video", "seedance-2-5"]);
+    expect(posts().map(entry => entry.body.model)).toEqual(["muse-video", "seedance-2-5-flash"]);
     const evidenceDir = join(process.cwd(), ".omb-scratch", "verify-evidence", "donebot-media-settings");
     await mkdir(evidenceDir, { recursive: true });
     await writeFile(join(evidenceDir, "result.json"), JSON.stringify({ fixture: fixture.info, preferences,

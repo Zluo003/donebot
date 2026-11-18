@@ -45,29 +45,41 @@ export interface SeedanceReferenceConstraints {
   };
 }
 
-export function seedance(officialId: string, resolutions: string[], newer = false): NativeModel {
+export const SEEDANCE_25 = "doubao-seedance-2-5-260628";
+export const SEEDANCE_25_FLASH = "doubao-seedance-2-5-flash-261115";
+
+export function seedanceGatewayResolutions(native: NativeModel): string[] {
+  return native.media!.resolutions!.filter(r => native.officialId !== SEEDANCE_25 || r !== "4k");
+}
+
+export function seedance(officialId: string, resolutions: string[]): NativeModel {
+  const flash = officialId === SEEDANCE_25_FLASH;
+  const newer = officialId === SEEDANCE_25 || flash;
+  const imageCount = flash ? 10 : newer ? 30 : 9;
+  const clipCount = flash ? 5 : newer ? 10 : 3;
   const maxDuration = newer ? 30 : 15;
   const visual = { edgePixels: { min: 300, max: 6000 }, widthHeightRatio: { min: 0.4, max: 2.5 } };
   return { officialId, kind: "video", tools: false, input: ["text", "image", "video", "audio"], output: ["video", "audio"], streaming: false,
-    verifiedAt: "2026-11-11", sources: [`${VOLC}seedance-${newer ? "2-5" : "2-0"}?lang=zh`, `${VOLC}create-video-generation-task-api?lang=zh`,
+    verifiedAt: newer ? "2026-11-18" : "2026-11-11", sources: [`${VOLC}seedance-${newer ? "2-5" : "2-0"}?lang=zh`, `${VOLC}create-video-generation-task-api?lang=zh`,
       `${VOLC}video-generation-tutorial?lang=zh`, `${VOLC}seedance-${newer ? "2-5" : "2-0"}-prompt-guide?lang=zh`, `${VOLC}seedance-portrait-asset-guide?lang=zh`],
     media: { operations: ["generate", "first_frame", "first_last_frame", "multimodal_reference", "edit", "extend"],
-      maxReferences: { image: newer ? 30 : 9, video: newer ? 10 : 3, audio: newer ? 10 : 3 }, resolutions, aspectRatios: SEEDANCE_RATIOS,
+      maxReferences: { image: imageCount, video: clipCount, audio: clipCount }, resolutions, aspectRatios: SEEDANCE_RATIOS,
       formats: newer ? ["mp4", "mov"] : ["mp4"], builtInTools: ["web_search"],
-      ...(newer ? { explicitTaskTypes: ["auto", "reference", "edit", "extend"],
+      ...(newer ? { explicitTaskTypes: ["auto", "reference", "edit", "extend"] } : {}),
+      ...(officialId === SEEDANCE_25 ? {
         draft: { previewResolution: "480p", finalResolution: "1080p", taskTtlDays: 14, ttlEffectiveAt: "2026-10-28T10:00:00+08:00", separatelyBilled: true,
           inheritedFields: ["content.text", "content.image_url", "content.video_url", "content.audio_url", "duration", "ratio", "seed", "generate_audio", "omni_reference_task_type"],
           overridableFields: ["return_last_frame", "output_format", "watermark", "service_tier", "execution_expires_after", "priority", "callback_url", "safety_identifier"] } } : {}),
       duration: { min: 4, max: maxDuration, automatic: true }, audioOnlyReference: newer, nativeAssetReferences: true,
       referenceMedia: {
-        maxTotalFiles: newer ? 50 : 15, requestBodyMaxMegabytes: 64,
+        maxTotalFiles: imageCount + 2 * clipCount, requestBodyMaxMegabytes: 64,
         image: { ...visual, formats: ["jpeg", "png", "webp", "bmp", "tiff", "gif", "heic", "heif"], maxMegabytes: 30, sizeLimitExclusive: true,
-          count: { reference: newer ? 30 : 9, firstFrame: 1, firstLastFrame: 2 } },
+          count: { reference: imageCount, firstFrame: 1, firstLastFrame: 2 } },
         video: { ...visual, formats: ["mp4", "mov"], resolutions: ["480p", "720p", "1080p", "4k"], videoCodecs: ["h264", "hevc"],
           audioCodecsByContainer: { mp4: ["aac", "mp3"], mov: newer ? ["aac", "mp3", "pcm"] : ["aac", "mp3"] },
-          maxMegabytes: 200, totalPixels: { min: 407_696, max: 8_295_044 }, fps: { min: 24, max: 60 }, maxCount: newer ? 10 : 3,
+          maxMegabytes: 200, totalPixels: { min: 407_696, max: 8_295_044 }, fps: { min: 24, max: 60 }, maxCount: clipCount,
           durationSeconds: { min: 2, max: maxDuration, totalMax: maxDuration, ...(newer ? { editMin: 4 } : {}) } },
-        audio: { formats: ["wav", "mp3"], maxMegabytes: 15, maxCount: newer ? 10 : 3,
+        audio: { formats: ["wav", "mp3"], maxMegabytes: 15, maxCount: clipCount,
           durationSeconds: { min: 2, max: maxDuration, totalMax: maxDuration }, requiresVisualReference: !newer },
         portrait: { directHumanFaceReferences: false, authorizedPortraitAssets: true,
           trustedGeneratedVideo: { sameUpstreamAccount: true, originalOnly: true, withinDays: 30, modelFamilies: ["seedance-2-0", "seedance-2-5"] },
@@ -76,7 +88,7 @@ export function seedance(officialId: string, resolutions: string[], newer = fals
       },
       videoOutput: { fps: 24, audioChannels: 2, defaultResolution: "720p", defaultRatio: "adaptive", defaultFormat: "mp4",
         ...(newer ? { defaultDuration: -1, movEncoding: "H.264 / yuv444p / PCM" } : {}),
-        highResolutionHevc10Bit: newer ? ["1080p"] : resolutions.includes("4k") ? ["4k"] : [] },
+        highResolutionHevc10Bit: resolutions.filter(r => r === "4k" || newer && r === "1080p") },
       prompt: { languages: ["zh", "en", "es", "id", "pt", "ja", ...(newer ? ["ms", "th", "ar", "vi", "ko"] : [])],
         recommendedMax: { chineseCharacters: 500, englishWords: 1000 },
         referenceAddressing: "Use per-modality content order: 图片1/视频1/音频1 (or @图片1/@视频1/@音频1). Specify each reference's subject, motion, style or sound role; filenames and asset IDs are not model reference names." },
@@ -107,7 +119,7 @@ export function normalizeSeedanceParameters(native: NativeModel, parameters: Rec
   const frames = parts.some(part => part?.role === "first_frame" || part?.role === "last_frame");
   const references = parts.some(part => ["image_url", "video_url", "audio_url"].includes(String(part?.type)));
   const p: Record<string, unknown> = { ...parameters, ...(content === undefined ? {} : { content }) };
-  if (native.media?.explicitTaskTypes) {
+  if (native.officialId === SEEDANCE_25) {
     if (operation !== "generate" && p.omni_reference_task_type !== undefined && p.omni_reference_task_type !== operation) {
       throw new Error("The video operation and omni_reference_task_type must match.");
     }
@@ -138,17 +150,17 @@ export function seedanceReferenceGuidance(native: NativeModel): string {
 }
 
 export function seedanceParameterRules(native: NativeModel) {
-  return { fields: SEEDANCE_FIELDS.filter(x => x !== "model" && (!["omni_reference_task_type", "output_format"].includes(x) || native.media?.explicitTaskTypes)), required: ["content", "resolution"],
+  return { fields: SEEDANCE_FIELDS.filter(x => x !== "model" && (x !== "omni_reference_task_type" || native.officialId === SEEDANCE_25) && (x !== "output_format" || native.media?.formats?.includes("mov"))), required: ["content", "resolution"],
     references: "content:[{type:'text',text:'Animate 图片1'},{type:'image_url',image_url:{url:{local_path:'/allowed/reference.png'}},role:'reference_image'}]. Video/audio use video_url/audio_url and reference_video/reference_audio roles.",
     rules: ["Default to 全能参考 (multimodal reference). Use reference_image/reference_video/reference_audio, even for one image. Switch to first_frame, first/last frames, edit or extend only when explicitly requested by the person. Do not infer first_frame from a single image or edit from a reference video.",
       "DoneBot normalizes omitted image roles to reference_image. A text prompt and an explicitly available resolution are required. Without any reference, use text-to-video; never invent a reference file.",
       "DoneBot always sends generate_audio=true; audio cannot be disabled. Quote dialogue in the prompt when relevant. Do not use weak --parameter suffixes; send supported controls in the JSON body.",
-      `Duration=${native.media!.duration!.min}..${native.media!.duration!.max} integer seconds, default 6. The DoneBot gateway does not accept automatic duration -1. Output format=${native.media!.formats!.join("/")} (default mp4); ratios=${SEEDANCE_RATIOS.join("/")}. Resolutions=${native.media!.resolutions!.join("/")}. Use the client's registered contract directly.`,
+      `Duration=${native.media!.duration!.min}..${native.media!.duration!.max} integer seconds, default 6. The DoneBot gateway does not accept automatic duration -1. Output format=${native.media!.formats!.join("/")} (default mp4); ratios=${SEEDANCE_RATIOS.join("/")}. Resolutions=${seedanceGatewayResolutions(native).join("/")}.`,
       "First/last frames cannot mix with multimodal references; last requires first.",
       seedanceReferenceGuidance(native),
       "Inspect reference metadata before submission. File-size/type and count/role checks are local; dimensions, codec, frame rate and individual/total durations remain provider-validated in this version. A gateway upload alone is not proof of conformance or portrait authorization.",
       "Use per-type content order in prompt: 图片1、视频1、音频1; explain what each should contribute. Native prompt-length recommendations are guidance, not hard input limits.",
-      ...(native.media?.explicitTaskTypes ? ["With references, default omni_reference_task_type=reference, not auto. Explicitly requested extend uses generate plus task type extend and a reference video; ratio=adaptive and duration is the positive final total length. Native edit requires automatic -1 duration, so DoneBot does not expose that operation. First/last frames also require adaptive ratio.",
+      ...(native.officialId === SEEDANCE_25_FLASH ? ["NewToken Flash accepts audio-only references. Use content roles without omni_reference_task_type. Frame mode requires adaptive ratio. Explicit edit, extend and draft workflows are not exposed."] : native.media?.explicitTaskTypes ? ["With references, default omni_reference_task_type=reference, not auto. Explicitly requested extend uses generate plus task type extend and a reference video; ratio=adaptive and duration is the positive final total length. Native edit requires automatic -1 duration, so DoneBot does not expose that operation. First/last frames also require adaptive ratio.",
         "Seedance 2.5 supports audio-only references. Input videos in edit tasks must each be 4..30 seconds; non-edit reference clips may be 2..30 seconds, summed <=30 seconds. Audio clips are separately summed <=30 seconds."]
         : ["Seedance 2.0 does not accept audio-only references: include an image/video reference. Video and audio durations are each 2..15 seconds per file, with separate sums <=15 seconds.",
           "For explicitly requested edit/extend, use reference_video and clear prompt instructions through generate. Seedance 2.0 outputs MP4; never send omni_reference_task_type or output_format, which are documented only for 2.5."])],

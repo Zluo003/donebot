@@ -1,5 +1,4 @@
 import { seedream55ParameterSchema } from "./seedream-capabilities.ts";
-import { seedance, seedanceReferenceGuidance } from "./seedance-capabilities.ts";
 import { sunoParameterRules, sunoParameterSchema } from "./suno-capabilities.ts";
 
 const localFile = { type: "object", additionalProperties: false, properties: { local_path: { type: "string" } }, required: ["local_path"] };
@@ -11,7 +10,7 @@ export const DONEBOT_MEDIA_PARAMETER_SCHEMAS: Record<string, Record<string, unkn
   video: {
     type: "object", additionalProperties: false,
     properties: {
-      content: { type: "array", minItems: 1, description: "Text prompt plus at most 50 reference files: 30 images, 10 videos, 10 audios. Native text is optional with references; this client requires a complete prompt.", items: { type: "object", additionalProperties: false, properties: {
+      content: { type: "array", minItems: 1, description: "A complete text prompt and optional model-specific reference files.", items: { type: "object", additionalProperties: false, properties: {
         type: { type: "string", enum: ["text", "image_url", "video_url", "audio_url"] }, text,
         image_url: { type: "object", additionalProperties: false, properties: { url: localFile }, required: ["url"] },
         video_url: { type: "object", additionalProperties: false, properties: { url: localFile }, required: ["url"] },
@@ -32,6 +31,5 @@ export const DONEBOT_MEDIA_PARAMETER_SCHEMAS: Record<string, Record<string, unkn
 };
 
 export const DONEBOT_MEDIA_PARAMETER_GUIDANCE: Record<string, string> = {
-  video: "Seedance 2.5: submit content containing the complete text prompt and native reference roles. With reference material, default to 全能参考 (multimodal reference): omni_reference_task_type=reference and reference_image/reference_video/reference_audio roles, even for one image. Without reference material, use text-to-video and omit omni_reference_task_type. Default 720p, adaptive ratio, automatic duration and generated audio. Switch to first/last frames, edit or extend only when explicitly requested. Do not combine first/last frames with reference media; last_frame requires first_frame. At most 30 reference images, 10 reference videos and 10 reference audios, 50 files total. Edit requires a reference video, ratio=adaptive, duration=-1; extend requires a reference video and ratio=adaptive. Duration 4..30 or -1. No 4K. No draft or web_search workflow is exposed. The client preserves existing references. " + seedanceReferenceGuidance(seedance("doubao-seedance-2-5-260628", ["480p", "720p", "1080p"], true)),
   music: sunoParameterRules.rules.join(" "),
 };

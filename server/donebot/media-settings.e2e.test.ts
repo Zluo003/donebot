@@ -5,7 +5,7 @@ import { launchVerificationServer, runControlOmb } from "../../scripts/control-o
 import { FAKE_DONEBOT_CATALOG, startFakeDoneBotGateway } from "../testing/fake-donebot-gateway.ts";
 import { hostTimeout } from "../testing/host-timeout.ts";
 
-it.each(["muse-video", "seedance-2-5-flash"])("delivers a video with one unified Gemini request, primary %s", async primary => {
+it.each([["muse-video", false], ["seedance-2-5-flash", true], ["seedance-2-5", false]] as const)("delivers a video with one unified Gemini request, primary %s, scoped %s", async (primary, scoped) => {
   const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
   catalog.models.push({ id: "muse-video", display_name: "Muse", media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
   catalog.models.push({ id: "seedance-2-5-flash", display_name: "Seedance 2.5 Flash", media_types: ["video"], interfaces: ["openai.videos"], platforms: [] });
@@ -25,14 +25,14 @@ it.each(["muse-video", "seedance-2-5-flash"])("delivers a video with one unified
     await api("POST", "/api/donebot/login", { email: "fixture@example.invalid", password: "synthetic-fixture-password" });
     const initial = await api("GET", "/api/donebot/media-settings");
     expect(initial.models).toContainEqual({ id: "muse-video", name: "Muse", kind: "video" });
-    const preferences = { image: { primary: "gpt-image-2.6-flare", fallback: "seedream-5-5" }, video: { primary, fallback: primary === "muse-video" ? "seedance-2-5-flash" : "seedance-2-5" } };
+    const preferences = { image: { primary: "gpt-image-2.6-flare", fallback: "seedream-5-5" }, video: { primary, fallback: primary === "seedance-2-5-flash" ? "seedance-2-5" : "seedance-2-5-flash" } };
     expect((await request("PUT", "/api/donebot/media-settings", { accountId: "previous-account", preferences })).status).toBe(409);
     expect((await request("PUT", "/api/donebot/media-settings", { accountId: "fixture-user", preferences: { ...preferences, video: { primary: "not-enabled", fallback: "" } } })).status).toBe(400);
     const saved = await api("PUT", "/api/donebot/media-settings", { accountId: "fixture-user", preferences });
     expect(saved.preferences).toEqual(preferences);
     expect((await api("GET", "/api/donebot/media-settings")).preferences).toEqual(preferences);
     const { bot } = await control("new-bot", "--name", "Muse fallback fixture");
-    await api("PATCH", `/api/bots/${bot.id}`, { approvalMode: "full", toolScope: { allow: ["mcp:agents:generate_video"] } });
+    await api("PATCH", `/api/bots/${bot.id}`, { approvalMode: "full", ...(scoped ? { toolScope: { allow: ["mcp:agents:generate_video"] } } : {}) });
     await control("set-model", "--bot", bot.id, "--instance", "donebot", "--model", "gemini-4-hydrogen");
     const { task } = await api("POST", `/api/bots/${bot.id}/tasks`, { title: "Muse fallback", select: false });
     gateway.setMediaStatus("processing");
@@ -41,6 +41,13 @@ it.each(["muse-video", "seedance-2-5-flash"])("delivers a video with one unified
     await vi.waitFor(async () => expect((await api("GET", "/api/bots?messages=0")).bots.find((value: any) => value.id === bot.id)?.busy).toBe(false), { timeout: 15_000 });
     const posts = () => gateway.requests.filter(entry => entry.method === "POST" && entry.path === "/v1/videos");
     await vi.waitFor(async () => expect(posts(), JSON.stringify((await api("GET", `/api/threads/${task.threadId}/messages?limit=100`)).messages)).toHaveLength(1), { timeout: 15_000 });
+    const llm = gateway.requests.find(entry => entry.path.startsWith("/v1beta/models/gemini-4-hydrogen:"))!;
+    const declarations = (llm.body.tools as { functionDeclarations: { name: string; parameters: Record<string, unknown> }[] }[])[0]!.functionDeclarations;
+    const generation = declarations.find(tool => tool.name === "agents_generate_video")!;
+    expect(generation).not.toHaveProperty("parametersJsonSchema");
+    expect(generation.parameters).toMatchObject({ required: ["parameters", "model"], properties: {
+      model: { enum: [primary] }, parameters: { required: ["mode", "prompt", "duration", "resolution"] },
+    } });
     expect(posts()[0]!.body).toMatchObject({ model: primary, protocol: "donebot.media.v1", mode: "text", prompt: "Synthetic waves", duration: 6, resolution: "720p" });
     gateway.setMediaStatus("failed");
     await vi.waitFor(() => expect(posts()).toHaveLength(2), { timeout: 20_000 });

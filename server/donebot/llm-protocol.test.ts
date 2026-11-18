@@ -75,6 +75,21 @@ describe("DoneBot native LLM transports", () => {
     expect(args.model).toBe("seedream-5-0-flash");
   });
 
+  it("advertises the complete tool contract under Gemini's gateway-compatible parameters field", () => {
+    const parameters = { type: "object", additionalProperties: false, properties: {
+      model: { type: "string", enum: ["muse-video"] },
+      parameters: { type: "object", additionalProperties: false, properties: {
+        mode: { type: "string", enum: ["text", "reference"] }, prompt: { type: "string" },
+        duration: { type: "integer", minimum: 4, maximum: 10 },
+        resolution: { type: "string", enum: ["720p"] },
+      }, required: ["mode", "prompt", "duration", "resolution"] },
+    }, required: ["model", "parameters"] };
+    const tools = [{ type: "function" as const, function: { name: "agents_generate_video", description: "Generate video", parameters } }];
+    const body = geminiRequest(input({ tools }));
+    expect(body.tools).toEqual([{ functionDeclarations: [{ name: "agents_generate_video", description: "Generate video", parameters }] }]);
+    expect(tools[0]!.function.parameters).toEqual(parameters);
+  });
+
   it("uses Responses for helpers and requests encrypted reasoning for stateless tool continuation", async () => {
     const output = [{ type: "reasoning", id: "reasoning-1", encrypted_content: "opaque-reasoning", summary: [] }, { type: "message", id: "msg-1", role: "assistant", phase: "final_answer", content: [{ type: "output_text", text: "Fixture result" }] }];
     const request = vi.fn(async (_path: string, _init: RequestInit) => sse([{ type: "response.completed", response: { output, usage: { input_tokens: 5, output_tokens: 8 } } }]));

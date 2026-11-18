@@ -1,5 +1,27 @@
 # DoneBot 统一网关验证
 
+## Gemini 媒体工具参数契约（2026-11-18）
+
+真实 Gemini Hydrogen 通道的同模型、同工具 schema 对照中，`parametersJsonSchema`
+声明返回了缺少顶层 `parameters` 的视频工具参数，原 MCP schema 与 advertised schema
+均拒绝；改用 `parameters` 后返回正确嵌套参数且两层校验通过。客户端仅调整网关
+Gemini 协议适配的声明字段，保留工具校验、统一媒体协议和实际失败提示。
+
+专项 5 文件 83 项回归和类型检查通过，包含真实隔离 DoneBot 服务与合成网关的
+Muse、Seedance 2.5、Seedance 2.5 Flash，以及有/无工具范围的请求与回会话附件链路。
+临时测试账号的真实 Haiku 5.5、GPT 6.1 Terra 图片/视频参数测试均通过；只读取
+LLM 工具参数，未执行真实媒体生成。
+
+真实 Gemini 4 Argon 加隔离媒体网关验证工具执行、唯一统一视频 POST 和原会话附件
+交付，真实媒体 POST 为零。后续 Hydrogen 图片/视频参数矩阵各遇一次 HTTP 502，
+不能将最初的 A/B 成功写成所有线路均成功。DeepSeek 未在真实目录下发，不能记作
+已完成真实测试。证据在 `.omb-scratch/verify-evidence/donebot-media-tool-contract-live/`。
+
+DeepSeek 缺项已定位为网关按上游映射名称判断模型身份的错误；本地网关修复按公开 ID
+登记能力与准入，不要求登记任意上游别名。`server/donebot.e2e.test.ts` 的
+`signs in to a loopback gateway` 案例另通过，隔离目录中 DeepSeek 可选且走原生 Chat
+Completions。此结果不证明网关已部署或真实视频供应商已经出片。
+
 ## Cloud 自动续费与付费期限（2026-11-17）
 
 取消自动续费只关闭下次到期扣款，Cloud 在已付费期限内保持可用；有效期内显示

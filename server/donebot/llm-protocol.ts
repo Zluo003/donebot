@@ -128,7 +128,7 @@ export function geminiRequest(input: CompletionTransportInput) {
   }
   const system = input.messages.filter((message) => message.role === "system" && typeof message.content === "string").map((message) => message.content).join("\n\n");
   return { contents, ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-    ...(input.tools.length ? { tools: [{ functionDeclarations: input.tools.map(({ function: fn }) => ({ name: fn.name, description: fn.description, parametersJsonSchema: fn.parameters })) }] } : {}) };
+    ...(input.tools.length ? { tools: [{ functionDeclarations: input.tools.map(({ function: fn }) => ({ name: fn.name, description: fn.description, parameters: fn.parameters })) }] } : {}) };
 }
 
 function doneBotResponsesRequest(input: CompletionTransportInput): Row {

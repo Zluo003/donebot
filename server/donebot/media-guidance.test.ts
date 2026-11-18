@@ -101,7 +101,7 @@ describe("DoneBot configured local media contracts", () => {
     }, () => protocol)(guideDoneBotMedia(input(), FAKE_DONEBOT_CATALOG));
     const tools = protocol === "gemini" ? body.tools[0].functionDeclarations : body.tools;
     const generation = tools.map((tool: any) => protocol === "chat" ? tool.function : tool).find((tool: any) => tool.name === "agents_generate_image");
-    const schema = generation.input_schema ?? generation.parametersJsonSchema ?? generation.parameters;
+    const schema = generation.input_schema ?? generation.parameters;
     expect(schema.properties.model.enum).toEqual(["seedream-5-5"]);
     expect(schema.properties.parameters.properties).toHaveProperty("prompt");
     expect(JSON.stringify(body)).not.toContain("agents_media_model_capabilities");

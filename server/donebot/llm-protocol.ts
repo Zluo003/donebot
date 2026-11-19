@@ -3,6 +3,7 @@ import type { Completion, CompletionTransportInput, OpenAIChatMessage } from "..
 import { ChatProtocolError, ChatReasoningDetails, ChatToolCalls, object } from "../drivers/openai-chat-protocol.ts";
 import { readResponsesStream, responsesRequest, type ResponseItem } from "../drivers/openai-responses.ts";
 import { isGpt62 } from "./capabilities.ts";
+import { TaggedReasoning } from "./llm-reasoning.ts";
 
 export type DoneBotLlmProtocol = "messages" | "gemini" | "responses" | "chat";
 export type DoneBotLlmRequest = (path: string, init: RequestInit) => Promise<Response>;
@@ -383,7 +384,15 @@ async function readGemini(response: Response, input: CompletionTransportInput): 
 
 async function readChat(response: Response, input: CompletionTransportInput): Promise<Completion> {
   const result = blank(), calls = new ChatToolCalls(), details = new ChatReasoningDetails();
-  let usage: Row = {}, observed = false;
+  const streaming = response.headers.get("content-type")?.includes("text/event-stream");
+  const emit = (text: string, kind: "assistant_text" | "reasoning_text") => {
+    if (!text) return;
+    if (kind === "assistant_text") result.text += text;
+    else result.reasoning += text;
+    if (streaming) input.onDelta?.(text, kind);
+  };
+  const tagged = new TaggedReasoning(emit);
+  let usage: Row = {}, observed = false, rawContent = "";
   const consume = (body: Row, streaming: boolean) => {
     if (body.error) throw gatewayFailure("Chat", body.error);
     const choice = rows(body.choices).find((row) => row.index === undefined || row.index === 0);
@@ -398,23 +407,23 @@ async function readChat(response: Response, input: CompletionTransportInput): Pr
         return { ...call, type: "function" };
       }) : message.tool_calls;
       calls.add(toolCalls, streaming); details.add(message.reasoning_details);
-      if (typeof message.content === "string") { result.text += message.content; if (streaming) input.onDelta?.(message.content, "assistant_text"); }
       const reasoning = message.reasoning_content ?? message.reasoning;
-      if (typeof reasoning === "string") { result.reasoning += reasoning; if (streaming) input.onDelta?.(reasoning, "reasoning_text"); }
+      if (typeof reasoning === "string") { result.protocolReasoning += reasoning; emit(reasoning, "reasoning_text"); }
+      if (typeof message.content === "string") { rawContent += message.content; tagged.write(message.content); }
     }
     if (choice?.finish_reason) result.finishReason = String(choice.finish_reason);
     if (object(body.usage)) usage = { ...usage, ...object(body.usage) };
   };
-  const streaming = response.headers.get("content-type")?.includes("text/event-stream");
   const ended = streaming ? await readEvents(response, input, (body) => consume(body, true)) : true;
   if (!streaming) consume(await jsonBody(response, input), false);
   if (!observed || !result.finishReason) {
     if (streaming && !ended) throw interruptedStream();
     throw new ChatProtocolError("Chat response ended before completion");
   }
+  tagged.end();
   result.toolCalls = calls.finish(result.finishReason, false);
-  result.protocolReasoning = result.reasoning;
   result.protocolReasoningDetails = details.blocks;
+  if (rawContent !== result.text) result.nativeOutput = { protocol: "chat", content: [{ content: rawContent }] } satisfies NativeOutput;
   recordUsage(input, result, usage, { input: "prompt_tokens", output: "completion_tokens", cached: number(object(usage.prompt_tokens_details)?.cached_tokens) });
   return result;
 }
@@ -427,7 +436,13 @@ export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: 
     if (protocol === "messages") { path = "/v1/messages"; body = messagesRequest(input); }
     else if (protocol === "gemini") { path = `/v1beta/models/${encodeURIComponent(input.model)}:${input.stream ? "streamGenerateContent?alt=sse" : "generateContent"}`; body = geminiRequest(input); }
     else if (protocol === "responses") { path = "/v1/responses"; body = doneBotResponsesRequest(input); }
-    else if (protocol === "chat") { path = "/v1/chat/completions"; body = { model: input.model, messages: input.messages, stream: input.stream, ...(input.stream ? { stream_options: { include_usage: true } } : {}), ...(input.tools.length ? { tools: input.tools } : {}) }; }
+    else if (protocol === "chat") {
+      path = "/v1/chat/completions";
+      body = { model: input.model, messages: input.messages.map(message => {
+        const saved = message.role === "assistant" ? replay(input, message, "chat")?.[0] : undefined;
+        return saved ? { ...message, ...saved } : message;
+      }), stream: input.stream, ...(input.stream ? { stream_options: { include_usage: true } } : {}), ...(input.tools.length ? { tools: input.tools } : {}) };
+    }
     else throw new ChatProtocolError("The selected model has no registered native LLM protocol");
     const response = await request(path, { method: "POST", headers: { "content-type": "application/json", ...(protocol === "messages" ? { "anthropic-version": "2023-06-01" } : {}) }, body: JSON.stringify(body), signal: input.signal, redirect: "error" });
     if (!response.ok) { await response.body?.cancel().catch(() => {}); throw new Error(`DoneBot gateway model request failed (HTTP ${response.status})`); }
@@ -441,6 +456,7 @@ export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: 
       if (result.usage) input.onUsage?.({ model: input.model, input: result.usage.input, output: result.usage.output });
     }
     input.signal.throwIfAborted();
+    if (!result.text.trim() && result.reasoning.trim() && !result.toolCalls.length) throw new ChatProtocolError("DoneBot gateway returned reasoning without an assistant answer");
     return result;
   };
 }

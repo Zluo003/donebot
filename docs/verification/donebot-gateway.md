@@ -1,5 +1,26 @@
 # DoneBot 统一网关验证
 
+## DeepSeek 思考与回答分流
+
+Chat Completions 接入将正文开头的 `<thinking>` / `<think>` 包裹内容分流为
+`reasoning_text`，支持标签跨 SSE 分片、连续思考段与非流式响应。正文中的代码示例
+和带引号的标签保持原样。原生 `reasoning_content` 继续单独处理；只有思考、没有
+回答或工具调用的响应按协议错误结束，不允许运行器把思考兜底成聊天回答。
+
+工具调用当前回合通过私有 native replay 保留原始正文，不把提取的思考伪造成
+`reasoning_content`；持久聊天记录和下一轮会话上下文只保留正式回答。
+
+```sh
+pnpm exec vitest run server/donebot/llm-protocol.test.ts server/donebot/llm-driver.test.ts
+pnpm exec vitest run server/donebot-reasoning.e2e.test.ts server/donebot.e2e.test.ts --maxWorkers=1 -t 'persists only the DeepSeek answer|runs all nine'
+pnpm typecheck
+```
+
+单元及驱动 83 项、隔离服务 2 项通过。隔离服务验证 DeepSeek 工具只执行一次、
+回答持久化与下一轮上下文分离，并回归九个 Claude、GPT、Gemini 模型的原生工具协议。
+证据在 `.omb-scratch/verify-evidence/donebot-reasoning/result.json`。本轮使用合成网关，
+没有读取用户现有会话、访问真实上游或验证已安装客户端；旧安装包不含此修改。
+
 ## Gemini 媒体工具参数契约（2026-11-18）
 
 真实 Gemini Hydrogen 通道的同模型、同工具 schema 对照中，`parametersJsonSchema`

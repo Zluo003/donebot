@@ -96,6 +96,53 @@ const partialTextThenError = (protocol: DoneBotLlmProtocol) => {
 };
 
 describe("DoneBot driver using the existing platform tool loop", () => {
+  it("keeps streamed tagged reasoning out of chat messages while preserving the tool continuation", async () => {
+    const fx = await fixture("chat");
+    const content = "<thinking>Inspect the synthetic fixture.</thinking>";
+    fx.request.mockImplementation(async (_path, init) => {
+      const body = JSON.parse(init.body as string); fx.bodies.push(body);
+      if (fx.bodies.length === 1) return stream([
+        { choices: [{ delta: { content: "<thi" } }] },
+        { choices: [{ delta: { content: content.slice(4, -3) } }] },
+        { choices: [{ delta: { content: content.slice(-3), tool_calls: [{ index: 0, id: "call-fixture", type: "function", function: {
+          name: "workspace_write", arguments: JSON.stringify({ path: "receipt.txt", text: "fixture written" }),
+        } }] }, finish_reason: "tool_calls" }] },
+      ]);
+      return stream([
+        { choices: [{ delta: { reasoning_content: "Check the receipt. ", content: "<think>" } }] },
+        { choices: [{ delta: { content: "The synthetic receipt is present.</think>Fixture complete." }, finish_reason: "stop" }] },
+      ]);
+    });
+    await fx.instance.adapter.sendTurn({ threadId: "fixture", text: "Write the fixture", cwd: fx.cwd, approvalMode: "full", toolScope: { allow: ["native:workspace_write"] } });
+    await fx.completed();
+    expect(await readFile(join(fx.cwd, "receipt.txt"), "utf8")).toBe("fixture written");
+    expect(fx.events.at(-1)).toMatchObject({ type: "turn.completed", ok: true });
+    expect(fx.request).toHaveBeenCalledTimes(2);
+    expect(fx.events.filter(event => event.type === "item.completed" && event.itemType === "tool")).toHaveLength(1);
+    expect(fx.events.filter(event => event.type === "item.completed" && event.itemType === "assistant_text")).toEqual([
+      expect.objectContaining({ text: "Fixture complete." }),
+    ]);
+    const deltas = fx.events.filter(event => event.type === "content.delta");
+    expect(deltas.filter(event => event.streamKind === "assistant_text").map(event => event.delta).join("")).toBe("Fixture complete.");
+    expect(deltas.filter(event => event.streamKind === "reasoning_text").map(event => event.delta).join("")).toBe("Inspect the synthetic fixture.Check the receipt. The synthetic receipt is present.");
+    const assistant = rows(fx.bodies[1]!.messages).find(message => message.role === "assistant");
+    expect(assistant).toMatchObject({ content, tool_calls: [expect.objectContaining({ id: "call-fixture" })] });
+    expect(assistant).not.toHaveProperty("reasoning_content");
+  });
+
+  it.each([false, true])("does not turn reasoning-only output into a final chat bubble or retry (tagged=%s)", async tagged => {
+    const fx = await fixture("chat", false);
+    fx.request.mockImplementation(async () => stream([{ choices: [{ delta: tagged
+      ? { content: "<thinking>Only a synthetic thought.</thinking>" }
+      : { reasoning_content: "Only a synthetic thought." }, finish_reason: "stop" }] }]));
+    await fx.instance.adapter.sendTurn({ threadId: "fixture", text: "Answer the fixture", cwd: fx.cwd, approvalMode: "full" });
+    await fx.completed();
+    expect(fx.events.at(-1)).toMatchObject({ type: "turn.completed", ok: false });
+    expect(fx.request).toHaveBeenCalledTimes(1);
+    expect(fx.events.filter(event => event.type === "item.completed" && event.itemType === "assistant_text")).toEqual([]);
+    expect(fx.events.filter(event => event.type === "content.delta" && event.streamKind === "assistant_text")).toEqual([]);
+  });
+
   it("continues repeated image reads after the aggregate would exceed 32 MiB, without rerunning generation tools", async () => {
     const fx = await fixture("chat");
     const images = [];

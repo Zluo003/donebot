@@ -333,6 +333,10 @@ with an offline CLI and custom-domain validation without touching live accounts.
 The [engine library fixture](engines-ui.md) checks onboarding and Settings cards,
 responsive layouts, theme contrast, and status refreshes without losing drafts.
 
+The [DoneBot model pricing fixture](donebot-model-pricing.md) checks the Settings
+catalog's five categories, CNY units, TTS conversion, refresh and account changes,
+and desktop and narrow-screen themes against an isolated synthetic gateway.
+
 The [Claude account recipe](claude-account.md) checks sign-out, cancellation and
 retry against an offline Claude CLI confined to a disposable home.
 

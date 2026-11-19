@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2, LogOut, RefreshCw } from "lucide-react";
-import { doneBotMediaConcurrency, type DoneBotAccountState, type DoneBotCatalog } from "../../shared/donebot";
+import { Loader2, LogOut } from "lucide-react";
+import { doneBotMediaConcurrency, type DoneBotAccountState } from "../../shared/donebot";
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
 import { Card } from "@/components/SettingsPrimitives";
@@ -28,7 +28,6 @@ export function DoneBotAccountGate({ children }: { children: ReactNode }) {
 
 export function DoneBotAccountSettings() {
   const { state, dispatch } = useStore();
-  const [catalog, setCatalog] = useState<DoneBotCatalog | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [concurrency, setConcurrency] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,19 +36,17 @@ export function DoneBotAccountSettings() {
   const email = state.config?.donebot?.user?.email;
   const refresh = async () => {
     const generation = ++epoch.current;
-    setBusy(true); setError("");
-    const result = await Promise.allSettled([api<DoneBotCatalog>("/api/donebot/catalog"), api<{ balance_cents?: number | string; concurrency?: number }>("/api/donebot/account")]);
-    if (generation !== epoch.current) return;
-    if (result[0].status === "fulfilled") setCatalog(result[0].value); else setError(errorText(result[0].reason));
-    if (result[1].status === "fulfilled") {
-      const account = result[1].value;
+    setBusy(true); setError(""); setBalance(null); setConcurrency(null);
+    try {
+      const account = await api<{ balance_cents?: number | string; concurrency?: number }>("/api/donebot/account");
+      if (generation !== epoch.current) return;
       const cents = account.balance_cents === undefined ? NaN : Number(account.balance_cents);
       setBalance(Number.isFinite(cents) ? cents / 100 : null);
       setConcurrency(typeof account.concurrency === "number" && doneBotMediaConcurrency(account.concurrency) !== null ? account.concurrency : null);
-    } else { setConcurrency(null); setError(errorText(result[1].reason)); }
-    setBusy(false);
+    } catch (error) { if (generation === epoch.current) setError(errorText(error)); }
+    finally { if (generation === epoch.current) setBusy(false); }
   };
-  useEffect(() => { void refresh(); return () => { epoch.current++; }; }, [email]);
+  useEffect(() => { void refresh(); return () => { epoch.current++; }; }, [email, state.config?.donebot?.user?.id]);
   const logout = async () => {
     ++epoch.current; setBusy(true); setError("");
     try {
@@ -64,16 +61,11 @@ export function DoneBotAccountSettings() {
       <p className="mt-3 text-[13px] text-ink-secondary">{concurrency === null ? "账号并发尚未同步，媒体任务将等待配置。" : `账号总并发：${doneBotMediaConcurrency(concurrency)}；文本、语音和媒体共同使用全部额度。`}</p>
       <p className="mt-2 text-[13px] text-ink-secondary">文本、语音和媒体共用账号并发，图片、视频和音乐任务在并发用满时自动排队。</p>
       {!state.config?.donebot?.persistent && <p className="mt-3 text-[13px] text-ink-secondary">当前设备未启用凭据持久保存，重启后需要重新登录。</p>}
+      {error && <p role="alert" className="mt-3 text-[13px] text-danger">{error}</p>}
     </Card>
     <Card title="DoneBot Cloud" subtitle="使用同一个 DoneBot 账号，开通或管理你的专属云实例。">
       {isDoneBotCloudBrowser() ? <p className="text-[13px] text-ink-secondary">请在本机 DoneBot 客户端管理 Cloud 订阅。</p> : <DoneBotCloudAccess key={state.config?.donebot?.user?.id} heading={false} />}
     </Card>
     <DoneBotMediaSettingsPanel key={state.config?.donebot?.user?.id} />
-    <Card title="可用模型" subtitle="账号可使用的模型将自动同步。">
-      <button type="button" disabled={busy} onClick={() => void refresh()} className={buttonClass}><RefreshCw size={14} className={busy ? "animate-spin" : ""} />刷新模型</button>
-      {error && <p role="alert" className="mt-3 text-[13px] text-danger">{error}</p>}
-      {catalog && <ul className="mt-4 divide-y divide-hairline">{catalog.models.map(model => <li key={model.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 text-[13px]"><span className="break-all text-ink">{model.display_name || model.id}</span><span className="text-ink-secondary">{model.media_types.join(" · ")}</span></li>)}</ul>}
-      {catalog?.models.length === 0 && <p className="mt-3 text-[13px] text-ink-secondary">当前账号暂无可用模型。</p>}
-    </Card>
   </div>;
 }

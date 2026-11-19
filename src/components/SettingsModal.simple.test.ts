@@ -62,6 +62,7 @@ vi.mock("./ConnectedWorkspacesSettings", () => ({ ConnectedWorkspacesSettings: m
 vi.mock("./LocalComputerSection", () => ({ LocalComputerSection: marker("computer") }));
 vi.mock("./CloudAccountSettings", () => ({ CloudAccountSettings: marker("cloudAccount") }));
 vi.mock("@/donebot/Payments", () => ({ DoneBotPayments: marker("purchase") }));
+vi.mock("@/donebot/ModelPricing", () => ({ DoneBotModelPricing: marker("modelPricing") }));
 vi.mock("./OrganizationSettings", () => ({ OrganizationSettings: marker("organization") }));
 vi.mock("./PeopleSection", () => ({ PeopleSection: marker("people") }));
 vi.mock("./ActivitySection", () => ({ ActivitySection: marker("activity") }));
@@ -152,6 +153,23 @@ describe("Settings in Simple mode", () => {
     expect(currentPage(html)).toBe("purchase");
     expect(markers(html)).toContain("purchase");
   });
+  it.each([false, true])("offers model prices on local, Cloud and remote settings (advanced=%s)", advanced => {
+    fixture.advancedMode = advanced;
+    for (const location of ["local", "cloud", "remote"] as const) {
+      fixture.config = { ...fixture.config, cloudHome: location === "cloud", donebot: { enabled: true } };
+      vi.stubGlobal("window", { ogb: { ...desktop.ogb, remoteClient: { active: location === "remote" } } });
+      const html = open("modelPricing");
+      expect(markers(html), location).toContain("modelPricing");
+      expect(html, location).toContain(advanced ? 'data-settings-section="modelPricing" aria-current="page"' : 'data-settings-page="modelPricing" aria-current="page"');
+    }
+  });
+  it("hides model prices when the DoneBot gateway is disabled", () => {
+    expect(pages(render())).not.toContain("modelPricing");
+    expect(markers(open("modelPricing"))).not.toContain("modelPricing");
+    fixture.advancedMode = true;
+    expect(render()).not.toContain('data-settings-section="modelPricing"');
+    expect(markers(open("modelPricing"))).not.toContain("modelPricing");
+  });
   it("hides DoneBot's retired settings, including stale Computer and API key links", () => {
     for (const key of Object.keys(UPSTREAM_SETTINGS) as Array<keyof typeof UPSTREAM_SETTINGS>) UPSTREAM_SETTINGS[key] = false;
     fixture.rail = { available: true, hidden: true };
@@ -171,7 +189,7 @@ describe("Settings in Simple mode", () => {
   it("draws five pages on the desktop, General, AI, Computer, Usage & billing and Updates, and none of the Advanced-only ones", () => {
     const html = render();
     expect(pages(html)).toEqual(["general", "ai", "computer", "billing", "updates"]);
-    expect(SIMPLE_PAGES.map((page) => page.id)).toEqual(["general", "botAccess", "ai", "computer", "billing", "purchase", "updates"]);
+    expect(SIMPLE_PAGES.map((page) => page.id)).toEqual(["general", "botAccess", "ai", "modelPricing", "computer", "billing", "purchase", "updates"]);
     expect(html).toMatch(/General<\/span>[\s\S]*Account &amp; models<\/span>[\s\S]*Computer<\/span>[\s\S]*Usage &amp; billing<\/span>[\s\S]*Updates<\/span>/);
     expect(html).not.toContain("data-settings-group=");
     expect(html).not.toContain("data-settings-section=");

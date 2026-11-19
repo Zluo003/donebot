@@ -74,6 +74,7 @@ import { SavedStepsRow } from "./SavedStepsRow";
 import { BrowserProfilesRow, ColorUserBubblesRow, AdvancedModeRow, ExperimentalFeaturesRow, LanguageRow, NewBotEffortRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, FollowUpRow, SendKeyRow, ShowThreadsRow, ToolCallsRow, UniversalPinsRow, UpdatesRow } from "./AppSettingsRows";
 import { DoneBotAccountSettings } from "@/donebot/Account";
 import { DoneBotPayments } from "@/donebot/Payments";
+import { DoneBotModelPricing } from "@/donebot/ModelPricing";
 import { DoneBotDeviceName } from "@/donebot/DeviceName";
 import { doneBotPurchaseVisible } from "@/donebot/services";
 import { SIMPLE_ADVANCED_ONLY, SIMPLE_MORE_LIMITS, SimpleAiPage, SimpleBillingPage, SimpleComputerPage, SimpleGeneralPage, SimpleLooksPage, SimpleMorePage, SimpleUpdatesPage, type Disclose, type SimpleDisclosureId } from "./SettingsSimplePages";
@@ -101,6 +102,7 @@ export const SECTIONS: Array<{
   { id: "appearance", group: "you", labelKey: "settings.section.appearance", icon: Palette, keywords: ["skin", "theme", "appearance", "font", "typeface", "chat width", "width", "wide", "full width", "bubble", "bubbles", "tools", "tool calls", "threads", "show threads", "hide threads", "sidebar", "display", "run", "this run", "run card", "commands", "notifications", "sound", "sounds", "mute", "silent", "chime", "pinned", "circles", "universal", "groups", "top", "send", "enter", "return", "shift+enter", "ctrl+enter", "cmd+enter", "⌘+enter", "new line", "keyboard", "ime", "japanese", "message color", "my messages", "toolbar", "tools layout", "footer", "routines", "triggers", "team map", "color", "colour", "cloud color", "server color", "tint", "sidebar color", "sidebar picture", "picture", "image", "banner", "background", "computers", "your computers", "rail", "strip", "frame", "window frame", "title bar"] },
   { id: "companion", group: "you", labelKey: "settings.section.companion", icon: TabletSmartphone, keywords: ["companion", "device", "phone", "desktop", "client", "host", "pair", "pairing", "mobile", "https", "secure", "tailscale", "wifi", "remote", "advanced", "domain", "dns", "self-hosted", "server", "caddy"] },
   { id: "engines", group: "ai", labelKey: "settings.section.engines", icon: Terminal, keywords: ["models", "model providers", "engines", "claude", "codex", "grok", "providers", "cli", "sign in", "subscription"] },
+  { id: "modelPricing", group: "ai", labelKey: "settings.section.modelPricing", icon: Coins, keywords: ["模型", "价格", "人民币", "计费", "千字", "models", "pricing", "price", "CNY", "LLM", "TTS", "图片", "视频", "音乐", "音频"] },
   { id: "connections", group: "ai", labelKey: "settings.section.connections", icon: KeyRound, keywords: ["keys", "api", "api key", "api keys", "connections", "composio", "box", "xai", "mistral", "cerebras", "meta", "muse", "vps", "router", "openrouter", "base url", "openai", "anthropic", "groq", "greenference", "modelgo", "opencode", "deepseek", "provider", "ollama", "lm studio", "lmstudio", "llm studio", "llmstudio", "bionic"] },
   { id: "decisionModel", group: "ai", labelKey: "settings.section.decisionModel", icon: Zap, keywords: ["decision", "extraction", "jev", "typesafe", "cloudflare", "workers ai", "clef", "clairic", "email", "routing", "auto", "rooms", "who answers"] },
   { id: "imageGeneration", group: "ai", labelKey: "settings.section.imageGeneration", icon: ImagePlus, keywords: ["image", "images", "picture", "generate", "avatar", "gpt image", "grok imagine", "gemini", "nano banana", "openrouter", "flux", "backup"] },
@@ -134,6 +136,7 @@ export const SIMPLE_PAGES: SimpleSettingsPage[] = [
     keywords: ["account", "theme", "looks", "open at login", "startup", "analytics", "advanced mode", "more settings", "limits", "timeout"] },
   { id: "botAccess", labelKey: "settings.section.botAccess", icon: Users, sections: ["botAccess"] },
   { id: "ai", labelKey: "settings.group.ai", icon: Sparkles, sections: ["engines", "connections"], keywords: ["new bots", "defaults", "effort"] },
+  { id: "modelPricing", labelKey: "settings.section.modelPricing", icon: Coins, sections: ["modelPricing"] },
   { id: "computer", labelKey: "settings.simple.page.computer", icon: Monitor, sections: ["companion", "desktopWorkspaces", "computer", "logins"] },
   { id: "billing", labelKey: "settings.simple.page.billing", icon: Gauge, sections: ["usage", "cloudAccount"], keywords: ["billing", "included", "allowance", "cloud hours", "voice"] },
   { id: "purchase", labelKey: "settings.section.purchase", icon: Coins, sections: ["purchase"] },
@@ -202,11 +205,11 @@ function SettingsDialog() {
   const remoteActive = window.ogb?.remoteClient?.active === true;
   const ownerOrAdmin = useOwnerOrAdmin();
   const purchaseAvailable = doneBotPurchaseVisible({ enabled: state.config?.donebot?.enabled, cloudHome: state.config?.cloudHome, remote: remoteActive, ownerOrAdmin });
-  const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) || (state.appSettingsSection === "purchase" && !purchaseAvailable) ? "general" : state.appSettingsSection;
+  const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) || (state.appSettingsSection === "purchase" && !purchaseAvailable) || (state.appSettingsSection === "modelPricing" && state.config?.donebot?.enabled !== true) ? "general" : state.appSettingsSection;
   const section: AppSettingsSection =
     advanced && requested === "remote" && window.ogb?.environments
       ? "desktopWorkspaces"
-      : (UPSTREAM_SETTINGS.computers && remoteActive && !["appearance", "desktopWorkspaces"].includes(requested)) || requested === "remote"
+      : (UPSTREAM_SETTINGS.computers && remoteActive && !["appearance", "desktopWorkspaces", "modelPricing"].includes(requested)) || requested === "remote"
       ? "companion"
       : advanced && requested === "updates" ? "general" : requested;
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -221,8 +224,9 @@ function SettingsDialog() {
     ? { ...entry, labelKey: thisComputer ? "settings.section.phoneDevices" as const : "settings.section.thisServer" as const }
     : entry);
   const baseSections = sectionsHere.filter((entry) => doneBotSettingsSectionVisible(entry.id))
+    .filter((entry) => entry.id !== "modelPricing" || state.config?.donebot?.enabled === true)
     .filter((entry) => entry.id !== "purchase" || purchaseAvailable)
-    .filter((entry) => !remoteActive || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
+    .filter((entry) => !remoteActive || entry.id === "modelPricing" || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
     .filter((entry) => entry.id !== "desktopWorkspaces" || Boolean(window.ogb?.environments))
     .filter((entry) => entry.id !== "organization" || (UPSTREAM_SERVICES.cloud && Boolean(window.ogb?.organization)))
     .filter((entry) => entry.id !== "cloudAccount" || (UPSTREAM_SERVICES.cloud && Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true))))
@@ -355,6 +359,7 @@ function SettingsDialog() {
 
   const renderSection = (id: AppSettingsSection) => {
     switch (id) {
+      case "modelPricing": return <DoneBotModelPricing />;
       case "purchase": return purchaseAvailable ? <DoneBotPayments key={state.config?.donebot?.user?.id} /> : null;
       case "desktopWorkspaces":
         return <><ConnectedWorkspacesSettings />{remoteAccess.client}</>;

@@ -104,14 +104,14 @@ describe("Settings rail groups", () => {
     expect(SETTINGS_GROUPS.map((group) => group.id)).toEqual(["you", "ai", "computers", "account"]);
     const ids = SECTIONS.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toHaveLength(22);
+    expect(ids).toHaveLength(23);
     for (const entry of SECTIONS) expect(SETTINGS_GROUPS.map((group) => group.id)).toContain(entry.group);
   });
 
   it("shows every desktop page under its labelled group", () => {
     vi.stubGlobal("window", { ogb: { environments: {}, organization: {}, cloudAccount: {} } });
     const html = render();
-    for (const label of ["You", "AI", "Devices", "Account"]) expect(html).toContain(`>${label}</div>`);
+    for (const label of ["You", "Account &amp; models", "Devices", "Account"]) expect(html).toContain(`>${label}</div>`);
     expect(html).toContain("glass-surface");
     expect(rail(html)).toEqual({
       you: ["general", "appearance", "companion"],
@@ -119,7 +119,7 @@ describe("Settings rail groups", () => {
       computers: ["desktopWorkspaces", "computer", "logins"],
       account: ["cloudAccount", "organization", "usage", "backups", "import", "experimental"],
     });
-    expect(html).toContain('<optgroup label="AI">');
+    expect(html).toContain('<optgroup label="Account &amp; models">');
   });
 
   it("keeps the browser-only pages for a hosted workspace's admins", () => {

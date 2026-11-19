@@ -134,6 +134,77 @@ describe("DoneBot native LLM transports", () => {
     expect(result.protocolReasoning).toBe("think");
   });
 
+  it.each([false, true])("separates leading thinking tags from Chat answers (stream=%s)", async stream => {
+    const content = " \n<thinking>内部推理🙂</thinking>\n<think>继续核对</think>实际回答。";
+    const turn = input({ model: "deepseek-flash", stream });
+    const response = stream ? sse([
+      ...Array.from(content).map(content => ({ choices: [{ index: 0, delta: { content } }] })),
+      { choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 12 } },
+    ]) : json({ choices: [{ message: { content }, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 12 } });
+    const result = await createDoneBotCompletion(async () => response, () => "chat")(turn);
+    expect(result.text).toBe("实际回答。");
+    expect(result.reasoning).toBe("内部推理🙂继续核对");
+    expect(result.protocolReasoning).toBe("");
+    expect(result.usage).toEqual({ input: 5, output: 12 });
+    const deltas = vi.mocked(turn.onDelta!).mock.calls;
+    expect(deltas.filter(([, kind]) => kind === "assistant_text").map(([text]) => text).join("")).toBe(stream ? result.text : "");
+    expect(deltas.filter(([, kind]) => kind === "reasoning_text").map(([text]) => text).join("")).toBe(stream ? result.reasoning : "");
+  });
+
+  it.each([
+    "Explain `<thinking>example</thinking>`.",
+    "```xml\n<think>example</think>\n```",
+    "\"<thinking>example</thinking>\" is a literal.",
+    "Answer first. <thinking>literal example</thinking>",
+    "<thinker>ordinary XML</thinker>",
+    "<",
+  ])("keeps literal tags in an ordinary Chat answer: %s", async content => {
+    const turn = input();
+    const result = await createDoneBotCompletion(async () => sse([
+      ...Array.from(content).map(content => ({ choices: [{ delta: { content } }] })),
+      { choices: [{ delta: {}, finish_reason: "stop" }] },
+    ]), () => "chat")(turn);
+    expect(result.text).toBe(content);
+    expect(result.reasoning).toBe("");
+    expect(vi.mocked(turn.onDelta!).mock.calls.map(([text]) => text).join("")).toBe(content);
+  });
+
+  it("replays tagged content and native reasoning independently during a Chat tool round", async () => {
+    const content = "<thinking>Inline fixture thought</thinking>Checking the fixture.";
+    const turn = input();
+    const result = await createDoneBotCompletion(async () => json({ choices: [{ message: {
+      content, reasoning_content: "Native fixture thought",
+      tool_calls: [{ id: "read-1", type: "function", function: { name: "read", arguments: "{}" } }],
+    }, finish_reason: "tool_calls" }] }), () => "chat")(turn);
+    expect(result.text).toBe("Checking the fixture.");
+    expect(result.reasoning).toBe("Native fixture thoughtInline fixture thought");
+    expect(result.protocolReasoning).toBe("Native fixture thought");
+    const assistant: OpenAIChatMessage = { role: "assistant", content: result.text, reasoning_content: result.protocolReasoning, tool_calls: result.toolCalls };
+    const request = vi.fn(async (_path: string, _init: RequestInit) => json({ choices: [{ message: { content: "Done." }, finish_reason: "stop" }] }));
+    await createDoneBotCompletion(request, () => "chat")(input({ messages: [...turn.messages, assistant, { role: "tool", tool_call_id: "read-1", content: "receipt" }], replay: message => message === assistant ? result.nativeOutput : undefined }));
+    expect(JSON.parse(request.mock.calls[0]![1].body as string).messages).toEqual([
+      ...turn.messages, { ...assistant, content }, { role: "tool", tool_call_id: "read-1", content: "receipt" },
+    ]);
+    expect(assistant.content).toBe(result.text);
+  });
+
+  it.each(["<think>Unfinished fixture thought", "<thinking>Only a thought</thinking>"])("refuses a Chat response with only tagged reasoning: %s", async content => {
+    const turn = input();
+    await expect(createDoneBotCompletion(async () => sse([
+      { choices: [{ delta: { content }, finish_reason: "stop" }] },
+    ]), () => "chat")(turn)).rejects.toThrow("reasoning without an assistant answer");
+    expect(vi.mocked(turn.onDelta!).mock.calls.filter(([, kind]) => kind === "assistant_text")).toEqual([]);
+  });
+
+  it.each([
+    ["chat", () => json({ choices: [{ message: { reasoning_content: "Only a thought" }, finish_reason: "stop" }] })],
+    ["messages", () => json({ content: [{ type: "thinking", thinking: "Only a thought", signature: "opaque" }], stop_reason: "end_turn" })],
+    ["gemini", () => json({ candidates: [{ content: { parts: [{ text: "Only a thought", thought: true }] }, finishReason: "STOP" }] })],
+    ["responses", () => sse([{ type: "response.completed", response: { output: [{ type: "reasoning", id: "r", summary: [{ type: "summary_text", text: "Only a thought" }] }] } }])],
+  ] as const)("refuses native %s reasoning without a final answer or tool call", async (protocol, response) => {
+    await expect(createDoneBotCompletion(async () => response(), () => protocol)(input())).rejects.toThrow("reasoning without an assistant answer");
+  });
+
   it("accepts omitted function types and legacy Chat function_call replies", async () => {
     const omitted = await createDoneBotCompletion(async () => sse([
       { choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: "omitted-type", function: { name: "read", arguments: "{}" } }] }, finish_reason: "tool_calls" }] },

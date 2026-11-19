@@ -520,6 +520,7 @@ export type AppSettingsSection =
   | "connections"
   | "decisionModel" | "imageGeneration"
   | "engines"
+  | "modelPricing"
   | "companion"
   | "remote"
   | "computer"

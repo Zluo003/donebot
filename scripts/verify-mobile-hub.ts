@@ -30,8 +30,10 @@ const relay = await startRelay(config,{ log: () => {} });
 const stopManagement = startRelayManagement(relay, config);
 const fake = await startFakeDoneBotGateway(undefined,new Map([[credential,install]]),"101");
 fake.setPlan([],"Mobile hub verified reply.");
+let pauseHeartbeats = false;
 const proxy = createServer(async (req,res) => {
   try {
+    if (pauseHeartbeats && req.url === "/v1/donebot/runtime/mobile/heartbeat") { res.writeHead(503); res.end("{}"); return; }
     const origin = req.url?.startsWith("/v1/donebot/runtime/mobile/") ? hub : fake.origin;
     const chunks: Buffer[]=[];for await (const chunk of req) chunks.push(Buffer.from(chunk));
     const headers = Object.fromEntries(Object.entries(req.headers).filter(([name]) => !["host","connection","content-length","transfer-encoding"].includes(name)).map(([k,v])=>[k,String(v)]));
@@ -194,8 +196,27 @@ try {
  await until(async()=>{const events=await api("/fixture/pushes") as any[];return events.some(e=>e.botId===bot.id&&e.threadId===bot.activeTaskId)});
  const pushes=await api("/fixture/pushes") as any[];
  assert.ok(pushes.every(p=>!JSON.stringify(p).includes("Verify the self-hosted")));
+ if (workspaceKind === "computer") {
+   pauseHeartbeats = true;
+   await api("/fixture/computer/offline", {}, "POST");
+   await api(`/api/v1/donebot/mobile/workspaces/${install}`, undefined, "DELETE");
+   assert.ok(!(await api("/api/v1/donebot/mobile/workspaces")).workspaces.some((workspace:any)=>workspace.id===install));
+   assert.deepEqual(await readFile(generatedImage), media[0]!.data);
+   pauseHeartbeats = false;
+   await until(async()=>((await api("/api/v1/donebot/mobile/workspaces")) as any).workspaces.some((workspace:any)=>workspace.id===install&&workspace.online));
+   await assert.rejects(()=>connection!.request("/api/bots?messages=1"));
+   connection!.close();
+   const restoredDescriptor = await api(`/api/v1/donebot/mobile/workspaces/${install}/connection`, { installationId: phone });
+   assert.equal(restoredDescriptor.h, descriptor.h);
+   assert.equal(restoredDescriptor.k, descriptor.k);
+   connection = await RelayConnection.connect(restoredDescriptor);
+   const restoredMessages = messagePageSchema.parse(await connection!.request<any>(`/api/threads/${bot.activeTaskId}/messages?limit=50`));
+   assert.ok(restoredMessages.messages.some((message:any)=>message.id===reply.id));
+   const restoredWorkspaces = (await api("/api/v1/donebot/mobile/workspaces")).workspaces;
+   assert.equal(restoredWorkspaces.filter((workspace:any)=>workspace.id===install).length,1);
+ }
  await api("/api/v1/donebot/mobile/session",{installationId:phone},"DELETE");
  await until(async()=>{try{await connection!.request("/api/bots?messages=1");return false;}catch{return true;}});
- await writeFile(join(out,"evidence.json"),JSON.stringify({fixture:fixture.info,workspaceKind,workspaces,bot:bot.id,thread:bot.activeTaskId,wait:settled,messages:messages.messages,group:{channel,wait:groupSettled,messages:groupMessages.messages},pushes,devices,downloads,modelImageInput,checks:["mobile schema parses original directory and message responses","automation lists and public connected-app status","enabled-only routine and webhook updates preserve instructions","automation content changes refused","managed relay policy","independent relay domain and preserved paths","Capacitor WebSocket origin","separate desktop and phone lists","original encrypted transport","real hub persistence","account ownership","original session scope","department and group directory","original group send, reply and read","binary image/video/audio/PDF/text round trips","uploaded image bytes reach the model native input","idempotent image upload","message-scoped file denials","message outbox","generic notification","logout revocation"]},null,2));
- console.log(JSON.stringify({ok:true,log:fixture.info.logPath,evidence:join(out,"evidence.json")}));
+ await writeFile(join(out,"evidence.json"),JSON.stringify({fixture:fixture.info,workspaceKind,computerRemovalRecovery:workspaceKind === "computer",workspaces,bot:bot.id,thread:bot.activeTaskId,wait:settled,messages:messages.messages,group:{channel,wait:groupSettled,messages:groupMessages.messages},pushes,devices,downloads,modelImageInput,checks:["mobile schema parses original directory and message responses","automation lists and public connected-app status","enabled-only routine and webhook updates preserve instructions","automation content changes refused","managed relay policy","independent relay domain and preserved paths","Capacitor WebSocket origin","separate desktop and phone lists","original encrypted transport","real hub persistence","account ownership","original session scope","department and group directory","original group send, reply and read","binary image/video/audio/PDF/text round trips","uploaded image bytes reach the model native input","idempotent image upload","message-scoped file denials","message outbox","generic notification","logout revocation"]},null,2));
+ console.log(JSON.stringify({ok:true,computerRemovalRecovery:workspaceKind === "computer",log:fixture.info.logPath,evidence:join(out,"evidence.json")}));
 } finally {connection?.close();await fixture.close();stopManagement();await relay.close();await fake.close();proxy.closeAllConnections();await new Promise<void>(resolve=>proxy.close(()=>resolve()));}

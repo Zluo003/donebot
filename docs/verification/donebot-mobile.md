@@ -42,6 +42,25 @@ pnpm exec vitest run server/donebot/installation-identity.test.ts src/state/stor
 手机项目的 `tests/controller.test.ts` 和 `tests/workspace-picker.test.ts` 覆盖同名设备保留、
 离线标识、移除失败及退出登录后的迟到响应。这些检查使用合成数据，不代表已验证实体 iPhone 重装。
 
+## 手机移除离线电脑与恢复连接
+
+手机使用独立的 `DELETE /api/v1/donebot/mobile/workspaces/:id`，只移除中枢连接记录，
+不调用安装凭据吊销接口。现有电脑连接器下次启动或恢复联网发送心跳时自动恢复登记。
+真正撤销的安装或禁用账号仍不能登记。
+
+网关的 `TestPostgresRemove*` 检查移除后列表消失、关联授权和通知清理、安装/API Key 保留、
+重复移除、同身份恢复、Cloud/在线/跨账号/失效会话拒绝，以及等待行锁期间电脑恢复在线的竞态。
+`TestPostgresDesktopMobileWorkflow` 启动原版隔离运行服务与独立中继，暂停夹具心跳使电脑离线，
+执行移除并恢复心跳，重新连接读取原消息、核对原文件字节和相同主机公钥，检查没有重复设备。
+这证明现有连接器可恢复登记，不代表已经测试物理电脑重启或生产设备。
+
+```sh
+PATH=/opt/homebrew/opt/postgresql@17/bin:$PATH DONEBOT_MOBILE_PG_FIXTURE=1 DONEBOT_MOBILE_DESKTOP_ROOT=/Users/zluo/Dev/DoneBot DONEBOT_MOBILE_RELAY_ROOT=/Users/zluo/Dev/DoneBot-Relay go -C ../donebot-api/backend test -tags integration ./internal/mobilehub -run '^TestPostgres(Remove|DesktopMobileWorkflow)' -count=1 -v -timeout 150s
+```
+
+手机 `tests/session.test.ts` 核对删除路径和在线冲突文案，`tests/controller.test.ts` 检查
+失败/离线/Cloud 拒绝、移除后的旧刷新响应、后续正常发现和退出登录隔离。
+
 ## Cloud 安装凭据
 
 网关 `TestPostgresCloudMobileWorkflow` 使用同一个完整工作流，但在临时 PostgreSQL 中建立真实 Cloud 实例归属及有效订阅，并将安装标记为 `donebot-cloud`。运行服务只读取合成安装凭据，没有用户 JWT；工作空间须作为 `cloud` 在线，不能混入桌面设备列表。

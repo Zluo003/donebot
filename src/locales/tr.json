@@ -4582,7 +4582,7 @@
   "call.live.openApiKeys": "API anahtarlarını aç",
   "call.live.keyFromApiKeys": "Ayarlar → API anahtarları bölümündeki OpenAI API anahtarınızı kullanır.",
   "settings.group.you": "Siz",
-  "settings.group.ai": "AI",
+  "settings.group.ai": "Hesap ve modeller",
   "settings.group.computers": "Cihazlar",
   "settings.group.account": "Hesap",
   "apps.title": "Uygulamalar",

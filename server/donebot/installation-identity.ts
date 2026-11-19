@@ -14,8 +14,7 @@ export class DoneBotInstallationIdentity {
 
   constructor(path: string) { this.path = path; }
 
-  resolve(accountId: string, previousId?: string): string {
-    accountIdSchema.parse(accountId);
+  private read() {
     let saved: z.infer<typeof identitiesSchema> = { version: 1, identities: [] };
     try {
       const source = readFileSync(this.path, "utf8");
@@ -27,6 +26,17 @@ export class DoneBotInstallationIdentity {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
+    return saved;
+  }
+
+  lookup(accountId: string): string | undefined {
+    accountIdSchema.parse(accountId);
+    return this.read().identities.find(identity => identity.accountId === accountId)?.installationId;
+  }
+
+  resolve(accountId: string, previousId?: string): string {
+    accountIdSchema.parse(accountId);
+    const saved = this.read();
     const existing = saved.identities.find(identity => identity.accountId === accountId);
     if (existing) return existing.installationId;
     const installationId = previousId === undefined ? randomUUID() : z.uuid().parse(previousId);

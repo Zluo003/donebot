@@ -132,6 +132,19 @@ const placement = (html: string, needle: string): "shown" | "folded" | "missing"
 const open = (section: AppSettingsSection) => { fixture.section = section; return render(); };
 
 describe("Settings in Simple mode", () => {
+  it.each([false, true])("never mounts payments from stale Cloud or remote links (advanced=%s)", advanced => {
+    fixture.advancedMode = advanced;
+    for (const location of ["cloud", "remote", "browser", "member"] as const) {
+      fixture.config = { ...fixture.config, cloudHome: location === "cloud", donebot: { enabled: true } };
+      fixture.ownerOrAdmin = location === "member" ? false : true;
+      vi.stubGlobal("window", { ogb: { ...desktop.ogb, remoteClient: { active: location === "remote" } } });
+      vi.stubGlobal("sessionStorage", { getItem: () => location === "browser" ? "1" : null });
+      const html = open("purchase");
+      expect(pages(html), location).not.toContain("purchase");
+      expect(markers(html), location).not.toContain("purchase");
+    }
+  });
+
   it("offers Buy credits as a separate page when the DoneBot gateway is enabled", () => {
     fixture.config = { ...fixture.config, donebot: { enabled: true, user: { id: "fixture-user" } } };
     const html = open("purchase");
@@ -159,7 +172,7 @@ describe("Settings in Simple mode", () => {
     const html = render();
     expect(pages(html)).toEqual(["general", "ai", "computer", "billing", "updates"]);
     expect(SIMPLE_PAGES.map((page) => page.id)).toEqual(["general", "botAccess", "ai", "computer", "billing", "purchase", "updates"]);
-    expect(html).toMatch(/General<\/span>[\s\S]*AI<\/span>[\s\S]*Computer<\/span>[\s\S]*Usage &amp; billing<\/span>[\s\S]*Updates<\/span>/);
+    expect(html).toMatch(/General<\/span>[\s\S]*Account &amp; models<\/span>[\s\S]*Computer<\/span>[\s\S]*Usage &amp; billing<\/span>[\s\S]*Updates<\/span>/);
     expect(html).not.toContain("data-settings-group=");
     expect(html).not.toContain("data-settings-section=");
     expect(html).not.toMatch(/class="(?:[^"]*\s)?uppercase(?:\s[^"]*)?"/);
@@ -395,6 +408,17 @@ describe("Settings in Simple mode", () => {
     expect(scroller.scrollTop).toBe(0);
     expect(querySelector).toHaveBeenCalledTimes(1);
   });
+});
+
+it.each([false, true])("DoneBot shows the saved device name instead of account profile in General (advanced: %s)", advanced => {
+  UPSTREAM_SETTINGS.profilePhone = false;
+  fixture.advancedMode = advanced;
+  fixture.config.computerName = "Office computer";
+  const html = render();
+  expect(html).toContain('value="Office computer"');
+  expect(html).toContain('maxLength="63"');
+  expect(html).toContain("Device name");
+  expect(html).not.toContain("Your name");
 });
 
 describe("Settings in Advanced mode", () => {

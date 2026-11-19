@@ -83,7 +83,7 @@ const whereItLives = (environment) => (environment.kind === "local" ? environmen
  * @param {{ checked: boolean, onToggle: (on: boolean) => void } | null} [input.openAtLogin] Open at Login, in the app
  *   menu on macOS and the File menu elsewhere; absent when this build cannot add a login item.
  */
-export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFromClipboard, onConnect, onForget, onOpenSettings, onOrganizationSignIn, onAddCloud, sublabels = {}, home = null, openAtLogin = null, t = nativeText.englishText.t }) {
+export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFromClipboard, onConnect, onForget, onOpenSettings, onOrganizationSignIn, onAddCloud, sublabels = {}, home = null, openAtLogin = null, donebotOnly = false, t = nativeText.englishText.t }) {
   const isMac = process.platform === "darwin";
   const active = environments.find((e) => e.id === activeId) ?? null;
   const others = home ? environments.filter((e) => e.origin !== home.origin && e.kind !== "local") : [];
@@ -99,7 +99,14 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
       { label: away ? t("native.menu.forgetNamed", { name: active.name }) : t("native.menu.forgetServer"), enabled: away, click: () => away && onForget(active.id) },
     ],
   };
-  const server = home ? homeServer : {
+  const server = donebotOnly ? {
+    label: t("native.menu.server"),
+    submenu: [
+      { label: t("place.local"), type: "radio", checked: activeId === "local", click: () => onSwitch("local") },
+      ...environments.filter(doneBotCloudEntry).map(e => ({ label: workspaceName(e, t), type: "radio", checked: e.id === activeId, click: () => onSwitch(e.id) })),
+      ...(onAddCloud ? [{ id: "add-cloud", label: t("native.menu.openDoneBotCloud"), click: onAddCloud }] : []),
+    ],
+  } : home ? homeServer : {
     label: t("native.menu.server"),
     submenu: [
       { label: t("place.local"), type: "radio", checked: !active, click: () => onSwitch("local") },
@@ -141,7 +148,7 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
     ...(isMac ? [appMenu] : []),
     !isMac && openAtLogin ? { ...roles.file, submenu: [...atLogin, { type: "separator" }, role(t, "quit", "native.role.quit")] } : roles.file,
     roles.edit,
-    ...(home && !others.length ? [] : [server]),
+    ...(!donebotOnly && home && !others.length ? [] : [server]),
     roles.view,
     roles.window,
   ];

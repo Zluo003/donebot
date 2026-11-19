@@ -2568,6 +2568,11 @@ describe("live config frames", () => {
     expect(configStatusFromFrame({ ...baseFrame, automaticRecovery: { enabled: false } }).automaticRecovery).toEqual({ enabled: false });
   });
 
+  it("preserves the device name through live config refreshes", () => {
+    const config = configStatusFromFrame({ ...baseFrame, computerName: "Office computer" });
+    expect(reducer(initialState, { type: "configStatus", config }).config?.computerName).toBe("Office computer");
+  });
+
   it("keeps a Team Cloud's team through live config refreshes, so its people stay in the @ list", () => {
     const team = { id: "team-acme", name: "Acme", cloudPage: "https://cloud.example.test/cloud" };
     expect(configStatusFromFrame({ ...baseFrame, team }).team).toEqual(team);

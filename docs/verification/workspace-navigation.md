@@ -17,6 +17,12 @@ empty window, retention of the saved server list, and denial of menu access
 from a different window. Unit cases cover overlapping navigations, a newer
 selection, named local environments, closed windows and bounded fallback.
 
+The fixture also mounts the production Cloud loading view, checks its initial
+Atelier background, switches to Midnight and checks the retry control after
+failure. It retains light and dark screenshots. `electron/menu.test.mjs`
+covers the DoneBot-only Server menu: this computer, owned Cloud choices or
+Cloud activation, without upstream organization, pairing or forget actions.
+
 The printed evidence directory retains `receipt.json`, `electron.log`, the
 synthetic `environments.json` and a screenshot. Successful cleanup removes
 only the fixture's home and profile. Native menu items are selected

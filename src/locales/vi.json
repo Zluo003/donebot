@@ -4582,7 +4582,7 @@
   "call.live.openApiKeys": "Mở Khóa API",
   "call.live.keyFromApiKeys": "Dùng khóa API OpenAI của bạn trong Cài đặt → Khóa API.",
   "settings.group.you": "Bạn",
-  "settings.group.ai": "AI",
+  "settings.group.ai": "Tài khoản và mô hình",
   "settings.group.computers": "Thiết bị",
   "settings.group.account": "Tài khoản",
   "apps.title": "Ứng dụng",

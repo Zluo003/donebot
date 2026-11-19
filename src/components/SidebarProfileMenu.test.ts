@@ -395,6 +395,15 @@ describe("profileMenuItems", () => {
     expect(items.some((item) => item.separatorBefore)).toBe(false);
   });
 
+  it.each([false, true])("places local credit purchases immediately after usage (simple=%s)", simple => {
+    const onPurchase = vi.fn();
+    const items = build({ onPurchase, ...(simple ? { simple: { tools: [], places: [] } } : {}) });
+    expect(items.slice(0, 2).map(item => item.key)).toEqual(["usage", "purchase"]);
+    items[1].onSelect();
+    expect(onPurchase).toHaveBeenCalledOnce();
+    expect(build().some(item => item.key === "purchase")).toBe(false);
+  });
+
   it("keeps the update entry beside settings", () => {
     const update = { key: "update", label: "Check for updates", onSelect: noop };
     expect(build({ update }).map((item) => item.key)).toEqual(["usage", "phone-app", "support", "settings", "update", "account"]);

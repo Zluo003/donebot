@@ -1476,6 +1476,7 @@
   "cloudSetup.myCloud": "我的云服务器",
   "native.donebotCloud.name": "我的云服务器",
   "native.menu.addCloud": "添加云服务器",
+  "native.menu.openDoneBotCloud": "开通云服务",
   "native.switcher.addCloudSub": "让你的机器人全天候运行",
   "cloudSetup.alwaysOn": "始终在线",
   "cloudSetup.sleepsWhenIdle": "空闲时休眠",
@@ -6283,7 +6284,7 @@
   "call.live.openApiKeys": "打开 API 密钥",
   "call.live.keyFromApiKeys": "使用设置 → API 密钥中的 OpenAI API 密钥。",
   "settings.group.you": "你",
-  "settings.group.ai": "AI",
+  "settings.group.ai": "账户与模型",
   "settings.group.computers": "设备",
   "settings.group.account": "账户",
   "settings.simple.page.computer": "电脑",
@@ -7803,5 +7804,9 @@
   "mascot.color.teal": "蓝绿色",
   "mascot.color.coral": "珊瑚色",
   "mascot.color.silver": "银色",
-  "mascot.color.chrome": "铬色"
+  "mascot.color.chrome": "铬色",
+  "remote.computerName.title": "设备名称",
+  "remote.computerName.help": "显示在手机端和设备列表中。留空使用这台电脑的系统名称。",
+  "remote.computerName.placeholder": "例如：办公室电脑",
+  "remote.computerName.error": "无法保存设备名称：{error}"
 }

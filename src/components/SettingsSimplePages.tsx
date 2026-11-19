@@ -33,6 +33,7 @@ import { PlaceLookRows } from "./PlaceLookCard";
 import { ChromeRailRow } from "./ChromeRailToggle";
 import { WindowFrameRow } from "./WindowFrameRow";
 import { ProfileSummaryRow } from "./ProfileSettings";
+import { DoneBotDeviceName } from "@/donebot/DeviceName";
 import { AwayEmailsSetting } from "./AwayEmailsSetting";
 import { ImportSettings } from "./ImportSettings";
 import { NotificationRows } from "./NotificationSettingsRows";
@@ -68,9 +69,9 @@ export function SimpleGeneralPage({ has, peopleOpen, onLooks, onMore }: { has: H
   return (
     <>
       {(has("general") || has("people")) && (
-        <SettingsGroup label={t("settings.group.account")} block="general">
+        <SettingsGroup label={t(UPSTREAM_SETTINGS.profilePhone ? "settings.group.account" : "remote.computerName.title")} block="general">
           <SettingsRows>
-            {has("general") && <ProfileSummaryRow />}
+            {has("general") && (UPSTREAM_SETTINGS.profilePhone ? <ProfileSummaryRow /> : <DoneBotDeviceName />)}
             {has("general") && <AwayEmailsSetting row />}
             {has("general") && <CloudPlanRow place="account" />}
             {has("people") && <div data-settings-block="people" className="scroll-mt-4"><PeopleSection simple startOpen={peopleOpen} /></div>}

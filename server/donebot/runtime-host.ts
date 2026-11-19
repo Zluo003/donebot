@@ -7,6 +7,7 @@ import { DoneBotGateway } from "./gateway.ts";
 import { createDoneBotCredentialStore, type DoneBotPrivatePort } from "./credential-store.ts";
 import { cloudCredentialStore } from "./cloud-credential.ts";
 import { DoneBotInstallationIdentity } from "./installation-identity.ts";
+import { doneBotDeviceName } from "./device-name.ts";
 import { createDoneBotLlmDriver } from "./llm-driver.ts";
 import { createDoneBotHelpers } from "./helpers.ts";
 import { createDoneBotAccountRoutes } from "./routes.ts";
@@ -22,8 +23,17 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
   const identity = new DoneBotInstallationIdentity(join(dataDir, "donebot", "installation-identities.json"));
   const cloudCredential = process.env.DONEBOT_CLOUD_CREDENTIAL_FILE;
   if (cloudCredential && cloudCredential !== "/run/donebot/gateway.json" && !fixture) throw new Error("Invalid Cloud installation credential path.");
-  const gateway = new DoneBotGateway(cloudCredential ? cloudCredentialStore(cloudCredential) : createDoneBotCredentialStore((process as NodeJS.Process & { parentPort?: DoneBotPrivatePort }).parentPort, join(dataDir, "donebot", "session-id")), {
-    resolveInstallation: (accountId, previous) => identity.resolve(accountId, previous),
+  const credentials = cloudCredential ? cloudCredentialStore(cloudCredential) : createDoneBotCredentialStore((process as NodeJS.Process & { parentPort?: DoneBotPrivatePort }).parentPort, join(dataDir, "donebot", "session-id"));
+  const gateway = new DoneBotGateway(credentials, {
+    resolveInstallation: async (accountId, previous) => {
+      const local = identity.lookup(accountId) ?? previous;
+      const restored = await credentials.resolveInstallation?.(accountId, local).catch(error => {
+        if (!local) throw error;
+        return undefined;
+      });
+      return identity.resolve(accountId, local ?? restored);
+    },
+    installationName: () => doneBotDeviceName(config().computerName),
     ...(fixtureOrigin ? { testOrigin: fixtureOrigin } : {}),
   });
   const model = (id: string) => gateway.models()?.models.find(model => model.id === id);

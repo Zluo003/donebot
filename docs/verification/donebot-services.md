@@ -11,6 +11,12 @@
 
 ## 验证
 
+DoneBot 的“购买算力”只在本机网关工作空间提供，位于左下菜单“用量”之后。
+Cloud 工作空间、远程客户端和 Cloud 浏览器隐藏菜单及设置导航；旧的购买页入口回退到
+通用设置且不挂载支付组件。`src/donebot/services.purchase.test.ts`、
+`src/components/SettingsModal.simple.test.ts` 和 `src/components/SidebarProfileMenu.test.ts`
+覆盖这些条件以及简单、完整两种界面的菜单顺序。
+
 `src/donebot/services.dom.test.ts` 在隔离 DOM 中挂载真实组件，验证已保存原版密钥时
 促销卡和密钥入口仍隐藏，账户、购买、邮件订阅和移动下载组件不调用原版服务桥接，
 自有服务器连接表单及本地工作区入口仍可用，旧的原版服务动作不再执行。

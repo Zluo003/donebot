@@ -74,7 +74,8 @@ import { SavedStepsRow } from "./SavedStepsRow";
 import { BrowserProfilesRow, ColorUserBubblesRow, AdvancedModeRow, ExperimentalFeaturesRow, LanguageRow, NewBotEffortRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, FollowUpRow, SendKeyRow, ShowThreadsRow, ToolCallsRow, UniversalPinsRow, UpdatesRow } from "./AppSettingsRows";
 import { DoneBotAccountSettings } from "@/donebot/Account";
 import { DoneBotPayments } from "@/donebot/Payments";
-import { isDoneBotCloudBrowser } from "@/donebot/services";
+import { DoneBotDeviceName } from "@/donebot/DeviceName";
+import { doneBotPurchaseVisible } from "@/donebot/services";
 import { SIMPLE_ADVANCED_ONLY, SIMPLE_MORE_LIMITS, SimpleAiPage, SimpleBillingPage, SimpleComputerPage, SimpleGeneralPage, SimpleLooksPage, SimpleMorePage, SimpleUpdatesPage, type Disclose, type SimpleDisclosureId } from "./SettingsSimplePages";
 
 // labelKey, not a label: t() reads the active pack when called, so a label resolved at module scope would freeze the
@@ -199,7 +200,9 @@ function SettingsDialog() {
   const { state, dispatch } = useStore();
   const advanced = useAdvancedMode();
   const remoteActive = window.ogb?.remoteClient?.active === true;
-  const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) ? "general" : state.appSettingsSection;
+  const ownerOrAdmin = useOwnerOrAdmin();
+  const purchaseAvailable = doneBotPurchaseVisible({ enabled: state.config?.donebot?.enabled, cloudHome: state.config?.cloudHome, remote: remoteActive, ownerOrAdmin });
+  const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) || (state.appSettingsSection === "purchase" && !purchaseAvailable) ? "general" : state.appSettingsSection;
   const section: AppSettingsSection =
     advanced && requested === "remote" && window.ogb?.environments
       ? "desktopWorkspaces"
@@ -213,13 +216,12 @@ function SettingsDialog() {
   useEffect(() => window.ogb?.environments?.onOpenSettings?.(() => setQuery("")), []);
   useEffect(() => window.ogb?.onOpenAppSettings?.(() => setQuery("")), []);
   const q = query.trim().toLowerCase();
-  const ownerOrAdmin = useOwnerOrAdmin();
   const thisComputer = pageIsThisComputer();
   const sectionsHere = SECTIONS.map((entry) => entry.id === "companion"
     ? { ...entry, labelKey: thisComputer ? "settings.section.phoneDevices" as const : "settings.section.thisServer" as const }
     : entry);
   const baseSections = sectionsHere.filter((entry) => doneBotSettingsSectionVisible(entry.id))
-    .filter((entry) => entry.id !== "purchase" || (state.config?.donebot?.enabled === true && !isDoneBotCloudBrowser() && ownerOrAdmin !== false))
+    .filter((entry) => entry.id !== "purchase" || purchaseAvailable)
     .filter((entry) => !remoteActive || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
     .filter((entry) => entry.id !== "desktopWorkspaces" || Boolean(window.ogb?.environments))
     .filter((entry) => entry.id !== "organization" || (UPSTREAM_SERVICES.cloud && Boolean(window.ogb?.organization)))
@@ -353,7 +355,7 @@ function SettingsDialog() {
 
   const renderSection = (id: AppSettingsSection) => {
     switch (id) {
-      case "purchase": return <DoneBotPayments key={state.config?.donebot?.user?.id} />;
+      case "purchase": return purchaseAvailable ? <DoneBotPayments key={state.config?.donebot?.user?.id} /> : null;
       case "desktopWorkspaces":
         return <><ConnectedWorkspacesSettings />{remoteAccess.client}</>;
       case "organization":
@@ -373,10 +375,10 @@ function SettingsDialog() {
 
             <ProSettingsCard />
             <CloudUsageSettings />
-            <Card title={t("settings.profile.title")} subtitle={t("settings.profile.sharedSubtitle")}>
+            {!UPSTREAM_SETTINGS.profilePhone ? <Card><DoneBotDeviceName /></Card> : <Card title={t("settings.profile.title")} subtitle={t("settings.profile.sharedSubtitle")}>
               <ProfileFields />
               <AwayEmailsSetting />
-            </Card>
+            </Card>}
 
             <LanguageRow />
             <OpenAtLoginRow />

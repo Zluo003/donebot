@@ -165,6 +165,8 @@ let pendingPackageInstallUrl = pendingOrganizationEntry ? null : packageUrlFromC
 let pendingChatLink = pendingOrganizationEntry ? null : chatLinkFromCommandLine(process.argv);
 let organizationEntryReady = false;
 let mainWindow = null;
+let mainWindowSkin = null;
+const currentDesktopSkin = () => mainWindowSkin ?? (nativeTheme.shouldUseDarkColors ? "midnight" : "daylight");
 const serverUnavailableWindows = new WeakSet();
 let unreadCount = 0;
 let unreadOverlayIcon = null;
@@ -859,7 +861,7 @@ function cloudMenuSublabels() {
 }
 const cloudColorDot = colorDotIcons(nativeImage);
 function cloudMenuOptions(source = "app_menu", hasCloud = environmentsState.environments.some(doneBotCloudEntry)) {
-  return { sublabels: cloudMenuSublabels(), iconFor: cloudColorDot, ...(cloudOffersAllowed() && !hasCloud ? { onAddCloud: () => void workspaceMenuAction(() => openCloudAdd(source)) } : {}) };
+  return { sublabels: cloudMenuSublabels(), iconFor: cloudColorDot, ...(!desktopRemoteAccess && !hasCloud ? { onAddCloud: () => void workspaceMenuAction(() => openCloudAdd(source)) } : {}) };
 }
 let cloudMenuKey = "";
 function refreshCloudMenus() {
@@ -870,8 +872,7 @@ function refreshCloudMenus() {
 }
 /** Add a Cloud… is always the sheet on this computer's page, which says what is true now (setting up, one Cloud for now). */
 async function openCloudAdd(source) {
-  if (!cloudOffersAllowed() || !serverReady) return;
-  await cloudAccountRestored();
+  if (desktopRemoteAccess || !serverReady) return;
   if (activeRemote(environmentsState)) persistEnvironments(withActive(environmentsState, LOCAL_ID));
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow({ deferNavigation: true });
   if (!desktopTray?.show()) activateExistingWindow(appWindows());
@@ -1518,6 +1519,7 @@ function activeOrigin() {
 function refreshApplicationMenu() {
   Menu.setApplicationMenu(
     buildApplicationMenu({
+      donebotOnly: true,
       environments: environmentsState.environments,
       activeId: environmentsState.activeId,
       onSwitch: (id) => void workspaceMenuAction(() => switchEnvironment(id)),
@@ -2262,7 +2264,11 @@ ipcMain.handle("desktop:skin", (event, skin) => {
     if (win && !win.isDestroyed()) {
       try { win.setBackgroundColor(color); } catch {}
     }
-    if (mainWindow && event.sender === mainWindow.webContents) chromeRail.send("rail:skin", skin);
+    if (mainWindow && event.sender === mainWindow.webContents) {
+      mainWindowSkin = skin;
+      chromeRail.send("rail:skin", skin);
+      donebotCloud.refreshTheme();
+    }
   } catch {}
   return true;
 });
@@ -2584,7 +2590,7 @@ const cloudLook = createCloudLook({ store: lookFile(() => path.join(app.getPath(
   homeEntry: cloudHomeEntry, saveEntry: (origin, look) => persistEnvironments(withEnvironmentLook(environmentsState, origin, look)) });
 const cloudBuy = installCloudBuy({ ipcMain, guard: localWorkspaceOnly, client: ensureCloudAccount, offersReady: cloudOffersReady, clipboard, look: cloudLook });
 const localServerRequest = (route, init = {}) => (serverProc && serverReady ? fetch(`http://127.0.0.1:${SERVER_PORT}${route}`, { ...init, redirect: "error", credentials: "omit", headers: { ...init.headers, [DESKTOP_MUTATION_HEADER]: desktopMutationToken } }) : Promise.reject(new Error("not running")));
-const donebotCloud = installDoneBotCloud({ ipcMain, guardLocal: localWorkspaceOnly, guardWorkspace: workspaceOnly, request: localServerRequest, fetch: (...args) => session.defaultSession.fetch(...args), saved: () => environmentsState, persist: persistEnvironments, cancelHome: () => homeWindow.cancel(), navigate: navigateMainWindow, local: () => switchEnvironment(LOCAL_ID), loading: { createView: options => new WebContentsView(options), window: () => mainWindow, changed: () => railChanged() }, expires: async origin => (await session.defaultSession.cookies.get({ url: origin, name: "__Host-dbc_session" }))[0]?.expirationDate * 1000, lifecycle: app });
+const donebotCloud = installDoneBotCloud({ ipcMain, guardLocal: localWorkspaceOnly, guardWorkspace: workspaceOnly, request: localServerRequest, fetch: (...args) => session.defaultSession.fetch(...args), saved: () => environmentsState, persist: persistEnvironments, cancelHome: () => homeWindow.cancel(), navigate: navigateMainWindow, local: () => switchEnvironment(LOCAL_ID), loading: { createView: options => new WebContentsView(options), window: () => mainWindow, skin: currentDesktopSkin, changed: () => railChanged() }, expires: async origin => (await session.defaultSession.cookies.get({ url: origin, name: "__Host-dbc_session" }))[0]?.expirationDate * 1000, lifecycle: app });
 const teamProfileSeeds = createTeamProfileSeeds({ teamFetch: (...args) => session.defaultSession.fetch(...args), localRequest: localServerRequest, log: slog });
 const oneHome = installOneHome({ ipcMain, clean: cleanWorkspace, cloudPage: cloudPageAsking, pageOrigin: activePageOrigin, confirmMove: confirmTeamMove, server: () => serverProc, cookieFetch: (...args) => session.defaultSession.fetch(...args), home: () => (myCloud() && cloudAccount ? { origin: myCloud(), grant: () => cloudAccount.pairHome() } : null), power: cloudPower, file: () => path.join(app.getPath("userData"), "cloud-send.json"), localRequest: localServerRequest, space: { disk: () => cloudPlanDisk(ensureCloudAccount().state()), grow: sizeGb => ensureCloudAccount().growDisk(sizeGb) }, reconnect: origin => signInCloudSession({ origin, mine: myCloud(), pair: () => ensureCloudAccount().pairHome(), fetch: (...args) => session.defaultSession.fetch(...args) }), window: () => (desktopRemoteAccess ? null : mainWindow), localOrigin: rendererOrigin, account: () => cloudAccount, journalFile: () => path.join(app.getPath("userData"), "one-home.json"), tempRoot: () => path.join(app.getPath("temp"), "donebot-one-home"), lend: projects => sharingController().lendProjects(projects), phone: { paired: () => companionStartsAtLaunch({ remoteClient: Boolean(desktopRemoteAccess), serverReady }), start: () => startDesktopCompanion({ waitForHosted: false, remember: false }).then(() => {}) }, openHome: () => void showHome({ place: "cloud" }), openTeam: team => void showHome({ place: { team: team.id, name: team.name } }), openLocal: () => void showHome(), restart: () => relaunchAfterDesktopRemoteChange(), version: app.getVersion(), log: slog, other: () => ownHome, accountsHere: () => accountRing()?.count() ?? 1, chooses: true, t: nativeT }); ownHome = installOwnHome({ t: nativeT, localRequest: localServerRequest, fetch: (...args) => session.defaultSession.fetch(...args), environments: () => environmentsState.environments, handoff: what => oneHome.handoff(what), cloudJournal: () => oneHome.journal(), journal: jsonFile(path.join(app.getPath("userData"), "own-home.json")), choice: jsonFile(path.join(app.getPath("userData"), "own-home-choice.json")), sendState: jsonFile(path.join(app.getPath("userData"), "own-home-send.json")), lend: (projects, place) => sharingController().lendProjects(projects, place), phone: { paired: () => companionStartsAtLaunch({ remoteClient: Boolean(desktopRemoteAccess), serverReady }), start: () => startDesktopCompanion({ waitForHosted: false, remember: false }).then(() => {}) }, openHome: place => void workspaceMenuAction(() => switchEnvironment(place.id)), lastInput: oneHome.lastInput, version: app.getVersion(), log: slog, onChange: () => { oneHome.publish(); computerSharing?.cloudChanged(); railChanged(); } }); twoPlaces = installTwoPlacesMain({ t: nativeT, ipcMain, guard: localWorkspaceOnly, localRequest: localServerRequest, fetch: (...args) => session.defaultSession.fetch(...args), environments: () => environmentsState.environments, cloud: () => ({ origin: myCloud(), asleep: cloudPower.asleep() }), oneHome, ownHome, dismissed: jsonFile(path.join(app.getPath("userData"), "two-places.json")), account: () => cloudAccount, teamsRemembered: jsonFile(path.join(app.getPath("userData"), "team-places.json")), log: slog, tell: () => { if (mainWindow && !mainWindow.isDestroyed() && senderIsLocal({ sender: mainWindow.webContents })) mainWindow.webContents.send("two-places:changed"); } });
 // Teams from the verified session as places this window shows (home-places.mjs): the one to open next time, and its lines.

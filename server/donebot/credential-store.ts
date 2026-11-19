@@ -14,9 +14,9 @@ export function createDoneBotCredentialStore(port?: DoneBotPrivatePort, sessionF
     let value: DoneBotCredential | null = null;
     return { persistent: false, load: async () => value, save: async next => { value = next; } };
   }
-  const pending = new Map<string, { resolve: (value: DoneBotCredential | null) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  const pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   port.on("message", event => {
-    const message = event.data as { type?: string; requestId?: string; ok?: boolean; value?: DoneBotCredential | null } | undefined;
+    const message = event.data as { type?: string; requestId?: string; ok?: boolean; value?: unknown } | undefined;
     if (message?.type !== "donebot:credentials-result" || !message.requestId) return;
     const call = pending.get(message.requestId);
     if (!call) return;
@@ -25,12 +25,12 @@ export function createDoneBotCredentialStore(port?: DoneBotPrivatePort, sessionF
     if (message.ok) call.resolve(message.value ?? null);
     else call.reject(new Error("DoneBot secure credential storage is unavailable."));
   });
-  function request(operation: "load" | "save", value?: DoneBotCredential | null): Promise<DoneBotCredential | null> {
+  function request(operation: "load" | "save" | "installation", value?: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const requestId = randomUUID();
       const timer = setTimeout(() => { pending.delete(requestId); reject(new Error("DoneBot secure credential storage timed out.")); }, 10_000);
       pending.set(requestId, { resolve, reject, timer });
-      try { port!.postMessage({ type: "donebot:credentials", requestId, operation, ...(operation === "save" ? { value } : {}) }); }
+      try { port!.postMessage({ type: "donebot:credentials", requestId, operation, ...(operation !== "load" ? { value } : {}) }); }
       catch { clearTimeout(timer); pending.delete(requestId); reject(new Error("DoneBot secure credential storage is unavailable.")); }
     });
   }
@@ -45,6 +45,11 @@ export function createDoneBotCredentialStore(port?: DoneBotPrivatePort, sessionF
   let writes: Promise<void> = Promise.resolve();
   return {
     get persistent() { return persistent; },
+    async resolveInstallation(accountId, previousId) {
+      const id = await request("installation", { accountId, previousId });
+      if (typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new Error("Invalid saved DoneBot installation identity.");
+      return id;
+    },
     async load() {
       if (!persistent) return memory;
       try {

@@ -1,4 +1,4 @@
-import { UPSTREAM_SERVICES, UPSTREAM_SETTINGS } from "@/donebot/services";
+import { doneBotPurchaseVisible, UPSTREAM_SERVICES, UPSTREAM_SETTINGS } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import {
   Archive,
@@ -7,6 +7,7 @@ import {
   Check,
   CircleUserRound,
   Cloud,
+  Coins,
   Download,
   FolderOpen,
   Gauge,
@@ -37,6 +38,7 @@ import type { WorkspacePlace } from "./DesktopWorkspaceSwitcher";
 import { railShown, usePlaces } from "@/lib/places";
 import { useAutomationsNeedYou } from "./SidebarFooterNav";
 import { useCloudFilesReady } from "@/lib/cloud-files";
+import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import { ShortcutHint } from "./ShortcutHint";
 import { useSidebarPhoneStatus } from "./SidebarPhoneButton";
@@ -462,6 +464,7 @@ export function profileMenuItems({
   accounts = [],
   simple,
   onUsage,
+  onPurchase,
   onSettings,
   onShortcuts,
   onAbout,
@@ -481,6 +484,7 @@ export function profileMenuItems({
   accounts?: SidebarMenuItem[];
   simple?: { tools: SidebarMenuItem[]; places: SidebarMenuItem[] };
   onUsage: () => void;
+  onPurchase?: () => void;
   onSettings: () => void;
   onShortcuts: () => void;
   onAbout: () => void;
@@ -509,13 +513,14 @@ export function profileMenuItems({
     icon: <Gauge size={18} />,
     onSelect: onUsage,
   } : null;
+  const purchaseItem: SidebarMenuItem | null = onPurchase ? { key: "purchase", label: t("settings.section.purchase"), icon: <Coins size={18} />, onSelect: onPurchase } : null;
   const visiblePhone = UPSTREAM_SETTINGS.profilePhone ? phone : [];
   const support: SidebarMenuItem | null = UPSTREAM_SETTINGS.profileSupport ? { key: "support", label: t("sidebar.menu.support"), icon: <LifeBuoy size={18} />, submenu: help, onSelect: () => {} } : null;
   const settings: SidebarMenuItem = { key: "settings", label: t("sidebar.menu.settings"), icon: <SettingsIcon size={18} />, onSelect: onSettings };
   const accountItem: SidebarMenuItem | null = account ? { key: "account", label: account, icon: <CircleUserRound size={18} />, onSelect: onAccount } : null;
   const present = (...items: Array<SidebarMenuItem | null | false>) => items.filter((item): item is SidebarMenuItem => Boolean(item));
   if (!simple) {
-    const rest = [...present(usageItem), ...visiblePhone, ...present(support), settings, ...present(update), ...(accountItem ? [{ ...accountItem, separatorBefore: true }] : []), ...accounts.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item))];
+    const rest = [...present(usageItem, purchaseItem), ...visiblePhone, ...present(support), settings, ...present(update), ...(accountItem ? [{ ...accountItem, separatorBefore: true }] : []), ...accounts.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item))];
     return [...move, ...rest.map((item, index) => (move.length && index === 0 ? { ...item, separatorBefore: true } : item))];
   }
   const raised: SidebarMenuItem | null = update && updateTop ? {
@@ -529,7 +534,7 @@ export function profileMenuItems({
     move,
     present(raised),
     simple.tools,
-    [...present(usageItem), settings, ...present(!support && !raised && update)],
+    [...present(usageItem, purchaseItem), settings, ...present(!support && !raised && update)],
     [...visiblePhone, ...present(support && { ...support, submenu: raised ? help : [...help, ...present(update)] })],
     [...simple.places, ...present(accountItem)],
     accounts,
@@ -558,6 +563,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   iconOnly?: boolean; rail?: boolean; circle?: boolean; simple?: SimpleAccount;
 } = {}) {
   const { state, dispatch } = useStore();
+  const ownerOrAdmin = useOwnerOrAdmin();
   const simple = account !== undefined;
   const [menuOpen, setMenuOpen] = useState(false);
   const cloudUsage = cloudUsageSummary(useCloudPlanSnapshot(simple ? usageBridge(state.config?.cloudHome === true) : undefined));
@@ -621,6 +627,8 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
       places: placeMenuItems(account.place, { owner: account.owner, name: state.config?.team?.name, besideRail, onCloudSettings: openCloudAccount }),
     } } : {}),
     onUsage: () => dispatch({ type: "toggleAppSettings", open: true, section: "usage" }),
+    ...(doneBotPurchaseVisible({ enabled: state.config?.donebot?.enabled, cloudHome: state.config?.cloudHome, remote, ownerOrAdmin })
+      ? { onPurchase: () => dispatch({ type: "toggleAppSettings", open: true, section: "purchase" }) } : {}),
     onSettings: () => dispatch({ type: "toggleAppSettings" }),
     onShortcuts: () => {
       triggerRef.current?.closest("button")?.focus();

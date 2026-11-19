@@ -32,7 +32,8 @@ if (!process.versions.electron) {
 } else {
   assert.ok(process.argv.includes(flag));
   const output = process.argv[process.argv.indexOf(flag) + 1];
-  const { app, BrowserWindow, Menu, ipcMain, session } = await import("electron");
+  const { app, BrowserWindow, WebContentsView, Menu, ipcMain, session } = await import("electron");
+  const { createDoneBotCloudLoading } = await import("../electron/donebot-cloud-loading.mjs");
   const { createWorkspaceNavigation } = await import("../electron/workspace-navigation.mjs");
   const { createEnvironmentsFile } = await import("../electron/environments-file.mjs");
   const { default: environments } = await import("../electron/environments.cjs");
@@ -61,8 +62,8 @@ if (!process.versions.electron) {
       const local = `http://127.0.0.1:${localHttp.address().port}`;
       const cloud = `http://127.0.0.1:${cloudHttp.address().port}`;
       session.defaultSession.webRequest.onBeforeRequest((request, callback) => {
-        let allowed = false;
-        try { allowed = [local, cloud].includes(new URL(request.url).origin); } catch {}
+        let allowed = request.url.startsWith("data:text/html;charset=utf-8,");
+        try { allowed ||= [local, cloud].includes(new URL(request.url).origin); } catch {}
         callback({ cancel: !allowed });
       });
       const store = createEnvironmentsFile({ file: () => path.join(output, "environments.json"), fs, path, log: record });
@@ -141,6 +142,30 @@ if (!process.versions.electron) {
       await outsider.loadURL(local);
       assert.match(await outsider.webContents.executeJavaScript("window.ogb.workspaces.menu().then(() => '', error => error.message)"), /active main frame/);
       checks.push("sandbox, redirect restriction and main-window-only menu authority are preserved");
+      let skin = "atelier", loadingView;
+      const loading = createDoneBotCloudLoading({ createView: options => (loadingView = new WebContentsView(options)), window: () => context.mainWindow, local: () => {}, skin: () => skin });
+      try {
+        const handle = loading.start(async () => {});
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("Cloud loading fixture did not load")), 5000);
+          loadingView.webContents.once("did-finish-load", () => { clearTimeout(timer); resolve(); });
+        });
+        const background = () => loadingView.webContents.executeJavaScript("getComputedStyle(document.body).backgroundColor");
+        assert.equal(await background(), "rgb(245, 241, 235)");
+        context.mainWindow.showInactive();
+        await loadingView.webContents.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        fs.writeFileSync(path.join(output, "cloud-loading-light.png"), (await loadingView.webContents.capturePage()).toPNG());
+        skin = "midnight";
+        loading.refreshTheme();
+        await Promise.resolve();
+        assert.equal(await background(), "rgb(18, 18, 18)");
+        handle.fail();
+        await Promise.resolve();
+        assert.equal(await loadingView.webContents.executeJavaScript("document.getElementById('retry').hidden"), false);
+        await loadingView.webContents.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        fs.writeFileSync(path.join(output, "cloud-loading-dark.png"), (await loadingView.webContents.capturePage()).toPNG());
+        checks.push("Cloud loading starts with the desktop theme, updates its theme and retains retry controls");
+      } finally { loading.hide(); }
       fs.writeFileSync(path.join(output, "receipt.json"), JSON.stringify({ passed: true, checks, menuOpened, blocked,
         limitations: "Synthetic loopback pages, production preload/navigation and permission helpers; native menu items are selected programmatically. No live Cloud, production account, full app or installed DMG exercised.",
       }, null, 2));

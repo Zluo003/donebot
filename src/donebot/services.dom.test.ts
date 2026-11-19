@@ -102,16 +102,16 @@ it.each([true, false])("confirms Cloud inside the add sheet without opening a we
   await render([createElement(PlaceAddSheet, { choices: { cloud: true, local, link: true, address: true }, onClose: vi.fn() })]);
   const entry = document.querySelector('[data-donebot-cloud-access]')!;
   expect(entry.textContent).toContain("12.500000 / 月");
-  const open = [...entry.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "开通 DoneBot Cloud")!;
+  const open = [...entry.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "购买 Cloud 云主机")!;
   await act(async () => open.click());
-  expect(entry.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("余额不足无法开通或续期");
+  expect(entry.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("余额不足无法购买或续期");
   expect(fixture.api.mock.calls.every(([, init]) => !init?.method)).toBe(true);
   expect(calls).not.toHaveBeenCalled();
 });
 
 it("opens the application's own Cloud dialog without mounting upstream checkout", async () => {
   await render([createElement(DoneBotCloudDialog, { onClose: vi.fn() })]);
-  expect(document.querySelector('[data-donebot-cloud-access]')?.textContent).toContain("开通 DoneBot Cloud");
+  expect(document.querySelector('[data-donebot-cloud-access]')?.textContent).toContain("购买 Cloud 云主机");
   expect(calls).not.toHaveBeenCalled();
 });
 

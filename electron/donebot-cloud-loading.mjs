@@ -1,14 +1,24 @@
 import { fileURLToPath } from "node:url";
+import { skinChrome, skinIsLight } from "./skin-overlay.cjs";
 
-export function cloudLoadingHtml(platform = process.platform) {
+export function cloudLoadingTheme(skin) {
+  const light = skinIsLight(skin);
+  const chrome = skinChrome(skin);
+  return { "color-scheme": light ? "light" : "dark", "--bg": chrome.color,
+    "--ink": light ? "#202020" : "#f5f5f5", "--muted": chrome.symbolColor,
+    "--line": light ? "#00000024" : "#ffffff30", "--accent": light ? "#202020" : "#f5f5f5",
+    "--wash": light ? "#00000008" : "#ffffff0a" };
+}
+
+export function cloudLoadingHtml(platform = process.platform, skin = "midnight") {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>连接 Cloud</title><style>
-:root{color-scheme:dark;--bg:#111;--ink:#f5f5f5;--muted:#999;--line:#383838;--accent:#f5f5f5;--wash:#ffffff0a}
+:root{${Object.entries(cloudLoadingTheme(skin)).map(([key, value]) => `${key}:${value}`).join(";")}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,sans-serif}
 header{height:54px;-webkit-app-region:drag}main{min-height:calc(100vh - 108px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center}
 .window-actions{display:flex;justify-content:flex-end}.window-actions button{width:46px;height:32px;padding:0;border:0;border-radius:0;-webkit-app-region:no-drag}.window-actions button:last-child:hover{background:#333;color:#fff}
-.connection{display:flex;flex-direction:column;align-items:center;color:var(--ink);margin-bottom:30px}.connection-logo{width:42px;height:35px;margin-bottom:22px}.connection-diagram{width:224px;height:72px}.connection-line{stroke:#666}.connection-packet{animation:transmit 2s ease-in-out infinite}
+.connection{display:flex;flex-direction:column;align-items:center;color:var(--ink);margin-bottom:30px}.connection-logo{width:42px;height:35px;margin-bottom:22px}.connection-diagram{width:224px;height:72px}.connection-line{stroke:var(--muted)}.connection-packet{animation:transmit 2s ease-in-out infinite}
 h1{font-size:24px;font-weight:600;letter-spacing:-.5px;margin:0 0 12px}p{font-size:14px;color:var(--muted);line-height:1.7;max-width:360px;margin:0}.status{display:flex;align-items:center;gap:9px}
 .spinner{width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .85s linear infinite}
 .hint{margin-top:12px;font-size:12px;min-height:21px}.actions{display:flex;gap:12px;margin-top:28px}button{font:inherit;font-size:13px;padding:10px 18px;border:1px solid var(--line);border-radius:20px;color:var(--ink);background:transparent;cursor:pointer}button:hover{background:var(--wash)}button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}#retry{background:var(--ink);border-color:var(--ink);color:var(--bg)}[hidden]{display:none!important}
@@ -62,8 +72,16 @@ body[data-failed] .spinner{display:none}body[data-failed] .connection-packet{ani
 </main></body></html>`;
 }
 
-export function createDoneBotCloudLoading({ createView, window: getWindow, changed = () => {}, local }) {
+export function createDoneBotCloudLoading({ createView, window: getWindow, changed = () => {}, local, skin = () => "midnight" }) {
   let current = null;
+  function refreshTheme() {
+    const active = current;
+    if (!active) return;
+    void active.ready.then(() => {
+      if (current !== active || active.contents.isDestroyed()) return;
+      return active.contents.executeJavaScript(`for (const [key,value] of Object.entries(${JSON.stringify(cloudLoadingTheme(skin()))})) document.documentElement.style.setProperty(key,value);`);
+    }).catch(() => {});
+  }
   function hide() {
     const active = current;
     if (!active) return;
@@ -113,7 +131,7 @@ export function createDoneBotCloudLoading({ createView, window: getWindow, chang
         if (action === "close") win.close();
       }
     });
-    active.ready = contents.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(cloudLoadingHtml()));
+    active.ready = contents.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(cloudLoadingHtml(process.platform, skin())));
     active.ready.catch(() => {});
     win.contentView.addChildView(view);
     active.layout();
@@ -147,5 +165,5 @@ export function createDoneBotCloudLoading({ createView, window: getWindow, chang
       },
     };
   }
-  return { start, hide, visible: () => current !== null };
+  return { start, hide, refreshTheme, visible: () => current !== null };
 }

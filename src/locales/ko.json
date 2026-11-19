@@ -6060,7 +6060,7 @@
   "call.live.openApiKeys": "API 키 열기",
   "call.live.keyFromApiKeys": "설정 → API 키의 OpenAI API 키를 써요.",
   "settings.group.you": "나",
-  "settings.group.ai": "AI",
+  "settings.group.ai": "계정 및 모델",
   "settings.group.computers": "기기",
   "settings.group.account": "계정",
   "settings.simple.page.computer": "컴퓨터",

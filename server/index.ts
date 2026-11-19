@@ -559,6 +559,7 @@ import {
 import { cookieMaxAgeSeconds, formatPairingCode, pairingRequest, SessionRegistry, type SessionRecord } from "./sessions.ts";
 import { ThreadStarters } from "./thread-starters.ts";
 import { createDoneBotMobileRuntime } from "./host/donebot-mobile.ts";
+import { doneBotDeviceName } from "./donebot/device-name.ts";
 import { startPhoneRelay } from "./phone-relay.ts";
 import {
   appendAdminAction,
@@ -4546,7 +4547,7 @@ function pageIfThreadChanged(id: string, threadId: string) {
   sentThreads.set(id, threadId);
   return messagePage(threadId, DEFAULT_PAGE);
 }
-const donebotMobile = createDoneBotMobileRuntime({ dataDir: DATA_DIR, gateway: donebotHost.gateway, sessions, store, handle: (req, res) => handleRequest(req, res), name: () => cfg.computerName || "DoneBot", sourceUrl: import.meta.url });
+const donebotMobile = createDoneBotMobileRuntime({ dataDir: DATA_DIR, gateway: donebotHost.gateway, sessions, store, handle: (req, res) => handleRequest(req, res), name: () => doneBotDeviceName(cfg.computerName), sourceUrl: import.meta.url });
 store.onChange((change) => {
   if (change.type !== "message" && change.type !== "message.patch" && change.type !== "thread" && change.type !== "sections") forgetVisibility();
   personRooms.forgetDeleted(change);

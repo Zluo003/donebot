@@ -5207,7 +5207,7 @@
   "call.live.openApiKeys": "Abrir Claves de API",
   "call.live.keyFromApiKeys": "Usa tu clave de API de OpenAI de Ajustes → Claves de API.",
   "settings.group.you": "Tú",
-  "settings.group.ai": "IA",
+  "settings.group.ai": "Cuenta y modelos",
   "settings.group.computers": "Dispositivos",
   "settings.group.account": "Cuenta",
   "apps.title": "Apps",

@@ -5688,7 +5688,7 @@
   "call.live.openApiKeys": "Открыть API-ключи",
   "call.live.keyFromApiKeys": "Используется ваш ключ OpenAI API из Настройки → API-ключи.",
   "settings.group.you": "Вы",
-  "settings.group.ai": "AI",
+  "settings.group.ai": "Аккаунт и модели",
   "settings.group.computers": "Устройства",
   "settings.group.account": "Аккаунт",
   "apps.title": "Приложения",

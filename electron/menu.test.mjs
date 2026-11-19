@@ -115,6 +115,27 @@ describe("buildApplicationMenu", () => {
     expect(onCloud.find((entry) => entry.id === "back-to-my-cloud").enabled).toBe(false);
   });
 
+  it("DoneBot offers only this computer and its own Cloud, including when Cloud is home", () => {
+    const cloud = { id: "cloud", name: "DoneBot Cloud", origin: "https://fixture.donebot.cn", donebotCloud: true };
+    const onSwitch = vi.fn();
+    const items = build("darwin", { donebotOnly: true, environments: [cloud, environments[0]], activeId: "cloud", home: { origin: cloud.origin }, onSwitch }).find(entry => entry.label === "Server").submenu;
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ label: "This computer", type: "radio", checked: false });
+    expect(items[1]).toMatchObject({ type: "radio", checked: true });
+    items[0].click();
+    items[1].click();
+    expect(onSwitch.mock.calls).toEqual([["local"], ["cloud"]]);
+  });
+
+  it("DoneBot offers Cloud activation when none is provisioned", () => {
+    const onAddCloud = vi.fn();
+    const items = build("darwin", { donebotOnly: true, environments: [], activeId: "local", onAddCloud }).find(entry => entry.label === "Server").submenu;
+    expect(items.map(entry => entry.label)).toEqual(["This computer", "Activate cloud service"]);
+    expect(items[0].checked).toBe(true);
+    items[1].click();
+    expect(onAddCloud).toHaveBeenCalledOnce();
+  });
+
   it("speaks Brazilian Portuguese: Servidor, Configurações… and This computer as the app names it", () => {
     const { t } = nativeText.createNativeText({ saved: "pt-br" });
     const pt = JSON.parse(readFileSync(new URL("../src/locales/pt-br.json", import.meta.url), "utf8"));

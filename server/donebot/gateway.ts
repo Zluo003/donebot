@@ -22,6 +22,7 @@ export interface DoneBotCredentialStore {
   persistent: boolean;
   load(): Promise<DoneBotCredential | null>;
   save(value: DoneBotCredential | null): Promise<void>;
+  resolveInstallation?(accountId: string, previousId?: string): Promise<string>;
 }
 
 export interface DoneBotScope { accountId: string; installationId: string }
@@ -126,14 +127,16 @@ export class DoneBotGateway {
   private readonly store: DoneBotCredentialStore;
   private readonly installationResolver?: (accountId: string, previousId?: string) => string | Promise<string>;
   private readonly installations = new Map<string, string>();
+  private readonly installationName: () => string;
   private writes: Promise<void> = Promise.resolve();
 
   constructor(store: DoneBotCredentialStore, options: { fetch?: typeof fetch; testOrigin?: string;
-    resolveInstallation?: (accountId: string, previousId?: string) => string | Promise<string> } = {}) {
+    resolveInstallation?: (accountId: string, previousId?: string) => string | Promise<string>; installationName?: () => string } = {}) {
     this.store = store;
     this.fetcher = options.fetch ?? fetch;
     this.origin = options.testOrigin ?? DONEBOT_ORIGIN;
     this.installationResolver = options.resolveInstallation;
+    this.installationName = options.installationName ?? (() => "DoneBot");
     if (options.testOrigin && !/^http:\/\/127\.0\.0\.1:\d+$/.test(options.testOrigin)) throw new Error("Fixture origin must be IPv4 loopback.");
   }
 
@@ -274,7 +277,7 @@ export class DoneBotGateway {
     await this.persist(next, attempt.epoch);
     if (!next.credential) {
       const claimed = await this.authCall("donebot/installations/claim", { installation_id: next.installationId,
-        install_name: "DoneBot", fingerprint: "donebot-desktop" }, next.accessToken) as { credential?: string };
+        install_name: this.installationName(), fingerprint: "donebot-desktop" }, next.accessToken) as { credential?: string };
       this.checkEpoch(attempt.epoch);
       let key = claimed.credential;
       if (!key) {

@@ -24,6 +24,24 @@ DONEBOT_MOBILE_PG_FIXTURE=1 DONEBOT_MOBILE_DESKTOP_ROOT=/Users/zluo/Dev/DoneBot 
 
 结果保留在 `.omb-scratch/verify-evidence/mobile-hub/evidence.json`；其中包含 `wait`、消息、通知 payload 和该次桌面日志路径。脚本关闭自己启动的桌面、中继和测试网关。
 
+## 设备名称与安装身份恢复
+
+通用设置中的设备名称复用 `computerName` 配置，空值使用系统主机名。安装认领和手机
+中枢心跳使用相同名称；手机列表保留离线设备并标记离线，不按名称合并设备。
+桌面安全存储按本地环境目录和账号保留安装 ID，退出登录只清理会话凭据。
+恢复安装身份后重新登录会轮换网关凭据，撤销旧手机连接授权，再登记新的中继身份。
+如果本地资料和安全存储都被删除，无法保证识别为原设备；已有重复设备不会按名称自动删除。
+
+```sh
+node --test electron/donebot-credentials.node-test.mjs
+pnpm exec vitest run server/donebot/installation-identity.test.ts src/state/store.test.ts src/components/SettingsModal.simple.test.ts
+```
+
+在网关项目运行 `DONEBOT_MOBILE_PG_FIXTURE=1 go -C backend test -tags integration ./internal/mobilehub -run 'TestPostgres(Reinstall|DeviceNames|DevicePresence)' -count=1 -v`，
+覆盖真实凭据轮换 SQL、旧连接授权撤销、禁止跨账号重绑、UTF-8 名称与离线列表。
+手机项目的 `tests/controller.test.ts` 和 `tests/workspace-picker.test.ts` 覆盖同名设备保留、
+离线标识、移除失败及退出登录后的迟到响应。这些检查使用合成数据，不代表已验证实体 iPhone 重装。
+
 ## Cloud 安装凭据
 
 网关 `TestPostgresCloudMobileWorkflow` 使用同一个完整工作流，但在临时 PostgreSQL 中建立真实 Cloud 实例归属及有效订阅，并将安装标记为 `donebot-cloud`。运行服务只读取合成安装凭据，没有用户 JWT；工作空间须作为 `cloud` 在线，不能混入桌面设备列表。

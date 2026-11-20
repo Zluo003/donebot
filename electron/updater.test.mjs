@@ -122,13 +122,15 @@ const settle = async () => {
   for (let index = 0; index < 10; index += 1) await Promise.resolve();
 };
 
-it("does not load or check an updater when the package has no DoneBot update feed", async () => {
+it("reports an unavailable updater instead of claiming the package is current when its feed is missing", async () => {
   const { updater, autoUpdater, handlers } = await load(() => true);
   rmSync(join(process.resourcesPath, "app-update.yml"));
   updater.startUpdater();
   await vi.advanceTimersByTimeAsync(60_000);
   expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
-  expect(await handlers.get("update:get-state")({})).toMatchObject({ status: "idle" });
+  expect(await handlers.get("update:get-state")({})).toMatchObject({ status: "error", messageCode: "unavailable" });
+  await handlers.get("update:check")({});
+  expect(await handlers.get("update:get-state")({})).toMatchObject({ status: "error" });
 });
 
 beforeEach(() => {

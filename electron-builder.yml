@@ -85,6 +85,9 @@ extraResources:
     to: android-platform-tools
 
 mac:
+  publish:
+    provider: generic
+    url: https://donebot.cn/api/v1/client/updates/macos-${arch}/
   # Two single-arch artifacts rather than one universal binary: the app is
   # architecture-specific, and universal would make users download both halves.
   # electron-updater picks by filename (arm64-marked files on Apple silicon,
@@ -154,6 +157,9 @@ dmg:
       path: /Applications
 
 win:
+  publish:
+    provider: generic
+    url: https://donebot.cn/api/v1/client/updates/windows-${arch}/
   target:
     - target: nsis
       arch: x64

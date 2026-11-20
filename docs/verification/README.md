@@ -184,6 +184,10 @@ The [failed workspace navigation smoke](workspace-navigation.md) checks blocked
 Cloud redirects, selection recovery and native menu access in an isolated
 Electron profile.
 
+The [client update checks](client-updates.md) verify packaged update feeds,
+new-version detection against a loopback gateway, unavailable-updater errors,
+and native staging with a simulated macOS installer.
+
 The [DoneBot Cloud reconnect checks](donebot-cloud-reconnect.md) cover native
 Cookie reuse and renewal, cached conversations while loading, and interrupted
 media downloads through an isolated production request handler.

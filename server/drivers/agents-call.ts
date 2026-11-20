@@ -920,11 +920,11 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
         text: `A confirmation card is now visible to the user to ${verb} skill “${skillName}”. Nothing changes until they approve it. End this turn and wait for the decision.`,
       };
     }
-    if (args.action !== "create" && args.action !== "update") {
-      return { text: 'skill_manage action must be "create", "update", "enable", "disable" or "delete".', isError: true };
+    if (args.action !== "create" && args.action !== "update" && args.action !== "import") {
+      return { text: 'skill_manage action must be "create", "update", "import", "enable", "disable" or "delete".', isError: true };
     }
     const skillMd = typeof args.skill_md === "string" ? args.skill_md : "";
-    if (!skillMd.trim()) {
+    if (!skillMd.trim() && args.action !== "import") {
       return { text: 'skill_manage needs skill_md: the full SKILL.md including YAML frontmatter.', isError: true };
     }
     const source = typeof args.source === "string" ? args.source.trim() : "";

@@ -35,6 +35,8 @@ describe("scoped skill tools", () => {
     expect(calls.at(-1)?.body).toMatchObject({ fromBotId: "bot-voice", fromThreadId: "thread-voice", bot_id: "specialist", action: "enable" });
     await callTool("skill_manage", { bot_id: "specialist", action: "create", skill_md: "---\nname: new-report\ndescription: Format reports.\n---\nUse a heading.", source: "conversation" }, toolContext);
     expect(calls.at(-1)?.body).toMatchObject({ fromBotId: "bot-voice", bot_id: "specialist", action: "create" });
+    await callTool("skill_manage", { bot_id: "specialist", action: "import", source: "https://skills.sh/acme/skills/report" }, toolContext);
+    expect(calls.at(-1)).toMatchObject({ path: "/api/internal/skills/stage", body: { bot_id: "specialist", action: "import", source: "https://skills.sh/acme/skills/report" } });
     for (const [name, args, path] of [
       ["skill_find", { bot_id: "specialist", query: "report", online: false }, "/api/internal/skills/find"],
       ["skill_import", { bot_id: "specialist", source: "/fixture/SKILL.md", preview: false }, "/api/internal/skills/import"],

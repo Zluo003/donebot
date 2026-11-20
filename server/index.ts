@@ -404,7 +404,7 @@ import { discoverSkills } from "./skill-discovery.ts";
 import { fetchLocalSkill } from "./skill-import-local.ts";
 import { skillImportSummary } from "./skill-folder.ts";
 import { ensureTaskWorkspaceWithSkills, harnessSkillLinks } from "./skill-task-links.ts"; import { changedWords, createLendingLifts, handedInSince } from "./host/lending-lifts.ts"; import { deviceWord } from "./lent-computers.ts";
-import { parseSkillManageReferences, previousSkillVersion, skillCardCopy, skillRequestReferences } from "./skill-request-card.ts";
+import { importedSkillRequest, parseSkillManageReferences, previousSkillVersion, skillCardCopy, skillRequestReferences } from "./skill-request-card.ts";
 import { skillReferencesSha256 } from "./skill-storage.ts";
 import { createSkillsLibraryHost } from "./host/skills-library.ts";
 import { skillExport } from "./skill-export.ts";
@@ -13760,6 +13760,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           if (typeof body.query !== "string" || !body.query.trim() || body.query.length > 300 || (body.online !== undefined && typeof body.online !== "boolean")) return json(res, 400, { error: "query must contain 1–300 characters and online must be a boolean" });
           const result = await discoverSkills(body.query.trim(), listBotSkills(target), body.online !== false);
           requireActiveInternalCapability();
+          if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
           const current = skillTarget(internalSender, target.id);
           return "error" in current ? json(res, 403, current) : json(res, 200, { botId: target.id, botName: target.name, ...result });
         }
@@ -13767,8 +13768,9 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const source = body.source.trim();
         const roots = messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR);
         const attached = store.messagesFor(threadId).flatMap((message) => message.attachments?.map((file) => file.path) ?? []);
-        const fetched = isAbsolute(source) ? fetchLocalSkill(source, roots, attached) : await fetchSkillFromSource(source);
+        const fetched = isAbsolute(source) ? fetchLocalSkill(source, roots, attached) : await fetchSkillFromSource(source, fetch, callSignal);
         requireActiveInternalCapability();
+        if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
         const current = skillTarget(internalSender, target.id);
         if ("error" in current) return json(res, 403, current);
         if ("error" in fetched) return json(res, 422, fetched);
@@ -13817,20 +13819,29 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       if (method === "POST" && path === "/api/internal/skills/stage") {
         if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
         if (!internalCapability.skillAuthoring) return json(res, 403, { error: store.groupByThread(internalCapability.threadId) ? roomSkillsRefusal(Boolean(internalCapability.roomHandoffId)) : "skill authoring is not enabled for this turn" });
-        const body = await readInternalBody();
+        const received = await readInternalBody();
         const from = internalSender;
         const fromThreadId = internalCapability.threadId;
         if (!connectorThread(from.id, fromThreadId)) {
           return json(res, 403, { error: "source conversation does not belong to sender" });
         }
-        const target = skillTarget(from, body.bot_id);
+        const initiallyAllowed = skillTarget(from, received.bot_id);
+        if ("error" in initiallyAllowed) return json(res, 403, initiallyAllowed);
+        if (isSkillSwitchAction(received.action)) {
+          const staged = skillSwitch.stage(from, fromThreadId, received.action, received, appliesDirectly(from.id, fromThreadId), initiallyAllowed);
+          return json(res, staged.status, staged.body);
+        }
+        const body = await importedSkillRequest(received, fetch, callSignal);
+        requireActiveInternalCapability();
+        if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
+        const target = skillTarget(from, initiallyAllowed.id);
         if ("error" in target) return json(res, 403, target);
+        if ("importError" in body) return json(res, 422, { error: body.importError });
         const direct = appliesDirectly(from.id, fromThreadId);
-        if (isSkillSwitchAction(body.action)) { const staged = skillSwitch.stage(from, fromThreadId, body.action, body, direct, target); return json(res, staged.status, staged.body); }
         const persistence = skillProposalPersistence(from.id, fromThreadId, !direct);
         if (!persistence.ok) return json(res, persistence.status, { error: persistence.error });
         const action = body.action === "create" || body.action === "update" ? body.action : "";
-        if (!action) return json(res, 400, { error: 'action must be "create" or "update"' });
+        if (!action) return json(res, 400, { error: 'action must be "create", "update" or "import"' });
         const skillMd = typeof body.skill_md === "string" ? body.skill_md : "";
         if (!skillMd.trim()) {
           return json(res, 400, { error: 'skill_manage needs skill_md: the full SKILL.md including YAML frontmatter, for example ---\\nname: file-expense\\ndescription: Files an expense in the company portal.\\n---\\n\\n# File expense\\n' });

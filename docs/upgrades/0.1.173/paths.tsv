@@ -1089,8 +1089,8 @@ M	server/drivers/agents-bridge.ts	接入	待核对	待核对
 M	server/drivers/agents-call-cards.test.ts	接入	待核对	待核对
 M	server/drivers/agents-call-triggers.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/drivers/agents-call-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
-M	server/drivers/agents-call.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
-M	server/drivers/agents-call.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
+M	server/drivers/agents-call.test.ts	自有适配	5/6	部分接入：长brief与安全回执 25254cde4；其它差异继续核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
+M	server/drivers/agents-call.ts	自有适配	5/6	部分接入：长brief与安全回执 25254cde4；其它差异继续核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
 M	server/drivers/agents-catalog-goldens/bridged.profiles.json	接入	6	待核对
 M	server/drivers/agents-catalog-goldens/bridged.tools-list.json	接入	待核对	待核对
 M	server/drivers/agents-catalog-goldens/full.tools-list.json	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
@@ -1098,7 +1098,7 @@ M	server/drivers/agents-catalog-goldens/profiles.json	接入	5	部分接入：0a
 A	server/drivers/agents-catalog-local-vm.test.ts	接入	待核对	待核对
 M	server/drivers/agents-catalog-profile.ts	接入	6	待核对
 M	server/drivers/agents-catalog-wire.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
-M	server/drivers/agents-catalog.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
+M	server/drivers/agents-catalog.ts	自有适配	5/6	部分接入：长brief与安全回执 25254cde4；其它差异继续核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
 A	server/drivers/agents-check-back-tool.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	server/drivers/agents-claude-defer.test.ts	接入	待核对	待核对
 A	server/drivers/agents-claude-defer.ts	接入	待核对	待核对
@@ -2071,14 +2071,14 @@ M	server/side-jobs.ts	接入	待核对	待核对
 M	server/skill-command.test.ts	接入	6	待核对
 M	server/skill-export.ts	接入	6	待核对
 M	server/skill-fetch.test.ts	接入	6	待核对
-M	server/skill-fetch.ts	接入	6	待核对
+M	server/skill-fetch.ts	自有适配	6	待核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
 M	server/skill-folder.ts	接入	6	待核对
 M	server/skill-learn.ts	接入	6	待核对
 M	server/skill-library.ts	接入	6	待核对
 A	server/skill-openmausbot-docs.test.ts	接入	6	待核对
 A	server/skill-publish-to-netlify.test.ts	接入	6	待核对
-A	server/skill-request-card.test.ts	接入	6	待核对
-M	server/skill-request-card.ts	接入	6	待核对
+A	server/skill-request-card.test.ts	自有适配	6	待核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
+M	server/skill-request-card.ts	自有适配	6	待核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
 A	server/skill-side-files.ts	接入	6	待核对
 M	server/skill-storage.ts	接入	6	待核对
 M	server/skills.test.ts	接入	6	待核对

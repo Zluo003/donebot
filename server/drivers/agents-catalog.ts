@@ -815,7 +815,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "skill_manage",
     description:
-      "Submit a reusable SKILL.md, or enable, disable or delete a skill. Omit bot_id for yourself; a Chief may target a bot it manages. For a new skill, first search and inspect existing skills with skill_find unless the user explicitly requested custom creation. User-requested new bot setup authorizes creating a chosen skill for that bot. Never change a skill unless the user explicitly asked for that named skill. If the result is pending, a create stays inactive and an update leaves the current version unchanged." + APPLIES_OUTCOME,
+      "Submit a reusable SKILL.md, import one from GitHub or skills.sh for review, or enable, disable or delete a skill. Omit bot_id for yourself; a Chief may target a bot it manages. For a new skill, first search and inspect existing skills with skill_find unless the user explicitly requested custom creation. User-requested new bot setup authorizes creating a chosen skill for that bot. Never change a skill unless the user explicitly asked for that named skill. If the result is pending, a create stays inactive and an update leaves the current version unchanged." + APPLIES_OUTCOME,
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -823,12 +823,12 @@ const TOOL_DEFINITIONS = [
         bot_id: { type: "string", description: "Exact managed target bot from list_team_setup; omit for yourself." },
         action: {
           type: "string",
-          enum: ["create", "update", "enable", "disable", "delete"],
-          description: "Create a uniquely named skill, update a learned one, or switch or delete one of your own.",
+          enum: ["create", "update", "import", "enable", "disable", "delete"],
+          description: "Create a uniquely named skill, update a learned one, import from source, or switch or delete one of your own.",
         },
         skill_name: {
           type: "string",
-          description: "Required for every action but create: the exact existing name from skills_list.",
+          description: "Required for update/enable/disable/delete: the exact existing name from skills_list.",
         },
         skill_md: {
           type: "string",
@@ -860,7 +860,7 @@ const TOOL_DEFINITIONS = [
         },
         source: {
           type: "string",
-          description: "Create/update: provenance label: the URL, folder, or 'conversation' used to author the skill.",
+          description: "Import: owner/repo, a GitHub skill folder/SKILL.md link or skills.sh link. Imports SKILL.md and references/*.md; use skill_import to preview and preserve other bundled files, disabled. Create/update: provenance label: the URL, folder, or 'conversation' used to author the skill.",
         },
       },
       required: ["action"],

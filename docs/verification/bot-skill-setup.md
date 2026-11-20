@@ -54,3 +54,11 @@ the configured DoneBot service. External skills retain their own dependencies.
 Bot planning is scripted in these tests. They prove wiring, persistence and
 permissions; recommendation quality, the optional skill interview and the
 quality of authored skills need evaluation with representative real tasks.
+
+## Reviewed remote imports and download races
+
+```sh
+pnpm exec vitest run server/skill-import-approval.e2e.test.ts server/skill-request-card.test.ts server/skill-fetch.test.ts server/skills.test.ts server/host/skill-switch-host.test.ts
+```
+
+The fixture serves synthetic GitHub repositories in the isolated child process. It holds downloads while settings, management authority, turn validity or card capacity change, then verifies no unauthorized installation. It restarts disposable data as a personal Cloud with an adopted guest conversation and a newly proven owner, checks the pending-card limit and exact reviewed hashes, and preserves disabled full-folder imports without running scripts. No real GitHub, account or app is used.

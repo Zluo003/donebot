@@ -12,7 +12,9 @@ const { DoneBotAccountSettings } = await import("./Account");
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  fixture.api.mockReset().mockResolvedValue({ balance_cents: 1234, concurrency: 30 });
+  fixture.api.mockReset().mockImplementation(async path => path === "/api/donebot/workspaces"
+    ? { protocol: "donebot.teams.v1", account_id: "fixture-user", capabilities: [], workspaces: [] }
+    : { balance_cents: 1234, concurrency: 30 });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
@@ -25,7 +27,7 @@ it("keeps account, Cloud and media preferences without the old available-model l
   expect(host.textContent).toContain("Fixture media preferences");
   expect(host.textContent).not.toContain("可用模型");
   expect(host.textContent).not.toContain("刷新模型");
-  expect(fixture.api.mock.calls).toEqual([["/api/donebot/account"]]);
+  expect(fixture.api.mock.calls.map(([path]) => path).sort()).toEqual(["/api/donebot/account", "/api/donebot/workspaces"]);
 });
 it("retains account error feedback after the model list is removed", async () => {
   fixture.api.mockRejectedValue(new Error("隔离测试：账号同步失败"));

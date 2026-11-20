@@ -27,6 +27,10 @@ it("offers no team entry until the gateway declares compatible identity support"
   snapshot.capabilities = [];
   await mount(); expect(host.textContent).toBe("");
 });
+it.each([null, {}, { protocol: "donebot.teams.v0", capabilities: ["identity"], workspaces: [] }, { protocol: "donebot.teams.v1", account_id: "1", capabilities: ["identity"] }])("hides incompatible discovery responses without breaking settings: %j", async value => {
+  fixture.api.mockResolvedValue(value);
+  await mount(); expect(host.textContent).toBe("");
+});
 it("separates team roles from personal billing and requires confirmation for removal", async () => {
   await mount(); await select();
   expect(host.textContent).toContain("协作运行服务尚未就绪");

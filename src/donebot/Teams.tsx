@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/SettingsPrimitives";
 import { api } from "@/state/api";
-import type { DoneBotTeamCommand, DoneBotTeamInvitation, DoneBotTeamMember, DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams";
+import { DONEBOT_TEAMS_PROTOCOL, type DoneBotTeamCommand, type DoneBotTeamInvitation, type DoneBotTeamMember, type DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams";
 
 const button = "ui-button disabled:opacity-50";
 const field = "w-full rounded-lg border border-line bg-app px-3 py-2 text-sm text-ink";
@@ -22,6 +22,9 @@ export function DoneBotTeams() {
     const mine = ++generation.current;
     const next = await api<DoneBotWorkspaceSnapshot>("/api/donebot/workspaces");
     if (generation.current === mine) {
+      if (next?.protocol !== DONEBOT_TEAMS_PROTOCOL || typeof next.account_id !== "string" || !Array.isArray(next.capabilities) || !Array.isArray(next.workspaces)) {
+        setSnapshot(null); setSelected(""); return;
+      }
       setSnapshot(next); setSelected(current => next.workspaces.some(team => team.id === current) ? current : "");
     }
   }, []);

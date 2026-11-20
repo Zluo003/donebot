@@ -135,7 +135,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "description": "A teammate's id exactly as list_bots or your roster prints it ([id: …]). A teammate's unique display name also resolves; a name shared by two reachable teammates is refused."
+              "description": "A teammate's name, preferred, or its id from list_bots; an id's first 8 characters or more work too."
             }
           },
           "message": {

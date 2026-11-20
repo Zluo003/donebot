@@ -1,3 +1,7 @@
+import { COORDINATION_BRIEF_MAX } from "../shared/bot-coordination.ts";
+
+export const coordinateMessageMax = COORDINATION_BRIEF_MAX;
+
 // What a bot hears when a call is refused for length: which field, the limit, that nothing happened, and how to send it
 // again. Without the last part a bot retries the same words or gives up.
 

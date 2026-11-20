@@ -1,5 +1,6 @@
 import type { WireBot } from "../../shared/wire.ts";
 import { freshLook } from "../bot-look.ts";
+import { REMOTE_BOT_ID_PREFIX } from "../../shared/bot-coordination.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
 import { parseBotProfilePatch } from "../bot-profile.ts";
 import { parseVisibility } from "../bot-visibility.ts";
@@ -56,12 +57,14 @@ const OWN_ID = /^[\w-]{8,128}$/;
 
 /** A bot sent from the person's other computer keeps its id and its conversation's, so later sends and Bring newer
  * chats find it. Only ids in the server's own form, and only while nothing here uses them. */
-export function keptBotIds(body: Record<string, unknown>, store: Pick<Store, "bot" | "botByThread" | "groupByThread">): { id?: string; threadId?: string } | { error: string } {
+export function keptBotIds(body: Record<string, unknown>, store: Pick<Store, "bot" | "botByThread" | "groupByThread"> & { bots: ReadonlyArray<Pick<BotRecord, "id">> }): { id?: string; threadId?: string } | { error: string } {
   const { id, threadId } = body;
   if (id === undefined && threadId === undefined) return {};
   if (typeof id !== "string" || !OWN_ID.test(id) || (threadId !== undefined && (typeof threadId !== "string" || !OWN_ID.test(threadId)))) {
     return { error: "id and threadId must be ids of letters, digits, - and _ (8 to 128)" };
   }
+  if (id.toLowerCase().startsWith(REMOTE_BOT_ID_PREFIX)) return { error: `id must not begin with "${REMOTE_BOT_ID_PREFIX}": that is how a bot in another place is addressed here` };
+  if (store.bots.some(bot => bot.id.toLowerCase() === id.toLowerCase())) return { error: "a bot with this id already exists here" };
   if (store.bot(id) || store.botByThread(id) || store.groupByThread(id)) return { error: "a bot with this id already exists here" };
   if (threadId !== undefined && (threadId === id || store.bot(threadId) || store.botByThread(threadId) || store.groupByThread(threadId))) {
     return { error: "this conversation id is already used here" };

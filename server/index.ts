@@ -129,7 +129,7 @@ import { vpsLeftBehindNotice } from "./cloud-backend.ts";
 import * as composio from "./composio.ts";
 import { appSandboxRule, connectorCallFromFrame, connectorRefusalText, connectorScopeRefusalText, connectorUnrecognizedText, evaluateConnectorTools } from "./connector-verdict.ts";
 import { signInCardText } from "./connector-card-text.ts";
-import { BOT_HELD_CODE, BOT_PAUSED_CODE } from "../shared/bot-limit.ts"; import { createBotHolds } from "./host/bot-holds.ts"; import { createBotHoldRoutes } from "./routes/bot-holds.ts"; import { createStarterAwake } from "./host/starter-awake.ts"; import { createStarterCaps } from "./host/starter-caps.ts"; import { createStarterAwakeRoutes } from "./routes/starter-awake.ts"; import { chiefOfStaffSystemPrompt } from "./chief-of-staff.ts"; import { coordinateTooLong } from "./too-long.ts"; import { chiefAbsentFrom, createChiefRooms } from "./host/chief-rooms.ts"; import { chiefLevel, readTeamRolesWith } from "./chief-level.ts"; import { defaultBotRefusal, ensureDefaultBot, localizeDefaultBotName } from "./default-bot.ts";
+import { BOT_HELD_CODE, BOT_PAUSED_CODE } from "../shared/bot-limit.ts"; import { createBotHolds } from "./host/bot-holds.ts"; import { createBotHoldRoutes } from "./routes/bot-holds.ts"; import { createStarterAwake } from "./host/starter-awake.ts"; import { createStarterCaps } from "./host/starter-caps.ts"; import { createStarterAwakeRoutes } from "./routes/starter-awake.ts"; import { chiefOfStaffSystemPrompt } from "./chief-of-staff.ts"; import { coordinateMessageMax, coordinateTooLong } from "./too-long.ts"; import { chiefAbsentFrom, createChiefRooms } from "./host/chief-rooms.ts"; import { chiefLevel, readTeamRolesWith } from "./chief-level.ts"; import { defaultBotRefusal, ensureDefaultBot, localizeDefaultBotName } from "./default-bot.ts";
 import { buildRecall, recallRooms, recallThreadIds, withRecalled } from "./recall.ts";
 import { hostTimeZone, takesTurnClock, turnClockLine, withTurnClock } from "./turn-clock.ts";
 import { createMemoryUpkeep, dreamConversations, upkeepEnabled } from "./memory-upkeep.ts";
@@ -308,7 +308,7 @@ import type { ProviderInstance } from "./contracts.ts";
 import { readyToRun, selectDefaultModelSelection, withInstanceConfig, withNewBotEffort, type SelectableInstance } from "./default-model-selection.ts"; import { configIdentity, createTestedAi } from "./tested-ai.ts"; import { instanceLook } from "./provider-icon.ts";
 import { threadModelFallback, type ThreadEngine } from "./thread-model.ts";
 import { computerEngineMoveText, removedComputerInstanceIds, writeComputerEngineMoveLines } from "./computer-engine-removal.ts";
-import { peerDeliveryReceipt, type PeerDeliveryReceipt } from "./peer-delivery.ts";
+import { peerDeliveryReceipt, refusalsOnlyInstructions, type PeerDeliveryReceipt } from "./peer-delivery.ts";
 import { createRoomAccess, PRIVATE_CHAT_ROOM_WRITE } from "./host/room-access.ts";
 import { outsideRoomNote, sentRow, teammateResultRow, WAIT_CARD_CLOSED_REASON } from "./host/handoff-sent.ts";
 import { createWebhookRoomPost } from "./host/webhook-room-deps.ts";
@@ -14031,7 +14031,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           { senderId: internalSender.id, returns, lanes, awaited: reply !== "none" }) : "";
         if (EXTERNAL) coordinator.endTurn(generation, { ok: sent, text: sent ? "" : refused.join("; ") });
         const message = coordinateResultMessage(reply, answeredOnly);
-        return { status: sent ? 200 : 409, body: { receipts, ...(sent ? { message: lead ? `${lead} ${message}` : message } : { error: refused.join("; ") }),
+        return { status: sent ? 200 : 409, body: { receipts, ...(sent ? { message: lead ? `${lead} ${message}` : message } : { error: refused.join("; "), ...(refusalsOnlyInstructions(refused, receipts) ? { instructionOnly: true } : {}) }),
           ...(EXTERNAL && sent ? { rootId: generation } : {}) } };
       };
       if (method === "GET" && path === "/api/internal/assignment-status") {
@@ -14088,7 +14088,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const parsed = z.object({
           groupId: z.string().min(1).max(128).optional(),
           botIds: z.array(z.string().min(1).max(128)).min(1).max(4).refine(ids => new Set(ids).size === ids.length),
-          message: z.string().trim().min(1).max(4000),
+          message: z.string().trim().min(1).max(coordinateMessageMax),
           reason: z.string().trim().max(200).optional(),
           rework: z.boolean().default(false),
           thread: z.string().trim().min(1).max(128).default("standing"), title: z.string().trim().max(80).refine(fitsOnOneLine).optional(),
@@ -14097,7 +14097,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           inMyFolder: z.boolean().optional(),
           done_when: z.string().trim().max(1000).optional(), answers: z.string().trim().min(1).max(128).optional(), files: handoffFilesSchema,
         }).safeParse(await readInternalBody());
-        if (!parsed.success) return json(res, 400, { error: coordinateTooLong(parsed.error.issues) ?? "Provide 1-4 distinct botIds and a message of 1-4000 characters; thread is standing, new or the id of a thread you opened on that teammate, title one line of at most 80 characters, reply is resume or none, consult is a boolean, done_when at most 1000 characters, files at most 5 paths." });
+        if (!parsed.success) return json(res, 400, { error: coordinateTooLong(parsed.error.issues) ?? `Provide 1-4 distinct botIds and a message of 1-${coordinateMessageMax} characters; thread is standing, new or the id of a thread you opened on that teammate, title one line of at most 80 characters, reply is resume or none, consult is a boolean, done_when at most 1000 characters, files at most 5 paths.` });
         const { groupId, botIds, message, reason, rework, thread, title, reply, consult, inMyFolder, done_when: doneWhen, answers, files: paths } = parsed.data;
         const result = await handoffFiles.coordinate({ paths, answers, senderId: internalSender.id, recipients: botIds.length,
           saveOne: async path => saveTurnFile(internalCapability, internalSender.id, await attachmentVmForTurn(internalCapability), path, undefined, true),

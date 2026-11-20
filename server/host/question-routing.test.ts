@@ -193,7 +193,7 @@ describe("an answer passed on by another bot", () => {
   it("refuses an answer to work that no longer asks, saying how to send it as work instead", async () => {
     const w = world();
     const receipt = await w.routing.relay({ sender: FUCHS, senderThreadId: "inbox", target: DACHS, message: "kurz", answers: "as_gone" });
-    expect(receipt).toMatchObject({ outcome: "failed" });
+    expect(receipt).toMatchObject({ outcome: "failed", instructionOnly: true });
     expect(receipt?.detail).toBe("nothing of Dachs's waits on an answer as as_gone: it was answered or its work ended. Send it without answers if it still needs doing");
   });
 

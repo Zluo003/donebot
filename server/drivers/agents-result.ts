@@ -1,5 +1,12 @@
 import { redactSecretsInText } from "../../shared/redact.ts";
 import { TOOL_RESULT_MAX_CHARS, TOOL_RESULT_PREVIEW_CHARS, toolResultPrefix } from "../tool-results.ts";
+import type { ToolCallResult } from "./agents-call.ts";
+import type { Json } from "./agents-client.ts";
+
+export function apiAnswer(accepted: boolean, status: number, body: Json): ToolCallResult {
+  if (!accepted) return { text: String(body.error ?? `HTTP ${status}`), ...(body.instructionOnly === true ? {} : { isError: true }) };
+  return { text: JSON.stringify(body), ...(body.error ? { isError: true } : {}) };
+}
 
 /** The operation already happened. Saving overflow must never retry it or
  * turn a successful operation into a failed MCP call. Only cache I/O is timed. */

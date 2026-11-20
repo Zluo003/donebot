@@ -480,3 +480,11 @@ pnpm exec vitest run server/bot-visibility.test.ts server/channel-queue.test.ts 
 ```
 
 Disposable local and Team fixtures verify reply targets survive batching, paused members are excluded from Auto routing, unnamed steer does not enter another member's handed task, and queued jobs identify actual running work. Busy private conversation identifiers are withheld from HTTP lists, live events and replay even for the Owner/Admin; only the private chat's member gets its location. These fixtures do not qualify native mobile or cross-node execution.
+
+## Brief length and stale answers
+
+```sh
+pnpm exec vitest run server/room-coordination.e2e.test.ts server/peer-roster.test.ts server/peer-delivery.test.ts server/host/question-routing.test.ts server/too-long.test.ts server/drivers/agents-bridge-chat.test.ts
+```
+
+The disposable service receives the complete 12,000-character brief once, refuses over-limit input, resolves case and unique ID prefixes, refuses ambiguous prefixes, and does not dispatch stale answers. The tool bridge treats only all-instruction refusals as normal results; mixed execution failures remain errors. This does not qualify cross-node coordination.

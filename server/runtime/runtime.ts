@@ -1,5 +1,6 @@
 // The store is the only state: tick() is the only place work is admitted or dispatched, and no timer lives here.
 import { randomUUID } from "node:crypto";
+import { COORDINATION_BRIEF_MAX as BRIEF_MAX } from "../../shared/bot-coordination.ts";
 import { redactSecretsInText } from "../../shared/redact.ts";
 
 import { composeEnvelope } from "./envelope.ts";
@@ -47,7 +48,6 @@ export interface BeginRequest {
   goalRunId?: string;
 }
 
-const BRIEF_MAX = 12_000;
 const RESULT_MAX = 12_000;
 const STOPPED_WITH_REQUEST = "Stopped with the request it was for";
 const DETAIL_MAX = 400;

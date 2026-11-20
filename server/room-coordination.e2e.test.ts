@@ -178,12 +178,34 @@ it("hands work to a bot in another department, into a room whose readers are in 
   expect((await f.messages(f.source.activeTaskId)).some((m: any) => m.text === "Reviewed downstream outcome")).toBe(true);
 }), 45_000);
 
-it.each([4000, 4001])("enforces the %i-character request boundary on the real server", length => withRooms(async f => {
+it.each([6_000, 12_000, 12_001])("enforces the %i-character request boundary on the real server", length => withRooms(async f => {
   f.plan[f.sender.id].steps[0].arguments.message = "x".repeat(length);
-  f.plan[f.sender.id].steps[0].expectError = length > 4000;
+  f.plan[f.sender.id].steps[0].expectError = length > 12_000;
   await f.start(); expect((await f.wait()).status).toBe("settled");
-  if (length > 4000) expect(f.handoffs()).toEqual([]);
-  else expect(f.nodes().find((n: any) => n.parentId).status).toBe("completed");
+  if (length > 12_000) expect(f.handoffs()).toEqual([]);
+  else {
+    expect(f.nodes().find((n: any) => n.parentId)).toMatchObject({ status: "completed", text: "x".repeat(length) });
+    expect(JSON.stringify(f.provider().find((turn: any) => turn.botId === f.target.id).prompt)).toContain("x".repeat(length));
+  }
+}), 45_000);
+
+it.each(["case", "prefix"])("resolves a teammate's %s id before dispatching exactly one task", spelling => withRooms(async f => {
+  f.plan[f.sender.id].steps[0].arguments.bot_ids = [spelling === "case" ? f.target.id.toUpperCase() : f.target.id.slice(0, 8).toUpperCase()];
+  await f.start();
+  expect((await f.wait()).status).toBe("settled");
+  expect(f.handoffs()).toHaveLength(1);
+  expect(f.handoffs()[0]).toMatchObject({ botId: f.target.id, status: "completed" });
+}), 45_000);
+
+it("returns a stale answer as an instruction to finish without dispatching a new task", () => withRooms(async f => {
+  f.plan[f.sender.id].steps[0].arguments.answers = "as_no_longer_waiting";
+  await f.start();
+  expect((await f.wait()).status).toBe("settled");
+  expect(f.handoffs()).toEqual([]);
+  const turn = f.provider().find((entry: any) => entry.botId === f.sender.id);
+  const answer = turn.evidence.find((entry: any) => entry.step).response.result;
+  expect(answer.isError).not.toBe(true);
+  expect(answer.content[0].text).toContain("was answered or its work ended");
 }), 45_000);
 
 it("does not turn incidental mentions into extra participants in initiating or dispatched turns", () => withRooms(async f => {

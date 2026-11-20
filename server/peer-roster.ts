@@ -137,10 +137,22 @@ const foldedName = (value: string) => value.replace(/^@/, "").replace(/\s+/g, " 
 // Models slug names they saw ("Reviewer 2" → "reviewer-2").
 const looseName = (value: string) => foldedName(value.replace(/[-_]+/g, " "));
 
-/** Whether `raw`, as a bot wrote it, means this teammate: its id, or its name however it was typed. */
+export const ID_PREFIX_MIN = 8;
+
+export const isIdStart = (value: string): boolean => value.length >= ID_PREFIX_MIN && !/\s/u.test(value);
+
+const startsId = (id: string, raw: string): boolean => isIdStart(raw) && id.toLowerCase().startsWith(raw.toLowerCase());
+
+export function botById<T extends RosterMember>(bots: readonly T[], raw: string): T | "ambiguous" | undefined {
+  const wanted = raw.trim(), lower = wanted.toLowerCase();
+  const sameId = bots.filter(bot => bot.id.toLowerCase() === lower);
+  const found = sameId.length ? sameId : bots.filter(bot => startsId(bot.id, wanted));
+  return found.length > 1 ? "ambiguous" : found[0];
+}
+
 export function namesTeammate(target: Pick<RosterMember, "id" | "name">, raw: string): boolean {
   const wanted = raw.trim();
-  return target.id === wanted || foldedName(target.name) === foldedName(wanted) || looseName(target.name) === looseName(wanted);
+  return target.id === wanted || startsId(target.id, wanted) || foldedName(target.name) === foldedName(wanted) || looseName(target.name) === looseName(wanted);
 }
 
 /** Their audiences alone would let `from` reach `target`, whatever its own list of peers says. */
@@ -177,6 +189,9 @@ export function resolveTeammate<T extends RosterMember>(
   const name = fold(wanted);
   const shown = peerName(wanted) || wanted;
   if (!name) return { error: `No bot with id "${shown}" — call list_bots and copy the exact id from the result` };
+  const byId = botById(bots.filter(bot => !wider?.hides(bot)), wanted);
+  if (byId === "ambiguous") return { error: `More than one bot's id starts with "${shown}", so nothing was sent — call list_bots and copy the exact id from the result` };
+  if (byId) return { id: byId.id, byName: false };
   const reachable = reachablePeers(bots, from, wider?.reaches);
   const matches = reachable.filter(bot => fold(bot.name) === name);
   if (matches.length === 1) return { id: matches[0]!.id, byName: true };

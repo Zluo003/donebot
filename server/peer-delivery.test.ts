@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { peerDeliveryReceipt, renderPeerDeliveryReceipts, type PeerDeliveryReceipt } from "./peer-delivery.ts";
+import { peerDeliveryReceipt, refusalsOnlyInstructions, renderPeerDeliveryReceipts, type PeerDeliveryReceipt } from "./peer-delivery.ts";
 
 describe("peerDeliveryReceipt", () => {
+  it("treats only an entirely instructional refusal as a result, including identical real error text", () => {
+    const note = peerDeliveryReceipt({ botId: "one", outcome: "failed", detail: "already answered", instructionOnly: true });
+    const error = peerDeliveryReceipt({ botId: "two", outcome: "failed", detail: "already answered" });
+    expect(note.instructionOnly).toBe(true);
+    expect(refusalsOnlyInstructions([], [])).toBe(false);
+    expect(refusalsOnlyInstructions([note.detail], [note])).toBe(true);
+    expect(refusalsOnlyInstructions([note.detail, error.detail], [note, error])).toBe(false);
+    expect(refusalsOnlyInstructions(["missing bot"], [note])).toBe(false);
+  });
   it("keeps the ids and tickets and clips a hostile detail onto one line", () => {
     const receipt = peerDeliveryReceipt({
       botId: "bot-helper",

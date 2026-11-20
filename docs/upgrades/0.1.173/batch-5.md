@@ -106,7 +106,24 @@ DoneBot 将结果通知产生时的消息编号持久保存，后续回复和重
 
 - `/tmp/donebot-room-routing-units-final.log`：8 文件 / 96 项通过，包含路由、排队合并、准入、忙碌状态、HTTP/SSE 过滤及界面提示。
 - `/tmp/donebot-room-routing-workflows-final.log`：3 文件 / 31 个真实隔离服务测试通过。包含引用目标、暂停与目标协调者、插话不串任务、同房间串行与并行任务、其他房间忙碌及队列清空。
-- `/tmp/donebot-room-routing-privacy-workflow.log`：真实 Team fixture 通过。Owner、Admin、另一 Member 的 HTTP 列表、实时帧和回放没有私聊编号；本人仍可见其忙碌位置。
-- `/tmp/donebot-room-routing-types-complete.log`、`/tmp/donebot-room-routing-lint-final.log`、`/tmp/donebot-room-routing-i18n-final.log`：类型、lint、16 语言目录校验通过。
+- `/tmp/donebot-room-routing-privacy-workflow-final.log`：真实 Team fixture 通过。Owner、Admin、另一 Member 的 HTTP 列表、实时帧和回放没有私聊编号；本人仍可见其忙碌位置。
+- `/tmp/donebot-safe-coordination-types-complete.log`、`/tmp/donebot-room-routing-lint-final.log`、`/tmp/donebot-room-routing-i18n-final.log`：类型、lint、16 语言目录校验通过。
 
 尚未验证真实手机和跨节点行为；长 brief 与其余批次继续实施，团队新增能力保持关闭。
+
+## 长 brief 与安全回执
+
+接入固定上游 25254cde4，工具、HTTP 和运行上下文共用 12,000 字 brief 限制；ID 支持大小写及至少八字符的唯一前缀，先于名字解析，歧义则不派发。保留现有受众检查；导入 ID 不允许占用 link- 前缀或仅大小写不同的已用 ID。
+
+已结束任务的过期 answers 返回明确的 instructionOnly 回执，工具将其作为结束指令；真实失败仍报错。DoneBot 额外要求整批拒绝与指令回执逐条对应，混合失败不能被相同文字的指令回执掩盖。本节只接入本节点协作；跨节点协议仍属批次 3。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-safe-coordination-units-final.log`：9 文件 / 360 项通过，覆盖 ID、完整 brief、工具桥、回执、问题路由和运行时。
+- `/tmp/donebot-safe-coordination-catalog-complete.log`：50 项目录一致性和预算测试通过。
+- `/tmp/donebot-safe-coordination-workflow-complete.log`：2 文件 / 32 项完整隔离服务流程通过，包括真实团队忙碌位置隐私。
+- `/tmp/donebot-safe-coordination-boundary-workflow.log`：6 项真实隔离服务流程通过，包含 12,000 字完整送达、超限拒绝、大小写和唯一前缀只运行一次、过期 answers 不派发。
+- `/tmp/donebot-room-routing-privacy-workflow-final.log`：真实团队私聊 HTTP、实时和回放隔离通过。
+- `/tmp/donebot-safe-coordination-types-complete.log`、`/tmp/donebot-safe-coordination-lint-complete.log`：类型与 lint 通过。
+
+团队能力保持关闭。真实手机、跨节点及最终平台验收尚未完成。

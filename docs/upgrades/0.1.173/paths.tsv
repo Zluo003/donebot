@@ -822,7 +822,7 @@ M	server/cloud-send-files.ts	接入	6	待核对
 M	server/cloud-send-kinds.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/cloud-send-verify.ts	接入	待核对	待核对
 M	server/cloud-send.e2e.test.ts	接入	待核对	待核对
-M	server/cloud-send.test.ts	接入	待核对	待核对
+M	server/cloud-send.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 M	server/cloud-send.ts	接入	待核对	待核对
 A	server/cloud-sync-partial-writes.test.ts	接入	待核对	待核对
 M	server/cloud-sync.ts	接入	待核对	待核对
@@ -1082,15 +1082,15 @@ M	server/drivers/agents-aliases.test.ts	接入	待核对	待核对
 A	server/drivers/agents-app-settings-tool.ts	接入	6	待核对
 M	server/drivers/agents-app-tools.ts	接入	待核对	待核对
 M	server/drivers/agents-blank-arguments.ts	接入	待核对	待核对
-M	server/drivers/agents-bridge-chat.test.ts	接入	4	待核对
+M	server/drivers/agents-bridge-chat.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 M	server/drivers/agents-bridge-wire.test.ts	接入	待核对	待核对
 M	server/drivers/agents-bridge.test.ts	接入	待核对	待核对
 M	server/drivers/agents-bridge.ts	接入	待核对	待核对
 M	server/drivers/agents-call-cards.test.ts	接入	待核对	待核对
 M	server/drivers/agents-call-triggers.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/drivers/agents-call-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
-M	server/drivers/agents-call.test.ts	接入	待核对	待核对
-M	server/drivers/agents-call.ts	接入	待核对	待核对
+M	server/drivers/agents-call.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
+M	server/drivers/agents-call.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 M	server/drivers/agents-catalog-goldens/bridged.profiles.json	接入	6	待核对
 M	server/drivers/agents-catalog-goldens/bridged.tools-list.json	接入	待核对	待核对
 M	server/drivers/agents-catalog-goldens/full.tools-list.json	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
@@ -1098,7 +1098,7 @@ M	server/drivers/agents-catalog-goldens/profiles.json	接入	5	部分接入：0a
 A	server/drivers/agents-catalog-local-vm.test.ts	接入	待核对	待核对
 M	server/drivers/agents-catalog-profile.ts	接入	6	待核对
 M	server/drivers/agents-catalog-wire.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
-M	server/drivers/agents-catalog.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/drivers/agents-catalog.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 A	server/drivers/agents-check-back-tool.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	server/drivers/agents-claude-defer.test.ts	接入	待核对	待核对
 A	server/drivers/agents-claude-defer.ts	接入	待核对	待核对
@@ -1110,8 +1110,8 @@ M	server/drivers/agents-mcp.ts	接入	6	待核对
 M	server/drivers/agents-options-card.test.ts	接入	待核对	待核对
 M	server/drivers/agents-proxy.test.ts	接入	待核对	待核对
 M	server/drivers/agents-proxy.ts	接入	待核对	待核对
-M	server/drivers/agents-result.ts	接入	待核对	待核对
-M	server/drivers/agents-schema.test.ts	接入	待核对	待核对
+M	server/drivers/agents-result.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
+M	server/drivers/agents-schema.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 M	server/drivers/agents-schema.ts	接入	待核对	待核对
 A	server/drivers/agents-share-tool.ts	接入	待核对	待核对
 A	server/drivers/agents-thread-post-tool.ts	接入	待核对	待核对
@@ -1454,8 +1454,8 @@ M	server/host/proactive.ts	接入	待核对	待核对
 A	server/host/published-apps-included.test.ts	接入	待核对	待核对
 A	server/host/published-apps.test.ts	接入	待核对	待核对
 A	server/host/published-apps.ts	接入	待核对	待核对
-M	server/host/question-routing.test.ts	接入	待核对	待核对
-M	server/host/question-routing.ts	接入	待核对	待核对
+M	server/host/question-routing.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
+M	server/host/question-routing.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 M	server/host/queued-reason.test.ts	接入	待核对	待核对
 M	server/host/queued-reason.ts	接入	待核对	待核对
 A	server/host/representative-calendar-limit.test.ts	接入	待核对	待核对
@@ -1715,10 +1715,10 @@ M	server/pages/access.ts	接入	待核对	待核对
 M	server/pages/bundle.ts	接入	待核对	待核对
 M	server/parallel-threads.e2e.test.ts	接入	待核对	待核对
 A	server/pause-all.e2e.test.ts	接入	4	待核对
-M	server/peer-delivery.ts	接入	待核对	待核对
+M	server/peer-delivery.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 A	server/peer-limit-resend.e2e.test.ts	接入	待核对	待核对
-M	server/peer-roster.test.ts	接入	待核对	待核对
-M	server/peer-roster.ts	接入	待核对	待核对
+M	server/peer-roster.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
+M	server/peer-roster.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 A	server/perf/bot-footprint.test.ts	接入	待核对	待核对
 A	server/perf/bot-footprint.ts	接入	待核对	待核对
 A	server/perf/day-ledger.ts	接入	待核对	待核对
@@ -1824,7 +1824,7 @@ M	server/request-auth.ts	自有适配	5	流式/长历史子集已接入；其余
 M	server/research.ts	接入	待核对	待核对
 M	server/restart.test.ts	接入	1	待核对
 M	server/restart.ts	接入	1	待核对
-M	server/room-coordination.e2e.test.ts	接入	待核对	待核对
+M	server/room-coordination.e2e.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 A	server/room-pages-point.e2e.test.ts	接入	待核对	待核对
 A	server/room-pointed.test.ts	接入	待核对	待核对
 A	server/room-pointed.ts	接入	待核对	待核对
@@ -1860,7 +1860,7 @@ M	server/routes/bot-settings.ts	接入	6	待核对
 M	server/routes/bot-skills.test.ts	接入	6	待核对
 M	server/routes/bot-skills.ts	接入	6	待核对
 A	server/routes/bots-create.test.ts	接入	待核对	待核对
-M	server/routes/bots-create.ts	接入	待核对	待核对
+M	server/routes/bots-create.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 M	server/routes/browser-viewers.test.ts	接入	待核对	待核对
 M	server/routes/burst.test.ts	接入	待核对	待核对
 M	server/routes/burst.ts	接入	待核对	待核对
@@ -2025,7 +2025,7 @@ A	server/runtime/handoff-limits.test.ts	接入	5	待核对
 A	server/runtime/handoff-limits.ts	接入	5	待核对
 M	server/runtime/questions.ts	接入	待核对	待核对
 M	server/runtime/runtime.test.ts	接入	待核对	待核对
-M	server/runtime/runtime.ts	接入	待核对	待核对
+M	server/runtime/runtime.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 M	server/runtime/scenarios.test.ts	接入	待核对	待核对
 M	server/runtime/store.test.ts	接入	待核对	待核对
 M	server/runtime/store.ts	接入	待核对	待核对
@@ -2187,8 +2187,8 @@ M	server/thread-title-generate.ts	接入	待核对	待核对
 M	server/thread-title-regenerate.e2e.test.ts	接入	待核对	待核对
 M	server/thread-title.test.ts	接入	待核对	待核对
 M	server/thread-title.ts	接入	待核对	待核对
-M	server/too-long.test.ts	接入	待核对	待核对
-M	server/too-long.ts	接入	待核对	待核对
+M	server/too-long.test.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
+M	server/too-long.ts	自有适配	5	部分接入：长brief与安全回执 25254cde4；其它差异继续核对
 A	server/tool-groups.e2e.test.ts	接入	待核对	待核对
 A	server/tool-groups.test.ts	接入	待核对	待核对
 A	server/tool-groups.ts	接入	待核对	待核对

@@ -5,7 +5,7 @@ import { launchCloudSendFixture } from "../scripts/testing/cloud-send-fixture.ts
 import { openSse, type SseRecorder } from "./testing/sse.ts";
 
 it("keeps another member's busy conversation out of room lists, HTTP responses and live or replayed events", async () => {
-  const fx = await launchCloudSendFixture({ team: {
+  const fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-queue-private", team: {
     id: "team-queue-private", name: "Queue fixture",
     engine: 'process.env.FAKE_CLAUDE_ROOM_PLAN = process.env.FAKE_CLAUDE_FIXTURE_DIR + "/plan.json";',
   } });

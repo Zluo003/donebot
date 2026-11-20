@@ -11,6 +11,7 @@ import { DoneBotSignIn } from "./SignIn";
 import { isDoneBotCloudBrowser } from "./services";
 import { DoneBotCloudAccess } from "./CloudAccess";
 import { DoneBotMediaSettingsPanel } from "./MediaSettings";
+import { DoneBotTeams } from "./Teams";
 
 const buttonClass = "ui-button inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "请求失败，请稍后重试。";
@@ -66,6 +67,7 @@ export function DoneBotAccountSettings() {
     <Card title="DoneBot Cloud" subtitle="使用同一个 DoneBot 账号，开通或管理你的专属云实例。">
       {isDoneBotCloudBrowser() ? <p className="text-[13px] text-ink-secondary">请在本机 DoneBot 客户端管理 Cloud 订阅。</p> : <DoneBotCloudAccess key={state.config?.donebot?.user?.id} heading={false} />}
     </Card>
+    {!isDoneBotCloudBrowser() && <DoneBotTeams key={state.config?.donebot?.user?.id} />}
     <DoneBotMediaSettingsPanel key={state.config?.donebot?.user?.id} />
   </div>;
 }

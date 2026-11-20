@@ -538,6 +538,8 @@ export function clientGroupPatchViolation(body: unknown): string | null {
 }
 
 export interface ResolveOptions {
+  /** A request-bound gateway signature has already authenticated this ephemeral team session. */
+  verifiedTeamSession?: SessionRecord;
   sessions: SessionRegistry;
   cookieName: string;
   streamPath: string;
@@ -602,15 +604,15 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
   const bearer = bearerToken(req.headers.authorization);
   const cookie = parseCookies(headerValue(req.headers.cookie)).get(options.cookieName);
   const ticket = path === options.streamPath ? options.url.searchParams.get("ticket") : null;
-  let session: SessionRecord | null = null;
-  let via: "bearer" | "cookie" | "ticket" | null = null;
-  if (bearer?.startsWith("omb_sess_")) {
+  let session: SessionRecord | null = options.verifiedTeamSession ?? null;
+  let via: "bearer" | "cookie" | "ticket" | null = session ? "bearer" : null;
+  if (!session && bearer?.startsWith("omb_sess_")) {
     session = options.sessions.authenticate(bearer);
     via = "bearer";
-  } else if (ticket) {
+  } else if (!session && ticket) {
     session = options.sessions.redeemStreamTicket(ticket);
     via = "ticket";
-  } else if (cookie) {
+  } else if (!session && cookie) {
     session = options.sessions.authenticate(cookie);
     via = "cookie";
   }
@@ -630,7 +632,7 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
       return deny(403, options.scopeRefusal?.(method, path) ?? `forbidden: this session lacks the ${needed} scope`);
     }
     // Redeeming a stream ticket does not renew: an unattended open stream must not keep a session alive.
-    if (via !== "ticket") options.sessions.renew(session.id);
+    if (via !== "ticket" && !options.verifiedTeamSession) options.sessions.renew(session.id);
     return { auth: { kind: "session", session, via, scopes: session.scopes }, status: 401, error: "" };
   }
 

@@ -4,6 +4,8 @@ import { boundedResponseText } from "./bounded-response.ts";
 import { DEFAULT_DONEBOT_MEDIA_PREFERENCES, type DoneBotAccountState, type DoneBotCatalog, type DoneBotMediaPreferences } from "../../shared/donebot.ts";
 import type { DoneBotAuthSettings, DoneBotEmailDelivery } from "../../shared/donebot-auth.ts";
 import type { DoneBotCloudInstance, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudOperation, DoneBotCloudPlan, DoneBotCloudSnapshot } from "../../shared/donebot-cloud.ts";
+import { DONEBOT_TEAMS_PROTOCOL, type DoneBotTeamCommand, type DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams.ts";
+import { teamCommandRequest, teamIdentity, teamInvitation, teamMembers, workspaceSnapshot } from "./teams.ts";
 
 export const DONEBOT_ORIGIN = "https://donebot.cn";
 export const DONEBOT_INSTANCE_ID = "donebot";
@@ -520,6 +522,50 @@ export class DoneBotGateway {
       this.checkEpoch(epoch);
       return JSON.parse(Buffer.concat(chunks).toString("utf8"));
     } finally { this.controllers.delete(controller); }
+  }
+
+  private async teamRequest(path: string, method: string, accountId?: string, body?: unknown, key?: string): Promise<unknown> {
+    const epoch = this.epoch, session = await this.validSession();
+    this.checkEpoch(epoch);
+    if (session.mode === "installation") throw new DoneBotGatewayError(403, "team_login_required", "请在本机登录 DoneBot 账号后管理团队。");
+    if (accountId && accountId !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重试。");
+    const controller = new AbortController(); this.controllers.add(controller);
+    try {
+      const response = await this.fetcher(`${this.origin}/api/v1/donebot/${path}`, { method, redirect: "error", credentials: "omit",
+        headers: { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json", ...(key ? { "Idempotency-Key": key } : {}) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+      });
+      const value = await this.readGatewayJson(response) as { code?: number; data?: unknown };
+      this.checkEpoch(epoch);
+      if (!response.ok || value.code !== undefined && value.code !== 0) throw new DoneBotGatewayError(response.status, "team_request_failed",
+        response.status === 401 ? "登录已失效，请重新登录。" : "团队操作未完成，请刷新成员和权限后重试。");
+      return value.code === 0 && "data" in value ? value.data : value;
+    } finally { this.controllers.delete(controller); }
+  }
+
+  async workspaceSnapshot(): Promise<DoneBotWorkspaceSnapshot> {
+    const epoch = this.epoch, accountId = this.session?.user.id;
+    try {
+      const value = await this.teamRequest("workspaces", "GET"); this.checkEpoch(epoch);
+      return workspaceSnapshot(value, accountId!);
+    } catch (error) {
+      this.checkEpoch(epoch);
+      if (error instanceof DoneBotGatewayError && error.status === 404) return { account_id: accountId!, protocol: DONEBOT_TEAMS_PROTOCOL, capabilities: [], workspaces: [] };
+      throw error;
+    }
+  }
+
+  async teamMembers(id: string) {
+    teamIdentity.shape.id.parse(id);
+    return teamMembers.parse(await this.teamRequest(`teams/${id}/members`, "GET"));
+  }
+
+  async teamMutate(input: DoneBotTeamCommand) {
+    const request = teamCommandRequest(input);
+    const value = await this.teamRequest(request.path, request.method, input.account_id, request.body, request.key);
+    if (input.action === "invite") return teamInvitation.parse(value);
+    if (["create", "accept", "rename"].includes(input.action)) return teamIdentity.parse(value);
+    return { ok: true };
   }
 
   async cloudSnapshot(): Promise<DoneBotCloudSnapshot> {

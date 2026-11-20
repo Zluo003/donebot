@@ -76,6 +76,7 @@ import { doneBotConfigRefusal, doneBotModelRoutes } from "./donebot/model-policy
 import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
+import { teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./donebot/team-runtime.ts";
 import { effectiveCloudBackend } from "../shared/cloud-backend.ts";
 import { createExternalContext } from "./host/external-context.ts";
 import { createHandoffAttachments, withHandoffAttachments } from "./host/handoff-attachments.ts";
@@ -713,7 +714,8 @@ const deviceLinks = new DeviceLinks(); const sharedComputers = new SharedCompute
 const CLOUD_SECRETS = BOOT_CLOUD_SECRETS;
 const CLOUD_ENV: NodeJS.ProcessEnv = { ...process.env, ...CLOUD_SECRETS };
 const CLOUD_HOME = cloudHomeConfiguration(CLOUD_ENV);
-const CLOUD_TEAM = CLOUD_HOME?.team ?? null, CLOUD_PERSONAL = CLOUD_HOME !== null && CLOUD_TEAM === null, TEAM_LABEL = CLOUD_TEAM ? { label: CLOUD_TEAM.name } : {};
+const DONEBOT_TEAM_RUNTIME = teamRuntimeConfiguration(process.env);
+const CLOUD_TEAM = DONEBOT_TEAM_RUNTIME?.team ?? CLOUD_HOME?.team ?? null, CLOUD_PERSONAL = CLOUD_HOME !== null && CLOUD_TEAM === null, TEAM_LABEL = CLOUD_TEAM ? { label: CLOUD_TEAM.name } : {};
 /** The language set on this server, else (on a Team Cloud) the team's default from the Admin. threadLanguage: the one a line in a conversation is written in, its one person's, else the place's (server/server-lines.ts). */
 const appLanguage = (): string | undefined => cfg.language ?? CLOUD_TEAM?.language; const personLanguages = createPersonLanguages({ dataDir: DATA_DIR, configured: appLanguage, privateTo: (threadId) => teamHost.privateTo(threadId) }); const threadLanguage = personLanguages.forThread; setConversationLanguage(threadLanguage);
 if (CLOUD_HOME) { repairMovedWorkspacePaths(DATA_DIR); acceptLegacyOrigins(CLOUD_HOME.legacyOrigins); }
@@ -12645,6 +12647,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
   }
   const path = url.pathname;
   const method = req.method ?? "GET"; cloudPower?.arrived(path, req.headers); // a Cloud home's first request after a wake: what woke it
+  const verifiedTeamSession = DONEBOT_TEAM_RUNTIME ? teamRuntimeSession(DONEBOT_TEAM_RUNTIME, req) : null;
+  if (DONEBOT_TEAM_RUNTIME && !verifiedTeamSession && !teamRuntimePublicPath(method, path)) return json(res, 401, { error: "A current team member grant is required." });
   let m: RegExpMatchArray | null = null;
   let releaseWorkspaceRequest: (() => void) | undefined;
   try {
@@ -12759,6 +12763,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       });
     }
     const gate = resolveRequestAuth(req, {
+      ...(verifiedTeamSession ? { verifiedTeamSession } : {}),
       sessions,
       cookieName: SESSION_COOKIE,
       streamPath: "/api/events",
@@ -12833,13 +12838,14 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
               ...(auth.session.email ? { email: auth.session.email } : {}),
               ...(auth.session.owner ? { owner: auth.session.owner } : {}),
               ...(HOSTED_WORKSPACE ? { hosted: true } : {}),
-              ...(CLOUD_HOME ? { cloudHome: true } : {}), ...teamSignInFor(CLOUD_HOME, auth.session), ...(ownHome.owner(auth) ? { own: true, ...(ownerLends() ? { lending: OWNER_LENDING } : {}) } : {}), ...(teamHost.sessionInfo(auth.session) ? { team: teamHost.sessionInfo(auth.session), openedThreads: threadStarters.threadsOf(actorKey(auth), 2_000) } : {}),
+              ...(CLOUD_HOME || DONEBOT_TEAM_RUNTIME ? { cloudHome: true } : {}), ...teamSignInFor(CLOUD_HOME, auth.session), ...(ownHome.owner(auth) ? { own: true, ...(ownerLends() ? { lending: OWNER_LENDING } : {}) } : {}), ...(teamHost.sessionInfo(auth.session) ? { team: teamHost.sessionInfo(auth.session), openedThreads: threadStarters.threadsOf(actorKey(auth), 2_000) } : {}),
               ...(CLOUD_PERSONAL && !cloudOwnerSession(auth) ? { cloudGuest: true, openedThreads: threadStarters.threadsOf(actorKey(auth), 2_000) } : {}),
               ...(reactorFor(auth).by !== "user" ? { reactor: reactorFor(auth).by } : {}),
             },
       );
     }
     if (method === "POST" && path === "/api/auth/stream-ticket") {
+      if (verifiedTeamSession) return json(res, 200, { ticket: null });
       if (auth.kind === "loopback") return json(res, 200, { ticket: null, reason: "loopback needs no ticket" });
       return json(res, 200, sessions.issueStreamTicket(auth.session.id));
     }
@@ -14869,7 +14875,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           onClose: () => sseClients.delete(client),
         }),
       };
-      if (auth.kind === "session") client.sessionId = auth.session.id;
+      if (auth.kind === "session" && !verifiedTeamSession) client.sessionId = auth.session.id;
       if (CLOUD_TEAM && auth.kind === "session") client.person = auth.session;
       res.writeHead(200, {
         "content-type": "text/event-stream",

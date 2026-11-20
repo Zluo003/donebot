@@ -15,6 +15,7 @@ import { launchUi, runControlOmbUi } from "./testing/control-omb-ui.ts";
 import { removeTempDir, waitForExit } from "../server/testing/cleanup.ts";
 import { hostTimeout } from "../server/testing/host-timeout.ts";
 import { freePortBlock } from "../server/testing/ports.ts";
+import { teamRuntimeConfiguration } from "../server/donebot/team-runtime.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Outside the bot name pool, so no suite can plan a bot that collides with the
@@ -284,6 +285,7 @@ export async function launchVerificationServer(
   donebotCloudCredential?: { installationId: string; credential: string; user: { id: string; email: string } },
   donebotDesktopSocket?: string,
   donebotMobileRelay?: string,
+  teamRuntime?: { id: string; name: string; instanceId: string; publicKey: string },
 ): Promise<VerificationServer> {
   if (donebotMobileRelay && (!donebotFixtureOrigin || !/^ws:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(donebotMobileRelay))) throw new ControlOmbError("Mobile relay verification requires an owned loopback relay");
   if (donebotDesktopSocket && (!donebotCloudCredential || !/^\/tmp\/dbc-[\w/-]+\.sock$/.test(donebotDesktopSocket))) throw new ControlOmbError("Cloud desktop verification requires an owned fixture socket");
@@ -375,6 +377,13 @@ export async function launchVerificationServer(
   if (staticDir) childEnv.DONEBOT_STATIC_DIR = staticDir;
   if (donebotFixtureOrigin) Object.assign(childEnv, { DONEBOT_UPSTREAM_FIXTURE: "0", DONEBOT_FIXTURE_ORIGIN: donebotFixtureOrigin });
   if (donebotMobileRelay) childEnv.DONEBOT_MOBILE_FIXTURE_RELAY = donebotMobileRelay;
+  if (teamRuntime) {
+    if (!donebotFixtureOrigin) throw new ControlOmbError("Team verification requires an owned synthetic gateway");
+    const teamEnv = { DONEBOT_TEAM_RUNTIME: "1", DONEBOT_TEAM_ID: teamRuntime.id, DONEBOT_TEAM_NAME: teamRuntime.name,
+      DONEBOT_TEAM_INSTANCE_ID: teamRuntime.instanceId, DONEBOT_TEAM_PUBLIC_KEY: teamRuntime.publicKey };
+    teamRuntimeConfiguration(teamEnv);
+    Object.assign(childEnv, teamEnv);
+  }
   if (donebotCloudCredential) {
     const path = join(dataDir, "fixture-cloud-gateway.json");
     writeFileSync(path, JSON.stringify(donebotCloudCredential), { mode: 0o600 });
@@ -421,7 +430,7 @@ export async function launchVerificationServer(
   }
 
   // Pinned: the random starter name shares a pool with names e2e suites plan.
-  try {
+  try { if (!teamRuntime) {
     // First-run filesystem work can exceed a second on Windows.
     const timeout = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
     const list = await fetch(`${url}/api/bots`, {
@@ -441,6 +450,7 @@ export async function launchVerificationServer(
       signal: signal ? AbortSignal.any([signal, renameTimeout]) : renameTimeout,
     });
     if (!rename.ok) throw new Error(`verification starter rename failed (${rename.status}); see ${logPath}`);
+  }
   } catch (error) {
     await waitForExit(child, { signal: "SIGTERM" });
     await removeTempDir(dataDir);

@@ -1,3 +1,5 @@
+import type { DoneBotTeamCapability, DoneBotTeamIdentity } from "./donebot-teams.ts";
+
 /** Cloud billing uses the gateway account's balance units; monthly_price stays an exact decimal string. */
 export interface DoneBotCloudPlan { enabled: boolean; monthly_price: string; retention_days: number }
 export interface DoneBotCloudInstance {
@@ -22,6 +24,9 @@ export interface DoneBotCloudSnapshot {
   instance: DoneBotCloudInstance | null;
   operations: DoneBotCloudOperation[];
   connection_available: boolean;
+  /** Optional on older gateways; the personal instance above retains its original meaning. */
+  workspaces?: DoneBotTeamIdentity[];
+  team_capabilities?: DoneBotTeamCapability[];
 }
 export type DoneBotCloudAction = "start" | "stop" | "cancel" | "keep";
 export interface DoneBotCloudMutation {

@@ -4,6 +4,7 @@ import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import type { DoneBotCloudMutation } from "../../shared/donebot-cloud.ts";
 import { createPaymentOrder, paymentOrder, paymentSnapshot } from "./payments.ts";
 import type { DoneBotPaymentInput } from "../../shared/donebot-payments.ts";
+import { teamCommand } from "./teams.ts";
 
 const proofKeys = ["turnstile_token", "captcha_token", "captcha_ticket", "captcha_randstr", "captcha_verify_param", "tencent_ticket", "tencent_randstr", "tencent_captcha_ticket", "tencent_captcha_randstr", "aliyun_captcha_verify_param"];
 function text(body: Record<string, unknown>, key: string, max = 1000): string {
@@ -21,16 +22,25 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
     if (!ownerOrAdmin(auth)) return json(res, 403, { error: "Only the workspace owner can manage the DoneBot account." });
     res.setHeader("Cache-Control", "no-store");
     try {
+      if (process.env.DONEBOT_TEAM_RUNTIME === "1" && path !== "/api/donebot/catalog") return json(res, 403, { error: "个人账号与账单只能在个人工作空间管理。" });
       if (method === "GET" && path === "/api/donebot/state") return json(res, 200, gateway.state());
       if (method === "GET" && path === "/api/donebot/settings") return json(res, 200, await gateway.publicSettings());
       if (method === "GET" && path === "/api/donebot/account") return json(res, 200, await gateway.account());
       if (method === "GET" && path === "/api/donebot/catalog") return json(res, 200, await gateway.refreshCatalog());
       if (method === "GET" && path === "/api/donebot/cloud") return json(res, 200, await gateway.cloudSnapshot());
+      if (method === "GET" && path === "/api/donebot/workspaces") return json(res, 200, await gateway.workspaceSnapshot());
+      const members = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/members$/);
+      if (method === "GET" && members) return json(res, 200, await gateway.teamMembers(members[1]!));
       if (method === "GET" && path === "/api/donebot/payments") return json(res, 200, await paymentSnapshot(gateway));
       if (method !== "POST") return PASS;
       if (process.env.DONEBOT_CLOUD_CREDENTIAL_FILE) return json(res, 403, { error: "请在 DoneBot Cloud 控制台管理此账号。" });
       const body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) throw new DoneBotGatewayError(400, "invalid_input", "Expected an account JSON object.");
+      if (path === "/api/donebot/teams") {
+        const parsed = teamCommand.safeParse(body);
+        if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的团队操作。");
+        return json(res, 200, await gateway.teamMutate(parsed.data));
+      }
       if (path === "/api/donebot/payments/orders") {
         if (Object.keys(body).some(key => !["account_id", "amount", "payment_type"].includes(key)) || typeof body.amount !== "number") throw new DoneBotGatewayError(400, "payment_input", "无效的充值订单。");
         return json(res, 201, await createPaymentOrder(gateway, { account_id: text(body, "account_id", 200), amount: body.amount,

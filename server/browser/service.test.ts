@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { removeTempDir } from "../testing/cleanup.ts";
 import { forbiddenCommand } from "./cdp/testing/real-chrome.ts";
@@ -66,6 +66,27 @@ function setup(options: Partial<BrowserServiceOptions> = {}, startUrls?: string[
 }
 
 describe("the bots' browser tools", () => {
+  it("opens no browser when the process budget refuses admission", async () => {
+    const admit = vi.fn(async () => "No process room.");
+    const { service, target, backend } = setup({ admit });
+    await expect(service.running(service.profile(target))).rejects.toThrow("No process room.");
+    expect(admit).toHaveBeenCalledWith(target.key);
+    expect(backend.chromes).toHaveLength(0);
+  });
+
+  it("does not start after a close while waiting for process admission", async () => {
+    let release!: (refusal: string | null) => void;
+    const admit = vi.fn(() => new Promise<string | null>((resolve) => { release = resolve; }));
+    const { service, target, backend } = setup({ admit });
+    const starting = service.running(service.profile(target));
+    const refused = expect(starting).rejects.toThrow("closed while it was starting");
+    await vi.waitFor(() => expect(admit).toHaveBeenCalledOnce());
+    const closing = service.close(target.session);
+    release(null);
+    await Promise.all([refused, closing]);
+    expect(backend.chromes).toHaveLength(0);
+  });
+
   it("advertises 21 tools and restart_browser, with DoneBot's names and no launch settings", async () => {
     const { service, target } = setup();
     const listed = await service.agentRpc(target, "tools/list", {}) as { tools: Array<{ name: string; inputSchema: { properties?: Record<string, unknown> } }> };

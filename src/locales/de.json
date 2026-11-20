@@ -3489,5 +3489,10 @@
   "server.donebot.mediaFallbackAwaiting": "Das bevorzugte Modell {primary} ist fehlgeschlagen: {reason}. Nach deiner Bestätigung werde ich das Video mit dem Ersatzmodell {model} generieren.",
   "server.donebot.mediaFallbackContinuing": "Das bevorzugte Modell {primary} ist fehlgeschlagen: {reason}. Ich werde jetzt mit dem Ersatzmodell {model} generieren.",
   "server.donebot.mediaFallbackUnknownReason": "Der Dienst hat keinen genaueren Grund für den Fehler angegeben",
-  "server.donebot.mediaFallbackDeclined": "Die Generierung mit dem Ersatzmodell wurde abgelehnt. Es wurde keine Ersatzanfrage gesendet."
+  "server.donebot.mediaFallbackDeclined": "Die Generierung mit dem Ersatzmodell wurde abgelehnt. Es wurde keine Ersatzanfrage gesendet.",
+  "server.room.wait": "Wartet auf Platz auf diesem Server. Läuft gerade: {running}. Davor in der Reihe: {ahead}. Startet von selbst, sobald Platz ist.",
+  "server.room.still": "Wartet weiter auf Platz auf diesem Server. Läuft gerade: {running}. Davor in der Reihe: {ahead}.",
+  "server.room.turns": "Wartet auf einen Platz: Dieser Server führt {limit} Aufgaben gleichzeitig aus. Davor in der Reihe: {ahead}. Es startet von selbst, sobald eine fertig ist.",
+  "server.room.turnsStill": "Wartet noch: Dieser Server führt {limit} Aufgaben gleichzeitig aus. Davor in der Reihe: {ahead}.",
+  "chat.notice.outOfProcesses": "Es ist kein Platz, um ein weiteres Programm zu starten ({code}), deshalb konnte diese Aufgabe nicht laufen. An die KI wurde nichts gesendet. Sie startet von selbst neu, sobald Platz ist."
 }

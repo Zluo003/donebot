@@ -298,6 +298,7 @@ export interface BrowserLaunch {
 }
 
 interface Gate {
+  launchEpoch: number;
   owner: string | null;
   ready: boolean;
   releasing: boolean;
@@ -337,6 +338,7 @@ export class BrowserRuntime {
   private idleCloseListeners = new Set<(session: string) => void>();
   private options: { requestTimeoutMs: number; takeoverTimeoutMs: number; idleMs: number; maxPending: number; resultBudget: number; recoveryCheckMs: number; laneWaitMs: number; callBudgetMs: number; followUpReserveMs: number };
   private closeBrowser: CloseBrowser;
+  private admit?: (session: string) => Promise<string | null>;
   private applyViewport?: ApplyViewport;
   private launch?: BrowserLaunch;
   private relayCommand?: RelayCommand;
@@ -353,11 +355,12 @@ export class BrowserRuntime {
   private scrub: (text: string) => string;
   private onTiming?: (timing: BrowserTiming) => void;
 
-  constructor({ closeBrowser, applyViewport, launch, relayCommand, steps, scrub, onTiming, ...options }: Partial<BrowserRuntime["options"]> & { closeBrowser?: CloseBrowser; applyViewport?: ApplyViewport; launch?: BrowserLaunch; relayCommand?: RelayCommand; steps?: BrowserRuntime["steps"]; scrub?: (text: string) => string; onTiming?: (timing: BrowserTiming) => void } = {}) {
+  constructor({ closeBrowser, applyViewport, launch, relayCommand, steps, scrub, onTiming, admit, ...options }: Partial<BrowserRuntime["options"]> & { closeBrowser?: CloseBrowser; admit?: (session: string) => Promise<string | null>; applyViewport?: ApplyViewport; launch?: BrowserLaunch; relayCommand?: RelayCommand; steps?: BrowserRuntime["steps"]; scrub?: (text: string) => string; onTiming?: (timing: BrowserTiming) => void } = {}) {
     this.options = { ...BROWSER_CALL_DEFAULTS, takeoverTimeoutMs: 15_000, idleMs: 60_000, maxPending: 16, resultBudget: DEFAULT_BROWSER_RESULT_BUDGET, recoveryCheckMs: 30_000, ...options };
     this.closeBrowser = closeBrowser ?? (async () => false);
     this.applyViewport = applyViewport;
     this.launch = launch;
+    this.admit = admit;
     this.relayCommand = relayCommand;
     this.steps = steps;
     this.scrub = scrub ?? scrubHeldSecrets;
@@ -382,7 +385,7 @@ export class BrowserRuntime {
   private gate(session: string): Gate {
     let gate = this.gates.get(session);
     if (!gate) {
-      gate = { owner: null, ready: false, releasing: false, agents: 0, probes: 0, dispatched: 0, humans: 0, uncertain: false, lostCall: null, closing: false, changed: new Set(), watchers: 0, calls: 0, lastUsed: Date.now(), reopened: null };
+      gate = { launchEpoch: 0, owner: null, ready: false, releasing: false, agents: 0, probes: 0, dispatched: 0, humans: 0, uncertain: false, lostCall: null, closing: false, changed: new Set(), watchers: 0, calls: 0, lastUsed: Date.now(), reopened: null };
       this.gates.set(session, gate);
     }
     return gate;
@@ -513,7 +516,11 @@ export class BrowserRuntime {
     const invoke = async () => {
       const launchStarted = performance.now();
       let dispatched = false;
-      if (method === "tools/call") await this.launchReady(spec);
+      if (method === "tools/call") await this.launchReady(spec, session, () => {
+        beforeDispatch?.();
+        if (gate.owner !== null) throw new Error(BROWSER_CONTROL_REFUSAL);
+        if (Date.now() >= deadline) throw new Error("The browser could not start before this call's deadline. No action ran.");
+      });
       const entry = this.connect(session, spec);
       await entry.client.ready;
       beforeDispatch?.();
@@ -831,7 +838,15 @@ export class BrowserRuntime {
   /** Told just before an idle close stops a session's browser. */
   onIdleClose(listener: (session: string) => void): void { this.idleCloseListeners.add(listener); }
 
-  launchReady(spec: LaunchSpec): Promise<void> { return this.launch?.ready(spec) ?? Promise.resolve(); }
+  async launchReady(spec: LaunchSpec, session = spec.env?.AGENT_BROWSER_SESSION, beforeLaunch?: () => void): Promise<void> {
+    const gate = session ? this.gate(session) : undefined;
+    const epoch = gate?.launchEpoch;
+    const refusal = session && !attachesToChrome(spec.env ?? {}) ? await this.admit?.(session) : null;
+    if (gate && (gate.launchEpoch !== epoch || gate.closing || this.gates.get(session!) !== gate)) throw new Error("The browser was closed while it was starting.");
+    if (refusal) throw new Error(refusal);
+    beforeLaunch?.();
+    await this.launch?.ready(spec);
+  }
 
   /** A browser without its identity still browses, so a failure here never fails the call. */
   launched(session: string, spec: LaunchSpec): Promise<void> { return this.launch?.started(session, spec).catch(() => undefined) ?? Promise.resolve(); }
@@ -933,6 +948,7 @@ export class BrowserRuntime {
   async close(session: string): Promise<void> {
     this.holds.drop(session);
     const gate = this.gate(session);
+    gate.launchEpoch++;
     gate.closing = true;
     gate.ready = false;
     this.steps?.forget(session);

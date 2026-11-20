@@ -63,6 +63,7 @@ export function liveEventsUrl(options?: { since?: string | null; screens?: boole
   const params = new URLSearchParams();
   if (options?.since) params.set("since", options.since);
   if (options?.screens === false) params.set("screens", "off");
+  params.set("frames", "thread");
   const query = params.toString();
   return query ? `${LIVE_EVENTS_PATH}?${query}` : LIVE_EVENTS_PATH;
 }

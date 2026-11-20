@@ -354,18 +354,21 @@ export function cancelledChatFollowup(kind: ChatFollowup["kind"], ownerId: strin
   ).get(kind, ownerId, threadId, sendId));
 }
 
-const rowToMessage = (row: { json: string }): Message => JSON.parse(row.json) as Message;
+export const rowToMessage = (row: { json: string }): Message => JSON.parse(row.json) as Message;
 
 export interface ThreadRows {
   messages: Message[];
   activeLeafId: string | null;
 }
 
+export function readStoredActiveLeaf(threadId: string): string | null {
+  return (prepared(ACTIVE_LEAF).get(threadId) as { active_leaf_id: string | null } | undefined)?.active_leaf_id ?? null;
+}
+
 export function readThread(threadId: string, legacyFile: string): ThreadRows {
   const rows = prepared("SELECT json FROM messages WHERE thread_id = ? ORDER BY rowid").all(threadId) as Array<{ json: string }>;
   if (rows.length) {
-    const state = prepared(ACTIVE_LEAF).get(threadId) as { active_leaf_id: string | null } | undefined;
-    return { messages: rows.map(rowToMessage), activeLeafId: state?.active_leaf_id ?? null };
+    return { messages: rows.map(rowToMessage), activeLeafId: readStoredActiveLeaf(threadId) };
   }
   return importLegacy(threadId, legacyFile);
 }
@@ -379,14 +382,16 @@ export interface ThreadTailRows extends ThreadRows {
   hasMore?: boolean;
 }
 
+export function decodeMessagePage(rows: Array<{ json: string }>, limit: number): { messages: Message[]; hasMore: boolean } {
+  const hasMore = rows.length > limit;
+  if (hasMore) rows.length = limit;
+  return { messages: rows.reverse().map(rowToMessage), hasMore };
+}
+
 export function readThreadTail(threadId: string, legacyFile: string, limit: number): ThreadTailRows {
   const rows = prepared("SELECT json FROM messages WHERE thread_id = ? ORDER BY rowid DESC LIMIT ?").all(threadId, limit + 1) as Array<{ json: string }>;
   if (rows.length) {
-    const hasMore = rows.length > limit;
-    if (hasMore) rows.length = limit;
-    rows.reverse();
-    const state = prepared(ACTIVE_LEAF).get(threadId) as { active_leaf_id: string | null } | undefined;
-    return { messages: rows.map(rowToMessage), activeLeafId: state?.active_leaf_id ?? null, hasMore };
+    return { ...decodeMessagePage(rows, limit), activeLeafId: readStoredActiveLeaf(threadId) };
   }
   return importLegacy(threadId, legacyFile);
 }

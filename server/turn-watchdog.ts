@@ -32,6 +32,8 @@ const SUSPENDED_SWEEPS = 3;
 
 const parked = (turn: WatchedTurn): boolean => turn.waitingOnHuman || turn.waitingOnComputer;
 
+export type StallReason = "silent" | "server-error";
+
 export interface TurnWatchdogOptions {
   stallMs: number;
   toolStallMs: number;
@@ -41,7 +43,7 @@ export interface TurnWatchdogOptions {
   /** The turn's engine is known to have no process left for it; absent or false, a parked turn waits on. */
   engineGone?: (turn: WatchedTurn) => boolean;
   /** silentMs: the silence that stopped the turn, stallMs, toolStallMs or parkedStallMs. */
-  onStall: (turn: WatchedTurn, silentMs: number) => void;
+  onStall: (turn: WatchedTurn, silentMs: number, reason?: StallReason) => void;
   /** The conversations shown working that nothing holds but a watched turn (no dispatch, engine or settling turn): one no
    * watched turn holds either is freed once it has stayed so for stallMs. */
   unheld?: { threads(): Iterable<{ threadId: string; botId: string }>; free(threadId: string, botId: string): void };
@@ -121,6 +123,15 @@ export class TurnWatchdog {
   eventsDiscarded(threadId: string): void {
     const turn = this.turns.get(threadId);
     if (turn) this.watch(threadId, turn.botId);
+  }
+
+  /** Stops a watched turn now, as a stall would (server/crash-guard.ts: an error in the turn's own work). */
+  fail(threadId: string, reason: StallReason = "server-error"): boolean {
+    const turn = this.turns.get(threadId);
+    if (!turn) return false;
+    this.turns.delete(threadId);
+    this.opts.onStall(turn, this.now() - turn.lastEventAt, reason);
+    return true;
   }
 
   watching(threadId: string): boolean {

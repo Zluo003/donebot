@@ -567,7 +567,7 @@ it("ships an edge and a Fly template that keep the server private", () => {
   expect(caddy.match(/lb_try_interval 50ms/g)).toHaveLength(upstreams.length);
   // The root supervisor's code is root's, maus owns only the volume; the image's last step refuses to build otherwise.
   const dockerfile = readFileSync(join(import.meta.dirname, "../Dockerfile"), "utf8");
-  const image = dockerfile.slice(dockerfile.indexOf("FROM runtime AS cloud-home"), dockerfile.indexOf("FROM runtime AS server"));
+  const image = dockerfile.slice(dockerfile.indexOf("FROM runtime AS cloud-home"), dockerfile.indexOf("FROM runtime AS cloud-service"));
   const check = image.indexOf('untrusted="$(find /app /usr/local/bin/caddy /usr/local/bin/cloudflared \\( ! -user root -o ! -type l -perm /022 \\) -print)"');
   expect(image.slice(check)).toMatch(/^untrusted=.*\n && if \[ -n "\$untrusted" \]; then .*exit 1; fi \\\n/);
   expect(check).toBeGreaterThan(image.lastIndexOf("COPY "));
@@ -592,13 +592,16 @@ it("ships an edge and a Fly template that keep the server private", () => {
   expect(fly).not.toContain("DONEBOT_HOSTED_");
 });
 
-it("the Cloud launcher starts the server again only when it asks to after a restore, and only a few times in a row", () => {
+it("the Cloud launcher starts the server again when it asks to after a restore or after a crash (with a pause), and only a few times in a row", () => {
   const launcher = readFileSync(join(import.meta.dirname, "cloud-home-start.ts"), "utf8");
   expect(launcher).toContain("const policy = restartPolicy();");
   // The volume is prepared (and the previous machine's lease cleared) through one helper, as `maus`, before any child starts.
   expect(launcher).toContain("const prepare = () => prepareCloudHomeData(home, cloudHomeDataDir(env, home), config.machineId);");
-  expect(launcher.indexOf("prepared = prepare();")).toBeLessThan(launcher.indexOf("runServer();"));
-  expect(launcher).toContain("if (!policy.again(code, stopping)) return false;");
+  expect(launcher.indexOf("prepared = prepare();")).toBeLessThan(launcher.indexOf("\n  runServer();"));
+  expect(launcher).toContain("if (!policy.again(code, stopping, signal)) return false;");
+  expect(launcher).toContain("if (policy.delayMs() > 0) restartTimer = setTimeout(runServer, policy.delayMs());");
+  // A stop during the pause ends the wait, so a stopped home exits at once.
+  expect(launcher).toContain("if (restartTimer) clearTimeout(restartTimer);");
   for (const code of [0, 1, null]) expect(restartPolicy().again(code)).toBe(false);
   expect(restartPolicy().again(RESTART_EXIT_CODE, true)).toBe(false);
   const policy = restartPolicy(() => 0);

@@ -10216,5 +10216,10 @@
   "server.donebot.mediaApprovalDeny": "Negar",
   "server.donebot.mediaKindImage": "uma imagem",
   "server.donebot.mediaKindVideo": "um vídeo",
-  "server.donebot.mediaKindMusic": "música"
+  "server.donebot.mediaKindMusic": "música",
+  "server.room.wait": "Aguardando espaço neste servidor. Tarefas em execução: {running}. À frente desta: {ahead}. Ela começa sozinha quando houver espaço.",
+  "server.room.still": "Ainda aguardando espaço neste servidor. Tarefas em execução: {running}. À frente desta: {ahead}.",
+  "server.room.turns": "Aguardando a vez: este servidor roda {limit} tarefas ao mesmo tempo. À frente desta: {ahead}. Ela começa sozinha quando uma terminar.",
+  "server.room.turnsStill": "Ainda aguardando: este servidor roda {limit} tarefas ao mesmo tempo. À frente desta: {ahead}.",
+  "chat.notice.outOfProcesses": "Não há espaço para iniciar outro programa ({code}), então esta tarefa não pôde rodar. Nada foi enviado à IA. Ela começa de novo sozinha quando houver espaço."
 }

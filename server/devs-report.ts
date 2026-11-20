@@ -65,6 +65,7 @@ export interface DevsReportInput {
   /** Why no bot wrote a summary. */
   noSummary?: string;
   problems: string[];
+  performance?: string[];
   log: string[];
   contactEmail?: string;
 }
@@ -148,6 +149,7 @@ function diagnose(input: DevsReportInput, redact: (text: string) => string): str
     if (bot.health) lines.push(`  Engine status: ${bot.health}`);
     if (bot.apps) lines.push(`  Connected apps: ${bot.apps}`);
   }
+  if (input.performance?.length) lines.push("", "## Server performance", ...input.performance.slice(0, 10).map((line) => oneLine(redact(line), DEVS_REPORT_LIMITS.logLineChars)));
   lines.push("", "## Recent problems in this conversation, newest last");
   const problems = input.problems.slice(-DEVS_REPORT_LIMITS.problems).map((line) => oneLine(redact(line), DEVS_REPORT_LIMITS.problemChars));
   lines.push(...(problems.length ? problems : ["(none)"]));

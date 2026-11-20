@@ -15,6 +15,7 @@ import type { ProviderSnapshot, RuntimeEvent } from "./contracts.ts";
 import { createCloudSpeed, type CloudSpeed } from "./cloud-speed.ts";
 import { classifyError } from "./drivers/retry.ts";
 import type { Message, StoreChange } from "./store.ts";
+import type { StallsReport } from "./perf/loop-stalls.ts";
 
 /** The report's largest JSON body; incidents past it wait for the next poll. */
 export const CLOUD_HEALTH_MAX_BYTES = 64 * 1024;
@@ -256,6 +257,7 @@ export interface CloudHealthDeps {
   room?: () => RoomReport;
   /** CPU steal and pressure, boot and wake times, and how long messages wait for their engine. */
   speed?: CloudSpeed;
+  stalls?: () => StallsReport;
   now?: () => number;
 }
 
@@ -304,7 +306,7 @@ export function createCloudHealth(deps: CloudHealthDeps) {
         turns: read.turns, routines: read.routines, engines: engines(), connectors: connectorState(),
         browser: { available: browser.available, installing: browser.installing, interrupted: browser.interrupted },
         box: boxSummary(deps.box?.()),
-        firstHour: first?.firstHour ?? null, value: first?.value ?? null, room: deps.room?.() ?? null, speed: speed.report(),
+        firstHour: first?.firstHour ?? null, value: first?.value ?? null, room: deps.room?.() ?? null, speed: speed.report(), stalls: deps.stalls?.() ?? null,
         system: { ...memory, rssBytes: process.memoryUsage.rss(), load1: loadavg()[0] ?? 0, cpus: availableParallelism(), disk: diskBytes(deps.dataDir), eventLogWritable: writable(deps.eventsDir) },
       };
       let budget = CLOUD_HEALTH_MAX_BYTES - JSON.stringify({ ...base, cursor: ledger.cursor(read.seq), truncated: true, incidents: [] }).length;

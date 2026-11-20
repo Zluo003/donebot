@@ -9,9 +9,9 @@ export function createGracefulShutdown({
   cleanup,
   exit,
   timeoutMs = 6_000,
-}: GracefulShutdownOptions): () => void {
+}: GracefulShutdownOptions): (code?: number) => void {
   let started = false;
-  return () => {
+  return (code = 0) => {
     if (started) return;
     started = true;
 
@@ -25,7 +25,7 @@ export function createGracefulShutdown({
 
     void Promise.race([settled, deadline]).finally(() => {
       if (timer) clearTimeout(timer);
-      exit(0);
+      exit(code);
     });
   };
 }

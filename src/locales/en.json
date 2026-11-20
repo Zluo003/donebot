@@ -10356,5 +10356,10 @@
   "donebot.pricing.unit.thousandCharacters": "CNY / 1K characters",
   "donebot.pricing.unit.image": "CNY / image",
   "donebot.pricing.unit.second": "CNY / second",
-  "donebot.pricing.unit.request": "CNY / request"
+  "donebot.pricing.unit.request": "CNY / request",
+  "server.room.wait": "Waiting for room on this server. Running now: {running}. Ahead of this one: {ahead}. It starts by itself when there's room.",
+  "server.room.still": "Still waiting for room on this server. Running now: {running}. Ahead of this one: {ahead}.",
+  "server.room.turns": "Waiting for a turn: this server runs {limit} tasks at once. Ahead of this one: {ahead}. It starts by itself when one finishes.",
+  "server.room.turnsStill": "Still waiting: this server runs {limit} tasks at once. Ahead of this one: {ahead}.",
+  "chat.notice.outOfProcesses": "There is no room to start another program ({code}), so this task could not run. Nothing was sent to the AI. It starts again by itself when there is room."
 }

@@ -257,6 +257,39 @@ function daemonSpec(): { spec: BrowserSpawnSpec; busy: string; calls: () => stri
 }
 
 describe("server-owned browser MCP runtime", () => {
+  it("checks the explicit session before launching even without a session environment variable", async () => {
+    const ready = vi.fn(async () => {});
+    const admit = vi.fn(async () => "No process room.");
+    const value = runtime({ admit, launch: { ready, started: async () => {}, stopped: () => {} } });
+    await expect(value.agentRpc("capacity", spec(), "tools/call", { name: "echo", arguments: {} })).rejects.toThrow("No process room.");
+    expect(admit).toHaveBeenCalledWith("capacity");
+    expect(ready).not.toHaveBeenCalled();
+  });
+
+  it("does not launch after its session closed during process admission", async () => {
+    const admission = deferred<string | null>();
+    const admit = vi.fn(() => admission.promise);
+    const ready = vi.fn(async () => {});
+    const value = runtime({ admit, launch: { ready, started: async () => {}, stopped: () => {} } });
+    const starting = value.launchReady(spec(), "closing");
+    const refused = expect(starting).rejects.toThrow("closed while it was starting");
+    await value.close("closing");
+    admission.resolve(null);
+    await refused;
+    expect(ready).not.toHaveBeenCalled();
+  });
+
+  it("keeps a person's attached Chrome outside the server process budget", async () => {
+    const admit = vi.fn(async () => "No process room.");
+    const ready = vi.fn(async () => {});
+    const value = runtime({ admit, launch: { ready, started: async () => {}, stopped: () => {} } });
+    const attached = spec();
+    attached.env.AGENT_BROWSER_CDP = "http://127.0.0.1:9222";
+    await value.launchReady(attached, "personal");
+    expect(admit).not.toHaveBeenCalled();
+    expect(ready).toHaveBeenCalledWith(attached);
+  });
+
   it.runIf(process.platform === "linux")("starts a bot's browser engine first in line when memory runs out, before the server", async () => {
     const value = runtime();
     const listed = await value.agentRpc("scored", spec(), "tools/list", {}) as { pid: number };

@@ -3460,7 +3460,12 @@
       "server.runOwner.waitsItsTurn": "e8cd9fac4417e654d67bd9b2bb8a0ebf3ffc70b328de47fd1039da6995b84462",
       "server.runOwner.onlyAskerRetries": "d484d96fcb6a67c571cccb47ec50b631f17253f7ab1261c929bb7e91571f6c82",
       "server.mcp.alsoOn": "a7717d98c90c14e338a9e5d265c8f4c8f8c3d5ea4eb197a93705b868bc5f0dc7",
-      "server.rooms.chiefRetargeted": "2f8fbfd73503b5871395ef76bc69b867583dae6b03003099d551a7f019a070fb"
+      "server.rooms.chiefRetargeted": "2f8fbfd73503b5871395ef76bc69b867583dae6b03003099d551a7f019a070fb",
+      "server.room.wait": "221a8b208fb0d422501142a2ddd78e86b60a22730fba6423293438d770645555",
+      "server.room.still": "2ab8db3821e55f07ade15cecd95f296010c4b39f5c8828a34b3dfff525171b7b",
+      "server.room.turns": "22d3991e5e5089d0ec7c8997863b7172c73e1bc0bbaf9dc96febeaae98e02d0b",
+      "server.room.turnsStill": "02e83aa50e246a76d138335f0ba4d12c15efc909de572cb1a27be7ccaee2307f",
+      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85"
     },
     "es": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -33849,7 +33854,12 @@
       "browser.extensions.title": "fe3436af86b47d22f22d93da68119fcb749dbed0335b4dc99f254e02db236156",
       "browser.extensions.empty": "85494666424df419c354a92e4f107aebcfe4a636a3e54ff7ea3914284313c31e",
       "browser.extensions.takeControl": "e8357ac6462e969a5a75175e9d79ed5030939cca831b530fd6a4472276264f16",
-      "serverError.chat.busyFresh": "46c60722ffc0ccb52f387d58f962168a3f091f5af50e9049ef4ff932b2ccba4d"
+      "serverError.chat.busyFresh": "46c60722ffc0ccb52f387d58f962168a3f091f5af50e9049ef4ff932b2ccba4d",
+      "server.room.wait": "221a8b208fb0d422501142a2ddd78e86b60a22730fba6423293438d770645555",
+      "server.room.still": "2ab8db3821e55f07ade15cecd95f296010c4b39f5c8828a34b3dfff525171b7b",
+      "server.room.turns": "22d3991e5e5089d0ec7c8997863b7172c73e1bc0bbaf9dc96febeaae98e02d0b",
+      "server.room.turnsStill": "02e83aa50e246a76d138335f0ba4d12c15efc909de572cb1a27be7ccaee2307f",
+      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85"
     },
     "zh": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -41499,7 +41509,12 @@
       "remote.computerName.placeholder": "33d53fc415aeeb5128cb4c82cebe65e8fe3fbbbfae607ffee515ce72fafbbbd1",
       "remote.computerName.title": "155106be1173d7573d45e29f95a38e17bc3ce399535654f159ef4dd5a99e33ba",
       "native.menu.openDoneBotCloud": "88363846674542694a81e65a2476399a0654fcc69f9f6b358579767a5c12388d",
-      "remote.computerName.error": "39431ac4903234c376d4ee65e3cc59c4b0ec58484bb02363a27e128bca8f37c0"
+      "remote.computerName.error": "39431ac4903234c376d4ee65e3cc59c4b0ec58484bb02363a27e128bca8f37c0",
+      "server.room.wait": "221a8b208fb0d422501142a2ddd78e86b60a22730fba6423293438d770645555",
+      "server.room.still": "2ab8db3821e55f07ade15cecd95f296010c4b39f5c8828a34b3dfff525171b7b",
+      "server.room.turns": "22d3991e5e5089d0ec7c8997863b7172c73e1bc0bbaf9dc96febeaae98e02d0b",
+      "server.room.turnsStill": "02e83aa50e246a76d138335f0ba4d12c15efc909de572cb1a27be7ccaee2307f",
+      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",

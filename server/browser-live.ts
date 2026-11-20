@@ -609,7 +609,7 @@ export class BrowserLive {
     const resetting = this.sessionResets.get(viewer.session);
     if (resetting) await resetting;
     await this.runtime.settled(viewer.session);
-    await this.runtime.launchReady(viewer.spec).catch((error: unknown) => {
+    await this.runtime.launchReady(viewer.spec, viewer.session).catch((error: unknown) => {
       throw new BrowserLiveError(error instanceof Error ? error.message : "The browser is not ready yet.", 503);
     });
     let status: ObjectValue;

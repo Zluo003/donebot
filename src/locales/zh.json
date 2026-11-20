@@ -7833,5 +7833,10 @@
   "donebot.pricing.unit.thousandCharacters": "元／千字",
   "donebot.pricing.unit.image": "元／张",
   "donebot.pricing.unit.second": "元／秒",
-  "donebot.pricing.unit.request": "元／次"
+  "donebot.pricing.unit.request": "元／次",
+  "server.room.wait": "正在等待服务器资源。当前运行：{running} 个任务，前面还有 {ahead} 个。资源可用后会自动开始。",
+  "server.room.still": "仍在等待服务器资源。当前运行：{running} 个任务，前面还有 {ahead} 个。",
+  "server.room.turns": "正在排队：服务器最多同时运行 {limit} 个任务，前面还有 {ahead} 个。任务结束后会自动开始。",
+  "server.room.turnsStill": "仍在排队：服务器最多同时运行 {limit} 个任务，前面还有 {ahead} 个。",
+  "chat.notice.outOfProcesses": "服务器暂时无法启动新进程（{code}），此任务未能运行。未向 AI 发送请求，资源可用后会自动重试。"
 }

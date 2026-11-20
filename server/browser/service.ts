@@ -50,6 +50,8 @@ export interface BrowserServiceOptions {
   backend(key: string): Backend;
   /** Browsers running at once on this server. */
   maxRunning: number;
+  /** Null when a new browser fits the server process limit; otherwise a refusal. */
+  admit?(key: string): Promise<string | null>;
   idleMs(): number;
   /** A running turn holds this session between browser calls too. */
   held?(session: string): boolean;
@@ -190,7 +192,9 @@ export class BrowserService {
 
   async #start(profile: ProfileState, epoch: number): Promise<Running> {
     await this.#capacity(profile, epoch);
+    const refusal = await this.#options.admit?.(profile.key);
     this.#stillWanted(profile, epoch);
+    if (refusal) throw new Error(refusal);
     const opening = this.#open(profile, epoch);
     profile.opening = opening;
     try {

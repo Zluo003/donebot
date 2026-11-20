@@ -52,8 +52,9 @@ export interface ThreadRouteDeps {
   cliOwnerToken(): string | undefined;
   defaultPage: number;
   pageSize(raw: string | null): number | null | undefined;
-  messagePage(threadId: string, limit: number | undefined, before?: string | null): MessagePage;
-  messageWindow(threadId: string, messageId: string, limit: number): { messages: Array<Message | Record<string, unknown>>; hasMore: boolean } | null;
+  messagePage(threadId: string, limit: number | undefined): MessagePage;
+  messagePageBefore(threadId: string, before: string, limit: number): MessagePage | null;
+  messageWindow(threadId: string, messageId: string, limit: number): { messages: Array<Message | Record<string, unknown>>; hasMore: boolean; activeLeafId: string | null } | null;
   publicBotQueuedMessages(): ReturnType<typeof queuedSteerSnapshot>;
   publicGroupState(record: GroupRecord): WireGroup;
   wireBot(bot: BotRecord): WireBot;
@@ -78,7 +79,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
   const {
     store, userName: userNameFor, sessions, groupUsageReader, lendingEnabled,
     hostedWorkspace: HOSTED_WORKSPACE, sessionCookie: SESSION_COOKIE, loopback: LOOPBACK, defaultPage: DEFAULT_PAGE,
-    pageSize, messagePage, messageWindow, publicBotQueuedMessages, publicGroupState, wireBot,
+    pageSize, messagePage, messagePageBefore, messageWindow, publicBotQueuedMessages, publicGroupState, wireBot,
     botComputerControlSnapshot, messageFileRootsForThread, viewerFor, visibleTo,
   } = deps;
   const jobs = createJobRoutes({ store, coordinator: deps.coordinator, groupThreadIsWorking: deps.groupThreadIsWorking, viewerFor, visibleTo, sessions });
@@ -167,13 +168,14 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       if (around) {
         const window = messageWindow(threadId, around, limit ?? DEFAULT_PAGE);
         if (!window) return json(res, 404, { error: "no such message" });
-        return json(res, 200, { ...window, activeLeafId: store.activeLeaf(threadId) });
+        return json(res, 200, window);
       }
       // An unknown cursor must not answer with the newest page: the client would paginate in a circle.
-      if (before && !store.messagesFor(threadId).some((msg) => msg.id === before)) {
-        return json(res, 404, { error: "no such message" });
+      if (before) {
+        const page = messagePageBefore(threadId, before, limit ?? DEFAULT_PAGE);
+        return page ? json(res, 200, page) : json(res, 404, { error: "no such message" });
       }
-      return json(res, 200, { ...messagePage(threadId, limit ?? DEFAULT_PAGE, before), activeLeafId: store.activeLeaf(threadId) });
+      return json(res, 200, messagePage(threadId, limit ?? DEFAULT_PAGE));
     }
 
     m = path.match(/^\/api\/threads\/([\w-]+)\/messages\/([\w-]+)\/image$/);

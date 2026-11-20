@@ -42,6 +42,7 @@ import { CHROME_BROWSER_SYSTEM_PROMPT } from "../browser/prompt.ts";
 import { passkeyAnnotation } from "../browser/passkey-notice.ts";
 import { LentChromeDoors, lentChromeGuidance, type ChromeLender } from "../browser/lent-chrome.ts";
 import type { ChromeRoute } from "../device-links.ts";
+import { gateHost, processBudget } from "../process-room.ts";
 import type { EngineBrowsers } from "../engine-memory.ts";
 import { augmentedPath } from "../env-path.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
@@ -102,6 +103,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     botByThread: (threadId: string) => deps.store().botByThread(threadId) };
 
   const agentBrowserRuntime = new BrowserRuntime({
+    admit: (session) => processRoom?.enter(session) ?? Promise.resolve(null),
     closeBrowser: (session, spec) => closeBrowserSession(spec.command, browserRuntimeEnv({ ...spec.env, AGENT_BROWSER_SESSION: session })),
     applyViewport: (spec, size) => setBrowserViewport(spec.command, spec.env, size),
     launch: chromeLauncher,
@@ -122,12 +124,16 @@ export function createBrowserHost(deps: BrowserHostDeps) {
   const chromeEngine = new ChromeEngine({
     dataDir: DATA_DIR,
     host,
+    admit: (key) => processRoom?.enter(`cdp:${key}`) ?? Promise.resolve(null),
     egressPort: (key) => browserEgress.open(key),
     egressNotice: (key) => browserEgress.takeNotice(key),
     idleMs,
     held: (session) => !turnResources.free(`browser:${session}`),
     log: (line) => console.warn(line),
   });
+  const processRoom: ReturnType<typeof processBudget.browserRoom> | null = gateHost() === null ? null : processBudget.browserRoom((session) => session.startsWith("cdp:")
+    ? chromeEngine.service.profiles().some((profile) => profile.key === session.slice(4) && profile.run?.browser.connected)
+    : browserRunning(session, usedBrowserSessions.get(session)));
   const lendRefusal = deps.lendRefusal ?? ((): LendRefusal => "unproven");
   const mayLend = (turn: TurnOwner) => lendRefusal(turn) === null;
   const lentChrome = deps.lentChrome;

@@ -23,7 +23,7 @@ import type { NotificationLogEntry } from "../../shared/notification";
 import { isNotificationFeedAction, reduceNotificationFeed, type NotificationFeedAction } from "./notification-feed";
 import { bumpThreadUpdatedAt, mergeTaskStamps, rewindThreadUpdatedAt } from "./thread-stamps";
 import { botOpensTo, closeTrayUnlessShown, closeUnpinnedTray, openBot, openThread, visibleNotificationThread, withRememberedTrayPin } from "./thread-navigation";
-import { patchGroupTask } from "./thread-edits";
+import { patchGroupTask } from "./thread-edits"; import { unreadBeyondFrame, wholeBotFrame } from "./bot-thread-frame";
 import type { EngineInstall } from "./engine-install";
 import { optimisticMessageId, optimisticUserMessage, sendArrived, sendReconciled } from "./optimistic-send";
 import { patchedGroups, roomAnswers, snapshotPatch } from "./room-frames";
@@ -770,7 +770,7 @@ export type Action =
   | { type: "botDeletionPending"; botId: string; on: boolean }
   | { type: "duplicateBot"; botId: string }
   | { type: "markUnread"; botId: string }
-  | { type: "botPatched"; bot: BotAnnouncement }
+  | { type: "botPatched"; bot: BotAnnouncement; tasksPartial?: true }
   | { type: "messageAdded"; threadId: string; message: Message }
   | { type: "messagePatched"; threadId: string; message: Message }
   | { type: "optimisticMessageRemoved"; threadId: string; sendId: string; restoreLeafId?: string | null }
@@ -1172,6 +1172,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return updateBot(withMascotMotion(state, action.botId, "surprise"), action.botId, (b) => ({ ...b, unread: true }));
     case "botPatched": {
       const before = state.bots.find((b) => b.id === action.bot.id);
+      if (action.tasksPartial) return before ? reducer(state, { type: "botPatched", bot: wholeBotFrame(before, action.bot) }) : state;
       if (!before) {
         const added = {
           ...state,
@@ -3153,12 +3154,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (bot.id === stateRef.current.selectedId && stateRef.current.activeView === "chat" && document.hasFocus() &&
               (selectedTask?.unread || (!bot.tasks && bot.unread))) {
             if (selectedTask) selectedTask.unread = false;
-            bot.unread = botShowsUnread(bot);
+            bot.unread = frame.tasksPartial ? unreadBeyondFrame(selected, bot) : botShowsUnread(bot);
             fetch(`/api/bots/${bot.id}/read`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ threadId: shown }) }).catch(() => {});
           }
           rawDispatch({
             type: "botPatched",
             bot: withTaskWrites({ ...bot, ...botPatchQueue.overlayFor(bot.id) }),
+            tasksPartial: frame.tasksPartial,
           });
           break;
         }

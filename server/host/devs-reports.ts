@@ -110,6 +110,7 @@ export interface DevsReportsDeps {
   /** The language a line for this person is written in; absent, the one set on this server. */
   lineLanguage?: LineLanguage;
   recentLog: RecentLog;
+  performance?: () => string[];
   send(payload: DevsReportPayload): Promise<SendOutcome>;
   /** Asks the DoneBot team about reports this app sent (devs-report-send.ts `askReportStatus`); null: no answer this time. */
   askStatus(question: ReportStatusQuestion): Promise<ReportStatusAnswer | null>;
@@ -348,7 +349,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
       threadId: entry.threadId, messageId: entry.messageId, ...(groupId ? { groupId } : {}), where, message: entry.text, words: entry.words,
       bots: bots.map((bot) => reported(bot, entry.threadId)),
       ...("bot" in author ? { summary: { by: author.bot.name, text: author.summary } } : { noSummary: author.why }),
-      problems: conversationProblems(store.activePath(entry.threadId)), log: deps.recentLog(), contactEmail: contact,
+      problems: conversationProblems(store.activePath(entry.threadId)), log: deps.recentLog(), performance: deps.performance?.(), contactEmail: contact,
     }, secrets());
     return { payload, ...(contact ? { contact } : {}) };
   }

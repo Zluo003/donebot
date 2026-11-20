@@ -33,6 +33,7 @@ async function restartFixture(fixture: VerificationServer): Promise<ChildProcess
     XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local", "share"),
     TEMP: temp, TMP: temp, TMPDIR: temp, HERMES_HOME: join(home, ".hermes"),
     DONEBOT_DATA_DIR: dataDir, DONEBOT_PORT: new URL(fixture.info.url).port,
+    NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", DONEBOT_TEST_SEALED_PATH: "1",
     DONEBOT_WEBHOOK_PORT: String(Number(new URL(fixture.info.url).port) + 1),
     FAKE_CLAUDE_MODE: "happy", FAKE_CLAUDE_DUMP: fixture.fixtureDumpPath,
     PATH: dirname(process.execPath),

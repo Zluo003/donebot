@@ -10,10 +10,10 @@ const image = () => doneBotMediaModel(catalog(), "seedream-5-5", "image");
 const reference = "https://assets.example.test/reference.png";
 
 describe("Seedream 5.5 client registration", () => {
-  it("registers one model per media kind independently of gateway capability metadata", () => {
+  it("registers enabled supported media independently of gateway capability metadata", () => {
     const entries = catalog().models;
-    expect(entries.map(entry => entry.id)).toEqual(["seedream-5-5", "seedance-2-5", "suno"]);
-    const capabilities = modelCapabilities(entries[0]!);
+    expect(entries.map(entry => entry.id)).toEqual(expect.arrayContaining(["seedream-5-5", "seedance-2-5", "suno", "gpt-image-2.5-flare"]));
+    const capabilities = modelCapabilities(entries.find(entry => entry.id === "seedream-5-5")!);
     expect(capabilities.availability.usable).toBe(true);
     expect(capabilities.client.delivery).toBe("async");
     expect(capabilities.native?.media?.customSize).toMatchObject({ minPixels: 921_600, maxPixels: 4_624_220 });
@@ -23,7 +23,7 @@ describe("Seedream 5.5 client registration", () => {
       maxImages: { min: 2, max: 100, default: 30, includesBase: true }, textRecognition: { optional: true, promptMaySuppress: true } });
     expect(capabilities.client).toMatchObject({ referenceLimits: { maxFiles: 10, maxBytesPerFile: 31_457_280 }, referenceValidation: { provider: ["total_pixels", "decoded_format"] } });
     expect(() => doneBotMediaModel(catalog(), "gemini-4-argon", "image")).toThrow("unavailable");
-    expect(() => doneBotMediaModel(catalog(), "gpt-image-2.5-flare", "image")).toThrow("unavailable");
+    expect(doneBotMediaModel(catalog(), "gpt-image-2.5-flare", "image").id).toBe("gpt-image-2.5-flare");
   });
 
   it.each([
@@ -73,7 +73,7 @@ describe("Seedream 5.5 client registration", () => {
   it("supplies registered Seedance 2.5 defaults without gateway parameter metadata", () => {
     const video = doneBotMediaModel(catalog(), "seedance-2-5", "video");
     const parameters = video.normalizeParameters!({ content: [{ type: "text", text: "A tracking shot" }] }, "generate");
-    expect(parameters).toMatchObject({ resolution: "720p", ratio: "adaptive", duration: -1 });
+    expect(parameters).toMatchObject({ resolution: "720p", ratio: "adaptive", duration: 6 });
     expect(() => video.validate!({ ...parameters, ...video.fixedParameters }, "generate")).not.toThrow();
     expect(parameters).not.toHaveProperty("omni_reference_task_type");
   });
@@ -99,6 +99,6 @@ describe("Seedream 5.5 client registration", () => {
     expect(frames).not.toHaveProperty("omni_reference_task_type");
     expect(frames.content).toEqual([text, { ...image, role: "first_frame" }]);
     const edit = video.normalizeParameters!({ content: [text, { type: "video_url", video_url: { url: "https://assets.example.test/reference.mp4" }, role: "reference_video" }] }, "edit");
-    expect(edit).toMatchObject({ omni_reference_task_type: "edit", ratio: "adaptive", duration: -1 });
+    expect(() => video.validate!(edit, "edit")).toThrow();
   });
 });

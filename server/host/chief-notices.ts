@@ -1,6 +1,7 @@
 import { failedTurnTool } from "../../shared/failed-turn.ts";
 import { admit } from "../admission.ts";
-import { memoryStopped } from "../engine-memory.ts";
+import { engineMemory, memoryStopped } from "../engine-memory.ts";
+import { outOfProcesses } from "../process-shortage.ts";
 import {
   AUTO_RETRY_LEAD, chiefForBot, INCIDENTS_THREAD_TITLE, OLD_INCIDENTS_THREAD_TITLE, IncidentLedger, incidentChip, incidentContext, incidentText, RETRY_BLOCKED, RETRY_LEAD,
   type Incident, type IncidentKind, type IncidentRetry,
@@ -32,6 +33,7 @@ export interface ChiefNoticeDeps {
   /** Starts this thread's request again where it stopped: a continuation of the request the harness recorded, never a line
    * of the person's. Absent: a run stopped for memory with no Chief to retry it is only reported. */
   continueRequest?(botId: string, threadId: string, text: string): Promise<unknown>;
+  selfHosted?(): boolean;
   /** Runs a retry after a run stopped for memory, MEMORY_RETRY_MS later by default, so the machine settles first. */
   later?(run: () => void, ms: number): void;
   /** Security invariant: a read-and-draft run's prompt and reply carry mail and invite text, so its failures and
@@ -57,6 +59,10 @@ export interface ChiefNoticeDeps {
 export const MEMORY_RETRY_MS = 30_000;
 export const MEMORY_RETRY_TEXT = "[DoneBot started this again by itself, once: the last run was stopped to free memory on this Cloud. "
   + "Continue the request above from where it stopped and finish it. If the same problem comes back, say exactly what is blocking and stop.]";
+export const SERVER_MEMORY_RETRY_TEXT = "[DoneBot started this again by itself, once: the last run was stopped to free memory on this server. "
+  + "Continue the request above from where it stopped and finish it. If the same problem comes back, say exactly what is blocking and stop.]";
+export const ROOM_RETRY_TEXT = "[DoneBot started this again by itself, once: the last run could not start because this server had no room for another program. "
+  + "Continue the request above from where it stopped and finish it. If the same problem comes back, say exactly what is blocking and stop.]";
 
 export function createChiefNotices(deps: ChiefNoticeDeps) {
   const { store } = deps;
@@ -68,7 +74,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
 
   /** A run stopped for memory that no Chief retries starts once more by itself; the person hears only if that one fails too,
    * or can't start. Never a run whose thread someone wrote in since, or that is running or queued again. */
-  function retryForRoom(bot: BotRecord, threadId: string, report: (retry?: IncidentRetry) => void): boolean {
+  function retryForRoom(bot: BotRecord, threadId: string, report: (retry?: IncidentRetry) => void, text = MEMORY_RETRY_TEXT): boolean {
     const continueRequest = deps.continueRequest;
     if (!continueRequest) return false;
     const asked = store.activePath(threadId).findLast((line) => line.role === "user")?.id ?? "";
@@ -80,7 +86,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
       if (!store.bot(bot.id) || !store.taskByThread(bot.id, threadId)) return;
       if (store.activePath(threadId).some((line) => line.role === "user" && line.at > failedAt)) return;
       if (deps.threadBusy(bot.id, threadId) || deps.threadQueued?.(bot.id, threadId)) return;
-      continueRequest(bot.id, threadId, MEMORY_RETRY_TEXT)
+      continueRequest(bot.id, threadId, text)
         .catch((error) => report({ notRetried: `its retry could not start (${error instanceof Error ? error.message : String(error)})` }));
     }, MEMORY_RETRY_MS);
     return true;
@@ -212,6 +218,14 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
       alreadyNotified: input.notified === true || input.kind === "could-not-start" || input.kind === "routine-failed",
     });
     const chiefRetries = Boolean(chief && !group && reachesChief(chief, bot, threadId));
+    const noRoom = outOfProcesses(input.detail), stoppedHere = !noRoom && memoryStopped(input.detail) && (deps.selfHosted ?? (() => engineMemory.selfHosted()))();
+    if (noRoom || stoppedHere) {
+      const person = (retry?: IncidentRetry): void => void deliver({ chief: null, title: INCIDENTS_THREAD_TITLE, bot, threadId,
+        chip: incidentChip(incident, deps.threadLanguage?.(threadId)), text: incidentText(incident, count, retry),
+        alreadyNotified: input.notified === true || input.kind === "could-not-start" || input.kind === "routine-failed" });
+      if (group || input.kind === "routine-failed" || !retryForRoom(bot, threadId, person, noRoom ? ROOM_RETRY_TEXT : SERVER_MEMORY_RETRY_TEXT)) person();
+      return;
+    }
     if (input.kind === "failed" && !group && !chiefRetries && memoryStopped(input.detail) && retryForRoom(bot, threadId, report)) return;
     if (!chief || !chiefRetries) return report();
     const answered = store.activePath(threadId).findLast((line) => line.role === "user")?.text ?? "";

@@ -47,6 +47,7 @@ export interface ChromeEngineOptions {
   platform?: NodeJS.Platform;
   egressPort(key: string): Promise<number>;
   idleMs(): number;
+  admit?(key: string): Promise<string | null>;
   held?(session: string): boolean;
   egressNotice(key: string): string | null;
   log?: (line: string) => void;
@@ -97,6 +98,7 @@ export class ChromeEngine {
       backend: () => backend,
       maxRunning,
       idleMs: options.idleMs,
+      admit: options.admit,
       held: options.held,
       egressNotice: options.egressNotice,
       ...(options.log ? { log: options.log } : {}),

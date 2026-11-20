@@ -127,3 +127,10 @@ DoneBot 将结果通知产生时的消息编号持久保存，后续回复和重
 - `/tmp/donebot-safe-coordination-types-complete.log`、`/tmp/donebot-safe-coordination-lint-complete.log`：类型与 lint 通过。
 
 团队能力保持关闭。真实手机、跨节点及最终平台验收尚未完成。
+
+
+## Webhook 群聊提交目的地
+
+接入固定上游 cd9c6cba4。音频或图片准备期间房间切换会话时，回执使用真正写入的 threadId。相同 deliveryId 重试、服务重启或触发器改指其他房间后仍返回原提交目的地，不再次发消息、执行模型或合成音频；旧版只存 runId 的回执保持可读。
+
+2026-11-21 验证：`/tmp/donebot-webhook-receipt-regression.log` 六文件 65 项通过，覆盖会话切换竞态、重复/并发投递、重启及旧回执；`/tmp/donebot-webhook-receipt-workflow.log` 真实隔离服务再次核对重复投递返回原 threadId、仅一条消息和一次语音合成。`/tmp/donebot-data-webhook-types.log` 与 `/tmp/donebot-data-webhook-lint.log` 类型、定向 lint 通过。

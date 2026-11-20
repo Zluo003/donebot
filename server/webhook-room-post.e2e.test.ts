@@ -75,7 +75,10 @@ it("posts text, a voice note and an image into a room as one bot message, with n
     expect((await api("GET", "/api/bots")).bots.find((bot: any) => bot.id === herald.id).tasks).toHaveLength(heraldTasks);
     expect((await api("GET", "/api/webhooks")).attempts.at(-1)).toMatchObject({ outcome: "accepted", threadId: room.threadId, reason: "Posted to the room with 2 attachments (no task run)" });
 
-    expect(await deliver(url, { text }, "brief-1")).toMatchObject({ status: 202, body: { duplicate: true } });
+    expect(await deliver(url, { text }, "brief-1")).toEqual({ status: 202, body: { accepted: true, duplicate: true, deliveryId: "brief-1", threadId: room.threadId } });
+    const replay = (await api("GET", "/api/webhooks")).attempts.at(-1);
+    expect(replay).toMatchObject({ outcome: "duplicate", threadId: room.threadId });
+    expect(replay).not.toHaveProperty("runId");
     const wrong = url.replace(/[^/]+$/u, "whsec_wrong");
     expect(await deliver(wrong, { text: "Not from the owner" })).toEqual({ status: 401, body: { error: "Invalid webhook URL or secret" } });
     await api("POST", `/api/webhooks/${created.webhook.id}/test`, {}, 400);

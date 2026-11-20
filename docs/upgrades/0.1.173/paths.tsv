@@ -1519,9 +1519,9 @@ M	server/host/wait-words.test.ts	接入	待核对	待核对
 M	server/host/wait-words.ts	接入	待核对	待核对
 M	server/host/warm-summary-host.test.ts	接入	待核对	待核对
 M	server/host/warm-summary-host.ts	自有适配	4	已接入；上下文子批测试见 batch-4.md
-M	server/host/webhook-room-deps.ts	接入	5	待核对
-M	server/host/webhook-room-post.test.ts	接入	5	待核对
-M	server/host/webhook-room-post.ts	接入	5	待核对
+M	server/host/webhook-room-deps.ts	接入	5	部分接入：cd9c6cba4 群聊实际提交与重复投递目的地；其余差异继续审计
+M	server/host/webhook-room-post.test.ts	接入	5	部分接入：cd9c6cba4 群聊实际提交与重复投递目的地；其余差异继续审计
+M	server/host/webhook-room-post.ts	接入	5	部分接入：cd9c6cba4 群聊实际提交与重复投递目的地；其余差异继续审计
 M	server/host/work-thread.test.ts	接入	待核对	待核对
 M	server/host/work-thread.ts	接入	待核对	待核对
 M	server/hosted-models-api.test.ts	接入	待核对	待核对
@@ -2274,8 +2274,8 @@ M	server/web-panel-framing.ts	接入	待核对	待核对
 A	server/webhook-payload-filter.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/webhook-requests.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/webhook-requests.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
-M	server/webhooks.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
-M	server/webhooks.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/webhooks.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；部分接入：cd9c6cba4 群聊实际提交与重复投递目的地；其余差异继续审计
+M	server/webhooks.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；部分接入：cd9c6cba4 群聊实际提交与重复投递目的地；其余差异继续审计
 M	server/workspace-backup-policy.test.ts	接入	1	待核对
 M	server/workspace-backup-policy.ts	接入	1	待核对
 M	server/workspace-backup.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收

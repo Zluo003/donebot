@@ -1146,8 +1146,8 @@ M	server/drivers/chat-announcement.ts	自有适配	7	待核对
 A	server/drivers/chat-host-computer.test.ts	接入	4	待核对
 A	server/drivers/chat-host-computer.ts	接入	4	待核对
 M	server/drivers/chat-mcp-browser-args.test.ts	接入	4	待核对
-M	server/drivers/chat-mcp-tools.test.ts	接入	4	待核对
-M	server/drivers/chat-mcp-tools.ts	接入	4	待核对
+M	server/drivers/chat-mcp-tools.test.ts	接入	4	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/drivers/chat-mcp-tools.ts	接入	4	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
 M	server/drivers/claude-bot-settings.ts	接入	6	待核对
 M	server/drivers/claude-box.test.ts	接入	待核对	待核对
 A	server/drivers/claude-context-usage.test.ts	接入	待核对	待核对
@@ -1615,13 +1615,13 @@ M	server/mcp-bot-servers.ts	接入	6	待核对
 A	server/mcp-bridge.spawn.test.ts	接入	6	待核对
 M	server/mcp-bridge.ts	接入	6	待核对
 A	server/mcp-empty-event.test.ts	接入	6	待核对
-A	server/mcp-environment.test.ts	接入	6	待核对
-A	server/mcp-environment.ts	接入	6	待核对
+A	server/mcp-environment.test.ts	接入	6	已接入并验证（MCP 环境）
+A	server/mcp-environment.ts	接入	6	已接入并验证（MCP 环境）
 M	server/mcp-gate-config.test.ts	接入	6	待核对
 M	server/mcp-gate-config.ts	接入	6	待核对
 A	server/mcp-gate-lifetime.test.ts	接入	6	待核对
-M	server/mcp-gate.test.ts	接入	6	待核对
-M	server/mcp-gate.ts	接入	6	待核对
+M	server/mcp-gate.test.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/mcp-gate.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
 A	server/mcp-grant-spec.test.ts	接入	6	待核对
 A	server/mcp-grant-spec.ts	接入	6	待核对
 M	server/mcp-health.test.ts	接入	6	待核对
@@ -1629,14 +1629,14 @@ M	server/mcp-health.ts	接入	6	待核对
 M	server/mcp-http-framing.test.ts	接入	6	待核对
 M	server/mcp-http.test.ts	接入	6	待核对
 M	server/mcp-http.ts	接入	6	待核对
-M	server/mcp-oauth-discovery.test.ts	自有适配	2	待核对
-M	server/mcp-oauth-discovery.ts	自有适配	2	待核对
-A	server/mcp-oauth-refresh-races.test.ts	自有适配	2	待核对
-M	server/mcp-oauth-store.ts	自有适配	2	待核对
-M	server/mcp-oauth.test.ts	自有适配	2	待核对
-M	server/mcp-oauth.ts	自有适配	2	待核对
-M	server/mcp-probe.test.ts	接入	6	待核对
-M	server/mcp-probe.ts	接入	6	待核对
+M	server/mcp-oauth-discovery.test.ts	自有适配	2	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/mcp-oauth-discovery.ts	自有适配	2	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+A	server/mcp-oauth-refresh-races.test.ts	自有适配	2	已接入并验证（MCP 环境）
+M	server/mcp-oauth-store.ts	自有适配	2	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/mcp-oauth.test.ts	自有适配	2	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/mcp-oauth.ts	自有适配	2	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/mcp-probe.test.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/mcp-probe.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
 A	server/mcp-proxy-cidr.test.ts	接入	6	待核对
 M	server/mcp-registry.test.ts	接入	6	待核对
 M	server/mcp-registry.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
@@ -1655,8 +1655,8 @@ M	server/mcp-shape.ts	接入	6	待核对
 A	server/mcp-shaping-budget.test.ts	接入	6	待核对
 A	server/mcp-sse-budget.test.ts	接入	6	待核对
 A	server/mcp-sse-disconnect.test.ts	接入	6	待核对
-M	server/mcp-tool-schema.test.ts	接入	6	待核对
-M	server/mcp-tool-schema.ts	接入	6	待核对
+M	server/mcp-tool-schema.test.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
+M	server/mcp-tool-schema.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
 M	server/mcp-trim.ts	接入	6	待核对
 M	server/meetings/prompt.test.ts	接入	待核对	待核对
 M	server/meetings/prompt.ts	接入	待核对	待核对
@@ -2146,7 +2146,7 @@ M	server/testing/fake-connected-apps.ts	接入	待核对	待核对
 M	server/testing/fake-http-mcp-server.ts	接入	6	待核对
 M	server/testing/fake-login-page.ts	接入	待核对	待核对
 A	server/testing/fake-netlify.ts	接入	待核对	待核对
-M	server/testing/fake-oauth-server.ts	自有适配	2	待核对
+M	server/testing/fake-oauth-server.ts	自有适配	2	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
 A	server/testing/fake-phone.ts	自有适配	7	待核对
 M	server/testing/fake-pi-cli.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	server/testing/fake-vibe-acp-signin.mjs	接入	待核对	待核对

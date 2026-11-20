@@ -47,3 +47,13 @@ compatibility with a particular live OAuth provider.
 Unit/API tests additionally cover owner isolation, replay, duplicate parameters,
 wrong origins/ports/paths/states/issuers, expiry, cancellation during registration
 or code exchange, and the existing automatic loopback callback.
+
+## 0.1.173 登录与刷新回归
+
+批次证据见 `docs/upgrades/0.1.173/batch-6.md`。新增刷新竞争测试为
+`server/mcp-oauth-refresh-races.test.ts`，验证旧请求不覆盖重新登录、
+退出后不复活、发送标记跨重启保留、网络未连接可重试、成功但无有效令牌
+不重放，以及非轮换服务器的后续刷新。命令环境和分页保留名测试位于
+`server/mcp-environment.test.ts`、`server/mcp-gate.test.ts` 和
+`server/mcp-tool-schema.test.ts`。设置面板 fixture 为浏览器代理创建并清理
+短 socket 临时目录，不使用用户浏览器或用户凭据。

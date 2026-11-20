@@ -1,7 +1,8 @@
 // Real MCP panel + server + fake OAuth provider, only in a disposable workspace.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
@@ -11,6 +12,7 @@ import { startFakeOAuth } from "../server/testing/fake-oauth-server.ts";
 import { startFakeHttpMcp } from "../server/testing/fake-http-mcp-server.ts";
 
 const fixture = await launchVerificationServer();
+const socketDir = mkdtempSync(join(process.platform === "win32" ? tmpdir() : "/tmp", "db-mcp-"));
 let oauth: Awaited<ReturnType<typeof startFakeOAuth>> | undefined;
 let mcp: Awaited<ReturnType<typeof startFakeHttpMcp>> | undefined;
 let ui: MountedPreview | undefined;
@@ -52,6 +54,7 @@ try {
     HOME: fixture.info.dataDir, USERPROFILE: fixture.info.dataDir, PATH: process.env.PATH,
     TMPDIR: temp, TEMP: temp, TMP: temp, AGENT_BROWSER_SESSION: `mcp-oauth-${process.pid}`,
     AGENT_BROWSER_HEADLESS: "1", AGENT_BROWSER_NO_WEBMCP: "1",
+    AGENT_BROWSER_SOCKET_DIR: socketDir,
     ...(chrome ? { AGENT_BROWSER_EXECUTABLE_PATH: chrome } : {}),
   };
   const command = async (...args: string[]) => {
@@ -123,4 +126,5 @@ try {
   await fixture.close();
   await mcp?.close();
   await oauth?.close();
+  rmSync(socketDir, { recursive: true, force: true });
 }

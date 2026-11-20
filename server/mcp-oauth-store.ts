@@ -27,11 +27,17 @@ const recordSchema = z.object({
 
 const fileSchema = z.object({
   servers: z.record(z.string(), recordSchema).default({}),
+  /** Refresh tokens already sent to a token endpoint, per server. Presenting one of them again can be a replay, so the
+   * mark is kept here and not in memory: a restart must not present it either. */
+  spentRefresh: z.record(z.string(), z.string().min(1)).default({}),
 });
 
 export type McpOAuthTokens = z.infer<typeof tokensSchema>;
 export type McpOAuthRecord = z.infer<typeof recordSchema>;
-type StoreFile = z.infer<typeof fileSchema>;
+interface StoreFile {
+  servers: Record<string, McpOAuthRecord>;
+  spentRefresh: Record<string, string>;
+}
 
 /** One sign-in as this store keeps it, from anywhere else (a sign-in moved from the person's own computer); null if not. */
 export function parseMcpOAuthRecord(value: unknown): McpOAuthRecord | null {
@@ -59,8 +65,33 @@ export class McpOAuthStore {
 
   delete(name: string): void {
     const data = this.read();
-    if (!Object.hasOwn(data.servers, name)) return;
+    if (!Object.hasOwn(data.servers, name) && !Object.hasOwn(data.spentRefresh, name)) return;
     delete data.servers[name];
+    delete data.spentRefresh[name];
+    this.write(data);
+  }
+
+  forgetSpentRefresh(name: string): void {
+    const data = this.read();
+    if (!Object.hasOwn(data.spentRefresh, name)) return;
+    delete data.spentRefresh[name];
+    this.write(data);
+  }
+
+  spentRefreshFor(name: string): string | undefined {
+    return this.read().spentRefresh[name];
+  }
+
+  markSpentRefresh(name: string, token: string): void {
+    const data = this.read();
+    data.spentRefresh = { ...data.spentRefresh, [name]: token };
+    this.write(data);
+  }
+
+  clearSpentRefresh(name: string, token: string): void {
+    const data = this.read();
+    if (data.spentRefresh[name] !== token) return;
+    delete data.spentRefresh[name];
     this.write(data);
   }
 
@@ -71,7 +102,7 @@ export class McpOAuthStore {
       if (parsed.success) return parsed.data;
     } catch {
     }
-    return { servers: {} };
+    return { servers: {}, spentRefresh: {} };
   }
 
   private write(data: StoreFile): void {

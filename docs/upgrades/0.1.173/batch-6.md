@@ -18,3 +18,19 @@
 - `/tmp/donebot-skill-import-types-final.log`、`/tmp/donebot-skill-import-lint-final.log`、`/tmp/donebot-skill-import-i18n.log`：类型、lint、16 个语言目录校验通过。
 
 工具目录仅技能 profile 增加 267 字节；预算基线不变，2% 约束继续通过。未访问真实 GitHub、网关或用户数据。这些测试不替代跨节点团队与平台验收。
+
+## MCP 登录、刷新和命令环境
+
+接入固定上游 b07a4de16、d5e6ee167、89bc1d346、a27236595、e8e97f8e8、50630c354、467f9fad7、06eb477c1、627e0c83f、2faa745e3、7a7f3b578、ecdb86325 和 76dc471a5。并发连接复用按 state 分派的回调监听；刷新结果只适用于发起时的授权记录，注销不等待远端撤销才删除本机令牌。刷新令牌发送前以 0600 文件持久标记，响应丢失或成功但无有效令牌时不重放，离线未连接、明确临时错误及协议允许的非轮换令牌仍可重试。仅在上游声明支持时请求 offline_access；手工 scope 不被改写。
+
+命令服务器探测与聊天共用可写 npm 缓存选择。保留可写的既有缓存和服务器显式设置，仅在继承缓存不可写时使用进程复用的临时缓存；没有放宽环境凭据过滤。query_result 的保留名在所有分页过滤，本地工具替换参数作为通用 normalizer 能力接入；私有本地桌面及其文件工具仍未启用。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-mcp-reliability-auth-final.log`：9 文件 / 319 项通过，覆盖 OAuth、刷新竞争/重启、发现、令牌文件、探测、聊天环境及登录组件。
+- `/tmp/donebot-mcp-reliability-gate-final.log`：5 文件 / 102 项通过，覆盖真实子进程协议、分页冲突、环境与 schema。
+- `/tmp/donebot-mcp-reliability-workflows.log`：3 文件 / 23 项隔离服务用例通过，其余 325 项由明确测试名过滤而未运行；包含聊天登录卡、成员个人 OAuth 与 MCP API。
+- `/tmp/donebot-mcp-reliability-ui-final.log`：真实设置面板完成八项流程，包含阻止弹窗、粘贴回调、处理中取消重试、实际工具探测及退出登录取消；截图位于 `.omb-scratch/mcp-oauth-evidence/`。验证工具 socket 使用短临时目录，避免 macOS socket 路径上限。
+- `/tmp/donebot-mcp-reliability-types.log`、`/tmp/donebot-mcp-reliability-lint.log`：类型和 lint 通过。
+
+未访问真实 OAuth 账号或用户应用。npm 权限路径覆盖为单元环境与真实命令子进程测试，不替代真实 Linux 团队隔离。

@@ -90,6 +90,25 @@ export function routinesWithoutTeamPrivate(value: unknown, bots: unknown, privac
   return { ...value, ...(Array.isArray(value.routines) ? { routines } : {}), ...(Array.isArray(value.runs) ? { runs } : {}) };
 }
 
+export function handoffFilesWithoutTeamPrivate(value: unknown, runtime: string, privacy: TeamPrivacy): unknown {
+  if (!record(value)) throw new Error("Invalid handoff file records in workspace backup.");
+  const shared = new Set<string>();
+  if (existsSync(runtime)) {
+    const db = new DatabaseSync(runtime, { readOnly: true });
+    try {
+      if (hasTable(db, "assignments")) for (const row of db.prepare("SELECT id, requester_thread_id, assignee_thread_id, assignee_bot_id FROM assignments").all()) {
+        if (!privacy.threads.has(String(row.requester_thread_id)) && !privacy.threads.has(String(row.assignee_thread_id)) && !privacy.bots.has(String(row.assignee_bot_id))) shared.add(String(row.id));
+      }
+    } finally { db.close(); }
+  }
+  return {
+    batches: rows(value.batches).filter((batch) => shared.has(String(batch.assignmentId)) &&
+      !(record(batch.from) && privacy.bots.has(String(batch.from.botId))) &&
+      !(record(batch.to) && (privacy.bots.has(String(batch.to.botId)) || privacy.threads.has(String(batch.to.threadId))))),
+    days: Object.fromEntries(Object.entries(record(value.days) ? value.days : {}).filter(([bot]) => !privacy.bots.has(bot))),
+  };
+}
+
 function chunks(ids: readonly string[]): string[][] {
   const out: string[][] = [];
   for (let at = 0; at < ids.length; at += IN_CHUNK) out.push(ids.slice(at, at + IN_CHUNK));
@@ -143,9 +162,13 @@ function uploadedByMembers(root: string): string[] {
 }
 
 /** A member's file stays only if something the team keeps uses it: a line left in the snapshot, or a bot's or room's picture. */
-export function teamPrivateAttachments(root: string, messages: string, privacy: TeamPrivacy): ReadonlySet<string> {
+export function teamPrivateAttachments(root: string, messages: string, privacy: TeamPrivacy, sharedHandoffs?: unknown): ReadonlySet<string> {
   const candidates = new Set(uploadedByMembers(root));
   const kept = new Set<string>();
+  if (sharedHandoffs !== undefined) {
+    for (const name of attachmentsIn(JSON.stringify(readJson(join(root, "handoff-files.json"))))) candidates.add(name);
+    for (const name of attachmentsIn(JSON.stringify(sharedHandoffs))) kept.add(name);
+  }
   for (const file of ["bots.json", "groups.json"]) {
     try { for (const name of attachmentsIn(readFileSync(join(root, file), "utf8"))) kept.add(name); } catch { /* none yet */ }
   }

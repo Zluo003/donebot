@@ -8,7 +8,7 @@ import { BotAvatar } from "./Avatar";
 import { HandoffReply } from "./HandoffReply";
 import { HandoffStatusChip } from "./HandoffStatusChip";
 
-export function ThreadChip({ message }: { message: Message }) {
+export function ThreadChip({ message, threadId }: { message: Message; threadId?: string }) {
   const { state, dispatch } = useStore();
   const showThreads = useShowThreads();
   const ref = message.threadRef;
@@ -19,7 +19,7 @@ export function ThreadChip({ message }: { message: Message }) {
   const label = !direct ? activityText(tool, tool.name)
     : direct.room ? t("chat.sentDirectlyNotInRoom", { name: direct.name, room: direct.room }) : t("chat.sentDirectly", { name: direct.name });
   return (
-    <HandoffReply message={message}>
+    <HandoffReply message={message} threadId={threadId}>
       <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1">
       <button
         type="button"

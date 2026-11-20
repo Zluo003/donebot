@@ -27,3 +27,21 @@ DoneBot 保留当前共享协议和统一网关；状态行、取消和错误文
 - `/tmp/donebot-handoff-status-types.log`、`/tmp/donebot-handoff-status-lint.log`、`/tmp/donebot-handoff-status-i18n.log`：typecheck、lint、16 语言校验通过。
 
 其余批次 5 的长 brief、定向回复、完整文件传递、Webhook/自动化与收件箱改进继续实施；真实跨节点团队与手机验收未完成。
+
+## 双向文件传递
+
+接入固定上游 923d75725 的 coordinate_bots 显式 files、接收方 inbox、安全读取和传递记录。复用当前附件类型、大小及目录权限；单条最多 5 个文件、100 MiB，收件方取得独立副本，重试保留其编辑。内容寻址使用本次安装的密钥，避免从已知文件内容推算下载名称；不同媒体类型不共用名称。
+
+DoneBot 适配保留现有媒体回传为唯一发布方，避免重复附件行和重复生成。显式文件与正文引用按内容及规范化 MIME 去重，额外引用仍传递；本轮文件继续经过自有 Cloud 桌面桥和原有来源验证。复制前后复查取消、会话存续及私聊受众；返回记录在启动失败时撤回已告知标记。inbox 内即使链接指向本 Bot 其他可读目录也拒绝。
+
+团队备份按实际任务受众过滤文件记录、待发附件和私人 Bot 计数；恢复重定位文件路径及副本映射键，丢弃来源数据目录外的副本映射，保留目标安装的名称密钥。过期清理仅允许当前接收会话或当前 VM 的对应 inbox，旧来源路径不参与删除。
+
+2026-11-20 验证：
+
+- `/tmp/donebot-handoff-files-overlap-workflow-final.log`：3 文件 / 17 个真实隔离服务流程通过。包含双向显式传递、同字节不同类型、七种单聊/群聊/链式回传、显式与隐式输入重叠、越界/类型/数量拒绝、同会话文件报告，不重复执行生成者。
+- `/tmp/donebot-handoff-files-backup.log`：5 文件 / 149 项通过、1 项平台跳过。包含加密导出与实际恢复、团队私聊待发文件剔除、共享待发记录保留、当前安装密钥、恢复副本路径、过期清理及取消/撤权/删除竞态。
+- `/tmp/donebot-handoff-files-complete-units.log`：6 文件 / 164 项通过，含 inbox 链接拒绝、内容名称、工具参数、UI 附件和原始/打包工具目录一致性。
+- `/tmp/donebot-handoff-files-privacy-media.log`：5 文件 / 202 项通过，包含真实团队私聊隔离、媒体跟进、统一媒体与备用以及工具代理。
+- `/tmp/donebot-handoff-files-types-complete.log`、`/tmp/donebot-handoff-files-lint-complete.log`：类型与 lint 通过。
+
+尚未接入跨节点文件协议、其余自动化和收件箱改进。本节不替代真实 Linux、Windows 或跨成员本机验收。

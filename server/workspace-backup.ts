@@ -16,7 +16,7 @@ import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.
 import { INSTRUCTION_FILE, restorePaths, validRelative } from "./workspace-backup-paths.ts";
 import { cjkSearchText } from "./cjk-search.ts";
 import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEnginePath, managedTaskSkillLink, portableWorkspaceConfig, redownloadedOrgLibraryPath, restoredWorkspaceConfig } from "./workspace-backup-policy.ts";
-import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
+import { handoffFilesWithoutTeamPrivate, omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
 
@@ -335,7 +335,8 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
       try { snapshotDb.exec("PRAGMA journal_mode = DELETE"); } finally { snapshotDb.close(); }
     }
     const teamPrivate = teamPrivateThreads({ starters: join(root, "thread-starters.json"), groups: join(root, "groups.json"), bots: join(root, "bots.json") });
-    const privacy = teamPrivate && { ...teamPrivate, attachments: teamPrivateAttachments(root, join(snapshot, SNAPSHOT_DATABASES["messages.db"]!), teamPrivate) };
+    const sharedHandoffs = teamPrivate && existsSync(join(root, "handoff-files.json")) ? handoffFilesWithoutTeamPrivate(privateJson(join(root, "handoff-files.json")), join(snapshot, SNAPSHOT_DATABASES["runtime.db"]!), teamPrivate) : undefined;
+    const privacy = teamPrivate && { ...teamPrivate, attachments: teamPrivateAttachments(root, join(snapshot, SNAPSHOT_DATABASES["messages.db"]!), teamPrivate, sharedHandoffs) };
     if (privacy) {
       stripTeamPrivate({ messages: join(snapshot, SNAPSHOT_DATABASES["messages.db"]!), runtime: join(snapshot, SNAPSHOT_DATABASES["runtime.db"]!) }, privacy);
       warnings.push(TEAM_PRIVATE_NOTE);
@@ -395,11 +396,12 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           walk(source, path, [...chain, source]);
         } else if (stat.isFile()) {
           let copied: { size: number; mode: number; sha256: string };
-          if (path === "config.json" || path === "webhooks.json" || (privacy && (path === "bots.json" || path === "routines.json"))) {
+          if (path === "config.json" || path === "webhooks.json" || (privacy && (path === "bots.json" || path === "routines.json" || path === "handoff-files.json"))) {
             const value = privateJson(source);
             if (path === "config.json") writeJson(destination, portableWorkspaceConfig(value));
             else if (path === "bots.json") writeJson(destination, withoutTeamPrivate(value, privacy!));
             else if (path === "routines.json") writeJson(destination, routinesWithoutTeamPrivate(value, privateJson(join(root, "bots.json")), privacy!));
+            else if (path === "handoff-files.json") writeJson(destination, sharedHandoffs);
             else {
               if (!record(value)) throw new Error("Invalid webhook definitions in workspace backup.");
               if (Array.isArray(value.webhooks)) for (const webhook of value.webhooks) if (record(webhook)) { delete webhook.secretHash; delete webhook.sealedSecret; }
@@ -719,6 +721,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
     writeJson(path, value);
   };
   const paths = restorePaths(manifest.sourceDataDir, resolve(dataDir));
+  changeJson("handoff-files.json", (value) => paths.handoffFiles(value));
   changeJson("bots.json", (value) => {
     if (!Array.isArray(value)) throw new Error("Invalid bot definitions in workspace backup.");
     for (const bot of value) if (record(bot)) {

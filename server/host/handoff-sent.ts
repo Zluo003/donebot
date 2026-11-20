@@ -20,7 +20,7 @@ export function outsideRoomNote(room: AddressedRoom | undefined, via: SentVia): 
 
 /** `language`: the sender's conversation's, where the row is shown. */
 export function sentRow(input: { sender: Who; recipient: Who; threadId: string; title?: string; private?: boolean; reason?: string; doneWhen?: string; room?: AddressedRoom; via: SentVia;
-  language?: string }): Omit<Message, "id" | "at"> {
+  language?: string; attachments?: Message["attachments"] }): Omit<Message, "id" | "at"> {
   const { sender, recipient, threadId, room, via, language } = input;
   const outside = room && via === "direct" ? room : undefined;
   const title = input.private ? "" : input.title;
@@ -37,6 +37,7 @@ export function sentRow(input: { sender: Who; recipient: Who; threadId: string; 
       ok: true, ...(input.reason ? { output: input.reason } : {}),
     },
     ...(input.doneWhen ? { doneWhen: input.doneWhen } : {}),
+    ...(input.attachments?.length ? { attachments: input.attachments } : {}),
     ...(outside ? { sentDirectly: { name: recipient.name, ...(outside.here ? {} : { room: outside.name }) } } : {}),
     ...(room && via === "room"
       ? { comm: { groupId: room.id, threadId, withBotId: recipient.id, withName: recipient.name, withColor: recipient.color } }

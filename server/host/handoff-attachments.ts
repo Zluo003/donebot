@@ -8,6 +8,7 @@ import type { CoordinatorHost, HandoffView, HostTurnResult } from "../coordinato
 type Attachment = NonNullable<Message["attachments"]>[number];
 type AttachmentAddress = Pick<HandoffView, "threadId" | "botId">;
 type FileSource = { message: Message; attachment: Attachment };
+const contentKey = (mime: string, digest: string) => `${mime.split(";", 1)[0]!.trim().toLowerCase()}:${digest}`;
 
 export function createHandoffAttachments(deps: {
   store: Pick<Store, "activePath" | "appendMessage" | "bot" | "messagesFor" | "patchMessage" | "onChange">;
@@ -15,6 +16,7 @@ export function createHandoffAttachments(deps: {
   parent(node: HandoffView): HandoffView | undefined;
   allowed(node: HandoffView, parent: HandoffView): boolean;
   privateTo(threadId: string): string | null;
+  sentPaths?(assignmentId: string): readonly string[];
   wrote(botId: string, threadId: string): void;
   openGenerated(threadId: string, messageId: string, path: string): Promise<Awaited<ReturnType<typeof openMessageFile>> | null>;
 }) {
@@ -23,13 +25,22 @@ export function createHandoffAttachments(deps: {
     (message.attachments ?? []).filter(attachment => !(attachment.kind === "image" && attachment.fromTool))
       .map(attachment => ({ message, attachment })));
 
-  async function deliver(from: AttachmentAddress, to: AttachmentAddress, sources: FileSource[], sendId: string, live: () => boolean, assignmentId?: string, publish = true): Promise<Attachment[]> {
+  async function deliver(from: AttachmentAddress, to: AttachmentAddress, sources: FileSource[], sendId: string, live: () => boolean, assignmentId?: string, publish = true, sent: readonly string[] = []): Promise<Attachment[]> {
     const permitted = () => live() && !keptPrivate({ child: deps.privateTo(from.threadId), parent: deps.privateTo(to.threadId) });
     if (!sources.length || !permitted()) return [];
     const existing = store.activePath(to.threadId).find(message => message.sendId === sendId);
     if (existing) return existing.attachments ?? [];
     const attachments: Attachment[] = [];
     const seen = new Set<string>();
+    for (const path of sent) {
+      if (!permitted()) return [];
+      const file = await openMessageFile(path, [deps.attachmentsDir], FILE_MAX_BYTES);
+      try {
+        const hash = createHash("sha256");
+        for await (const chunk of file.handle.createReadStream({ start: 0, autoClose: false })) hash.update(chunk);
+        seen.add(contentKey(file.mime, hash.digest("hex")));
+      } finally { await file.handle.close().catch(() => undefined); }
+    }
     for (const { message, attachment } of sources) {
       if (!permitted()) return [];
       let file: Awaited<ReturnType<typeof openMessageFile>> | null = null;
@@ -46,7 +57,7 @@ export function createHandoffAttachments(deps: {
           if (image) imageChunks.push(chunk);
         }
         const digest = hash.digest("hex");
-        const key = `${attachment.mime}:${digest}`;
+        const key = contentKey(attachment.mime, digest);
         if (seen.has(key)) continue;
         seen.add(key);
         const { source: _source, ...clean } = attachment.kind === "audio" ? { ...attachment, source: undefined } : attachment;
@@ -118,8 +129,9 @@ export function createHandoffAttachments(deps: {
     async incoming(node: HandoffView, signal: AbortSignal): Promise<Attachment[]> {
       const parent = deps.parent(node);
       if (!parent) return [];
-      const sources = references(parent.threadId, node.text);
-      return deliver(parent, node, sources, `handoff_inputs_${node.id}`, () => !signal.aborted && deps.allowed(node, parent));
+      const sent = new Set(deps.sentPaths?.(node.id));
+      const sources = references(parent.threadId, node.text).filter(({ attachment }) => !sent.has(attachment.path));
+      return deliver(parent, node, sources, `handoff_inputs_${node.id}`, () => !signal.aborted && deps.allowed(node, parent), undefined, true, [...sent]);
     },
     async shared(first: HandoffView, node: HandoffView, signal: AbortSignal, outcome: HostTurnResult): Promise<HostTurnResult> {
       const firstParent = deps.parent(first), parent = deps.parent(node);

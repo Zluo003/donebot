@@ -655,8 +655,8 @@ M	server/bot-api-host.test.ts	接入	待核对	待核对
 M	server/bot-api-host.ts	接入	待核对	待核对
 M	server/bot-api.test.ts	接入	待核对	待核对
 M	server/bot-api.ts	接入	待核对	待核对
-M	server/bot-attachment.test.ts	接入	待核对	待核对
-M	server/bot-attachment.ts	接入	待核对	待核对
+M	server/bot-attachment.test.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
+M	server/bot-attachment.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
 M	server/bot-box/box.ts	接入	待核对	待核对
 M	server/bot-box/broker-mcp-refusal.test.ts	接入	6	待核对
 M	server/bot-box/broker-mcp-refusal.ts	接入	6	待核对
@@ -1291,7 +1291,7 @@ M	server/group-goal-run.ts	接入	待核对	待核对
 M	server/group-local-vm.e2e.test.ts	接入	待核对	待核对
 A	server/group-task-state.ts	接入	待核对	待核对
 A	server/handed-waits.e2e.test.ts	接入	待核对	待核对
-A	server/handoff-files.e2e.test.ts	接入	5	待核对
+A	server/handoff-files.e2e.test.ts	接入	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
 A	server/handoff-status.e2e.test.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	server/harness-capabilities.ts	接入	待核对	待核对
 M	server/harness/bus.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -1405,12 +1405,12 @@ M	server/host/devs-reports.test.ts	接入	待核对	待核对
 M	server/host/devs-reports.ts	接入	待核对	待核对
 M	server/host/fill-login-turn.test.ts	接入	待核对	待核对
 M	server/host/fill-login-turn.ts	接入	待核对	待核对
-A	server/host/handoff-files.test.ts	接入	5	待核对
-A	server/host/handoff-files.ts	接入	5	待核对
-A	server/host/handoff-inbox.test.ts	接入	5	待核对
-A	server/host/handoff-inbox.ts	接入	5	待核对
+A	server/host/handoff-files.test.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
+A	server/host/handoff-files.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
+A	server/host/handoff-inbox.test.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
+A	server/host/handoff-inbox.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
 M	server/host/handoff-sent.test.ts	接入	5	待核对
-M	server/host/handoff-sent.ts	接入	5	待核对
+M	server/host/handoff-sent.ts	接入	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
 A	server/host/handoff-status.test.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 A	server/host/handoff-status.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	server/host/helper-suggestion.ts	接入	待核对	待核对
@@ -2632,8 +2632,8 @@ M	src/components/GroupView.queue.test.ts	接入	待核对	待核对
 A	src/components/GroupView.render-count.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/GroupView.speaker.test.ts	接入	待核对	待核对
 M	src/components/GroupView.tsx	自有适配	4	流式/长历史子集已接入；其余目标差异继续核对
-M	src/components/HandoffReply.test.ts	接入	待核对	待核对
-M	src/components/HandoffReply.tsx	接入	待核对	待核对
+M	src/components/HandoffReply.test.ts	接入	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
+M	src/components/HandoffReply.tsx	接入	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
 A	src/components/HandoffStatusChip.test.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 A	src/components/HandoffStatusChip.tsx	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	src/components/HelperIntro.test.ts	接入	待核对	待核对
@@ -2861,7 +2861,7 @@ M	src/components/TeamWelcome.test.ts	接入	待核对	待核对
 M	src/components/TeamWelcome.tsx	接入	待核对	待核对
 A	src/components/TemplateCard.test.ts	接入	待核对	待核对
 A	src/components/TemplateCard.tsx	接入	待核对	待核对
-M	src/components/ThreadChip.tsx	接入	待核对	待核对
+M	src/components/ThreadChip.tsx	接入	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
 A	src/components/ThreadCleanupSettings.dom.test.ts	接入	待核对	待核对
 M	src/components/ThreadCleanupSettings.test.ts	接入	待核对	待核对
 M	src/components/ThreadCleanupSettings.tsx	接入	待核对	待核对

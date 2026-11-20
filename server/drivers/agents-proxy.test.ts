@@ -510,13 +510,18 @@ describe("agents-proxy MCP surface", () => {
         expect(description).toContain("a change for another bot may wait for the person's confirmation");
         expect(description).toContain("If applied, continue the requested work without another confirmation");
         expect(description).toContain("Only a pending result requires ending the turn");
+      } else if (tool === "propose_team_setup") {
+        expect(description).toContain("MCP server lists apply directly only at Full access");
+        expect(description).toContain("otherwise wait for the person to review the card");
+        expect(description).toContain("when applied, continue the work without another confirmation");
+        expect(description).toContain("no other execution permission changes");
       } else {
         expect(description).toContain("it applies immediately at every access level, and the person sees it with an Undo where possible");
         expect(description).toContain("If applied, continue the work without another confirmation");
         expect(description).toContain("Only a pending result (a Cloud conversation its owner did not drive)");
       }
       expect(description).toContain("Never claim success without an applied result");
-      expect(description).toContain("does not elevate another bot's execution permissions");
+      if (tool !== "propose_team_setup") expect(description).toContain("does not elevate another bot's execution permissions");
     }
     const credential = list.result.tools.find((entry: { name: string }) => entry.name === "request_credential");
     expect(credential.description).toContain("you resume when they save or decline");
@@ -679,6 +684,7 @@ describe("agents-proxy MCP surface", () => {
       "wait_until",
       "list_waits",
       "cancel_wait",
+      "check_back",
       "propose_profile",
       "propose_model",
       "propose_team_memory",
@@ -694,7 +700,7 @@ describe("agents-proxy MCP surface", () => {
     expect(coordinate.description).toContain("consult true asks a question");
     expect(coordinate.description).toContain('reply "none" is a one-way notice');
     expect(coordinate.description).toContain("never call assignment_status in the same turn");
-    expect(Object.keys(coordinate.inputSchema.properties)).toEqual(["group_id", "bot_ids", "message", "reason", "rework", "thread", "title", "in_my_folder", "reply", "consult", "done_when", "answers"]);
+    expect(Object.keys(coordinate.inputSchema.properties)).toEqual(["group_id", "bot_ids", "message", "reason", "rework", "thread", "title", "in_my_folder", "reply", "consult", "done_when", "answers", "files"]);
     expect(coordinate.inputSchema.properties.thread).toEqual({ type: "string", description: expect.stringContaining("new: a new thread on the teammate") });
     expect(coordinate.inputSchema.properties.reply.enum).toEqual(["resume", "none"]);
     expect(coordinate.inputSchema.properties.consult.type).toBe("boolean");
@@ -2385,7 +2391,7 @@ describe("coordinate_bots arguments", () => {
       lastCoordinateBody = null;
       const res = await callTool("coordinate_bots", args);
       expect(res.result.isError, JSON.stringify(args)).toBe(true);
-      expect(res.result.content[0].text).toContain('thread ("standing", "new" or the id of a thread you opened on that teammate), reply ("resume" or "none"), consult (true or false), in_my_folder (true or false), done_when and answers are optional');
+      expect(res.result.content[0].text).toContain('thread ("standing", "new" or the id of a thread you opened on that teammate), reply ("resume" or "none"), consult (true or false), in_my_folder (true or false), done_when, answers and files (an array of at most 5 file paths) are optional');
       expect(lastCoordinateBody).toBeNull();
     }
   });
@@ -2411,7 +2417,7 @@ describe("coordinate_bots arguments", () => {
     });
     expect(res.result.isError).toBe(true);
     const text = res.result.content[0].text;
-    for (const field of ["bot_ids", "message", "group_id", "reason", "rework", "thread", "reply", "consult", "in_my_folder", "done_when", "answers"]) {
+    for (const field of ["bot_ids", "message", "group_id", "reason", "rework", "thread", "reply", "consult", "in_my_folder", "done_when", "answers", "files"]) {
       expect(text).toContain(field);
     }
     expect(text).toContain("botIds");

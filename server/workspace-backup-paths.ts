@@ -108,6 +108,13 @@ export function restorePaths(source: string, destination: string) {
   };
   return {
     fields: (value: unknown) => fields(value, false),
+    handoffFiles: (value: unknown) => {
+      fields(value, false);
+      if (!record(value) || !Array.isArray(value.batches)) return;
+      for (const batch of value.batches) if (record(batch) && record(batch.placed)) {
+        batch.placed = Object.fromEntries(Object.entries(batch.placed).flatMap(([path, name]) => inside(path) === null ? [] : [[rebase(path), name]]));
+      }
+    },
     /** Bots, rooms, routines and settings: a working folder left on another kind of computer is cleared and noted. */
     definitions: (value: unknown, bot?: string) => fields(value, true, bot),
     text,

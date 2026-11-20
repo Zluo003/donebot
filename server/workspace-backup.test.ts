@@ -159,6 +159,13 @@ describe("encrypted full workspace backups", () => {
     // Production closes its sole message handle after draining writes, while the maintenance gate is held.
     db.close();
     try {
+      const inboxFile = join(source, "task-workspaces", "bot", "thread", "inbox", "scout", "handoff", "notes.txt");
+      mkdirSync(join(inboxFile, ".."), { recursive: true });
+      writeFileSync(inboxFile, "receiver's edited copy");
+      writeFileSync(join(source, "attachment-names.key"), "source-installation-name-key");
+      json(join(source, "handoff-files.json"), { batches: [{ assignmentId: "handoff", way: "sent", from: { botId: "scout", name: "Scout" }, to: { botId: "bot", threadId: "thread" },
+        files: [{ path: join(source, "attachments", "image.png"), name: "image.png", mime: "image/png", bytes: 1 }],
+        placed: { [inboxFile]: "image.png", "/external/inbox/scout/handoff/notes.txt": "image.png" }, at: 1_000 }], days: {} });
       json(join(source, "team-computers.json"), { version: 1, environmentId: "source-environment", computers: [{ id: "source-computer", name: "Source desktop", section: "Design" }] });
       const originalDb = readFileSync(join(source, "messages.db"));
       const originalRuntimeDb = readFileSync(join(source, "runtime.db"));
@@ -174,6 +181,7 @@ describe("encrypted full workspace backups", () => {
       expect(readFileSync(join(source, "messages.db"))).toEqual(originalDb);
       expect(readFileSync(join(source, "runtime.db"))).toEqual(originalRuntimeDb);
       const target = directory();
+      writeFileSync(join(target, "attachment-names.key"), "destination-installation-name-key");
       const connections = { xai: { key: "destination-key", url: "https://destination.example" }, instances: { local: { driver: "claudeAgent", config: { configDir: join(target, "providers", "local") } } } };
       json(join(target, "config.json"), { ...connections, language: "en" });
       json(join(target, "bots.json"), [{ id: "old" }]);
@@ -203,6 +211,11 @@ describe("encrypted full workspace backups", () => {
       expect(readPendingWorkspaceRestoreMetadata(target)?.id).toBe(staged.id);
       const result = applyPendingWorkspaceRestore(target);
       expect(result).toMatchObject({ restored: true, id: staged.id });
+      const restoredCopy = join(target, "task-workspaces", "bot", "thread", "inbox", "scout", "handoff", "notes.txt");
+      expect(readFileSync(restoredCopy, "utf8")).toBe("receiver's edited copy");
+      expect(readJson(join(target, "handoff-files.json")).batches[0]).toMatchObject({ files: [{ path: join(target, "attachments", "image.png") }], placed: { [restoredCopy]: "image.png" } });
+      expect(Object.keys(readJson(join(target, "handoff-files.json")).batches[0].placed)).toEqual([restoredCopy]);
+      expect(readFileSync(join(target, "attachment-names.key"), "utf8")).toBe("destination-installation-name-key");
       const restoredBot = readJson(join(target, "bots.json"))[0];
       expect(restoredBot).toMatchObject({ id: "bot", cwd: join(target, "task-workspaces", "bot", "thread"), soul: `Each morning read ${join(target, "notes.md")}.`, avatarUrl: "/api/attachments/avatar.png", avatarCrop: "circle" });
       expect(restoredBot).not.toHaveProperty("voice");

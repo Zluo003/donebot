@@ -143,6 +143,13 @@ describe("what a Team Cloud's export leaves out (the private sentence: not the O
     process.env.DONEBOT_CLOUD_ROLE = "team";
     const root = directory();
     teamData(root);
+    const handoff = (assignmentId: string, name: string, more = {}) => ({ assignmentId, way: "sent", from: { botId: "bot", name: "Scout" },
+      files: [{ path: join(root, "attachments", name), name, kind: "file", mime: "text/plain", bytes: 1 }], at: 1_000, ...more });
+    for (const name of ["queued-shared.txt", "queued-private-secret.txt", "orphan-private-secret.txt"]) file(join(root, "attachments", name), name);
+    json(join(root, "handoff-files.json"), { batches: [
+      handoff("as-team", "queued-shared.txt"), handoff("as-bob", "queued-private-secret.txt"), handoff("not-kept", "orphan-private-secret.txt"),
+      handoff("as-team", "bobs.png", { to: { botId: "bot", threadId: "bob-chat" } }),
+    ], days: { bot: { day: "2026-11-20", files: 1, bytes: 1 }, "bobs-own": { day: "2026-11-20", files: 1, bytes: 1 } } });
     const team = await exported(root);
     expect(team.warnings).toContain(TEAM_PRIVATE_NOTE);
     expect(existsSync(join(team.data, "workspaces", "bot", "MEMORY.md"))).toBe(true);
@@ -163,6 +170,13 @@ describe("what a Team Cloud's export leaves out (the private sentence: not the O
     expect(table(join(team.data, "messages.db"), "SELECT thread_id AS id FROM messages").map((row) => row.id).sort()).toEqual(["main", "outside-thread", "room-thread"]);
     expect(table(join(team.data, "runtime.db"), "SELECT id FROM assignments").map((row) => row.id)).toEqual(["as-team"]);
     expect(textOf(join(team.data, "messages.db")).toLowerCase()).not.toContain("secret");
+    const handoffs = textOf(join(team.data, "handoff-files.json"));
+    expect(JSON.parse(handoffs)).toMatchObject({ batches: [{ assignmentId: "as-team", files: [{ name: "queued-shared.txt" }] }], days: { bot: { files: 1 } } });
+    expect(JSON.parse(handoffs).batches).toHaveLength(1);
+    expect(handoffs).not.toMatch(/secret|bob/);
+    expect(existsSync(join(team.data, "attachments", "queued-shared.txt"))).toBe(true);
+    expect(existsSync(join(team.data, "attachments", "queued-private-secret.txt"))).toBe(false);
+    expect(existsSync(join(team.data, "attachments", "orphan-private-secret.txt"))).toBe(false);
 
     process.env.DONEBOT_CLOUD_ROLE = "home";
     const own = directory();

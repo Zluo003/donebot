@@ -91,6 +91,7 @@ Use only mapped, tested commands:
 - [Channels](channels.md)
 - [In-chat team coordination](room-coordination.md)
 - [委派状态展示](handoff-status.md)
+- [双向委派文件与备份隐私](handoff-files.md)
 - [Question cards: a teammate's question, in its chat and the person's inbox](question-cards.md)
 - [Chief authority over additional departments](team-access.md)
 - [Engines and Doctor](engines.md)

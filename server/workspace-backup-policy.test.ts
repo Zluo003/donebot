@@ -73,6 +73,11 @@ describe("workspace backup data boundary", () => {
     for (const path of ["mcp-oauth.json.md", "workspaces/bot/mcp-oauth.json"]) expect(excludedWorkspaceAuthPath(path)).toBe(false);
   });
 
+  it("keeps content-addressed attachment identities installation-local", () => {
+    for (const path of ["attachment-names.key", "attachment-names.key.123.05a7b3e0-1234.tmp"]) expect(excludedWorkspaceAuthPath(path)).toBe(true);
+    for (const path of ["attachment-names.key.md", "workspaces/bot/attachment-names.key"]) expect(excludedWorkspaceAuthPath(path)).toBe(false);
+  });
+
   it("never exports the per-turn hook token directory, and only that directory", () => {
     for (const path of ["hook-tokens", "hook-tokens/0123456789abcdef01234567.token", "sessions.json.open"]) expect(ephemeralWorkspaceTokenPath(path)).toBe(true);
     for (const path of ["hook-tokens.md", "workspaces/bot/hook-tokens/notes.md", "attachments/api.token", "sessions.json.opened", "workspaces/bot/sessions.json.open"]) expect(ephemeralWorkspaceTokenPath(path)).toBe(false);

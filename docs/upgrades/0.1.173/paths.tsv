@@ -146,7 +146,7 @@ M	docs/team-sharing.md	接入	待核对	待核对
 A	docs/team-slack.md	接入	待核对	待核对
 M	docs/tool-selection.md	接入	待核对	待核对
 A	docs/usage-caps.md	接入	待核对	待核对
-M	docs/verification/README.md	接入	待核对	待核对
+M	docs/verification/README.md	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	docs/verification/app-settings.md	接入	6	待核对
 A	docs/verification/assets/call-button-working/after-daylight.png	接入	待核对	待核对
 A	docs/verification/assets/call-button-working/after-midnight.png	接入	待核对	待核对
@@ -388,7 +388,7 @@ A	packages/phone-protocol/src/activity.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/agents-tool-names.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/app-rpc.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/app-settings.ts	自有适配	7	待核对
-A	packages/phone-protocol/src/app-triggers.ts	自有适配	7	待核对
+A	packages/phone-protocol/src/app-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	packages/phone-protocol/src/app.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/approval-mode.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/ask-question.ts	自有适配	7	待核对
@@ -471,8 +471,8 @@ A	packages/phone-protocol/src/upload-limits.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/vega-config.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/wait-request.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/waits.ts	自有适配	7	待核对
-A	packages/phone-protocol/src/webhook-request.ts	自有适配	7	待核对
-A	packages/phone-protocol/src/webhooks.ts	自有适配	7	待核对
+A	packages/phone-protocol/src/webhook-request.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+A	packages/phone-protocol/src/webhooks.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	packages/phone-protocol/src/widget-button-style.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/widget-chart.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/widget-text.ts	自有适配	7	待核对
@@ -615,10 +615,10 @@ A	server/app-settings/registry-config.ts	接入	6	待核对
 A	server/app-settings/registry-pictures.ts	接入	6	待核对
 A	server/app-settings/registry-window.ts	接入	6	待核对
 A	server/app-settings/registry.ts	接入	6	待核对
-M	server/app-trigger-host.ts	接入	待核对	待核对
-M	server/app-trigger-requests.ts	接入	待核对	待核对
-M	server/app-triggers.test.ts	接入	待核对	待核对
-M	server/app-triggers.ts	接入	待核对	待核对
+M	server/app-trigger-host.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/app-trigger-requests.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/app-triggers.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/app-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	server/assignment-read.test.ts	接入	待核对	待核对
 A	server/assignment-read.ts	接入	待核对	待核对
 M	server/atomic.ts	接入	1	待核对
@@ -819,7 +819,7 @@ M	server/cloud-power.ts	接入	待核对	待核对
 M	server/cloud-secrets.ts	接入	待核对	待核对
 M	server/cloud-send-files.test.ts	接入	6	待核对
 M	server/cloud-send-files.ts	接入	6	待核对
-M	server/cloud-send-kinds.ts	接入	待核对	待核对
+M	server/cloud-send-kinds.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/cloud-send-verify.ts	接入	待核对	待核对
 M	server/cloud-send.e2e.test.ts	接入	待核对	待核对
 M	server/cloud-send.test.ts	接入	待核对	待核对
@@ -1087,18 +1087,18 @@ M	server/drivers/agents-bridge-wire.test.ts	接入	待核对	待核对
 M	server/drivers/agents-bridge.test.ts	接入	待核对	待核对
 M	server/drivers/agents-bridge.ts	接入	待核对	待核对
 M	server/drivers/agents-call-cards.test.ts	接入	待核对	待核对
-M	server/drivers/agents-call-triggers.test.ts	接入	待核对	待核对
-M	server/drivers/agents-call-triggers.ts	接入	待核对	待核对
+M	server/drivers/agents-call-triggers.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/drivers/agents-call-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/drivers/agents-call.test.ts	接入	待核对	待核对
 M	server/drivers/agents-call.ts	接入	待核对	待核对
 M	server/drivers/agents-catalog-goldens/bridged.profiles.json	接入	6	待核对
 M	server/drivers/agents-catalog-goldens/bridged.tools-list.json	接入	待核对	待核对
-M	server/drivers/agents-catalog-goldens/full.tools-list.json	接入	待核对	待核对
-M	server/drivers/agents-catalog-goldens/profiles.json	接入	6	待核对
+M	server/drivers/agents-catalog-goldens/full.tools-list.json	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/drivers/agents-catalog-goldens/profiles.json	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	server/drivers/agents-catalog-local-vm.test.ts	接入	待核对	待核对
 M	server/drivers/agents-catalog-profile.ts	接入	6	待核对
-M	server/drivers/agents-catalog-wire.test.ts	接入	待核对	待核对
-M	server/drivers/agents-catalog.ts	接入	待核对	待核对
+M	server/drivers/agents-catalog-wire.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/drivers/agents-catalog.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	server/drivers/agents-check-back-tool.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	server/drivers/agents-claude-defer.test.ts	接入	待核对	待核对
 A	server/drivers/agents-claude-defer.ts	接入	待核对	待核对
@@ -1539,7 +1539,7 @@ A	server/included-hosting.e2e.test.ts	接入	待核对	待核对
 M	server/included-services.ts	接入	待核对	待核对
 M	server/independent-task-store.test.ts	接入	待核对	待核对
 M	server/index.test.ts	接入	待核对	待核对
-M	server/index.ts	自有适配	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
+M	server/index.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/instance-fleets.ts	接入	待核对	待核对
 A	server/job-slots-urgent.test.ts	接入	待核对	待核对
 A	server/job-slots.test.ts	接入	待核对	待核对
@@ -1997,7 +1997,7 @@ A	server/routine-run-history.ts	接入	5	待核对
 A	server/routine-run-watch.ts	接入	5	待核对
 M	server/routine-run-window.test.ts	接入	5	待核对
 M	server/routine-run-window.ts	接入	5	待核对
-A	server/routine-same-conversation.ts	接入	5	待核对
+A	server/routine-same-conversation.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	server/routine-schedule-report.test.ts	接入	5	待核对
 A	server/routine-schedule-report.ts	接入	5	待核对
 M	server/routine-schedules.ts	接入	5	待核对
@@ -2010,8 +2010,8 @@ A	server/routine-wake-retry.test.ts	接入	5	待核对
 A	server/routine-wake-retry.ts	接入	5	待核对
 M	server/routines-limit-reset.test.ts	接入	5	待核对
 M	server/routines-startup.test.ts	接入	5	待核对
-M	server/routines.test.ts	接入	5	待核对
-M	server/routines.ts	接入	5	待核对
+M	server/routines.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/routines.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/runtime-coordination.e2e.test.ts	接入	待核对	待核对
 A	server/runtime-coordinator-reads.test.ts	接入	待核对	待核对
 M	server/runtime-coordinator.test.ts	接入	待核对	待核对
@@ -2195,8 +2195,8 @@ A	server/tool-groups.ts	接入	待核对	待核对
 A	server/tool-permission-audit.e2e.test.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/tool-scope.e2e.test.ts	接入	待核对	待核对
 A	server/trigger-instructions.e2e.test.ts	接入	待核对	待核对
-M	server/trigger-tools.test.ts	接入	待核对	待核对
-M	server/trigger-tools.ts	接入	待核对	待核对
+M	server/trigger-tools.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/trigger-tools.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/trust-controls.e2e.test.ts	接入	待核对	待核对
 A	server/tts/cancellation.test.ts	接入	待核对	待核对
 M	server/tts/chatterbox.ts	接入	4	待核对
@@ -2271,11 +2271,11 @@ M	server/warm-summary.test.ts	接入	待核对	待核对
 M	server/warm-summary.ts	自有适配	4	已接入；上下文子批测试见 batch-4.md
 M	server/web-panel-framing.test.ts	接入	待核对	待核对
 M	server/web-panel-framing.ts	接入	待核对	待核对
-A	server/webhook-payload-filter.test.ts	接入	5	待核对
-M	server/webhook-requests.test.ts	接入	5	待核对
-M	server/webhook-requests.ts	接入	5	待核对
-M	server/webhooks.test.ts	接入	5	待核对
-M	server/webhooks.ts	接入	5	待核对
+A	server/webhook-payload-filter.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/webhook-requests.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/webhook-requests.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/webhooks.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/webhooks.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/workspace-backup-policy.test.ts	接入	1	待核对
 M	server/workspace-backup-policy.ts	接入	1	待核对
 M	server/workspace-backup.test.ts	接入	1	待核对
@@ -2299,7 +2299,7 @@ M	shared/app-frame/helper.ts	接入	待核对	待核对
 M	shared/app-frame/point.test.ts	接入	待核对	待核对
 M	shared/app-frame/point.ts	接入	待核对	待核对
 A	shared/app-settings.ts	接入	6	待核对
-M	shared/app-triggers.ts	接入	待核对	待核对
+M	shared/app-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	shared/app.ts	接入	待核对	待核对
 M	shared/approval-mode.ts	接入	待核对	待核对
 M	shared/ask-question.ts	接入	待核对	待核对
@@ -2432,8 +2432,8 @@ M	shared/vault.ts	接入	6	待核对
 M	shared/vega-config.ts	接入	待核对	待核对
 M	shared/wait-request.ts	接入	待核对	待核对
 M	shared/waits.ts	接入	待核对	待核对
-M	shared/webhook-request.ts	接入	5	待核对
-M	shared/webhooks.ts	接入	5	待核对
+M	shared/webhook-request.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	shared/webhooks.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	shared/widget-button-style.ts	接入	待核对	待核对
 M	shared/widget-chart.ts	接入	待核对	待核对
 M	shared/widget-text.ts	接入	待核对	待核对
@@ -3093,7 +3093,7 @@ A	src/lib/announcements.ts	自有适配	7	待核对
 M	src/lib/app-links.ts	接入	待核对	待核对
 A	src/lib/app-load.ts	接入	待核对	待核对
 A	src/lib/app-preview.ts	接入	待核对	待核对
-M	src/lib/app-triggers.ts	接入	待核对	待核对
+M	src/lib/app-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	src/lib/approval-mode-options.test.ts	接入	待核对	待核对
 M	src/lib/approval-mode-options.ts	接入	待核对	待核对
 M	src/lib/attach-notice.test.ts	接入	待核对	待核对

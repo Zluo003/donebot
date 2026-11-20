@@ -6717,5 +6717,7 @@
   "server.donebot.mediaApprovalDeny": "Nega",
   "server.donebot.mediaKindImage": "un’immagine",
   "server.donebot.mediaKindVideo": "un video",
-  "server.donebot.mediaKindMusic": "musica"
+  "server.donebot.mediaKindMusic": "musica",
+  "automations.sameConversationLabel": "Mantieni una sola conversazione",
+  "automations.sameConversationHelp": "Ogni esecuzione continua nella conversazione di quella precedente, così il bot vede cosa ha fatto prima. Le esecuzioni si alternano."
 }

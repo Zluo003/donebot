@@ -3614,5 +3614,7 @@
   "server.donebot.mediaApprovalDeny": "Відхилити",
   "server.donebot.mediaKindImage": "зображення",
   "server.donebot.mediaKindVideo": "відео",
-  "server.donebot.mediaKindMusic": "музику"
+  "server.donebot.mediaKindMusic": "музику",
+  "automations.sameConversationLabel": "Одна розмова",
+  "automations.sameConversationHelp": "Кожен запуск продовжується в розмові попереднього, тож бот бачить, що робив раніше. Запуски йдуть по черзі."
 }

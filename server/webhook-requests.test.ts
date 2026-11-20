@@ -134,6 +134,25 @@ describe("WebhookRequestService", () => {
     expect(webhooks.list()[0]!.enabled).toBe(false);
   });
 
+  it.each([false, true])("restores the payload filter and conversation preference on Undo (initially enabled: %s)", (enabled) => {
+    const { service, webhooks, tick } = harness();
+    const initial = enabled ? { payloadFilter: { action: "accepted", "base.ref": "main" }, sameConversation: true } : {};
+    const created = service.submit({ botId: "bot-a", threadId: "thread-a", operation: {
+      ...create, webhook: { ...create.webhook, ...initial },
+    } });
+    tick();
+    const updated = service.submit({ botId: "bot-a", threadId: "thread-a", operation: {
+      action: "update", webhookId: created.resultId,
+      changes: { payloadFilter: enabled ? {} : { action: "opened" }, sameConversation: !enabled },
+    } });
+    expect(webhooks.list()[0]!.sameConversation === true).toBe(!enabled);
+    expect(webhooks.list()[0]!.payloadFilter).toEqual(enabled ? undefined : { action: "opened" });
+    tick();
+    expect(service.undo({ botId: "bot-a", threadId: "thread-a", requestId: updated.requestId })).toMatchObject({ state: "undone" });
+    expect(webhooks.list()[0]!.sameConversation === true).toBe(enabled);
+    expect(webhooks.list()[0]!.payloadFilter).toEqual(enabled ? initial.payloadFilter : undefined);
+  });
+
   it("runs a webhook once with a test call, which cannot be undone", () => {
     const { service, queued } = harness();
     const created = service.submit({ botId: "bot-a", threadId: "thread-a", operation: create });

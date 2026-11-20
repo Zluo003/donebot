@@ -3502,5 +3502,7 @@
   "server.checkBack.pending": "Schaut {when} wieder nach",
   "server.checkBack.started": "Hat {when} wieder nachgeschaut",
   "server.checkBack.cancelled": "Nachschauen abgebrochen",
-  "server.checkBack.failed": "Konnte {when} nicht wieder nachschauen"
+  "server.checkBack.failed": "Konnte {when} nicht wieder nachschauen",
+  "automations.sameConversationLabel": "Ein Gespräch fortführen",
+  "automations.sameConversationHelp": "Jeder Lauf geht im Gespräch des vorherigen Laufs weiter, damit der Bot sieht, was er zuvor getan hat. Läufe kommen nacheinander dran."
 }

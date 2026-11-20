@@ -1,9 +1,9 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
 import type { RoutineRun } from "./routines.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
@@ -26,19 +26,7 @@ it("does not run a delivery twice after a process dies between the queue and ing
     const created = await api("/api/webhooks", { name: "Only once", prompt: "Handle this event once", botId: bot.id });
     await waitForExit(fixture.child, { signal: "SIGTERM" });
 
-    const env: NodeJS.ProcessEnv = {};
-    for (const key of ["SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "TZ"]) {
-      if (process.env[key]) env[key] = process.env[key];
-    }
-    Object.assign(env, {
-      HOME: dataDir, USERPROFILE: dataDir, DONEBOT_DATA_DIR: dataDir,
-      APPDATA: join(dataDir, "AppData", "Roaming"), LOCALAPPDATA: join(dataDir, "AppData", "Local"),
-      XDG_CONFIG_HOME: join(dataDir, ".config"), XDG_CACHE_HOME: join(dataDir, ".cache"),
-      XDG_DATA_HOME: join(dataDir, ".local", "share"), HERMES_HOME: join(dataDir, ".hermes"),
-      TEMP: join(dataDir, "tmp"), TMP: join(dataDir, "tmp"), TMPDIR: join(dataDir, "tmp"),
-      DONEBOT_PORT: new URL(url).port, DONEBOT_WEBHOOK_PORT: String(Number(new URL(url).port) + 1),
-      PATH: dirname(process.execPath), FAKE_CLAUDE_MODE: "happy",
-    });
+    const env = verificationServerEnvironment({}, dataDir, Number(new URL(url).port));
     // This disposable child runs the real enqueue, then exits before the WebhookManager can record acceptance.
     const crash = spawnSync(process.execPath, ["--input-type=module", "-e", `
       import { readFileSync } from 'node:fs';
@@ -59,7 +47,7 @@ it("does not run a delivery twice after a process dies between the queue and ing
     const committed = JSON.parse(readFileSync(join(dataDir, "routines.json"), "utf8")).runs[0] as RoutineRun;
     expect(JSON.parse(readFileSync(join(dataDir, "webhooks.json"), "utf8")).deliveries).toEqual([]);
     const log = openSync(logPath, "a", 0o600);
-    restarted = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./index.ts", import.meta.url))], {
+    restarted = spawn(process.execPath, verificationServerArgs(env), {
       cwd: fileURLToPath(new URL("..", import.meta.url)), env, stdio: ["ignore", log, log],
     });
     closeSync(log);

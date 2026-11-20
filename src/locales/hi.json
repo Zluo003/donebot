@@ -3176,5 +3176,7 @@
   "server.donebot.mediaApprovalDeny": "अस्वीकार करें",
   "server.donebot.mediaKindImage": "एक चित्र",
   "server.donebot.mediaKindVideo": "एक वीडियो",
-  "server.donebot.mediaKindMusic": "संगीत"
+  "server.donebot.mediaKindMusic": "संगीत",
+  "automations.sameConversationLabel": "एक ही बातचीत रखें",
+  "automations.sameConversationHelp": "हर रन पिछले रन की बातचीत में ही आगे बढ़ता है, ताकि बॉट देख सके कि उसने पहले क्या किया। रन एक-एक करके चलते हैं।"
 }

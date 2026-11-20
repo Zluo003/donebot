@@ -69,6 +69,7 @@ export interface WebhookManagerOptions {
     runOn: RoutineRunOn;
     deliveryId: string;
     receivedAt: number;
+    sameConversation?: boolean;
   }) => { id: string };
   cancelQueued?: (webhookId: string, message: string) => void;
   pendingRuns?: (webhookId: string) => number;
@@ -106,6 +107,9 @@ const maxPendingRunsSchema = z.number().int().min(1).max(MAX_PENDING_RUNS_LIMIT)
 const runOnSchema = z.enum(["maus", "cloud"]);
 const deliverySchema = z.enum(["run", "post"]);
 const eventTypesSchema = z.array(z.string()).max(20).optional();
+export const PAYLOAD_FILTER_MAX_FIELDS = 10;
+const payloadFilterSchema = z.record(z.string().max(200), z.string().max(200))
+  .refine((filter) => Object.keys(filter).length <= PAYLOAD_FILTER_MAX_FIELDS, `A payload filter takes at most ${PAYLOAD_FILTER_MAX_FIELDS} fields`);
 const triggerInputSchema = z.object({
   name: z.string(),
   prompt: z.string(),
@@ -116,7 +120,9 @@ const triggerInputSchema = z.object({
   enabled: z.boolean().optional(),
   verificationPending: z.boolean().optional(),
   eventTypes: eventTypesSchema,
+  payloadFilter: payloadFilterSchema.nullable().optional(),
   maxPendingRuns: maxPendingRunsSchema.nullable().optional(),
+  sameConversation: z.boolean().optional(),
 });
 const triggerPatchSchema = triggerInputSchema.partial();
 const verificationSampleSchema = z.object({
@@ -145,8 +151,10 @@ const storedWebhookSchema = z.object({
   verifiedAt: z.number().finite().nonnegative().optional(),
   verificationSample: verificationSampleSchema.optional(),
   eventTypes: eventTypesSchema,
+  payloadFilter: payloadFilterSchema.optional().catch(undefined),
   // A hand-edited value out of range falls back to the default instead of making the file unreadable.
   maxPendingRuns: maxPendingRunsSchema.optional().catch(undefined),
+  sameConversation: z.boolean().optional().catch(undefined),
   secretHash: z.string().regex(/^[a-f0-9]{64}$/),
   /** The current secret, sealed under WEBHOOK_KEY_FILE beside this file, so the person and the owning bot get the same
    * address back. Never in a public trigger or a workspace backup; absent for a webhook made before it was kept. */
@@ -213,6 +221,46 @@ function newSecret(): string {
   return `whsec_${randomBytes(32).toString("base64url")}`;
 }
 
+function cleanPayloadFilter(filter: Record<string, string> | null | undefined): Record<string, string> | undefined {
+  if (!filter) return undefined;
+  const entries = Object.entries(filter)
+    .map(([field, value]) => [field.trim().slice(0, 200), String(value).trim().slice(0, 200)] as const)
+    .filter(([field, value]) => field && value);
+  if (entries.length > PAYLOAD_FILTER_MAX_FIELDS) fail(400, `A payload filter takes at most ${PAYLOAD_FILTER_MAX_FIELDS} fields`);
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function* valuesAt(node: unknown, path: readonly string[]): Generator<unknown> {
+  const pending = [{ node, at: 0 }];
+  while (pending.length) {
+    const { node, at } = pending.pop()!;
+    if (at === path.length) {
+      if (Array.isArray(node)) yield* node;
+      else yield node;
+      continue;
+    }
+    const step = path[at]!;
+    if (Array.isArray(node)) {
+      if (/^\d+$/.test(step)) pending.push({ node: node[Number(step)], at: at + 1 });
+      else for (let index = node.length - 1; index >= 0; index--) pending.push({ node: node[index], at });
+    } else if (node && typeof node === "object" && Object.hasOwn(node, step)) {
+      pending.push({ node: (node as Record<string, unknown>)[step], at: at + 1 });
+    }
+  }
+}
+
+export function unmatchedPayloadField(filter: Record<string, string> | undefined, payload: unknown): string | null {
+  for (const [field, expected] of Object.entries(filter ?? {})) {
+    const want = expected.trim().toLowerCase();
+    let found = false;
+    for (const value of valuesAt(payload, field.split("."))) {
+      if ((typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) && String(value).trim().toLowerCase() === want) { found = true; break; }
+    }
+    if (!found) return field;
+  }
+  return null;
+}
+
 function cleanInput(input: WebhookTriggerInput): CleanWebhookInput {
   const name = input.name.trim().slice(0, 80);
   const prompt = input.prompt.trim().slice(0, 20_000);
@@ -236,11 +284,14 @@ function cleanInput(input: WebhookTriggerInput): CleanWebhookInput {
     verificationPending: enabled ? false : input.verificationPending === true,
   };
   if (eventTypes.length) clean.eventTypes = eventTypes;
+  const payloadFilter = cleanPayloadFilter(input.payloadFilter);
+  if (payloadFilter) clean.payloadFilter = payloadFilter;
   if (input.delivery) clean.delivery = input.delivery;
   const groupId = typeof input.groupId === "string" ? input.groupId.trim() : "";
   if (groupId && clean.delivery !== "post") fail(400, "a webhook room is only for delivery \"post\" webhooks");
   if (groupId) clean.groupId = groupId;
   if (typeof input.maxPendingRuns === "number") clean.maxPendingRuns = input.maxPendingRuns;
+  if (input.sameConversation) clean.sameConversation = true;
   return clean;
 }
 
@@ -439,13 +490,14 @@ export class WebhookManager {
     this.assertWritable();
     const held = this.webhooks.find((candidate) => candidate.id === record.id);
     const clean = cleanInput({ name: record.name, prompt: record.prompt, botId: record.botId, runOn: record.runOn, delivery: record.delivery,
-      groupId: record.groupId ?? null, enabled: held?.enabled ?? false, eventTypes: record.eventTypes, maxPendingRuns: record.maxPendingRuns ?? null });
+      groupId: record.groupId ?? null, enabled: held?.enabled ?? false, eventTypes: record.eventTypes, payloadFilter: record.payloadFilter, maxPendingRuns: record.maxPendingRuns ?? null,
+      sameConversation: record.sameConversation });
     if (this.options.botState(clean.botId) === "missing") fail(409, "Its bot is not on this server yet");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     const definition = { ...clean, ...(record.resultsThreadId ? { resultsThreadId: record.resultsThreadId } : {}) };
     let trigger: StoredWebhookTrigger;
     if (held) {
-      for (const key of ["delivery", "groupId", "eventTypes", "maxPendingRuns", "resultsThreadId"] as const) delete held[key];
+      for (const key of ["delivery", "groupId", "eventTypes", "payloadFilter", "maxPendingRuns", "sameConversation", "resultsThreadId"] as const) delete held[key];
       trigger = Object.assign(held, definition, { verificationPending: held.verificationPending, updatedAt: this.now() });
     } else {
       const secret = newSecret();
@@ -474,14 +526,18 @@ export class WebhookManager {
       enabled: patch.enabled ?? trigger.enabled,
       verificationPending: patch.verificationPending ?? trigger.verificationPending,
       eventTypes: patch.eventTypes ?? trigger.eventTypes,
+      payloadFilter: patch.payloadFilter === undefined ? trigger.payloadFilter : patch.payloadFilter,
       maxPendingRuns: patch.maxPendingRuns === undefined ? trigger.maxPendingRuns : patch.maxPendingRuns,
+      sameConversation: patch.sameConversation ?? trigger.sameConversation,
     });
     if (this.options.botState(clean.botId) === "missing") fail(400, "That MAUS no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
     if (!clean.eventTypes?.length) delete trigger.eventTypes;
+    if (!clean.payloadFilter) delete trigger.payloadFilter;
     if (!clean.groupId) delete trigger.groupId;
     if (clean.maxPendingRuns === undefined) delete trigger.maxPendingRuns;
+    if (!clean.sameConversation) delete trigger.sameConversation;
     if (patch.enabled === false) {
       this.options.cancelQueued?.(trigger.id, "The webhook was paused before this delivery started");
     }
@@ -625,18 +681,18 @@ export class WebhookManager {
     if (!trigger.enabled && !byPerson) fail(409, "This webhook is paused");
     if (this.options.botState(trigger.botId) === "missing") fail(410, "The assigned MAUS no longer exists");
 
-    const allowed = trigger.eventTypes ?? [];
-    if (allowed.length > 0 && (!event.eventName || !allowed.includes(event.eventName))) {
+    const ignore = (reason: string) => {
       const deliveryId = String(event.deliveryId ?? "").trim().slice(0, 200) || randomUUID();
-      this.appendAttempt(trigger, event, {
-        outcome: "ignored",
-        statusCode: 202,
-        deliveryId,
-        reason: event.eventName ? `Event type “${event.eventName}” is not enabled` : "Event type is missing",
-      });
+      this.appendAttempt(trigger, event, { outcome: "ignored", statusCode: 202, deliveryId, reason });
       this.save();
       return { receipt: { deliveryId, duplicate: false, ignored: true } };
+    };
+    const allowed = trigger.eventTypes ?? [];
+    if (allowed.length > 0 && (!event.eventName || !allowed.includes(event.eventName))) {
+      return ignore(event.eventName ? `Event type “${event.eventName}” is not enabled` : "Event type is missing");
     }
+    const unmatched = byPerson ? null : unmatchedPayloadField(trigger.payloadFilter, event.payload);
+    if (unmatched !== null) return ignore(`Field “${unmatched}” does not match the payload filter`);
 
     const requestedDeliveryId = String(event.deliveryId ?? "").trim().slice(0, 200);
     if (requestedDeliveryId) {
@@ -773,6 +829,7 @@ export class WebhookManager {
       runOn: trigger.runOn,
       deliveryId,
       receivedAt: now,
+      sameConversation: trigger.sameConversation,
     });
     this.deliveries.push({ key: `${trigger.endpointId}:${deliveryId}`, runId: run.id, at: now });
     if (this.deliveries.length > MAX_DELIVERIES) {

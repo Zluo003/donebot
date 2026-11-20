@@ -6855,5 +6855,7 @@
   "server.donebot.mediaApprovalDeny": "Odmów",
   "server.donebot.mediaKindImage": "obraz",
   "server.donebot.mediaKindVideo": "film",
-  "server.donebot.mediaKindMusic": "muzykę"
+  "server.donebot.mediaKindMusic": "muzykę",
+  "automations.sameConversationLabel": "Jedna rozmowa",
+  "automations.sameConversationHelp": "Każde uruchomienie toczy się dalej w rozmowie poprzedniego, więc bot widzi, co zrobił wcześniej. Uruchomienia idą po kolei."
 }

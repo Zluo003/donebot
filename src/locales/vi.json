@@ -5596,5 +5596,7 @@
   "server.donebot.mediaApprovalDeny": "Từ chối",
   "server.donebot.mediaKindImage": "hình ảnh",
   "server.donebot.mediaKindVideo": "video",
-  "server.donebot.mediaKindMusic": "nhạc"
+  "server.donebot.mediaKindMusic": "nhạc",
+  "automations.sameConversationLabel": "Giữ một cuộc trò chuyện",
+  "automations.sameConversationHelp": "Mỗi lần chạy tiếp tục trong cuộc trò chuyện của lần trước, để bot thấy những gì nó đã làm. Các lần chạy lần lượt diễn ra."
 }

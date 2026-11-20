@@ -5596,5 +5596,7 @@
   "server.donebot.mediaApprovalDeny": "Reddet",
   "server.donebot.mediaKindImage": "bir resim",
   "server.donebot.mediaKindVideo": "bir video",
-  "server.donebot.mediaKindMusic": "müzik"
+  "server.donebot.mediaKindMusic": "müzik",
+  "automations.sameConversationLabel": "Tek sohbeti sürdür",
+  "automations.sameConversationHelp": "Her çalıştırma bir öncekinin sohbetinde devam eder, böylece bot daha önce ne yaptığını görür. Çalıştırmalar sırayla yapılır."
 }

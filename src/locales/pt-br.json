@@ -10255,5 +10255,7 @@
   "chat.handoff.failed": "Falhou",
   "chat.handoff.failedWhy": "Falhou: {why}",
   "chat.handoff.for": "{status} · para {name}",
-  "chat.handoff.forPrivate": "{status} · para {name} (privado)"
+  "chat.handoff.forPrivate": "{status} · para {name} (privado)",
+  "automations.sameConversationLabel": "Manter uma só conversa",
+  "automations.sameConversationHelp": "Cada execução continua na conversa da anterior, assim o bot vê o que fez antes. As execuções acontecem uma de cada vez."
 }

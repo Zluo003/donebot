@@ -45,3 +45,18 @@ DoneBot 适配保留现有媒体回传为唯一发布方，避免重复附件行
 - `/tmp/donebot-handoff-files-types-complete.log`、`/tmp/donebot-handoff-files-lint-complete.log`：类型与 lint 通过。
 
 尚未接入跨节点文件协议、其余自动化和收件箱改进。本节不替代真实 Linux、Windows 或跨成员本机验收。
+
+## 事件过滤与同会话续跑
+
+接入固定上游 0a9d843a6 和 46859b327。Webhook 与 App 事件可选择继续同一会话，默认保持独立会话；同一事件源串行执行，重启后继续最近存在的执行会话，最近会话删除后新建。设置支持创建、编辑、Bot 工具修改、撤销及转发定义，保留当前共享协议。
+
+Webhook 可指定最多 10 个字段的精确值过滤，支持点路径、数组任一项、忽略大小写；所有字段同时匹配才入队。不匹配记录为忽略，不派发执行；手动“立即运行”绕过字段过滤。深层数组使用迭代遍历，避免外部 JSON 耗尽调用栈。管理员审计记录两项设置变化，更新其他字段不清除既有过滤。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-event-automations-workflow-final.log`：2 个真实隔离服务流程通过，包含过滤、重启续跑、原上下文保留、重复投递不执行、删除会话重建、关闭续跑及手动运行。另一个流程在入队成功但 Webhook 回执未保存时强制退出进程，重启仍只运行一次。
+- `/tmp/donebot-event-automations-regression.log`：10 文件 / 123 项通过，包含两种编辑器的双向切换保存、撤销恢复、过滤、请求路由、投递去重、App 事件及转发字段。
+- `/tmp/donebot-event-automations-catalog-final.log`：3 文件 / 60 项通过；`/tmp/donebot-event-automations-unit.log`：7 文件 / 293 项通过。工具目录仅新增两项可选参数及对应说明，每个 profile 增加 655 字节，预算基线只增加该差额，2% 约束保留。
+- `/tmp/donebot-event-automations-types-final.log`、`/tmp/donebot-event-automations-lint-final.log`、`/tmp/donebot-event-automations-i18n-final.log`：类型、lint 和 16 语言校验通过。
+
+续跑工作流证据：`/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/restartable-1795191164085-57589.log.continuity.json`。团队新增能力继续关闭；调度可靠性、收件箱及跨节点验收继续实施。

@@ -10134,5 +10134,7 @@
   "chat.handoff.failed": "失敗",
   "chat.handoff.failedWhy": "失敗：{why}",
   "chat.handoff.for": "{status} · 請求人：{name}",
-  "chat.handoff.forPrivate": "{status} · 請求人：{name}（私聊）"
+  "chat.handoff.forPrivate": "{status} · 請求人：{name}（私聊）",
+  "automations.sameConversationLabel": "保持同一個對話",
+  "automations.sameConversationHelp": "每次執行都會在上一次執行的對話中繼續，機器人能看到之前做過的事。執行會依序進行。"
 }

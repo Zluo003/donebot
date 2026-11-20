@@ -67,6 +67,19 @@ beforeEach(() => {
 afterEach(() => { root?.unmount(); root = null; document.body.innerHTML = ""; });
 
 describe("app events, set up by the person", () => {
+  it.each([false, true])("saves the changed conversation preference (initially enabled: %s)", async (enabled) => {
+    fixture.api.mockImplementation(async (path: unknown) => String(path).includes("/events?") ? catalog : { trigger: acme });
+    const onSaved = vi.fn();
+    const container = mount(createElement(AppEventEditor, { trigger: { ...acme, sameConversation: enabled }, bots: [scout], onClose: vi.fn(), onSaved }));
+    const checkbox = container.querySelector<HTMLInputElement>('input[aria-label="Keep one conversation"]')!;
+    expect(checkbox.checked).toBe(enabled);
+    flushSync(() => checkbox.click());
+    flushSync(() => button(container, "Save").click());
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const [, init] = fixture.api.mock.calls.find(([path]) => path === "/api/app-triggers/acme") as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ sameConversation: !enabled, filter: acme.filter });
+  });
+
   it("offers \"When something happens in an app\" under Set it up yourself", () => {
     const onSetUpYourself = vi.fn();
     const container = mount(createElement(NewAutomation, { onClose: vi.fn(), onSetUpYourself }));

@@ -7436,5 +7436,7 @@
   "server.donebot.mediaApprovalDeny": "거부",
   "server.donebot.mediaKindImage": "이미지",
   "server.donebot.mediaKindVideo": "동영상",
-  "server.donebot.mediaKindMusic": "음악"
+  "server.donebot.mediaKindMusic": "음악",
+  "automations.sameConversationLabel": "하나의 대화 유지",
+  "automations.sameConversationHelp": "실행할 때마다 이전 실행의 대화에서 이어가서, 봇이 전에 한 일을 알 수 있어요. 실행은 차례로 진행돼요."
 }

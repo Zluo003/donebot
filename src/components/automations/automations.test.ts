@@ -33,6 +33,7 @@ vi.mock("@/lib/copy-text", async (importOriginal) => ({
 }));
 
 const { NewAutomation, defaultBot } = await import("./NewAutomation");
+const { WebhookEditor } = await import("../WebhookTrigger");
 const { AutomationPanel } = await import("./AutomationPanel");
 const { TriggersPage } = await import("../TriggersPage");
 const { AutomationsCalendar } = await import("./AutomationsCalendar");
@@ -63,6 +64,25 @@ beforeEach(() => {
   fixture.state = { hydrated: true, bots: [botA, botB], selectedId: "", routines: [], webhooks: [webhook], routineRuns: [], webhookAttempts: [], routinesLoadState: "ready", webhookIngress: { available: true, baseUrl: "http://127.0.0.1:18900" } };
 });
 afterEach(() => { root?.unmount(); root = null; document.body.innerHTML = ""; });
+
+describe("webhook conversation preference", () => {
+  it.each([false, true])("saves the changed preference without clearing other settings (initially enabled: %s)", async (enabled) => {
+    fixture.api.mockResolvedValue({ webhook });
+    const onClose = vi.fn();
+    const container = mount(createElement(WebhookEditor, { webhook: { ...webhook, runOn: "maus", sameConversation: enabled, payloadFilter: { action: "accepted" } },
+      bots: [botA], onClose, onCredential: vi.fn() }));
+    const checkbox = container.querySelector<HTMLInputElement>('input[aria-label="Keep one conversation"]')!;
+    expect(checkbox.checked).toBe(enabled);
+    flushSync(() => checkbox.click());
+    flushSync(() => button(container, "Save").click());
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+    const [path, init] = fixture.api.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/webhooks/hook-1");
+    const input = JSON.parse(String(init.body));
+    expect(input).toMatchObject({ sameConversation: !enabled, botId: webhook.botId, prompt: webhook.prompt });
+    expect(input).not.toHaveProperty("payloadFilter");
+  });
+});
 
 describe("+ New", () => {
   it("talks to the bot open now, else the one most recently talked to", () => {

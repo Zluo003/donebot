@@ -7900,5 +7900,7 @@
   "chat.handoff.failed": "失败",
   "chat.handoff.failedWhy": "失败：{why}",
   "chat.handoff.for": "{status} · 请求人：{name}",
-  "chat.handoff.forPrivate": "{status} · 请求人：{name}（私聊）"
+  "chat.handoff.forPrivate": "{status} · 请求人：{name}（私聊）",
+  "automations.sameConversationLabel": "保持同一个对话",
+  "automations.sameConversationHelp": "每次运行都在上一次运行的对话中继续，机器人能看到之前做过的事。运行会依次进行。"
 }

@@ -10423,5 +10423,7 @@
   "chat.handoff.failed": "Failed",
   "chat.handoff.failedWhy": "Failed: {why}",
   "chat.handoff.for": "{status} · for {name}",
-  "chat.handoff.forPrivate": "{status} · for {name} (private)"
+  "chat.handoff.forPrivate": "{status} · for {name} (private)",
+  "automations.sameConversationLabel": "Keep one conversation",
+  "automations.sameConversationHelp": "Each run continues in the previous run's conversation, so the bot sees what it did before. Runs take turns."
 }

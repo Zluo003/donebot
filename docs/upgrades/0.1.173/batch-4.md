@@ -38,3 +38,14 @@
 - lint、typecheck、16 语言目录检查通过，新增入口与面板已有中文。
 
 消息分叉、批量设置和工具权限继承仍在实施；本批尚未完成。
+
+## 消息分叉
+
+移植固定上游的独立分叉、历史复制和侧栏面板，以及后续权限继承、发送回滚、卡片作答、搜索焦点、逐会话已读及渲染选择器修复。使用 `store-forks.ts`、`task-record.ts`、`fork-request.ts`、`fork-panel.ts` 和 `read-visible.ts` 的最终实现；保留 DoneBot 当前未开放的 Bot API 权限边界，不引入上游 opt-in 的 acts-as-owner 功能。
+
+分叉只复制用户实际可见的活动历史，保留附件引用、显式无目录、模型选择和有效权限；新的线程独立保存，不复制引擎会话、不自动运行。运行中来源、DM 及越权来源不能分叉。注册失败清理已复制历史。双面板分别处理流、乐观发送、失败回滚、审批卡及未读。窄屏关闭侧栏分叉。
+
+- `pnpm exec vitest run server/fork-tasks.test.ts src/state/fork-panel.test.ts src/state/read-visible.test.ts src/lib/chat-find.test.ts src/components/ChatFindBar.fork.test.ts src/state/store.test.ts server/host/room-reads.test.ts`：7 文件 / 267 测试通过。
+- `server/fork-api.e2e.test.ts` 和 `server/request-auth.test.ts`：2 文件 / 68 测试通过；真实隔离服务验证分叉发送、历史与图片下载、删除来源后继续、群聊分叉和未读定位。初测发现群聊切换遗漏读取该线程，已修复并通过复测。
+- 真实浏览器：`/tmp/donebot-fork-ui.mts`；证据 `/tmp/donebot-fork-ui.json`、`/tmp/donebot-fork-ui.png`、`/tmp/donebot-fork-ui.log`。通过消息菜单分叉、侧栏发送、原线程不变、查找焦点、手机宽度关闭面板。fixture 日志 `server-1795174812421-97256.log`，运行后精确停止并清理临时数据。
+- 类型检查、lint、16 语言目录校验通过。旧线程、独立权限及删除权限回归 5 文件 / 52 项通过，日志 `/tmp/donebot-fork-regression.log`。旧批量删除夹具补齐 JSON 对象、隔离假引擎环境及临时目录，未放宽产品网关限制。

@@ -1,3 +1,4 @@
+import { forkMessageItem, ForkLinks } from "./ForkMessage";
 import { memo, useEffect, useMemo, useState } from "react";
 import { formattedReplyWidth, isFormattedReply, splitReplyBlocks } from "@/lib/formatted-reply";
 import { intlLocale, t } from "@/lib/i18n";
@@ -78,10 +79,14 @@ export const RoomTextMessage = memo(function RoomTextMessage({
   eager,
   onReply,
   canReact,
+  phone,
+  working,
   localVoice,
 }: RoomTextMessageProps) {
   const m = useLiveRow(threadId, row);
   const dispatch = useStoreDispatch(), store = useStoreRef();
+  const forkAction = !phone && !dm && m.kind === "text" && !m.id.startsWith("optimistic-")
+    ? [forkMessageItem({ kind: "group", ownerId: groupId, threadId, messageId: m.id }, dispatch, working)] : [];
   const focusNonce = useStoreSelector((state) => {
     const focus = state.focusMessage;
     return focus?.messageId === m.id && focus.matchText && focus.threadId === threadId ? focus.nonce : null;
@@ -124,7 +129,7 @@ export const RoomTextMessage = memo(function RoomTextMessage({
   const blocks = useMemo(() => simple && !user && !viewRaw && botText.trim() ? splitReplyBlocks(botText) : null, [simple, user, viewRaw, botText]);
   const tabled = Boolean(blocks?.some((block) => block.kind === "table"));
   const botActions = !user && (
-    <MessageActions side="bot" forceOpen={viewRaw || speaking} menu={[...botMenu]}>
+    <MessageActions side="bot" forceOpen={viewRaw || speaking} menu={[...botMenu, ...forkAction]}>
       <ReplyAction onReply={() => onReply(m)} />
       {canReact && m.from && <ReactAction threadId={threadId} message={m} />}
       {botText && <CopyButton text={botText} className={messageActionClass} />}
@@ -137,7 +142,7 @@ export const RoomTextMessage = memo(function RoomTextMessage({
       {speaker && <div className="mb-0.5 px-1 text-right text-[13px] [overflow-wrap:anywhere] font-semibold text-ink-secondary">{speaker}</div>}
       <div className={cn("flex w-full items-end gap-1.5", user ? "justify-end" : "justify-start")}>
         {user && (
-          <MessageActions side="user" menu={[...userMessageMenu({ messageId: m.id, pin })]}>
+          <MessageActions side="user" menu={[...userMessageMenu({ messageId: m.id, pin }), ...forkAction]}>
             <ReplyAction onReply={() => onReply(m)} />
             {Boolean(display.trim()) && <CopyButton text={display} className={messageActionClass} />}
           </MessageActions>
@@ -232,6 +237,7 @@ export const RoomTextMessage = memo(function RoomTextMessage({
           {formatTime(m.at)}
         </span>
       </div>
+      <ForkLinks kind="group" ownerId={groupId} threadId={threadId} messageId={m.id} phone={phone} />
       <ReactionChips threadId={threadId} message={m} bots={members} align={user ? "end" : "start"} canReact={canReact} />
       {!user && m.routedBy && <RoutedByLine routedBy={m.routedBy} />}
     </div>

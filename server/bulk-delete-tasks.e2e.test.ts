@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { verificationServerEnvironment } from "../scripts/control-omb.ts";
 
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { workerPort } from "./testing/worker-port.ts";
@@ -32,7 +33,9 @@ posixOnly("bulk delete tasks e2e", () => {
   const getBot = async (id: string) => (await api("GET", "/api/bots")).body.bots.find((b: any) => b.id === id);
   const taskIds = async (botId: string): Promise<string[]> => (await getBot(botId)).tasks.map((t: any) => t.threadId);
   const newBot = async (name: string, selection?: unknown) => {
-    const bot = (await api("POST", "/api/bots")).body.bot;
+    const created = await api("POST", "/api/bots", {});
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const bot = created.body.bot;
     await api("PATCH", `/api/bots/${bot.id}`, { name, ...(selection ? { modelSelection: selection } : {}) });
     return bot;
   };
@@ -49,7 +52,7 @@ posixOnly("bulk delete tasks e2e", () => {
   beforeAll(async () => {
     chmodSync(FAKE_CLAUDE, 0o755);
     home = mkdtempSync(join(tmpdir(), "omb-bulk-delete-"));
-    mkdirSync(join(home, ".donebot"), { recursive: true });
+    mkdirSync(join(home, ".donebot", "tmp"), { recursive: true });
     finishGate = join(home, "finish-turn.gate");
     writeFileSync(
       join(home, ".donebot", "config.json"),
@@ -65,7 +68,7 @@ posixOnly("bulk delete tasks e2e", () => {
     );
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: { ...(process.env.PATH ? { PATH: process.env.PATH } : {}), HOME: home, USERPROFILE: home, DONEBOT_PORT: String(PORT) },
+      env: verificationServerEnvironment({ FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: finishGate }, join(home, ".donebot"), PORT),
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stderr!.on("data", (c) => (stderr += c));
@@ -130,7 +133,7 @@ posixOnly("bulk delete tasks e2e", () => {
     const res = await api("POST", `/api/bots/${bot.id}/tasks/delete`, { threadIds: [running, idle] });
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body.deleted).toEqual([idle]);
+    expect(res.body.deleted, stderr).toEqual([idle]);
     expect(res.body.refused).toEqual([{ threadId: running, reason: "busy" }]);
     expect(await taskIds(bot.id)).toContain(running);
     expect(await taskIds(bot.id)).not.toContain(idle);
@@ -196,7 +199,7 @@ posixOnly("bulk delete tasks e2e", () => {
     const res = await api("POST", `/api/groups/${room.id}/tasks/delete`, { threadIds: [room.threadId, second] });
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body.deleted).toEqual([second]);
+    expect(res.body.deleted, stderr).toEqual([second]);
     expect(res.body.refused).toEqual([{ threadId: room.threadId, reason: "busy" }]);
     expect((await roomTaskIds(room.id)).sort()).toEqual([room.threadId, third].sort());
     writeFileSync(finishGate, "go");

@@ -1,3 +1,6 @@
+import { buildTask, threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
+import { createBotFork, createGroupFork } from "./store-forks.ts";
+export { threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
 import { existsSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path"; import { isDeepStrictEqual } from "node:util";
 
@@ -113,7 +116,7 @@ export type TaskPatch = Partial<Pick<TaskRecord, typeof TASK_PATCH_FIELDS[number
 export type GroupTaskPatch = Partial<Pick<GroupTaskRecord, "title" | "pinned">> & { turnTimeoutMinutes?: number | null; archivedAt?: number | null; activity?: "waiting-on-you" | null };
 
 function mirrorActiveGroupTask(group: GroupRecord, task: GroupTaskRecord): void {
-  Object.assign(group, { threadId: task.threadId, pinnedCwd: task.pinnedCwd, pinnedMessageId: task.pinnedMessageId });
+  Object.assign(group, { threadId: task.threadId, pinnedCwd: task.pinnedCwd, pinnedMessageId: task.pinnedMessageId, lastReadMessageId: task.lastReadMessageId });
 }
 
 
@@ -132,13 +135,6 @@ export type StoreChange =
   | { type: "group"; groupId: string }
   | { type: "group.deleted"; groupId: string };
 
-export const UNTITLED_THREAD = "New thread";
-
-/** Every title (a bot's or a person's) passes through here, so equality tells a machine-made title from a rename. */
-const TASK_TITLE_MAX = 80;
-export function threadTitleFrom(title?: string): string {
-  return title?.trim().slice(0, TASK_TITLE_MAX) || UNTITLED_THREAD;
-}
 
 export function titleFromLlm(raw: string): string | null {
   const line = raw
@@ -479,6 +475,15 @@ export class Store {
       }
       g.pinnedCwd = active.pinnedCwd;
       g.pinnedMessageId = active.pinnedMessageId;
+      if (g.lastReadMessageId && !active.lastReadMessageId) {
+        active.lastReadMessageId = g.lastReadMessageId;
+        groupsMigrated = true;
+      }
+      // Older registries kept one unread mark for the active room conversation.
+      if (g.unread && !g.tasks.some((task) => task.unread)) {
+        active.unread = true;
+        groupsMigrated = true;
+      }
     }
     if (groupsMigrated) this.saveGroups();
     const clearModelCopies = !existsSync(THREAD_MODEL_COPIES_CLEARED) && (botsLoaded || !existsSync(BOTS_FILE));
@@ -861,6 +866,15 @@ export class Store {
     }
     this.commitGroupChange(group, group.dm ? "the chat's settings" : "the room's settings", () => {
       Object.assign(group, stored);
+      if (!group.dm && stored.unread !== undefined) {
+        const active = this.activeGroupTask(group.id);
+        if (active) active.unread = stored.unread;
+        group.unread = Boolean(group.tasks?.some((task) => task.unread));
+      }
+      if (!group.dm && stored.lastReadMessageId) {
+        const active = this.activeGroupTask(group.id);
+        if (active) active.lastReadMessageId = stored.lastReadMessageId;
+      }
       if (Object.prototype.hasOwnProperty.call(stored, "turnTimeoutMinutes") && stored.turnTimeoutMinutes == null) {
         delete group.turnTimeoutMinutes;
       }
@@ -964,6 +978,24 @@ export class Store {
     return group.tasks?.find((task) => task.threadId === threadId);
   }
 
+  /** A room's unread mark summarizes its conversations, while each task retains its own mark. */
+  markGroupThreadUnread(groupId: string, threadId: string, unread: boolean, lastReadMessageId?: string): GroupRecord | null {
+    const group = this.group(groupId);
+    if (group?.dm && group.threadId === threadId) return this.patchGroup(groupId, { unread, ...(!unread && lastReadMessageId ? { lastReadMessageId } : {}) });
+    const task = this.groupTaskByThread(groupId, threadId);
+    if (!group || !task) return null;
+    this.commitGroupChange(group, "the thread's read state", () => {
+      task.unread = unread;
+      group.unread = group.tasks!.some((candidate) => candidate.unread);
+      if (!unread && lastReadMessageId) {
+        task.lastReadMessageId = lastReadMessageId;
+        if (threadId === group.threadId) group.lastReadMessageId = lastReadMessageId;
+      }
+    });
+    this.emit({ type: "group", groupId });
+    return group;
+  }
+
   createGroupTask(groupId: string, title?: string, activate = true): GroupTaskRecord | null {
     const group = this.group(groupId);
     if (!group || group.dm) return null;
@@ -979,6 +1011,16 @@ export class Store {
       if (activate) mirrorActiveGroupTask(group, task);
     });
     this.emit({ type: "group", groupId });
+    return task;
+  }
+
+  forkGroupTask(groupId: string, sourceThreadId: string, messageId: string): GroupTaskRecord | null {
+    const group = this.group(groupId);
+    const source = this.groupTaskByThread(groupId, sourceThreadId);
+    if (!group || !source) return null;
+    const task = createGroupFork(source, this.activePath(sourceThreadId), messageId,
+      (created) => this.commitGroupChange(group, "the forked thread", () => { group.tasks = [created, ...(group.tasks ?? [])]; }));
+    if (task) this.emit({ type: "group", groupId });
     return task;
   }
 
@@ -1042,6 +1084,7 @@ export class Store {
     mdb.deleteThreads(deleted, () => this.commitGroupChange(group, "the thread deletion", () => {
       group.tasks = group.tasks!.filter((task) => !doomed.has(task.threadId));
       if (doomed.has(group.threadId)) mirrorActiveGroupTask(group, group.tasks[0]!);
+      group.unread = group.tasks.some((task) => task.unread);
     }));
     for (const id of deleted) this.deleteThreadRecord(id, true);
     this.emit({ type: "group", groupId });
@@ -2143,7 +2186,7 @@ export class Store {
     const bot = this.bot(botId);
     if (!bot) return null;
     if (projectId !== undefined && !this.project(botId, projectId)) return null;
-    const task = this.buildTask(bot, title, projectId, openedBy, approvalMode, modelSelection, cwd);
+    const task = buildTask(bot, title, projectId, openedBy, approvalMode, modelSelection, cwd);
     this.commitBotChange(bot, "the new thread", () => {
       bot.tasks = [task, ...(bot.tasks ?? [])];
       if (activate) this.mirrorActiveTask(bot, task);
@@ -2152,26 +2195,16 @@ export class Store {
     return task;
   }
 
-  private buildTask(bot: BotRecord, title?: string, projectId?: string, openedBy?: TaskOpenedBy, approvalMode?: "ask" | "full",
-    modelSelection?: ModelSelection, cwd?: string): TaskRecord {
-    const createdAt = Date.now();
-    return {
-      threadId: newId(),
-      title: threadTitleFrom(title),
-      createdAt,
-      updatedAt: createdAt,
-      ...(cwd !== undefined ? { cwd } : {}),
-      ...(projectId ? { projectId } : {}),
-      ...(openedBy ? { openedBy: structuredClone(openedBy) } : {}),
-      resumeCursors: {},
-      ...(modelSelection && !sameModelSelection(modelSelection, bot.modelSelection) ? { modelSelection: structuredClone(modelSelection) } : {}),
-      approvalMode: approvalMode ?? approvalModeFor(bot),
-      autoApprove: approvalMode ? false : Boolean(bot.autoApprove),
-      alwaysAllow: approvalMode ? [] : [...(bot.alwaysAllow ?? [])],
-      unread: false,
-      activity: "idle",
-      busy: false,
-    };
+  forkTask(botId: string, sourceThreadId: string, messageId: string): TaskRecord | null {
+    const bot = this.bot(botId);
+    const source = this.taskByThread(botId, sourceThreadId);
+    if (!bot || !source) return null;
+    const sourceView = this.projectBotForTask(botId, sourceThreadId)!;
+    const task = createBotFork(bot, source, this.activePath(sourceThreadId), messageId,
+      { mode: approvalModeFor(sourceView), alwaysAllow: sourceView.alwaysAllow ?? [] },
+      (created) => this.commitBotChange(bot, "the forked thread", () => { bot.tasks = [created, ...(bot.tasks ?? [])]; }));
+    if (task) this.emit({ type: "bot", botId });
+    return task;
   }
 
   setTaskOpenedBy(botId: string, threadId: string, openedBy: TaskOpenedBy): TaskRecord | null {
@@ -2253,7 +2286,7 @@ export class Store {
     const doomed = new Set(deleted); this.threadsGoing(deleted);
     mdb.deleteThreads(deleted, () => this.commitBotChange(bot, "the thread deletion", () => {
       const kept = bot.tasks!.filter((t) => !doomed.has(t.threadId));
-      const visible = nextOpenThread(kept) ?? this.buildTask(bot);
+      const visible = nextOpenThread(kept) ?? buildTask(bot);
       bot.tasks = kept.includes(visible) ? kept : [visible, ...kept];
       if (doomed.has(bot.threadId) || this.taskByThread(botId, bot.threadId)?.routineRunId) this.mirrorActiveTask(bot, visible);
       bot.unread = bot.tasks.some(taskCountsAsBotUnread);

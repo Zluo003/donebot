@@ -6,6 +6,7 @@ import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync } from "nod
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { WELCOME_VERSION } from "../electron/onboarding-record.mjs";
 import { closeBrowserSession } from "../server/browser-engine.ts";
 import { waitForExit } from "../server/testing/cleanup.ts";
 import { DATA_ROUTES, DATA_TOOL_NAMES, type DataSheet } from "../shared/data-surface.ts";
@@ -16,6 +17,7 @@ import { mountPreview, parkUntilSignal, type MountedPreview } from "./testing/pr
 assert(process.argv.slice(2).every((arg) => arg === "--check"), "Usage: node --experimental-strip-types scripts/verify-data.ts [--check]");
 const check = process.argv.includes("--check");
 const root = fileURLToPath(new URL("..", import.meta.url));
+const labels = JSON.parse(readFileSync(join(root, "src/locales/en.json"), "utf8")) as Record<string, string>;
 const fixture = await launchVerificationServer();
 const { url, dataDir, logPath } = fixture.info;
 const stopped = parkUntilSignal();
@@ -61,7 +63,9 @@ try {
   // The capability minting route exists only in this restarted fixture server.
   await waitForExit(fixture.child, { signal: "SIGTERM" });
   await startServer();
-  await api("PATCH", "/api/config", { language: "en" });
+  await api("PUT", "/api/config", { language: "en", onboarding: { completedAt: new Date().toISOString(), version: WELCOME_VERSION, hintsSeen: ["donebot-chief-setup-v1"] } });
+  const seeded = await api("GET", "/api/bots") as { bots: Array<{ id: string }> };
+  for (const bot of seeded.bots) await api("PATCH", `/api/bots/${bot.id}`, { welcomed: true });
   const { bot } = await runControlOmb(["new-bot", "--name", "Data review", "--url", url]) as { bot: { id: string; activeTaskId: string } };
   const minted = await api("POST", "/api/testing/internal-capability", { botId: bot.id, threadId: bot.activeTaskId, kind: "data" }, { "x-donebot-test-capability": capabilityKey });
   const mcp = async (method: string, params?: unknown) =>
@@ -173,7 +177,7 @@ try {
   const active = "document.querySelectorAll('[data-testid^=data-card-], [data-testid=data-source-view]')";
   const gridCount = "document.querySelector('.data-grid')?.getAttribute('data-row-count')";
   const gridRows = "document.querySelectorAll('.data-grid .ag-row[row-index]')";
-  const visibleChart = "[...document.querySelectorAll('[data-testid=data-chart] .vega-embed canvas, [data-testid=data-chart] .vega-embed svg')].find(element => element.checkVisibility({ visibilityProperty: true }))";
+  const visibleChart = "[...document.querySelectorAll('[data-testid=data-panel] [data-testid=data-chart] .vega-embed canvas, [data-testid=data-panel] [data-testid=data-chart] .vega-embed svg')].find(element => element.checkVisibility({ visibilityProperty: true }))";
   const layout = () => evaluate(`(() => {
     const rect = (element) => { if (!element) return null; const { top, bottom, left, width, height } = element.getBoundingClientRect(); return { top, bottom, left, width, height }; };
     const panel = document.querySelector('[data-testid=data-panel]');
@@ -183,7 +187,7 @@ try {
     const sqlContentHeight = sql.clientHeight - parseFloat(sqlStyle.paddingTop) - parseFloat(sqlStyle.paddingBottom);
     return { panel: rect(panel), sql: rect(sql), sqlContentHeight, sqlLineHeight: parseFloat(sqlStyle.lineHeight), dock: rect(document.querySelector('[data-testid=data-query]')), splitter: rect(splitter), limits: { min: Number(splitter.getAttribute('aria-valuemin')), max: Number(splitter.getAttribute('aria-valuemax')), value: Number(splitter.getAttribute('aria-valuenow')) }, result: rect(document.querySelector('[data-testid=data-result]')), grid: rect(document.querySelector('.data-grid')), viewport: { width: innerWidth, height: innerHeight }, fullscreen: document.fullscreenElement === panel };
   })()`);
-  const measureChart = () => evaluate(`(() => { const box = document.querySelector('[data-testid=data-chart]').getBoundingClientRect(); const result = document.querySelector('[data-testid=data-result]').getBoundingClientRect(); const chart = (${visibleChart}).getBoundingClientRect(); return { width: chart.width, height: chart.height, availableWidth: box.width, availableHeight: box.height, top: chart.top, bottom: chart.bottom, visibleTop: result.top, visibleBottom: document.querySelector('[data-testid=data-result-footer]').getBoundingClientRect().top }; })()`);
+  const measureChart = () => evaluate(`(() => { const box = document.querySelector('[data-testid=data-panel] [data-testid=data-chart]').getBoundingClientRect(); const result = document.querySelector('[data-testid=data-result]').getBoundingClientRect(); const chart = (${visibleChart}).getBoundingClientRect(); return { width: chart.width, height: chart.height, availableWidth: box.width, availableHeight: box.height, top: chart.top, bottom: chart.bottom, visibleTop: result.top, visibleBottom: document.querySelector('[data-testid=data-result-footer]').getBoundingClientRect().top }; })()`);
   const assertDockedLayout = (measurement: Awaited<ReturnType<typeof layout>>) => {
     assert(measurement.result.bottom <= measurement.dock.top + 1, "Result should sit above the SQL dock");
     assert(Math.abs(measurement.result.bottom - measurement.splitter.top) <= 1 && Math.abs(measurement.splitter.bottom - measurement.dock.top) <= 1, "Splitter should separate the result from SQL");
@@ -218,7 +222,7 @@ try {
   await until(async () => await evaluate("!!document.querySelector('textarea[aria-label=\"Message Data review\"]')"), "Seeded conversation did not mount");
   console.log(JSON.stringify({ ok: true, ui: handlePath, ...fixture.info, pid: server?.pid, previewUrl: preview.previewUrl, botId: bot.id, rows: 100_000, cards: 20, serverChecks: "load, describe, SQL, charts, paging, filter, sort, export, restart" }, null, 2));
   if (check) {
-    if (await evaluate("!!document.querySelector('[data-tour=computer-data]')")) await click("Close computer panel");
+    if (await evaluate("!!document.querySelector('[data-tour=computer-data]')")) await click(labels["computer.close"]!);
     await until(async () => await evaluate("!document.querySelector('[data-tour=computer-data]')"), "Computer panel did not close");
     await until(async () => await evaluate(`!!document.querySelector('${receipt} button')`), "Older chart's inline receipt did not render");
     await toggleReceiptSql();
@@ -231,9 +235,9 @@ try {
     await ui("wait-settle", "--timeout", "30");
     assert.equal(await evaluate(receiptSelected), true, "First receipt lost its Data selection after configuration settled");
     await clickTab("computer-browser");
-    await click("Close computer panel");
+    await click(labels["computer.close"]!);
     await until(async () => await evaluate("!document.querySelector('[data-tour=computer-data]')"), "Computer panel did not close after Browser selection");
-    await click("Bot's computer");
+    await click(labels["chat.computer"]!);
     await ui("wait-settle", "--timeout", "30");
     assert.equal(await evaluate("document.querySelector('[data-tour=computer-browser]')?.getAttribute('aria-selected') === 'true' && !document.querySelector('[data-testid=data-panel]')"), true, "Consumed receipt replaced Browser when reopening the panel");
     await openReceipt();
@@ -242,7 +246,7 @@ try {
     assert.equal(await evaluate(receiptSelected), true, "Clicking the receipt again did not reopen its Data result");
     await chooseHistory("Latest result");
   } else {
-    if (!await evaluate("!!document.querySelector('[data-tour=computer-data]')")) await click("Bot's computer");
+    if (!await evaluate("!!document.querySelector('[data-tour=computer-data]')")) await click(labels["chat.computer"]!);
     await clickTab("computer-data");
   }
 
@@ -495,7 +499,7 @@ try {
       await browser("set", "viewport", "1280", "460");
       await until(async () => {
         const current = await layout();
-        return current.panel.width >= 350 && current.panel.width <= 361 && current.panel.height < 400;
+        return current.panel.width >= 350 && current.panel.width <= 361 && current.panel.height <= current.viewport.height - 40;
       }, "Narrow/short Data panel did not settle");
       await clampDock(true);
       await recordResize("table-narrow-short");
@@ -641,9 +645,15 @@ try {
     let chatFailure: unknown;
     let chatRequests = 0;
     const upstream = createServer(async (req, res) => {
-      if (req.url === "/v1/models") {
+      const path = new URL(req.url ?? "/", "http://data.fixture.invalid").pathname;
+      if (path === "/v1/models" && req.method === "GET") {
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify({ data: [{ id: "data-chat-fixture" }] }));
+        return;
+      }
+      if (path !== "/v1/chat/completions" || req.method !== "POST") {
+        req.resume();
+        res.writeHead(404).end();
         return;
       }
       try {

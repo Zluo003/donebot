@@ -123,6 +123,18 @@ prove native Electron packaging, third-party database credentials, remote URL
 availability, or production query capacity. The row-count check measures DOM
 virtualization, not an end-to-end performance benchmark.
 
+## Import and query edge cases
+
+`server/data/data.e2e.test.ts` also checks a literal `[Manifest]` directory,
+upper-case and compressed CSV names, preserved source filename columns,
+single statements with quoted semicolons and nested trailing comments, rejection
+of a second statement, and concurrent exports with distinct paths and exact
+bytes. Run all data regressions with `pnpm exec vitest run server/data/`.
+
+The 2026-11-21 renderer run passed; evidence is retained under the system temp
+directory in `donebot-verification-evidence/server-1795213174868-42402.log.data.json`
+and adjacent screenshots. This records fixture behavior, not production capacity.
+
 ## Current limits
 
 The legacy companion connection does not expose the Data routes; its chat

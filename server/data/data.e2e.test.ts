@@ -3,6 +3,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, write
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../../scripts/control-omb.ts";
 import { DATA_ROUTES, DATA_TOOL_NAMES, type DataCard, type DataSheet } from "../../shared/data-surface.ts";
@@ -172,6 +173,48 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
     await api("DELETE", DATA_ROUTES.card(bot.id, afterRun.cards[2]!.id));
     const final = (await api("GET", DATA_ROUTES.sheet(bot.id))).sheet as DataSheet;
     expect(final.cards.map((card) => card.title)).toEqual(["Totals by region", "By region"]);
+
+    Object.assign(minted, await api("POST", "/api/testing/internal-capability", { botId: bot.id, threadId, kind: "data" }, 201, { "x-donebot-test-capability": CAPABILITY_KEY }));
+    const folder = join(dataDir, "[Manifest]");
+    mkdirSync(join(folder, "nested"), { recursive: true });
+    writeFileSync(join(folder, "first.CSV"), "filename,source_filename,value\nreport.txt,kept.csv,1\n");
+    writeFileSync(join(folder, "nested", "second.csv.gz"), gzipSync("filename,source_filename,value\nother.txt,kept.csv,2\n"));
+    mkdirSync(join(dataDir, "M"));
+    writeFileSync(join(dataDir, "M", "unrelated.csv"), "filename,source_filename,value\nwrong.txt,wrong.csv,999\n");
+    const manifest = await call("data_load", { source: folder, name: "manifest" });
+    expect(manifest.isError, manifest.text).toBe(false);
+    expect(manifest.data.tables[0].rowCount).toBe(2);
+    expect(manifest.data.warnings.join(" ")).toContain("source_filename_2");
+    const manifestRows = await call("data_sql", { sql: "SELECT filename, source_filename, value, source_filename_2 FROM manifest ORDER BY value" });
+    expect(manifestRows.isError, manifestRows.text).toBe(false);
+    expect(manifestRows.data.rows).toEqual([
+      ["report.txt", "kept.csv", "1", join(folder, "first.CSV")],
+      ["other.txt", "kept.csv", "2", join(folder, "nested", "second.csv.gz")],
+    ]);
+
+    const boundarySql = "SELECT 'semi;--汉字' AS value; /* outer /* nested */ done */ -- tail";
+    const boundaryDescription = await call("data_describe", { target: boundarySql });
+    expect(boundaryDescription.isError, boundaryDescription.text).toBe(false);
+    expect(boundaryDescription.data.columns[0].sample).toEqual(["semi;--汉字"]);
+    const boundaryCard = await call("data_show", { kind: "table", sql: boundarySql });
+    expect(boundaryCard.isError, boundaryCard.text).toBe(false);
+    const boundaryPage = await api("POST", DATA_ROUTES.page(bot.id), { cardId: boundaryCard.data.id, offset: 0, limit: 1 });
+    expect(boundaryPage.rows).toEqual([["semi;--汉字"]]);
+    const boundaryExport = await call("data_export", { sql: boundarySql, format: "csv" });
+    expect(boundaryExport.isError, boundaryExport.text).toBe(false);
+    expect(readFileSync(boundaryExport.data.path, "utf8")).toContain("semi;--汉字");
+    const multiple = await call("data_describe", { target: "SELECT 1; DELETE FROM manifest" });
+    expect(multiple.isError).toBe(true);
+    expect(multiple.data.code).toBe("invalid_input");
+    expect((await call("data_sql", { sql: "SELECT count(*) AS n FROM manifest" })).data.rows).toEqual([["2"]]);
+
+    const exportPath = join(dataDir, "Downloads", "concurrent.csv");
+    const simultaneous = await Promise.all([1, 2, 3].map((value) => call("data_export", { sql: `SELECT ${value} AS value -- keep closing parenthesis`, path: exportPath, format: "csv" })));
+    expect(new Set(simultaneous.map((result) => result.data.path)).size).toBe(3);
+    for (const [index, result] of simultaneous.entries()) {
+      expect(result.isError, result.text).toBe(false);
+      expect(readFileSync(result.data.path, "utf8")).toBe(`value\n${index + 1}\n`);
+    }
 
     // Opt-in: downloads the real signed extensions into this fixture's empty cache.
     if (process.env.DONEBOT_TEST_DUCKDB_EXTENSIONS === "1") {

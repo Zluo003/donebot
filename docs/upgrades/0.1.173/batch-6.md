@@ -2,6 +2,19 @@
 
 本批继续实施；以下只记录已验证的子项。
 
+## 表格导入、SQL、导出和图表边界
+
+接入 c1ad50f98、eea768514、369565808、b3d847d88、11d451a65、a9b2c7e15、e0b4e3b61、d9dfb1938、98c54270a、83a3487eb、7586b70b8、d27758e51、c2c5f59b5、0a8e96665、e15a66c1d、3dfda815c、907d40005 和 d608ddf70。查询结果编号先持久化，并发导出预留互不冲突的路径；Windows 路径大小写按平台折叠。支持引用及 Unicode 表名、大小写扩展名、压缩 CSV、带方括号的真实目录，保留源文件字段并生成不重名的来源列。单条 SQL 识别实际终止分号及嵌套尾注释；截断标记与 UTF-8 字节预算一致。图表处理早期年份、空坐标、非有限数、常量分布及源列与聚合列重名。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-data-regression-accepted.log`：25 文件 / 431 项通过，包括文档引用检查。
+- `/tmp/donebot-data-edge-workflow-fixed.log`：真实隔离 HTTP 流程通过，验证字面目录不会误导入相邻 glob 文件、来源字段保留、嵌套 SQL 尾注释、多语句拒绝及三路并发导出内容。
+- `/tmp/donebot-data-workflow-native-final.log`：完整 Chromium 工作流通过，包含十万行、120 列、图表、分页/过滤/排序、重启、SQL 竞态、键鼠调整尺寸、窄屏及聊天调用实际数据工具更新当前结果。证据为 `server-1795213174868-42402.log.data.json` 与相邻截图，位于系统临时目录的 `donebot-verification-evidence/`。
+- `/tmp/donebot-data-accepted-types.log`、`/tmp/donebot-data-accepted-lint.log`：类型及定向 lint 通过。
+
+fixture 更新欢迎版本和界面标签，图表选择器限定到 Data 面板；合成模型服务分别处理模型目录 GET 和聊天 POST。数据目录、home、浏览器与服务均由 fixture 创建及清理。未使用真实用户数据。发布格式元数据仍记录上游 0.1.152，和保留的应用版本 0.1.3 不一致；`server/data-format.test.ts` 的发布版本检查留至正式版本确定时处理，未为消除失败改写发布记录。
+
 ## GitHub／skills.sh 技能导入
 
 接入固定上游 558047fff、8ed728be7、1f08f4912 和 92585043f。skill_manage 新增 import，把单个远端技能转为受审核的 create；SKILL.md 和至多八个 references/<topic>.md 进入原有扫描、32 KiB 单文件限制、名字冲突、审批和 Undo 机制。脚本及其它文件不进入该方式，摘要明确列出遗漏文件。

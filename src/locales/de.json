@@ -3498,5 +3498,9 @@
   "server.botHeld": "{bot} ist pausiert und nimmt keine neue Arbeit an. Setze ihn über sein Menü in der Seitenleiste fort.",
   "server.botHeldDepartment": "{bot} ist mit der Abteilung {department} pausiert und nimmt keine neue Arbeit an. Setze die Abteilung über ihr Menü in der Seitenleiste fort.",
   "server.botHeldAll": "Alle Bots sind pausiert, daher nimmt {bot} keine neue Arbeit an. Setze alle Bots über das Menü eines beliebigen Bots in der Seitenleiste fort.",
-  "server.skill.targetBot": "Ziel-Bot: {name} ({id})"
+  "server.skill.targetBot": "Ziel-Bot: {name} ({id})",
+  "server.checkBack.pending": "Schaut {when} wieder nach",
+  "server.checkBack.started": "Hat {when} wieder nachgeschaut",
+  "server.checkBack.cancelled": "Nachschauen abgebrochen",
+  "server.checkBack.failed": "Konnte {when} nicht wieder nachschauen"
 }

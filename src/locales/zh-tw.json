@@ -10113,5 +10113,16 @@
   "donebot.pricing.unit.thousandCharacters": "元／千字",
   "donebot.pricing.unit.image": "元／張",
   "donebot.pricing.unit.second": "元／秒",
-  "donebot.pricing.unit.request": "元／次"
+  "donebot.pricing.unit.request": "元／次",
+  "chat.checkBack.pending": "將在 {when} 跟進",
+  "server.checkBack.pending": "將在 {when} 跟進",
+  "chat.checkBack.started": "已於 {when} 跟進",
+  "server.checkBack.started": "已於 {when} 跟進",
+  "chat.checkBack.cancelled": "已取消跟進",
+  "server.checkBack.cancelled": "已取消跟進",
+  "chat.checkBack.failed": "未能在 {when} 跟進",
+  "server.checkBack.failed": "未能在 {when} 跟進",
+  "chat.checkBack.cancel": "取消",
+  "chat.checkBack.cancelFailed": "取消失敗，請重試。",
+  "activity.tool.team.checkBack": "定時跟進"
 }

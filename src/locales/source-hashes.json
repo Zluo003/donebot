@@ -3465,7 +3465,11 @@
       "server.room.still": "2ab8db3821e55f07ade15cecd95f296010c4b39f5c8828a34b3dfff525171b7b",
       "server.room.turns": "22d3991e5e5089d0ec7c8997863b7172c73e1bc0bbaf9dc96febeaae98e02d0b",
       "server.room.turnsStill": "02e83aa50e246a76d138335f0ba4d12c15efc909de572cb1a27be7ccaee2307f",
-      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85"
+      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85",
+      "server.checkBack.pending": "3485ef5b61e2e50dabbe819ee194e953ad6872b16398fc33861b2ebe579f0549",
+      "server.checkBack.started": "65fea36da026916e99f81c23b26bd6204cd870d003bdde01b25e43f0fe8704c3",
+      "server.checkBack.cancelled": "2bc90e45e77b2d3a20a1d8a3bd9c6674080fb2897563103dcfdde6e267a33f22",
+      "server.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda"
     },
     "es": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -33859,7 +33863,18 @@
       "server.room.still": "2ab8db3821e55f07ade15cecd95f296010c4b39f5c8828a34b3dfff525171b7b",
       "server.room.turns": "22d3991e5e5089d0ec7c8997863b7172c73e1bc0bbaf9dc96febeaae98e02d0b",
       "server.room.turnsStill": "02e83aa50e246a76d138335f0ba4d12c15efc909de572cb1a27be7ccaee2307f",
-      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85"
+      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85",
+      "server.checkBack.pending": "3485ef5b61e2e50dabbe819ee194e953ad6872b16398fc33861b2ebe579f0549",
+      "server.checkBack.started": "65fea36da026916e99f81c23b26bd6204cd870d003bdde01b25e43f0fe8704c3",
+      "server.checkBack.cancelled": "2bc90e45e77b2d3a20a1d8a3bd9c6674080fb2897563103dcfdde6e267a33f22",
+      "server.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
+      "chat.checkBack.pending": "3485ef5b61e2e50dabbe819ee194e953ad6872b16398fc33861b2ebe579f0549",
+      "chat.checkBack.started": "65fea36da026916e99f81c23b26bd6204cd870d003bdde01b25e43f0fe8704c3",
+      "chat.checkBack.cancelled": "2bc90e45e77b2d3a20a1d8a3bd9c6674080fb2897563103dcfdde6e267a33f22",
+      "chat.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
+      "chat.checkBack.cancel": "19766ed6ccb2f4a32778eed80d1928d2c87a18d7c275ccb163ec6709d3eb2e27",
+      "chat.checkBack.cancelFailed": "53e54b214d436f1d7d15adc952c37bff1fae08072df576385e5a585cab11e563",
+      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497"
     },
     "zh": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -41514,7 +41529,18 @@
       "server.room.still": "2ab8db3821e55f07ade15cecd95f296010c4b39f5c8828a34b3dfff525171b7b",
       "server.room.turns": "22d3991e5e5089d0ec7c8997863b7172c73e1bc0bbaf9dc96febeaae98e02d0b",
       "server.room.turnsStill": "02e83aa50e246a76d138335f0ba4d12c15efc909de572cb1a27be7ccaee2307f",
-      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85"
+      "chat.notice.outOfProcesses": "7dd799040935793afd9a12757698c404c5b9d9a83d9a749dda145d05607a5a85",
+      "server.checkBack.pending": "3485ef5b61e2e50dabbe819ee194e953ad6872b16398fc33861b2ebe579f0549",
+      "server.checkBack.started": "65fea36da026916e99f81c23b26bd6204cd870d003bdde01b25e43f0fe8704c3",
+      "server.checkBack.cancelled": "2bc90e45e77b2d3a20a1d8a3bd9c6674080fb2897563103dcfdde6e267a33f22",
+      "server.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
+      "chat.checkBack.pending": "3485ef5b61e2e50dabbe819ee194e953ad6872b16398fc33861b2ebe579f0549",
+      "chat.checkBack.started": "65fea36da026916e99f81c23b26bd6204cd870d003bdde01b25e43f0fe8704c3",
+      "chat.checkBack.cancelled": "2bc90e45e77b2d3a20a1d8a3bd9c6674080fb2897563103dcfdde6e267a33f22",
+      "chat.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
+      "chat.checkBack.cancel": "19766ed6ccb2f4a32778eed80d1928d2c87a18d7c275ccb163ec6709d3eb2e27",
+      "chat.checkBack.cancelFailed": "53e54b214d436f1d7d15adc952c37bff1fae08072df576385e5a585cab11e563",
+      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -51477,7 +51503,18 @@
       "agentEndpoints.codexHint": "2b1afcbf7bc1ab8970583399c941b7234d04f4f67949149c2600537c85b991ce",
       "settings.simple.account.noNameHint": "488c9a6a017d6ea2f145c838bee156e762ffcebdaddc173135f4d0590f0b6271",
       "settings.simple.account.yourName": "2c6b2e253c01fb2ed7209c15766745ccee92a35ac8209f544789bdf9500e0944",
-      "native.menu.openDoneBotCloud": "88363846674542694a81e65a2476399a0654fcc69f9f6b358579767a5c12388d"
+      "native.menu.openDoneBotCloud": "88363846674542694a81e65a2476399a0654fcc69f9f6b358579767a5c12388d",
+      "server.checkBack.pending": "3485ef5b61e2e50dabbe819ee194e953ad6872b16398fc33861b2ebe579f0549",
+      "server.checkBack.started": "65fea36da026916e99f81c23b26bd6204cd870d003bdde01b25e43f0fe8704c3",
+      "server.checkBack.cancelled": "2bc90e45e77b2d3a20a1d8a3bd9c6674080fb2897563103dcfdde6e267a33f22",
+      "server.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
+      "chat.checkBack.pending": "3485ef5b61e2e50dabbe819ee194e953ad6872b16398fc33861b2ebe579f0549",
+      "chat.checkBack.started": "65fea36da026916e99f81c23b26bd6204cd870d003bdde01b25e43f0fe8704c3",
+      "chat.checkBack.cancelled": "2bc90e45e77b2d3a20a1d8a3bd9c6674080fb2897563103dcfdde6e267a33f22",
+      "chat.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
+      "chat.checkBack.cancel": "19766ed6ccb2f4a32778eed80d1928d2c87a18d7c275ccb163ec6709d3eb2e27",
+      "chat.checkBack.cancelFailed": "53e54b214d436f1d7d15adc952c37bff1fae08072df576385e5a585cab11e563",
+      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497"
     },
     "uk": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",

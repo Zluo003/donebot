@@ -10234,5 +10234,16 @@
   "pause.resumeAll": "Retomar todos os bots",
   "pause.byAll": "Pausado junto com todos os bots: retome todos os bots",
   "pause.badge": "Pausado",
-  "routines.botHeld": "O bot está pausado, então esta rotina não roda até ele ser retomado."
+  "routines.botHeld": "O bot está pausado, então esta rotina não roda até ele ser retomado.",
+  "server.checkBack.pending": "Vai verificar de novo: {when}",
+  "server.checkBack.started": "Verificou de novo: {when}",
+  "server.checkBack.cancelled": "Verificação cancelada",
+  "server.checkBack.failed": "Não foi possível verificar de novo: {when}",
+  "chat.checkBack.pending": "Vai verificar de novo: {when}",
+  "chat.checkBack.started": "Verificou de novo: {when}",
+  "chat.checkBack.cancelled": "Verificação cancelada",
+  "chat.checkBack.failed": "Não foi possível verificar de novo: {when}",
+  "chat.checkBack.cancel": "Cancelar",
+  "chat.checkBack.cancelFailed": "Não foi possível cancelar. Tente de novo.",
+  "activity.tool.team.checkBack": "Verificar depois"
 }

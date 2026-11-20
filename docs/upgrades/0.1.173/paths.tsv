@@ -154,7 +154,7 @@ A	docs/verification/assets/call-button-working/before-daylight.png	接入	待核
 A	docs/verification/assets/call-button-working/before-midnight.png	接入	待核对	待核对
 M	docs/verification/chat-polish.md	接入	4	待核对
 M	docs/verification/chat-ui.md	接入	4	流式/长历史子集已接入；其余目标差异继续核对
-A	docs/verification/check-backs.md	接入	5	待核对
+A	docs/verification/check-backs.md	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 M	docs/verification/claude-tool-lifecycle.md	接入	待核对	待核对
 M	docs/verification/cloud-account.md	接入	待核对	待核对
 M	docs/verification/cloud-rail.md	接入	待核对	待核对
@@ -398,7 +398,7 @@ A	packages/phone-protocol/src/bot-body.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/bot-limit.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/burst.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/carved-bodies.ts	自有适配	7	待核对
-A	packages/phone-protocol/src/check-back.ts	自有适配	7	待核对
+A	packages/phone-protocol/src/check-back.ts	自有适配	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	packages/phone-protocol/src/cloud-hints.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/codex-usage-limit.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/command-allowlist.ts	自有适配	7	待核对
@@ -758,7 +758,7 @@ M	server/chat-notices.test.ts	接入	4	待核对
 M	server/chat-notices.ts	接入	4	待核对
 M	server/chat-widgets.test.ts	接入	4	待核对
 M	server/chat-widgets.ts	接入	4	待核对
-A	server/check-backs.e2e.test.ts	接入	5	待核对
+A	server/check-backs.e2e.test.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 M	server/checkpoints-perf.test.ts	接入	待核对	待核对
 M	server/checkpoints.test.ts	接入	待核对	待核对
 M	server/checkpoints.ts	接入	待核对	待核对
@@ -833,7 +833,7 @@ A	server/cloud-team-bitwarden.e2e.test.ts	自有适配	2	待核对
 M	server/cloud-team-bot-access.e2e.test.ts	自有适配	2	待核对
 A	server/cloud-team-box-audience.e2e.test.ts	自有适配	2	待核对
 M	server/cloud-team-browser.e2e.test.ts	自有适配	2	待核对
-A	server/cloud-team-check-backs.e2e.test.ts	自有适配	2	待核对
+A	server/cloud-team-check-backs.e2e.test.ts	自有适配	5	已接入并通过隔离回归；手机/真实镜像待批次8
 M	server/cloud-team-connections.e2e.test.ts	自有适配	2	待核对
 A	server/cloud-team-conversation-share.e2e.test.ts	自有适配	2	待核对
 M	server/cloud-team-engine-homes.e2e.test.ts	自有适配	2	待核对
@@ -1099,7 +1099,7 @@ A	server/drivers/agents-catalog-local-vm.test.ts	接入	待核对	待核对
 M	server/drivers/agents-catalog-profile.ts	接入	6	待核对
 M	server/drivers/agents-catalog-wire.test.ts	接入	待核对	待核对
 M	server/drivers/agents-catalog.ts	接入	待核对	待核对
-A	server/drivers/agents-check-back-tool.ts	接入	5	待核对
+A	server/drivers/agents-check-back-tool.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	server/drivers/agents-claude-defer.test.ts	接入	待核对	待核对
 A	server/drivers/agents-claude-defer.ts	接入	待核对	待核对
 A	server/drivers/agents-hosting-tools.ts	接入	待核对	待核对
@@ -1364,11 +1364,11 @@ A	server/host/browser-daemons.test.ts	接入	待核对	待核对
 A	server/host/browser-daemons.ts	接入	待核对	待核对
 M	server/host/browser.test.ts	接入	待核对	待核对
 M	server/host/browser.ts	接入	待核对	待核对
-A	server/host/check-back-host.ts	接入	5	待核对
-A	server/host/check-back-time.test.ts	接入	5	待核对
-A	server/host/check-back-time.ts	接入	5	待核对
-A	server/host/check-backs.test.ts	接入	5	待核对
-A	server/host/check-backs.ts	接入	5	待核对
+A	server/host/check-back-host.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
+A	server/host/check-back-time.test.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
+A	server/host/check-back-time.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
+A	server/host/check-backs.test.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
+A	server/host/check-backs.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 M	server/host/check-plan.ts	接入	待核对	待核对
 A	server/host/checkpoint-seeds.test.ts	接入	待核对	待核对
 A	server/host/checkpoint-seeds.ts	接入	待核对	待核对
@@ -1867,8 +1867,8 @@ M	server/routes/burst.ts	接入	待核对	待核对
 A	server/routes/call-route.test.ts	接入	待核对	待核对
 A	server/routes/call-route.ts	接入	待核对	待核对
 M	server/routes/channels.ts	接入	待核对	待核对
-A	server/routes/check-backs.test.ts	接入	5	待核对
-A	server/routes/check-backs.ts	接入	5	待核对
+A	server/routes/check-backs.test.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
+A	server/routes/check-backs.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	server/routes/cli-login.test.ts	接入	待核对	待核对
 A	server/routes/cli-login.ts	接入	待核对	待核对
 A	server/routes/cloud-computer-recovery.test.ts	接入	待核对	待核对
@@ -2312,7 +2312,7 @@ M	shared/bot-order.ts	接入	待核对	待核对
 A	shared/bot-read.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	shared/burst.ts	接入	待核对	待核对
 M	shared/carved-bodies.ts	接入	待核对	待核对
-A	shared/check-back.ts	接入	5	待核对
+A	shared/check-back.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	shared/cli-login.ts	接入	待核对	待核对
 A	shared/cloud-computer-recovery.test.ts	接入	待核对	待核对
 A	shared/cloud-computer-recovery.ts	接入	待核对	待核对
@@ -2535,8 +2535,8 @@ A	src/components/ChatView.switch.test.ts	接入	待核对	待核对
 M	src/components/ChatView.team.test.ts	接入	待核对	待核对
 M	src/components/ChatView.tsx	自有适配	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/ChatView.user-bubble.test.ts	接入	待核对	待核对
-A	src/components/CheckBackLine.dom.test.ts	接入	待核对	待核对
-A	src/components/CheckBackLine.tsx	接入	待核对	待核对
+A	src/components/CheckBackLine.dom.test.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
+A	src/components/CheckBackLine.tsx	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 M	src/components/CitationUI.tsx	接入	待核对	待核对
 M	src/components/ClaudeSignIn.tsx	接入	待核对	待核对
 A	src/components/CliLoginCard.dom.test.ts	接入	待核对	待核对

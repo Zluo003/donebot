@@ -7879,5 +7879,16 @@
   "contextMenu.category.other": "其他",
   "contextMenu.category.free": "剩余空间",
   "chat.newChatHint": "新建对话可节省上下文用量。",
-  "chat.newChatHintButton": "新建对话"
+  "chat.newChatHintButton": "新建对话",
+  "chat.checkBack.pending": "将在 {when} 跟进",
+  "server.checkBack.pending": "将在 {when} 跟进",
+  "chat.checkBack.started": "已于 {when} 跟进",
+  "server.checkBack.started": "已于 {when} 跟进",
+  "chat.checkBack.cancelled": "已取消跟进",
+  "server.checkBack.cancelled": "已取消跟进",
+  "chat.checkBack.failed": "未能在 {when} 跟进",
+  "server.checkBack.failed": "未能在 {when} 跟进",
+  "chat.checkBack.cancel": "取消",
+  "chat.checkBack.cancelFailed": "取消失败，请重试。",
+  "activity.tool.team.checkBack": "定时跟进"
 }

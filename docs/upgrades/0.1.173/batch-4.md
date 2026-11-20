@@ -49,3 +49,19 @@
 - `server/fork-api.e2e.test.ts` 和 `server/request-auth.test.ts`：2 文件 / 68 测试通过；真实隔离服务验证分叉发送、历史与图片下载、删除来源后继续、群聊分叉和未读定位。初测发现群聊切换遗漏读取该线程，已修复并通过复测。
 - 真实浏览器：`/tmp/donebot-fork-ui.mts`；证据 `/tmp/donebot-fork-ui.json`、`/tmp/donebot-fork-ui.png`、`/tmp/donebot-fork-ui.log`。通过消息菜单分叉、侧栏发送、原线程不变、查找焦点、手机宽度关闭面板。fixture 日志 `server-1795174812421-97256.log`，运行后精确停止并清理临时数据。
 - 类型检查、lint、16 语言目录校验通过。旧线程、独立权限及删除权限回归 5 文件 / 52 项通过，日志 `/tmp/donebot-fork-regression.log`。旧批量删除夹具补齐 JSON 对象、隔离假引擎环境及临时目录，未放宽产品网关限制。
+
+
+## 批量设置与工具权限继承
+
+接入 aaceb557d、20b48d310、05717a0b1、1339ad21b 的实现及固定目标的输入错误说明。一次最多修改 40 个 Bot，创建不超过 8 个；`soulAppend` 合并追加、保留原文并固定版本，禁止通过追加触发原文凭据脱敏重写。MCP 列表校验名称及实际归属，应用前重查；Undo 恢复未限定列表时删除字段，保留已有会话模型和权限。撤销创建前检查所有目标的桌面接管状态，生命周期删除也遵守接管限制。委派返回 Chief 或发给自己时，在读取来源权限前拒绝自我继承，避免递归读取与提权。权限审计包含工具选择及连接授权。
+
+DoneBot 适配：沿用普通资料/模型设置在各权限级别直接应用的既有行为；MCP 是新增工具授权，只有 Full access 可直接应用并提供 Undo，其他级别等待用户审批。未复制已禁用的私有本地桌面或上游共享 VM 模块；接管检查复用 DoneBot 自有桌面控制状态。工具目录快照同步此前已存在的媒体附件与技能字段，逐项审查后更新 28 个 profile 的实际字节基线，2% 增量限制保持。
+
+2026-11-20 验证：
+
+- `/tmp/donebot-bulk-workflow-final.log`：8 文件 / 199 项通过，含真实隔离服务“两个 Bot 批量追加 → MCP 列表 → Undo”、设置/删除原流程、权限审计、原始及打包工具目录字节一致性。
+- `/tmp/donebot-bulk-followup.log`：5 文件 / 284 项通过，含 Store 持久化、重载、MCP 继承列表恢复、团队共享设置的成员身份。旧团队夹具补充 `NODE_ENV=test` 和 `DONEBOT_UPSTREAM_FIXTURE=1`，仅在临时 home/data 的源码假引擎服务生效，不放宽正式网关限制。
+- `/tmp/donebot-bulk-protected.log`：9 文件 / 287 项通过，含真实 MCP 挂载、全权限与审批、请求鉴权、部门权限、批量 UI 设置、Full access 在写入前失效时取消 MCP 变更。
+- `/tmp/donebot-bulk-final-types.log`、`/tmp/donebot-bulk-final-lint.log`：typecheck 和 lint 通过。
+
+本批的本机聊天管理子项已接入；团队工作空间切换、跨成员本机工具边界及真实 Linux 验证仍依赖后续批次，未宣称整批最终验收。

@@ -5,12 +5,24 @@ import {
   listMcpServers,
   MAX_MCP_SERVERS,
   mcpServerNameError,
+  mcpServerProblemFor,
   parseMcpServerMutation,
   parseMcpServersImport,
   parseStoredMcpServer,
 } from "./mcp-registry.ts";
 
 describe("custom MCP registry", () => {
+  it("checks saved server ownership without accepting inherited names or malformed records", () => {
+    const servers = { notes: {}, own: { bot: "scout" }, other: { bot: "writer" }, bad: [], empty: null };
+    expect(mcpServerProblemFor(servers, "notes", "scout")).toBeNull();
+    expect(mcpServerProblemFor(servers, "own", "scout")).toBeNull();
+    expect(mcpServerProblemFor(servers, "other", "scout")).toMatch(/another bot/);
+    for (const name of ["constructor", "missing", "bad", "empty"]) {
+      expect(mcpServerProblemFor(servers, name, "scout")).toBe("no such server");
+    }
+    expect(mcpServerProblemFor(undefined, "notes", "scout")).toBe("no such server");
+  });
+
   it("parses stdio servers and keeps newly added commands disabled", () => {
     expect(parseMcpServerMutation("notes", { command: "npx", args: ["-y", "notes-mcp"] })).toEqual({
       ok: true,

@@ -2753,6 +2753,26 @@ describe("soul", () => {
     expect(reloaded.bot(chief.id)?.managedSections).toHaveLength(100);
   });
 
+  it("restores inherited MCP selection through reviewed setup and reload without changing thread grants", () => {
+    const store = new Store(selection);
+    const chief = store.createBot({ name: "Clive" });
+    const target = store.createBot({ name: "Mira" });
+    store.patchBot(chief.id, { chiefOfStaff: true });
+    store.patchTask(target.id, target.threadId, { approvalMode: "edits", alwaysAllow: ["Read"] });
+    const tasks = structuredClone(store.bot(target.id)!.tasks);
+    const request: TeamSetupRequest = { version: 1, requestId: "mcp-select", botId: chief.id, threadId: chief.threadId,
+      reason: "Requested app selection", createdAt: 1, requesterRevision: "fixture", newTeams: [],
+      operations: [{ action: "update", botId: target.id, fields: { mcpServers: ["notes"] } }] };
+    store.applyTeamSetup(request);
+    expect(new Store(selection).bot(target.id)?.mcpServers).toEqual(["notes"]);
+    const restored = { mcpServers: "" } as unknown as TeamSetupRequest["operations"][number]["fields"];
+    store.applyTeamSetup({ ...request, requestId: "mcp-undo", operations: [{ action: "update", botId: target.id, fields: restored }] });
+    expect(store.bot(target.id)).not.toHaveProperty("mcpServers");
+    const reloaded = new Store(selection).bot(target.id)!;
+    expect(reloaded).not.toHaveProperty("mcpServers");
+    expect(reloaded.tasks).toEqual(tasks);
+  });
+
   it("persists reviewed Chief replacement atomically and revokes the outgoing Chief's grants", () => {
     const store = new Store(selection);
     const chief = store.createBot({ name: "Outgoing", section: "Operations" });

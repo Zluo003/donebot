@@ -229,7 +229,7 @@ import { createQuotaSwitchHost } from "./host/quota-switch.ts"; import { quotaSw
 import { decodeGeneratedImage } from "./generated-image.ts";
 import { createMcpServersHost } from "./host/mcp-servers-host.ts"; import { createMcpKeys } from "./vault/mcp-keys.ts"; import { createLimitTakeover, signedOutStop } from "./host/limit-takeover.ts";
 import {
-  isRemoteMcpServer,
+  isRemoteMcpServer, mcpServerProblemFor,
   parseStoredMcpServer,
 } from "./mcp-registry.ts";
 import { attachCustomMcp } from "./mcp-result-budget.ts"; import { mcpToolProblem } from "./mcp-failure.ts";
@@ -8995,11 +8995,17 @@ const routineRequests = new RoutineRequestService({
 const memberOwnBot = createMemberOwnBot({ store: () => store, routines: () => routines, activeGroupTurnForBot, cancelGroupTurnOperations, revokeInternalCapabilitiesForThread, interruptAllDirectThreads,
   interruptTurn: (bot, threadId) => runningTurnInstance(bot, threadId)?.adapter.interruptTurn(threadId), closeOpenApprovals, deleteBot: (botId) => deleteBotWithLifecycle(botId) });
 
+function botDeletionRefusal(botId: string): string | null {
+  return botComputerControlSnapshot(botId).held ? "Hand back control of this bot's computer before deleting it" : null;
+}
+
 async function deleteBotWithLifecycle(botId: string, revalidate: () => void = () => {}, setupRequest?: TeamSetupRequest) {
   const deletionResponse = (status: number, body: { error?: string; ok?: boolean; notice?: string }) => ({ status, body });
       revalidate();
       const bot = store.bot(botId);
       if (!bot) return deletionResponse( 404, { error: "no such bot" }); if (bot.defaultBot) return deletionResponse(409, { error: defaultBotRefusal(bot.name) });
+      const held = botDeletionRefusal(botId);
+      if (held) return deletionResponse(409, { error: held });
       if (computerProviderConfigTransitions.size > 0) {
         return deletionResponse( 409, { error: "computer provider settings are being updated — wait before deleting this bot" });
       }
@@ -9089,6 +9095,8 @@ async function deleteBotWithLifecycle(botId: string, revalidate: () => void = ()
 
         // Revalidate and record the browser cleanup intent before the first irreversible provider mutation.
         revalidate();
+        const held = botDeletionRefusal(bot.id);
+        if (held) return deletionResponse(409, { error: held });
         const browserCleanupRequest = browserCleanup.prepare("bot", bot.id);
         try {
           for (const instance of ownedBoatComputers) {
@@ -9250,6 +9258,8 @@ const teamSetupRequests = new TeamSetupRequestService({
   store, teams: teamSetupTeams, hasTeamAuthority, canPersist: proposalPersistence, maxBots: MAX_WORKSPACE_BOTS,
   autoApply: appliesDirectly,
   validateChange: (before, fields) => assertTeamComputerChangeIdle(before, { ...before, ...fields }),
+  mcpServerProblem: (name, botId) => mcpServerProblemFor(cfg.mcpServers, name, botId),
+  deletionRefusal: botDeletionRefusal,
   ownsThread: (botId, threadId) => Boolean(connectorThread(botId, threadId)),
   targetBusy: (botId, sourceThreadId) => {
     if (!sourceThreadId) return Boolean(store.bot(botId)?.busy || hasDirectDispatch(botId) || activeGroupTurnForBot(botId) || routines?.activeRunForBot(botId));

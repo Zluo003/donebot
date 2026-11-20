@@ -167,6 +167,7 @@ const TRIGGER_FIELDS_SCHEMA = {
 } as const;
 
 const CHIEF_PROFILE_TARGET = " A Chief of Staff may pass for_bot_id (from list_bots) for a requested change to another bot in its section.";
+const APPLIES_AT_ONCE = " Read the result: when applied, continue the work without another confirmation. The person sees an Undo where possible. A pending result means ending the turn to wait for the owner. Never claim success without an applied result; report failures honestly.";
 const APPLIES_OUTCOME = " Read the result: it applies immediately at every access level, and the person sees it with an Undo where possible. If applied, continue the work without another confirmation. Only a pending result (a Cloud conversation its owner did not drive) means ending the turn to wait for the owner. Never claim success without an applied result; report failures honestly. This does not elevate another bot's execution permissions.";
 
 
@@ -414,27 +415,29 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "propose_team_setup",
-    description: "Chief of Staff only: submit all requested specialist creation, profile/model configuration, Chief assignments, and authorized team moves in ONE combined plan. Use exact catalog engine/model IDs from list_team_setup. Combine all fields for each bot; use the same create key or botId to coalesce repeated entries. New teams must be named explicitly in newTeams and have a specialist in this plan; access is granted only to those new teams. Existing unauthorized teams cannot be included. Models change bot defaults for groups/new threads; existing threads and execution permissions stay unchanged. If review is pending, the decision and structured result automatically resume you once; do not ask again, poll, or repeat the proposal." + APPLIES_OUTCOME,
+    description: "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes. MCP server lists apply directly only at Full access; otherwise wait for the person to review the card." + APPLIES_AT_ONCE,
     inputSchema: {
       type: "object", additionalProperties: false,
       properties: {
         reason: { type: "string", minLength: 1, maxLength: 500 },
         newTeams: { type: "array", maxItems: 8, items: { type: "string", minLength: 1, maxLength: 60 } },
-        operations: { type: "array", minItems: 1, maxItems: 24, items: {
+        operations: { type: "array", minItems: 1, maxItems: 40, items: {
           type: "object", additionalProperties: false,
           properties: {
             action: { type: "string", enum: ["create", "update"] },
-            key: { type: "string", description: "For create: your stable short name for this new bot in this plan." },
-            botId: { type: "string", description: "For update: exact existing bot ID from list_team_setup." },
+            key: { type: "string", description: "create: your short name for the new bot." },
+            botId: { type: "string", description: "update: the bot's id from list_team_setup." },
             fields: { type: "object", additionalProperties: false, properties: {
               name: { type: "string", maxLength: 100 }, title: { type: "string", maxLength: 200 },
-              chiefOfStaff: { type: "boolean", description: "Appoint or remove this team's Chief. At most one Chief per team: explicitly demote the current Chief in the same plan when replacing them. Does not grant access to other teams or change execution permissions." },
-              description: { type: "string", maxLength: 4000 }, soul: { type: "string", description: "Standing instructions; required with name/title/modelSelection for every new bot." },
-              cwd: { type: "string", maxLength: 1024, description: "Create only: absolute path of the folder the new bot's tools read and write in. It must already exist. Leave it out for a private workspace." },
-              section: { type: "string", maxLength: 60, description: "Exact authorized existing team, or a team explicitly named in newTeams. Empty string means General." },
+              chiefOfStaff: { type: "boolean", description: "Appoint or remove the team's Chief; one per team, so demote the current one in this plan. Grants no other access." },
+              description: { type: "string", maxLength: 4000 }, soul: { type: "string", description: "Standing instructions; a new bot needs name, title, soul and modelSelection." },
+              soulAppend: { type: "string", description: "update, instead of soul: text to append." },
+              cwd: { type: "string", maxLength: 1024, description: "create: an existing absolute folder; omit for a private workspace." },
+              section: { type: "string", maxLength: 60, description: "An authorized team or one in newTeams; \"\" = General." },
               modelSelection: { type: "object", additionalProperties: false, properties: {
                 instanceId: { type: "string" }, model: { type: "string" }, effort: { type: "string" }, variant: { type: "string" },
               }, required: ["instanceId", "model"] },
+              mcpServers: { type: "array", maxItems: 20, items: { type: "string" }, description: "update: the bot's full MCP server list by name." },
             } },
           }, required: ["action", "fields"],
         } },

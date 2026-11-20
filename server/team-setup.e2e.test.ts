@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
@@ -80,6 +81,30 @@ it("Clive sets up multi-provider teams at Ask with no card, keeps existing threa
     expect(notice.subtitle).toContain("Chief of Staff: No → Yes");
     await finish();
     expect(await decisionReplies(applied.requestId)).toBe(0);
+
+    const notes = { command: process.execPath, args: ["--experimental-strip-types", fileURLToPath(new URL("./testing/fake-mcp-server.ts", import.meta.url))] };
+    await api("POST", "/api/mcp/servers/import", { json: JSON.stringify({ notes }) }, 201);
+    await api("POST", "/api/mcp/servers/notes/test");
+    await api("PATCH", `/api/bots/${chief.id}`, { approvalMode: "full" });
+    const originalSoul = engineer.soul;
+    const originalThreads = structuredClone(engineer.tasks);
+    token = await start("Add the agreed reporting rule to two specialists and select the notes app.");
+    const setupApps = await api("POST", "/api/internal/team-setup-requests", { plan: { reason: "Requested reporting rule and notes app", operations: [
+      { action: "update", botId: engineer.id, fields: { soulAppend: "Report verification evidence.", mcpServers: ["notes"] } },
+      { action: "update", botId: created.find((bot: any) => bot.name === "Mira").id, fields: { soulAppend: "Report verification evidence." } },
+    ] } }, 201, token);
+    expect(setupApps).toMatchObject({ state: "applied", applied: true });
+    await finish();
+    const configured = (await state()).find((bot: any) => bot.id === engineer.id);
+    expect(configured.soul).toBe(`${originalSoul}\n\nReport verification evidence.`);
+    expect(configured.mcpServers).toEqual(["notes"]);
+    expect(configured.tasks).toEqual(originalThreads);
+    expect(await api("POST", `/api/threads/${chief.threadId}/undo`, { requestId: setupApps.requestId })).toEqual({ ok: true, undone: true });
+    const undone = (await state()).find((bot: any) => bot.id === engineer.id);
+    expect(undone.soul).toBe(originalSoul);
+    expect(undone.mcpServers).toBeUndefined();
+    expect(undone.tasks).toEqual(originalThreads);
+    await api("PATCH", `/api/bots/${chief.id}`, { approvalMode: "ask" });
 
     token = await start("Move Patch to Growth and switch its default engine to Claude; retain its existing thread.");
     const updated = await api("POST", "/api/internal/team-setup-requests", { plan: { reason: "Requested default and team change", operations: [

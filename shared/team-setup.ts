@@ -10,6 +10,8 @@ export interface TeamSetupFields {
   section?: string;
   modelSelection?: ModelSelection;
   chiefOfStaff?: boolean;
+  /** Update only: the complete list of MCP server names the bot may use. */
+  mcpServers?: string[];
 }
 
 export interface TeamSetupOperation {
@@ -27,7 +29,7 @@ export interface TeamSetupResult {
   error?: string;
 }
 
-/** The complete, reviewed operation. It never accepts executable permissions. */
+/** The complete, reviewed operation. MCP selection may change; other execution permissions are excluded. */
 export interface TeamSetupRequest {
   version: 1;
   requestId: string;

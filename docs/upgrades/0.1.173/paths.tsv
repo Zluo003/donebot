@@ -463,7 +463,7 @@ A	packages/phone-protocol/src/sign-in-request.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/skill-request.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/task-provenance.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/team-presence.ts	自有适配	7	待核对
-A	packages/phone-protocol/src/team-setup.ts	自有适配	7	待核对
+A	packages/phone-protocol/src/team-setup.ts	自有适配	4	已核对；见 batch-4.md 批量设置与工具权限继承
 A	packages/phone-protocol/src/tool-groups.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/tool-scope.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/turn-progress.ts	自有适配	7	待核对
@@ -583,8 +583,8 @@ M	scripts/verify-window-frame.ts	接入	待核对	待核对
 M	server/acp-recovery.e2e.test.ts	接入	待核对	待核对
 M	server/activity.ts	接入	待核对	待核对
 M	server/admin-activity.e2e.test.ts	接入	待核对	待核对
-M	server/admin-activity.test.ts	接入	待核对	待核对
-M	server/admin-activity.ts	接入	待核对	待核对
+M	server/admin-activity.test.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
+M	server/admin-activity.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/admin-audit-plan.ts	接入	待核对	待核对
 M	server/admission-golden.test.ts	接入	待核对	待核对
 M	server/admission.ts	接入	待核对	待核对
@@ -1397,8 +1397,8 @@ A	server/host/conversation-compaction.test.ts	自有适配	4	已接入；上下�
 A	server/host/conversation-compaction.ts	自有适配	4	已接入；上下文子批测试见 batch-4.md
 A	server/host/conversation-shares.test.ts	接入	待核对	待核对
 A	server/host/conversation-shares.ts	接入	待核对	待核对
-M	server/host/delegated-level.test.ts	接入	待核对	待核对
-M	server/host/delegated-level.ts	接入	待核对	待核对
+M	server/host/delegated-level.test.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
+M	server/host/delegated-level.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/host/delete-leftovers.test.ts	接入	待核对	待核对
 M	server/host/delete-leftovers.ts	接入	待核对	待核对
 M	server/host/devs-reports.test.ts	接入	待核对	待核对
@@ -1639,7 +1639,7 @@ M	server/mcp-probe.test.ts	接入	6	待核对
 M	server/mcp-probe.ts	接入	6	待核对
 A	server/mcp-proxy-cidr.test.ts	接入	6	待核对
 M	server/mcp-registry.test.ts	接入	6	待核对
-M	server/mcp-registry.ts	接入	6	待核对
+M	server/mcp-registry.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/mcp-remote-proxy.test.ts	接入	6	待核对
 M	server/mcp-remote-proxy.ts	接入	6	待核对
 M	server/mcp-result-budget.ts	接入	6	待核对
@@ -2114,8 +2114,8 @@ M	server/team-package-skills.e2e.test.ts	接入	6	待核对
 A	server/team-phone-data.e2e.test.ts	自有适配	7	待核对
 M	server/team-protocol.e2e.test.ts	接入	待核对	待核对
 A	server/team-roster-prompt.test.ts	接入	待核对	待核对
-M	server/team-setup-requests.test.ts	接入	待核对	待核对
-M	server/team-setup-requests.ts	接入	待核对	待核对
+M	server/team-setup-requests.test.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
+M	server/team-setup-requests.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/team-setup.e2e.test.ts	接入	待核对	待核对
 D	server/team-share.e2e.test.ts	接入	待核对	待核对
 A	server/team-slack.test.ts	接入	待核对	待核对
@@ -2192,7 +2192,7 @@ M	server/too-long.ts	接入	待核对	待核对
 A	server/tool-groups.e2e.test.ts	接入	待核对	待核对
 A	server/tool-groups.test.ts	接入	待核对	待核对
 A	server/tool-groups.ts	接入	待核对	待核对
-A	server/tool-permission-audit.e2e.test.ts	接入	待核对	待核对
+A	server/tool-permission-audit.e2e.test.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/tool-scope.e2e.test.ts	接入	待核对	待核对
 A	server/trigger-instructions.e2e.test.ts	接入	待核对	待核对
 M	server/trigger-tools.test.ts	接入	待核对	待核对

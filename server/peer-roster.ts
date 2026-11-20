@@ -36,6 +36,18 @@ export function hasTeamAuthority(
       typeof value === "string" && sectionKey(value) === target));
 }
 
+export function managedDepartmentsHelp(bot: Pick<RosterMember, "name" | "chiefOfStaff">): string {
+  return bot.chiefOfStaff
+    ? `Only the person can add a department, in ${peerName(bot.name)}'s bot settings, Permissions, "Also in charge of".`
+    : "Only a Chief of Staff can be put in charge of more departments.";
+}
+
+export function outsideDepartmentReason(chief: Pick<RosterMember, "name" | "chiefOfStaff">, target: { name?: string; section?: string }): string {
+  const department = peerName(sectionKey(target.section)) || "General";
+  return `${target.name ? `@${peerName(target.name)} is in` : "That is"} the ${department} department, which ${peerName(chief.name)} is not in charge of. ` +
+    managedDepartmentsHelp(chief);
+}
+
 /** A Team Cloud Chief its person owns: that person's email. */
 const ownedChief = (bot: Pick<RosterMember, "chiefOfStaff" | "createdBy" | "reportsTo">): string | null => bot.chiefOfStaff ? botOwner(bot) : null;
 

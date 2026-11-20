@@ -79,6 +79,12 @@ export function mcpServerServes(server: object & { bot?: string }, botId: string
   return !server.bot || server.bot === botId;
 }
 
+export function mcpServerProblemFor(servers: Record<string, unknown> | undefined, name: string, botId: string): string | null {
+  const server = servers && Object.hasOwn(servers, name) ? servers[name] : undefined;
+  if (!server || typeof server !== "object" || Array.isArray(server)) return "no such server";
+  return mcpServerServes(server, botId) ? null : "that server belongs to another bot";
+}
+
 export const MAX_MCP_SERVERS = 20;
 const MAX_ARGS = 64;
 const MAX_ENV = 64;

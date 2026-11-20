@@ -435,7 +435,7 @@
     },
     {
       "name": "attach_file",
-      "description": "Attach a finished file to the chat so the user can preview and download it: an image, video, audio clip, PDF, spreadsheet, slide deck or other document you made. Pass its path: a path inside your computer's /home/cua/workspace (for example /home/cua/workspace/report.pdf), or a file in your working folder. Do this instead of pasting a VM path as a link; a path inside a VM cannot be opened from chat. Supported: images (png, jpg, gif, webp), video (mp4, webm, mov), audio (mp3, m4a, aac, wav, ogg, opus, flac), pdf, Word/Excel/PowerPoint and OpenDocument files, and csv, tsv, txt, md, json, rtf. Up to 100 MB (images 10 MB). Finish writing the file first, then call this directly: it reports an error if the file is missing, so you do not need to list or open the folder to check.",
+      "description": "Attach a new finished file to the chat so the user can preview and download it: an image, video, audio clip, PDF, spreadsheet, slide deck or other document you made. Files already delivered by DoneBot media receipts or another bot are already visible in this conversation: reply directly without attaching or copying them again. Only attach again after creating a new or edited output. Pass its path: a path inside your computer's /home/cua/workspace (for example /home/cua/workspace/report.pdf), or a file in your working folder. Do this instead of pasting a VM path as a link; a path inside a VM cannot be opened from chat. Supported: images (png, jpg, gif, webp), video (mp4, webm, mov), audio (mp3, m4a, aac, wav, ogg, opus, flac), pdf, Word/Excel/PowerPoint and OpenDocument files, and csv, tsv, txt, md, json, rtf. Up to 100 MB (images 10 MB). Finish writing the file first, then call this directly: it reports an error if the file is missing, so you do not need to list or open the folder to check.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -446,7 +446,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Optional file name to show the user. Defaults to the file's own name."
+            "description": "Optional display name for a new attachment. An already attached file keeps its existing name."
           }
         },
         "required": [
@@ -610,7 +610,7 @@
     },
     {
       "name": "create_bot",
-      "description": "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
+      "description": "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its SOUL.md: include purpose, responsibilities, boundaries, deliverables and result checks. After creation offer skills or adding them later. Unless the user supplies a specific skill or explicitly requests custom creation, first find and inspect high-quality existing skills, then recommend suitable choices for the user's decision. Offer custom creation only if no suitable candidate was found; respect an already stated choice. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -624,7 +624,7 @@
           },
           "instructions": {
             "type": "string",
-            "description": "What this specialist is responsible for and how it should work."
+            "description": "Concise SOUL.md: identity, responsibilities, scope, deliverables, quality checks and reporting. Put detailed reusable procedures in skills."
           },
           "modelSelection": {
             "type": "object",
@@ -686,7 +686,7 @@
     },
     {
       "name": "propose_team_setup",
-      "description": "Chief of Staff only: submit all requested specialist creation, profile/model configuration, Chief assignments, and authorized team moves in ONE combined plan. Use exact catalog engine/model IDs from list_team_setup. Combine all fields for each bot; use the same create key or botId to coalesce repeated entries. New teams must be named explicitly in newTeams and have a specialist in this plan; access is granted only to those new teams. Existing unauthorized teams cannot be included. Models change bot defaults for groups/new threads; existing threads and execution permissions stay unchanged. If review is pending, the decision and structured result automatically resume you once; do not ask again, poll, or repeat the proposal. Read the result: it applies immediately at every access level, and the person sees it with an Undo where possible. If applied, continue the work without another confirmation. Only a pending result (a Cloud conversation its owner did not drive) means ending the turn to wait for the owner. Never claim success without an applied result; report failures honestly. This does not elevate another bot's execution permissions.",
+      "description": "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes. MCP server lists apply directly only at Full access; otherwise wait for the person to review the card. Read the result: when applied, continue the work without another confirmation. The person sees an Undo where possible. A pending result means ending the turn to wait for the owner. Never claim success without an applied result; report failures honestly.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -696,7 +696,6 @@
           },
           "newTeams": {
             "type": "array",
-            "maxItems": 8,
             "items": {
               "type": "string",
               "maxLength": 60
@@ -704,7 +703,6 @@
           },
           "operations": {
             "type": "array",
-            "maxItems": 24,
             "items": {
               "type": "object",
               "additionalProperties": false,
@@ -718,11 +716,11 @@
                 },
                 "key": {
                   "type": "string",
-                  "description": "For create: your stable short name for this new bot in this plan."
+                  "description": "create: your short name for the new bot."
                 },
                 "botId": {
                   "type": "string",
-                  "description": "For update: exact existing bot ID from list_team_setup."
+                  "description": "update: the bot's id from list_team_setup."
                 },
                 "fields": {
                   "type": "object",
@@ -737,23 +735,27 @@
                     },
                     "chiefOfStaff": {
                       "type": "boolean",
-                      "description": "Appoint or remove this team's Chief. At most one Chief per team: explicitly demote the current Chief in the same plan when replacing them. Does not grant access to other teams or change execution permissions."
+                      "description": "Appoint or remove the team's Chief; one per team, so demote the current one in this plan. Grants no other access."
                     },
                     "description": {
                       "type": "string"
                     },
                     "soul": {
                       "type": "string",
-                      "description": "Standing instructions; required with name/title/modelSelection for every new bot."
+                      "description": "Standing instructions; a new bot needs name, title, soul and modelSelection."
+                    },
+                    "soulAppend": {
+                      "type": "string",
+                      "description": "update, instead of soul: text to append."
                     },
                     "cwd": {
                       "type": "string",
-                      "description": "Create only: absolute path of the folder the new bot's tools read and write in. It must already exist. Leave it out for a private workspace."
+                      "description": "create: an existing absolute folder; omit for a private workspace."
                     },
                     "section": {
                       "type": "string",
                       "maxLength": 60,
-                      "description": "Exact authorized existing team, or a team explicitly named in newTeams. Empty string means General."
+                      "description": "An authorized team or one in newTeams; \"\" = General."
                     },
                     "modelSelection": {
                       "type": "object",
@@ -776,6 +778,14 @@
                         "instanceId",
                         "model"
                       ]
+                    },
+                    "mcpServers": {
+                      "type": "array",
+                      "maxItems": 20,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "update: the bot's full MCP server list by name."
                     }
                   }
                 }
@@ -1889,15 +1899,75 @@
       }
     },
     {
-      "name": "skills_list",
-      "description": "List this bot's skills (enabled and disabled) and any staged skill writes still waiting for the user's decision; pass query to find enabled skills for a task. Use this before skill_manage to avoid duplicate names. Listing does not enable anything.",
+      "name": "skill_find",
+      "description": "Find skills matching a concrete role or task. Use this first when adding skills unless the user chose a specific skill or explicitly requested custom creation. Searches local skills and skills.sh without an external CLI; network failure returns local matches. Inspect quality, task fit and dependencies before recommending choices; install counts alone do not establish quality. Let the user decide before installation.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "query": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Omit for yourself; a Chief may target a managed bot."
+          },
+          "online": {
+            "type": "boolean",
+            "description": "False searches local skills only. Defaults true."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "skill_import",
+      "description": "Preview a skill's contents and files, or import the user-selected skill into the specified bot, disabled. Supports GitHub/skills.sh URLs, owner/repo and a local SKILL.md or folder in this conversation. Preview defaults true; set preview=false to install, then skill_manage enable with the same bot_id. Preserves bundled scripts/assets, reports skipped files and never executes them.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Omit for yourself; a Chief may target a managed bot."
+          },
+          "preview": {
+            "type": "boolean",
+            "description": "Defaults true (read only). False imports the selected skill, disabled."
+          }
+        },
+        "required": [
+          "source"
+        ]
+      }
+    },
+    {
+      "name": "skills_list",
+      "description": "List your skills, or a managed bot's when a Chief passes bot_id (enabled and disabled) and any staged skill writes still waiting for the user's decision; pass query to find enabled skills for a task. Use this before skill_manage to avoid duplicate names. Listing does not enable anything.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "bot_id": {
+            "type": "string",
+            "description": "Omit for yourself. A Chief may name an exact bot it manages from list_team_setup."
+          },
+          "query": {
             "type": "string",
             "description": "Words about the task; returns the best matches and where to read each."
+          },
+          "skill_name": {
+            "type": "string",
+            "description": "Return the exact skill's full SKILL.md for inspection or a user-requested update, including on a managed bot."
+          },
+          "reference": {
+            "type": "string",
+            "description": "For a built-in skill, read this packaged Markdown reference instead of SKILL.md, e.g. references/grader.md. Requires skill_name. Omit bot_id to read your own built-in skill's references."
           }
         }
       },
@@ -1910,11 +1980,15 @@
     },
     {
       "name": "skill_manage",
-      "description": "Submit a new or updated reusable SKILL.md, or turn one of your own skills on or off, or delete it. Never change a skill unless the user explicitly asked for that named skill. If the result is pending, a create stays inactive and an update leaves the current version unchanged. Read the result: it applies immediately at every access level, and the person sees it with an Undo where possible. If applied, continue the work without another confirmation. Only a pending result (a Cloud conversation its owner did not drive) means ending the turn to wait for the owner. Never claim success without an applied result; report failures honestly. This does not elevate another bot's execution permissions.",
+      "description": "Submit a reusable SKILL.md, or enable, disable or delete a skill. Omit bot_id for yourself; a Chief may target a bot it manages. For a new skill, first search and inspect existing skills with skill_find unless the user explicitly requested custom creation. User-requested new bot setup authorizes creating a chosen skill for that bot. Never change a skill unless the user explicitly asked for that named skill. If the result is pending, a create stays inactive and an update leaves the current version unchanged. Read the result: it applies immediately at every access level, and the person sees it with an Undo where possible. If applied, continue the work without another confirmation. Only a pending result (a Cloud conversation its owner did not drive) means ending the turn to wait for the owner. Never claim success without an applied result; report failures honestly. This does not elevate another bot's execution permissions.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "bot_id": {
+            "type": "string",
+            "description": "Exact managed target bot from list_team_setup; omit for yourself."
+          },
           "action": {
             "type": "string",
             "enum": [

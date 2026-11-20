@@ -63,3 +63,16 @@
 - 类型、定向 lint 和 16 个语言目录校验通过，命令及使用方式见 `docs/verification/chat-polish.md`。
 
 已关闭该命名浏览器和临时服务。未访问真实网关、用户文件或应用；打包 Electron、物理手机和 Cloud 代理留至整体验收。
+
+## 压缩包、未知格式与文件粘贴
+
+接入固定上游 73e9f6962、f42488d0b、ccbe58b7a 和 a6cd67c78。压缩包从文件选择、拖放或 Chromium 文件剪贴板进入原有附件 intake；支持手机系统常见 MIME 别名。未知格式以 `.bin` 保存，显示名保留安全扩展名，只能下载；文本粘贴和纯图片粘贴保持既有路径。Bot 可通过原有 attach_file 回传八类压缩包，不自动解压。保留 DoneBot 的上传重试、内容冲突、凭据目录隔离及媒体回执不重复发布规则。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-archive-intake-units.log`：5 文件 / 185 项通过；`/tmp/donebot-archive-delivery-units.log`：4 文件 / 143 项通过。
+- `/tmp/donebot-archive-intake-route.log`、`/tmp/donebot-archive-delivery-route.log`：分别通过已有上传流程及 Bot 回传压缩包；各自仅运行指定名称，其余跳过。
+- `/tmp/donebot-archive-roundtrip-final.log`：真实隔离服务完成六种文件重试、会话发送和下载；内联及媒体播放被拒绝，未授权直读被拒绝，文件内容保持一致。
+- `/tmp/donebot-archive-catalog-final.log`：原始与桥接工具目录共 90 项通过。桥接快照补齐此前已实现的委派文件、check_back、技能导入及 DoneBot 附件去重说明；逐项审核后按实际目录差额 466–504 字节调整超出范围的旧基线，其中本次压缩包说明为 48 字节，2% 断言保留。没有套用上游预算数值。
+- Chromium 粘贴、真实发送与 390 px 窄屏通过，记录见 `docs/verification/plain-file-attachments.md`。本次 fixture 首轮缺少 scripted reply 导致假引擎失败，补齐合成计划后在全新隔离 home 重测通过；不是生产应用故障。
+- `/tmp/donebot-archive-types-final.log`、`/tmp/donebot-archive-lint.log`、`/tmp/donebot-archive-lint-final.log`、`/tmp/donebot-archive-i18n.log`：类型、定向 lint、16 个语言目录校验通过。

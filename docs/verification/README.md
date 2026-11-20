@@ -53,6 +53,7 @@ Use only mapped, tested commands:
 - [Account and first-use light/dark themes](donebot-auth-theme.md)
 - [DoneBot mobile hub, encrypted relay and notifications](donebot-mobile.md)
 - [Mobile attachment transfer and resume](mobile-file-resume.md)
+- [压缩包与普通文件附件](plain-file-attachments.md)
 - [DoneBot media capabilities and input limits](donebot-media-capabilities.md)
 - [DoneBot media defaults, Muse and fallback delivery](donebot-media-settings.md)
 - [DoneBot asynchronous media receipts and coordinator returns](donebot-media-coordination.md)

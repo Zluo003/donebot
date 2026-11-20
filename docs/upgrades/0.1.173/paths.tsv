@@ -622,8 +622,8 @@ M	server/app-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过�
 A	server/assignment-read.test.ts	接入	待核对	待核对
 A	server/assignment-read.ts	接入	待核对	待核对
 M	server/atomic.ts	接入	1	待核对
-M	server/attachments.test.ts	接入	待核对	待核对
-M	server/attachments.ts	接入	待核对	待核对
+M	server/attachments.test.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
+M	server/attachments.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
 M	server/auto-vm-claims.test.ts	接入	待核对	待核对
 M	server/auto-vm-claims.ts	接入	待核对	待核对
 A	server/automation-instructions.test.ts	接入	待核对	待核对
@@ -655,8 +655,8 @@ M	server/bot-api-host.test.ts	接入	待核对	待核对
 M	server/bot-api-host.ts	接入	待核对	待核对
 M	server/bot-api.test.ts	接入	待核对	待核对
 M	server/bot-api.ts	接入	待核对	待核对
-M	server/bot-attachment.test.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
-M	server/bot-attachment.ts	自有适配	5	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证
+M	server/bot-attachment.test.ts	自有适配	6	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
+M	server/bot-attachment.ts	自有适配	6	923d75725；DoneBot 媒体/权限/备份适配；batch-5.md 双向文件已验证；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
 M	server/bot-box/box.ts	接入	待核对	待核对
 M	server/bot-box/broker-mcp-refusal.test.ts	接入	6	待核对
 M	server/bot-box/broker-mcp-refusal.ts	接入	6	待核对
@@ -1672,8 +1672,8 @@ M	server/memory-upkeep.test.ts	接入	待核对	待核对
 M	server/memory-upkeep.ts	接入	待核对	待核对
 M	server/message-db.test.ts	接入	4	待核对
 M	server/message-db.ts	接入	4	待核对
-M	server/message-file.test.ts	接入	4	待核对
-M	server/message-file.ts	接入	4	待核对
+M	server/message-file.test.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
+M	server/message-file.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
 A	server/message-media-links.test.ts	接入	6	已接入并通过隔离附件流程与浏览器验收
 A	server/message-media-links.ts	接入	6	已接入；保留 DoneBot 手机设备身份绑定
 M	server/message-redaction.ts	接入	4	待核对
@@ -2558,7 +2558,7 @@ M	src/components/CommandPalette.tsx	接入	待核对	待核对
 A	src/components/CompactionChip.dom.test.ts	接入	4	已接入；上下文子批测试见 batch-4.md
 A	src/components/Composer.room-steer.test.ts	接入	待核对	待核对
 M	src/components/Composer.simple.test.ts	接入	待核对	待核对
-M	src/components/Composer.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
+M	src/components/Composer.tsx	接入	6	流式/长历史子集已接入；其余目标差异继续核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
 A	src/components/ComposerAttachments.citation-chip.test.ts	接入	待核对	待核对
 M	src/components/ComposerAttachments.tsx	接入	待核对	待核对
 A	src/components/ComposerContextMenu.test.ts	接入	4	已接入；上下文子批测试见 batch-4.md
@@ -3096,8 +3096,8 @@ A	src/lib/app-preview.ts	接入	待核对	待核对
 M	src/lib/app-triggers.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 A	src/lib/approval-mode-options.test.ts	接入	待核对	待核对
 M	src/lib/approval-mode-options.ts	接入	待核对	待核对
-M	src/lib/attach-notice.test.ts	接入	待核对	待核对
-M	src/lib/attach-notice.ts	接入	待核对	待核对
+M	src/lib/attach-notice.test.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
+M	src/lib/attach-notice.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
 M	src/lib/automations.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/lib/automations.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	src/lib/avatar-marks.ts	接入	待核对	待核对
@@ -3131,8 +3131,8 @@ M	src/lib/cloud-setup.ts	接入	待核对	待核对
 M	src/lib/cloud-welcome.test.ts	接入	待核对	待核对
 M	src/lib/cloud-welcome.ts	接入	待核对	待核对
 M	src/lib/companion-types.ts	接入	待核对	待核对
-M	src/lib/composer-attachments.test.ts	接入	待核对	待核对
-M	src/lib/composer-attachments.ts	接入	待核对	待核对
+M	src/lib/composer-attachments.test.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
+M	src/lib/composer-attachments.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
 M	src/lib/composer-dock.test.ts	接入	待核对	待核对
 M	src/lib/composer-dock.ts	接入	待核对	待核对
 A	src/lib/config-status-frame.test.ts	接入	待核对	待核对
@@ -3176,7 +3176,7 @@ M	src/lib/formatted-reply.ts	接入	待核对	待核对
 M	src/lib/glass-surface.test.ts	接入	待核对	待核对
 M	src/lib/grok-move.ts	接入	待核对	待核对
 M	src/lib/hosted-mcp-apps.ts	接入	6	待核对
-M	src/lib/intake-files.test.ts	接入	6	待核对
+M	src/lib/intake-files.test.ts	接入	6	待核对；压缩包/普通文件子集已接入并通过隔离流程，其余差异待核对
 M	src/lib/interface-mode.ts	接入	待核对	待核对
 A	src/lib/launch-marks.test.ts	接入	待核对	待核对
 A	src/lib/launch-marks.ts	接入	待核对	待核对

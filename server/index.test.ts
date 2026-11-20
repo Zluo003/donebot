@@ -5273,12 +5273,25 @@ describe("harness HTTP API", () => {
       expect(statSync(result.path).mode & 0o777).toBe(0o600);
     }
 
-    const unsupported = await fetch(`${BASE}/api/files?name=payload.zip`, {
+    const archive = await fetch(`${BASE}/api/files?name=payload.zip`, {
       method: "POST",
       headers: { "content-type": "application/zip" },
       body: Buffer.from("archive"),
     });
-    expect(unsupported.status).toBe(400);
+    expect(archive.status).toBe(201);
+    const archiveResult = await archive.json() as { path: string; name: string; mime: string };
+    expect(archiveResult).toMatchObject({ name: "payload.zip", mime: "application/zip" });
+    expect(archiveResult.path).toMatch(/\.zip$/);
+
+    const binary = await fetch(`${BASE}/api/files?name=payload.exe`, {
+      method: "POST", headers: { "content-type": "application/x-msdownload" }, body: Buffer.from("binary"),
+    });
+    expect(binary.status).toBe(201);
+    const binaryResult = await binary.json() as { path: string; name: string; mime: string };
+    expect(binaryResult).toMatchObject({ name: "payload.exe", mime: "application/octet-stream" });
+    expect(binaryResult.path).toMatch(/[\\/]attachments[\\/][0-9a-f-]+\.bin$/);
+    const served = await fetch(`${BASE}/api/attachments/${binaryResult.path.split(/[\\/]/).at(-1)}`);
+    expect(served.status).toBe(404);
 
     const missingName = await fetch(`${BASE}/api/files`, {
       method: "POST",
@@ -13056,6 +13069,46 @@ describe("bot memory API", () => {
       for (let count = 2; count < 10; count += 1) expect((await attach({ path: "song.mp3" })).status).toBe(200);
       const flooded = await attach({ path: "song.mp3" });
       expect(flooded.status).toBe(429);
+    } finally {
+      await api("DELETE", `/api/bots/${bot.id}`);
+    }
+  });
+
+  it("lets a bot send an archive, served only as a download", async () => {
+    const bot = (await api("POST", "/api/bots", {})).body.bot;
+    try {
+      const workspace = workspaceOf(bot.id);
+      mkdirSync(workspace, { recursive: true });
+      const tarball = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x3c, 0x68, 0x74, 0x6d, 0x6c, 0x3e]);
+      writeFileSync(join(workspace, "Site.TAR.GZ"), tarball);
+      writeFileSync(join(workspace, "bundle.cab"), "MSCF");
+      const token = await mintTestCapability(BASE, bot.id, bot.threadId);
+      const attach = (body: unknown) => fetch(`${BASE}/api/internal/attach-file`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const attached = await attach({ path: "Site.TAR.GZ" });
+      expect(attached.status).toBe(200);
+      expect(await attached.json()).toMatchObject({ ok: true, name: "Site.TAR.gz", bytes: tarball.byteLength });
+      expect((await attach({ path: "bundle.cab" })).status).toBe(415);
+
+      const dump = await api("GET", `/api/threads/${bot.threadId}/export?format=json`);
+      const [message] = (dump.body.messages as Array<{ id: string; attachments?: Array<{ kind: string; path: string; mime: string; name?: string }> }>)
+        .filter((entry) => entry.attachments?.length);
+      expect(message!.attachments).toEqual([expect.objectContaining({ kind: "file", name: "Site.TAR.gz", mime: "application/gzip" })]);
+
+      const served = await fetch(`${BASE}/api/threads/${bot.threadId}/messages/${message!.id}/file`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: message!.attachments![0]!.path }),
+      });
+      expect(served.status).toBe(200);
+      expect(served.headers.get("content-type")).toBe("application/gzip");
+      expect(served.headers.get("content-disposition")).toMatch(/^attachment; filename="Site\.TAR\.gz"/);
+      expect(served.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(Buffer.from(await served.arrayBuffer())).toEqual(tarball);
     } finally {
       await api("DELETE", `/api/bots/${bot.id}`);
     }

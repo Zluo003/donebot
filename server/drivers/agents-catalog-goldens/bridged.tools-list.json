@@ -38,7 +38,7 @@
     },
     {
       "name": "coordinate_bots",
-      "description": "The one way to hand work on: ask existing DoneBot teammates a question or assign them concrete work. In a room it defaults to this room; use group_id from list_room_targets for a specific room. Outside a room, what you send a teammate from this conversation goes to one standing work thread with them; thread \"new\" opens a fresh one, a thread id picks one you opened. Where work you gave is still open, it goes into that work: it answers the question that work waits on, or reaches the turn running it. Give 1-4 bot_ids — teammate ids as list_bots or your roster prints them; a unique teammate name also resolves: they see only what you send them and use their own model, tools and permissions. They can consult their own specialists; every result returns here and resumes you automatically, so after sending all assignments END your turn: do not poll or wait, and never call assignment_status in the same turn. consult true asks a question the teammate answers from what it knows, acting on nothing; reply \"none\" is a one-way notice nothing comes back from. Include exact file paths, constraints and what must be verified (done_when). On return, resolve tradeoffs, verify the requested outcome and request concrete corrections with rework true if necessary before giving one final answer. Never target whoever assigned you this work or anyone above it: to ask or report back, end your turn and your reply resumes them. Never thank or approve a finished teammate; its result already returned. Never repeat a refused call unchanged.",
+      "description": "The one way to hand work on: ask existing DoneBot teammates a question or assign them concrete work. In a room it defaults to this room; use group_id from list_room_targets for a specific room. Outside a room, what you send a teammate from this conversation goes to one standing work thread with them; thread \"new\" opens a fresh one, a thread id picks one you opened. Where work you gave is still open, it goes into that work: it answers the question that work waits on, or reaches the turn running it. Give 1-4 bot_ids — teammate ids as list_bots or your roster prints them; a unique teammate name also resolves: they see only what you send them and use their own model, tools and permissions. They can consult their own specialists; every result returns here and resumes you automatically, so after sending all assignments END your turn: do not poll or wait, and never call assignment_status in the same turn. consult true asks a question the teammate answers from what it knows, acting on nothing; reply \"none\" is a one-way notice nothing comes back from. Include constraints and what must be verified (done_when), and pass files they need in files. On return, resolve tradeoffs, verify the requested outcome and request concrete corrections with rework true if necessary before giving one final answer. Never target whoever assigned you this work or anyone above it: to ask or report back, end your turn and your reply resumes them. Never thank or approve a finished teammate; its result already returned. Never repeat a refused call unchanged.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -51,7 +51,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "description": "A teammate's id exactly as list_bots or your roster prints it ([id: …]). A teammate's unique display name also resolves; a name shared by two reachable teammates is refused."
+              "description": "A teammate's name, preferred, or its id from list_bots; an id's first 8 characters or more work too."
             }
           },
           "message": {
@@ -98,6 +98,14 @@
           "answers": {
             "type": "string",
             "description": "Only to answer a teammate's question instead of sending work: the assignment id its question note names. message is the answer."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "description": "Paths as for attach_file, 100 MB together: copied into each teammate's inbox. Files a teammate attaches with attach_file come back with its result."
           }
         },
         "required": [
@@ -158,7 +166,7 @@
     },
     {
       "name": "attach_file",
-      "description": "Attach a finished file to the chat so the user can preview and download it: an image, video, audio clip, PDF, spreadsheet, slide deck or other document you made. Pass its path: a path inside your computer's /home/cua/workspace (for example /home/cua/workspace/report.pdf), or a file in your working folder. Do this instead of pasting a VM path as a link; a path inside a VM cannot be opened from chat. Supported: images (png, jpg, gif, webp), video (mp4, webm, mov), audio (mp3, m4a, aac, wav, ogg, opus, flac), pdf, Word/Excel/PowerPoint and OpenDocument files, and csv, tsv, txt, md, json, rtf. Up to 100 MB (images 10 MB). Finish writing the file first, then call this directly: it reports an error if the file is missing, so you do not need to list or open the folder to check.",
+      "description": "Attach a new finished file to the chat so the user can preview and download it: an image, video, audio clip, PDF, spreadsheet, slide deck or other document you made. Files already delivered by DoneBot media receipts or another bot are already visible in this conversation: reply directly without attaching or copying them again. Only attach again after creating a new or edited output. Pass its path: a path inside your computer's /home/cua/workspace (for example /home/cua/workspace/report.pdf), or a file in your working folder. Do this instead of pasting a VM path as a link; a path inside a VM cannot be opened from chat. Supported: images (png, jpg, gif, webp), video (mp4, webm, mov), audio (mp3, m4a, aac, wav, ogg, opus, flac), pdf, Word/Excel/PowerPoint and OpenDocument files, csv, tsv, txt, md, json, rtf, and archives (zip, rar, 7z, tar, gz, tgz, bz2, xz). Up to 100 MB (images 10 MB). Finish writing the file first, then call this directly: it reports an error if the file is missing, so you do not need to list or open the folder to check.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -169,7 +177,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Optional file name to show the user. Defaults to the file's own name."
+            "description": "Optional display name for a new attachment. An already attached file keeps its existing name."
           }
         },
         "required": [
@@ -421,7 +429,7 @@
     },
     {
       "name": "find_tool",
-      "description": "Find an DoneBot tool that is not in your tool list. Say what you want to do in a few words, or give the tool's name. Each match comes back with its description and exact input schema; run one with use_tool. Tools reached this way: list_shared_computers, shared_computer, assignment_status, usage_limits, list_threads, close_thread, start_thread, burst, list_models, vm_exec, show_widget, show_html, unpublish_page, create_bot, list_team_setup, list_team_library, propose_team_setup, propose_bot_deletion, manage_room, x_search, research_search, research_endpoint, research_call, decide, extract, generate_image, report_bug, retry_thread, memory_log, session_search, trigger_info, trigger, delete_trigger, wait_until, list_waits, cancel_wait, propose_profile, propose_model, propose_team_memory, skills_list, skill_manage, mcp_server.",
+      "description": "Find an DoneBot tool that is not in your tool list. Say what you want to do in a few words, or give the tool's name. Each match comes back with its description and exact input schema; run one with use_tool. Tools reached this way: list_shared_computers, shared_computer, assignment_status, usage_limits, list_threads, close_thread, start_thread, burst, list_models, vm_exec, show_widget, show_html, unpublish_page, create_bot, list_team_setup, list_team_library, propose_team_setup, propose_bot_deletion, manage_room, x_search, research_search, research_endpoint, research_call, decide, extract, generate_image, report_bug, retry_thread, memory_log, session_search, trigger_info, trigger, delete_trigger, wait_until, list_waits, cancel_wait, check_back, propose_profile, propose_model, propose_team_memory, skill_find, skill_import, skills_list, skill_manage, mcp_server.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,

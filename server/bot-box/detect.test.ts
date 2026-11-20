@@ -13,6 +13,7 @@ describe("deciding whether turns are boxed", () => {
     expect(boxWanted({ DONEBOT_BOT_BOX: "bwrap" })).toBe("on");
     expect(cloudRole({ DONEBOT_CLOUD_ROLE: "home" })).toBe(true);
     expect(cloudRole({ DONEBOT_CLOUD_ROLE: "team" })).toBe(true);
+    expect(cloudRole({ DONEBOT_TEAM_RUNTIME: "1" })).toBe(true);
     expect(cloudRole({})).toBe(false);
     const working = { platform: "linux" as const, probe: () => true, which: tools({ bwrap: "/usr/bin/bwrap", socat: "/usr/bin/socat" }) };
     expect(detectBox({ env: {}, ...working })).toEqual({ box: "off", reason: "not-cloud", tools: null });

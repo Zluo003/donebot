@@ -49,7 +49,7 @@ export const CONTROL_PLANE_ENV_PREFIX = "DONEBOT_CLOUD_";
 export function stripControlPlaneEnv(env: Record<string, string | undefined>): void {
   for (const key of Object.keys(env)) {
     const name = key.toUpperCase();
-    if (name.startsWith(CONTROL_PLANE_ENV_PREFIX) || (CONTROL_PLANE_ENV as readonly string[]).includes(name)) delete env[key];
+    if (name.startsWith(CONTROL_PLANE_ENV_PREFIX) || name.startsWith("DONEBOT_TEAM_") || (CONTROL_PLANE_ENV as readonly string[]).includes(name)) delete env[key];
   }
 }
 

@@ -26,7 +26,7 @@ export interface DetectInput {
 
 /** A Cloud home (`home`, or the Team Cloud role `team`) boxes turns unless told not to. */
 export function cloudRole(env: Record<string, string | undefined>): boolean {
-  return env.DONEBOT_CLOUD_ROLE === "home" || env.DONEBOT_CLOUD_ROLE === "team";
+  return env.DONEBOT_CLOUD_ROLE === "home" || env.DONEBOT_CLOUD_ROLE === "team" || env.DONEBOT_TEAM_RUNTIME === "1";
 }
 
 /** `DONEBOT_BOT_BOX`: unset (Cloud homes on, others off), 0/off, 1/on/bwrap. */

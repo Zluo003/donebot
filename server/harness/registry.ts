@@ -4,6 +4,7 @@ import { installNpmEngine, npmAvailable, serverInstallFor, standaloneLookupPath 
 import { installStandaloneEngine, isAppStandaloneCopy, type StandaloneInstalled } from "../engine-standalone.ts";
 import { pinnedNpmVersion } from "../engine-versions.ts";
 import { withEngineMemory } from "../engine-memory.ts";
+import { withTeamIsolation } from "../donebot/team-isolation.ts";
 import { withEngineHomes } from "../engine-homes/engine-homes.ts";
 import { withLocalContext } from "../drivers/local-inject.ts";
 import { engineStatusFile, snapshotFrom } from "./engine-status-file.ts";
@@ -202,7 +203,7 @@ export class ProviderRegistry {
         config,
       }))))));
       this.shareSnapshot(live);
-      return { instanceId, live: decorate ? decorate(live) : live };
+      return { instanceId, live: withTeamIsolation(decorate ? decorate(live) : live) };
     } catch (e) {
       return {
         instanceId,

@@ -13,6 +13,7 @@ import { closeSync, existsSync, readdirSync, readFileSync, realpathSync } from "
 import type { Readable, Writable } from "node:stream";
 import { basename, dirname, join, resolve } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
+import { assertTeamIsolation } from "./donebot/team-isolation.ts";
 import type { BoxRequest } from "./bot-box/plan.ts";
 import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
 import { engineMemory } from "./engine-memory.ts";
@@ -206,6 +207,10 @@ export type CliSpawnOptions = SpawnOptions & BoxSpawnOptions;
 
 /** The box for this spawn, or null when it runs as is. A spawn in an engine home has that home in place of HOME. */
 export function boxedSpawn(resolved: ResolvedSpawn, opts: CliSpawnOptions, owner: CliOwner, homed: HomedSpawn | null = null): WrappedSpawn | null {
+  if (owner === "bot" || opts.box) {
+    assertTeamIsolation();
+    if (process.env.DONEBOT_TEAM_RUNTIME === "1" && opts.box === false) throw Object.assign(new Error("Team bot processes require isolation."), { code: "EACCES" });
+  }
   if (opts.box === false || (owner !== "bot" && !opts.box)) return null;
   const request = typeof opts.box === "object" ? opts.box : {};
   const home = homed ? { home: homed.home, shared: homed.shared } : {};

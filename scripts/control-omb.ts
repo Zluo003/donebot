@@ -416,8 +416,8 @@ export async function launchVerificationServer(
         const response = await fetch(`${url}/api/health`, {
           signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         });
-        const body = response.ok ? await response.json() as { app?: string } : null;
-        if (body?.app === "donebot") break;
+        const body = response.ok || teamRuntime && response.status === 503 ? await response.json() as { app?: string; team_protocol?: string } : null;
+        if (body?.app === "donebot" && (!teamRuntime || body.team_protocol === "donebot.teams.v1")) break;
       } catch {
       }
       if (Date.now() >= deadline) throw new Error(`verification server did not become ready; see ${logPath}${logTail()}`);

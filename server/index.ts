@@ -288,6 +288,7 @@ import { mainThread, wasOldestThread } from "./main-thread.ts";
 import { computerKindForResource, ManagedDesktopPolicy, type ComputerKind } from "./managed-policy.ts"; import { nudgeCloudTeamPolicy, remoteAccessPaths, startCloudTeamPolicy, stopCloudTeamPolicy } from "./cloud-team-policy.ts"; import { startCloudTeamRoster, stopCloudTeamRoster } from "./cloud-team-roster.ts"; import { createTeamWelcomeStore } from "./team-welcome.ts"; import { teamOnboarding, teamSignInFor } from "./host/team-join-host.ts";
 import { hostedModelPolicy, HOSTED_MODEL_POLICY_HEADER } from "./hosted-models.ts";
 import { CLOUD_HOME_SECRET_KEYS, CLOUD_IGNORED_KEYS, cloudHomeConfiguration, cloudHomeOffersPlace, cloudHomePlaceRefusal, firstCloudTurnPatch } from "./cloud-home.ts";
+import { assertTeamIsolation, teamIsolationReady } from "./donebot/team-isolation.ts";
 import { botBox, startBotBoxAtBoot } from "./bot-box/boot.ts"; import { attachmentsForBox } from "./box-attachments.ts"; import { brokerPath } from "./bot-box/broker-probe.ts";
 import { createCloudSignedHost } from "./host/cloud-signed-host.ts"; import { createDeleteLeftovers, engineSessionFolders, instanceEnvironment } from "./host/delete-leftovers.ts"; import { createBotNameClash } from "./host/bot-name-clash.ts"; import { hiddenThreadRefusal, hideOthersSyncFolders } from "./host/team-private.ts"; import { createTeamMemberLeft, memoryLayerRecords } from "./host/team-member-left.ts"; import { createUploadOwners, uploadsFor } from "./host/member-uploads.ts"; import { createMemberOwnBot } from "./host/member-own-bot.ts"; import { createVisibilityHost } from "./host/visibility-host.ts"; import { createBotAccessHost, refusalFor, relayedSendRefusal } from "./host/bot-access-gate.ts"; import { createBotAccessRoutes, writeAccess } from "./routes/bot-access.ts"; import { createAccessRequests } from "./host/access-requests.ts";
 import { cloudPowerNow, createCloudPower, registerCloudPower, wokeFromSleep, type CloudPower } from "./cloud-power.ts"; import { createWokeNotifier } from "./cloud-woke.ts"; import { createSharedComputerRoutes } from "./routes/shared-computers.ts";
@@ -7535,7 +7536,7 @@ async function beginTurn(
     /** A person's own send: it may run beside a room turn on another thread. */ allowRoomTurnElsewhere?: boolean;
   },
 ) {
-  workspaceMaintenance.assertAvailable(); moveFreeze.assertTurns();
+  workspaceMaintenance.assertAvailable(); moveFreeze.assertTurns(); assertTeamIsolation();
   const profile = store.bot(botId); assertBotHere(profile);
   if (!profile) throw Object.assign(new Error("no such bot"), { status: 404 });
   const threadId = opts?.threadId ?? profile.threadId, paused = botHolds.text(botId, threadLanguage(threadId)) ?? starterCaps.pausedText(botId, threadLanguage(threadId)); if (paused) throw Object.assign(new Error(paused), { status: 409, code: botHolds.held(botId) ? BOT_HELD_CODE : BOT_PAUSED_CODE });
@@ -9644,6 +9645,10 @@ async function runClaimedGroupMemberTurn(
   // Rebuild the turn once from the fresh bot rather than mix a stale adapter with fresh permissions.
   setupRetry = 0,
 ): Promise<boolean> {
+  try { assertTeamIsolation(); } catch (error) {
+    onDispatchError?.(error instanceof Error ? error.message : "Team isolation is unavailable.");
+    return false;
+  }
   if (workspaceMaintenance.active || moveFreeze.frozen()) {
     onDispatchError?.(moveFreeze.refusal() ?? "A workspace backup or restore is in progress.");
     return false;
@@ -12636,6 +12641,11 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
   }
   const path = url.pathname;
   const method = req.method ?? "GET"; cloudPower?.arrived(path, req.headers); // a Cloud home's first request after a wake: what woke it
+  if (DONEBOT_TEAM_RUNTIME && method === "GET" && path === "/api/health") {
+    const ready = teamIsolationReady();
+    res.setHeader("cache-control", "no-store");
+    return json(res, ready ? 200 : 503, { app: "donebot", team_protocol: "donebot.teams.v1", ready });
+  }
   const verifiedTeamSession = DONEBOT_TEAM_RUNTIME ? teamRuntimeSession(DONEBOT_TEAM_RUNTIME, req) : null;
   if (DONEBOT_TEAM_RUNTIME && !verifiedTeamSession && !teamRuntimePublicPath(method, path)) return json(res, 401, { error: "A current team member grant is required." });
   let m: RegExpMatchArray | null = null;

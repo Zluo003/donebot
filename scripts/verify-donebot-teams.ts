@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { launchVerificationServer } from "./control-omb.ts";
 import { FAKE_DONEBOT_CATALOG, startFakeDoneBotGateway } from "../server/testing/fake-donebot-gateway.ts";
 
@@ -28,10 +28,16 @@ try {
   const runtime = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, [], undefined, undefined, gateway.origin, undefined, undefined, undefined, config);
   results.runtimeLog = runtime.info.logPath;
   try {
-    const call = async (path: string, role = "member", method = "GET", patch = {}) => {
+    const call = async (path: string, role = "member", method = "GET", patch = {}, body?: unknown) => {
       const payload = Buffer.from(JSON.stringify({ protocol: "donebot.teams.v1", team_id: config.id, instance_id: config.instanceId, user_id: "3", email: "member@example.invalid", role, member_version: 1, expires: Math.floor(Date.now() / 1000) + 9,
         runtime_hash: createHash("sha256").update(`${method}\n${path}`).digest("hex"), ...patch }));
-      return fetch(runtime.info.url + path, { method, headers: { "x-donebot-team-grant": `${payload.toString("base64url")}.${sign(null, payload, privateKey).toString("base64url")}` } });
+      const init: RequestInit = { method, headers: { "x-donebot-team-grant": `${payload.toString("base64url")}.${sign(null, payload, privateKey).toString("base64url")}`,
+        "content-type": "application/json", origin: runtime.info.url } };
+      if (body !== undefined) {
+        if (method === "GET" || method === "HEAD") throw new Error("A read request cannot carry a body");
+        init.body = JSON.stringify(body);
+      }
+      return fetch(runtime.info.url + path, init);
     };
     for (const path of ["/api/bots", "/api/config", "/api/auth/session"]) assert.equal((await fetch(runtime.info.url + path)).status, 401);
     assert.equal((await fetch(runtime.info.url + "/api/auth/pairing", { method: "POST" })).status, 401);
@@ -46,6 +52,18 @@ try {
       assert.equal((await call(path, "member", "POST")).status, 403);
     }
     assert.equal((await call("/api/paused", "owner")).status, 200);
+    const health = await fetch(runtime.info.url + "/api/health");
+    const readiness = await health.json();
+    assert.equal(readiness.team_protocol, "donebot.teams.v1");
+    if (!readiness.ready) {
+      assert.equal(health.status, 503);
+      const bots = await (await call("/api/bots", "owner")).json();
+      const bot = bots.bots[0]; assert.ok(bot?.id);
+      const sent = await call(`/api/bots/${bot.id}/messages`, "owner", "POST", {}, { text: "This must not start an engine", threadId: bot.activeTaskId });
+      assert.equal(sent.status, 503, await sent.clone().text());
+      assert.equal(existsSync(runtime.info.dataDir + "/fake-claude-dump.json"), false);
+      results.isolation = "execution refused before isolation was ready";
+    } else { assert.equal(health.status, 200); results.isolation = "runtime self-check passed"; }
     results.runtime = "passed";
   } finally { await runtime.close(); }
   writeFileSync(fixture.info.logPath + ".teams.json", JSON.stringify(results, null, 2));

@@ -218,6 +218,10 @@ USER root
 CMD ["node", "/app/dist-server/cloud-home-start.js"]
 
 FROM runtime AS cloud-service
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bubblewrap socat \
+  && rm -rf /var/lib/apt/lists/*
+LABEL cn.donebot.teams.protocol="donebot.teams.v1"
 # Optional engine CLIs baked into the image (space-separated npm packages).
 ARG ENGINES=""
 RUN if [ -n "$ENGINES" ]; then HOME=/tmp/omb-build-home npm install -g $ENGINES && rm -rf /tmp/omb-build-home /tmp/node-compile-cache; fi

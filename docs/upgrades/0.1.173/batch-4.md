@@ -26,3 +26,15 @@
 这些测试不替代批次 8 的真实 Linux、Windows、手机及多执行节点验收。
 
 技能卡片本地化回归修复：`server-lines.test.ts` 与 `skill-switch-host.test.ts` 2 文件 17 项通过，lint、typecheck、16 语言目录检查通过。日志 `/tmp/donebot-skill-card-locale-tests.log`。
+
+上下文子批已接入，来源 07f46461e、aa683cd4e、f2e6c73c2、198b84350。输入框面板展示上下文、手动压缩和重新开始；压缩记录提供新建会话入口。摘要提前写入，等待、停止和失败后的重试沿用上游状态机。原生压缩仅用于引擎声明支持的路径；统一网关引擎继续使用原有 side-job 摘要和回放，不恢复直连入口。上下文类别仅在引擎确实提供分类数据时显示，不估算为实测。
+
+上下文子批验证（2026-11-20）：
+
+- 9 文件 386 项单元/组件测试通过，日志 `/tmp/donebot-context-unit-tests.log`。
+- 4 文件 22 项真实隔离服务流程通过，覆盖手动压缩、重新开始、原生/摘要后备、自动提前摘要、等待与停止、重启和群聊，日志 `/tmp/donebot-context-e2e-tests.log`。
+- 10 文件 247 项相关保护回归通过，包含网关驱动、团队认证、摘要/上下文/回放和群聊，日志 `/tmp/donebot-context-protected-tests.log`。
+- 真实浏览器临时 home/data 流程通过：打开面板、点击压缩、重复压缩锁定、重新开始、再次重新开始锁定和 Escape 关闭。脚本 `/tmp/donebot-context-ui.mts`，结果 `/tmp/donebot-context-ui.json`、截图 `/tmp/donebot-context-ui.png`，日志 `/tmp/donebot-context-ui.log`。所有 fixture 已关闭。
+- lint、typecheck、16 语言目录检查通过，新增入口与面板已有中文。
+
+消息分叉、批量设置和工具权限继承仍在实施；本批尚未完成。

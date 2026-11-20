@@ -1393,8 +1393,8 @@ A	server/host/connect-card-settle.ts	接入	待核对	待核对
 M	server/host/connection-health-host.test.ts	接入	待核对	待核对
 M	server/host/connection-health-host.ts	接入	待核对	待核对
 M	server/host/connector-cards.ts	接入	6	待核对
-A	server/host/conversation-compaction.test.ts	接入	4	待核对
-A	server/host/conversation-compaction.ts	接入	4	待核对
+A	server/host/conversation-compaction.test.ts	自有适配	4	已接入；上下文子批测试见 batch-4.md
+A	server/host/conversation-compaction.ts	自有适配	4	已接入；上下文子批测试见 batch-4.md
 A	server/host/conversation-shares.test.ts	接入	待核对	待核对
 A	server/host/conversation-shares.ts	接入	待核对	待核对
 M	server/host/delegated-level.test.ts	接入	待核对	待核对
@@ -1518,7 +1518,7 @@ A	server/host/vault-readers.ts	接入	6	待核对
 M	server/host/wait-words.test.ts	接入	待核对	待核对
 M	server/host/wait-words.ts	接入	待核对	待核对
 M	server/host/warm-summary-host.test.ts	接入	待核对	待核对
-M	server/host/warm-summary-host.ts	接入	待核对	待核对
+M	server/host/warm-summary-host.ts	自有适配	4	已接入；上下文子批测试见 batch-4.md
 M	server/host/webhook-room-deps.ts	接入	5	待核对
 M	server/host/webhook-room-post.test.ts	接入	5	待核对
 M	server/host/webhook-room-post.ts	接入	5	待核对
@@ -2268,7 +2268,7 @@ M	server/waits.test.ts	接入	待核对	待核对
 M	server/waits.ts	接入	待核对	待核对
 M	server/warm-summary.e2e.test.ts	接入	待核对	待核对
 M	server/warm-summary.test.ts	接入	待核对	待核对
-M	server/warm-summary.ts	接入	待核对	待核对
+M	server/warm-summary.ts	自有适配	4	已接入；上下文子批测试见 batch-4.md
 M	server/web-panel-framing.test.ts	接入	待核对	待核对
 M	server/web-panel-framing.ts	接入	待核对	待核对
 A	server/webhook-payload-filter.test.ts	接入	5	待核对
@@ -2555,14 +2555,14 @@ M	src/components/CloudUsageMeter.test.ts	接入	待核对	待核对
 M	src/components/CloudUsageMeter.tsx	接入	待核对	待核对
 M	src/components/CodeBlock.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/CommandPalette.tsx	接入	待核对	待核对
-A	src/components/CompactionChip.dom.test.ts	接入	待核对	待核对
+A	src/components/CompactionChip.dom.test.ts	接入	4	已接入；上下文子批测试见 batch-4.md
 A	src/components/Composer.room-steer.test.ts	接入	待核对	待核对
 M	src/components/Composer.simple.test.ts	接入	待核对	待核对
 M	src/components/Composer.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/components/ComposerAttachments.citation-chip.test.ts	接入	待核对	待核对
 M	src/components/ComposerAttachments.tsx	接入	待核对	待核对
-A	src/components/ComposerContextMenu.test.ts	接入	待核对	待核对
-A	src/components/ComposerContextMenu.tsx	接入	待核对	待核对
+A	src/components/ComposerContextMenu.test.ts	接入	4	已接入；上下文子批测试见 batch-4.md
+A	src/components/ComposerContextMenu.tsx	接入	4	已接入；上下文子批测试见 batch-4.md
 M	src/components/ComposerPlusMenu.tsx	接入	待核对	待核对
 M	src/components/ComposerQueuedMessages.test.ts	接入	待核对	待核对
 M	src/components/ComposerQueuedMessages.tsx	接入	待核对	待核对
@@ -2591,7 +2591,7 @@ M	src/components/DefaultBotControls.tsx	接入	待核对	待核对
 M	src/components/DeviceSignIn.tsx	接入	待核对	待核对
 M	src/components/DiagnosticsRow.test.ts	接入	待核对	待核对
 M	src/components/DiagnosticsRow.tsx	接入	待核对	待核对
-M	src/components/DigestChip.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
+M	src/components/DigestChip.tsx	接入	4	已接入；上下文子批测试见 batch-4.md
 A	src/components/DisplayNameSetting.test.ts	接入	待核对	待核对
 A	src/components/DisplayNameSetting.tsx	接入	待核对	待核对
 M	src/components/EngineAccounts.tsx	接入	待核对	待核对
@@ -3147,9 +3147,9 @@ M	src/lib/connected-apps.ts	接入	待核对	待核对
 M	src/lib/connector-grants.test.ts	接入	6	待核对
 A	src/lib/connector-poll-failures.test.ts	接入	6	待核对
 M	src/lib/connector-poll.ts	接入	6	待核对
-A	src/lib/context-usage.ts	接入	待核对	待核对
+A	src/lib/context-usage.ts	接入	4	已接入；上下文子批测试见 batch-4.md
 M	src/lib/context-warning.test.ts	接入	待核对	待核对
-M	src/lib/context-warning.ts	接入	待核对	待核对
+M	src/lib/context-warning.ts	接入	4	已接入；上下文子批测试见 batch-4.md
 A	src/lib/copy-image.test.ts	接入	待核对	待核对
 A	src/lib/copy-image.ts	接入	待核对	待核对
 M	src/lib/copy-text.ts	接入	待核对	待核对

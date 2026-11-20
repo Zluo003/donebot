@@ -668,7 +668,7 @@ const MessagesList = memo(function MessagesList({
   onRegenerate: () => void;
   onReply: (message: Message) => void;
 }) {
-  const { botId, threadId, botName, botColor, bots, hasMore, focus, showToolCalls, locale, simple = false } = useChatRows(), busy = use(ChatBusyContext);
+  const { botId, threadId, botName, botColor, bots, hasMore, focus, showToolCalls, locale, dispatch, canReact, simple = false } = useChatRows(), busy = use(ChatBusyContext);
   const messages = useLiveTranscriptLayout(threadId, saved, transcript);
   // A finished turn keeps the bot's progress lines and folds only its tool steps under "Worked for", in both modes.
   const items = useMemo(() => groupTranscript(messages), [messages, locale]);
@@ -754,7 +754,7 @@ const MessagesList = memo(function MessagesList({
             case "digest":
               return showToolCalls ? <DigestChip message={m} /> : null;
             case "compaction":
-              return <CompactionChip message={m} />;
+              return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId }) : undefined} />;
             case "screen":
               return <ScreenFrame threadId={threadId} message={m} />;
             default: {
@@ -1099,7 +1099,7 @@ export const ChatView = memo(function ChatView({ bot: profile }: { bot: Bot }) {
               <span className="@max-4xl/chathead:hidden">{t("chat.stop")}</span>
             </button>
           )}
-          <ThreadContextWarning bot={bot} messages={messages} />
+          <ThreadContextWarning bot={bot} />
           {phone && <UsageAlert engine={bot.modelSelection?.instanceId} />}
           {/* The model and the bot's computer stay in view in both modes; Simple mode moves only ⋯ into the bot panel. */}
           {!phone && <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} />}

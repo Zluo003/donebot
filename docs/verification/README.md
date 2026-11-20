@@ -198,6 +198,9 @@ The [DoneBot Cloud reconnect checks](donebot-cloud-reconnect.md) cover native
 Cookie reuse and renewal, cached conversations while loading, and interrupted
 media downloads through an isolated production request handler.
 
+The [personal collaboration checks](bot-link.md) cover explicit native consent,
+account revocation, and two disposable servers handing work and files to each other.
+
 The [published Cloud image record](cloud-images-2026-11-17-attachments.md) identifies the
 verified image digests and the controlled upgrade procedure for existing nodes;
 the [attachment resume image record](cloud-images-2026-11-17.md) and the

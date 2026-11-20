@@ -224,10 +224,10 @@ M	electron/app-frame-guard.mjs	接入	待核对	待核对
 M	electron/app-frame-guard.node-test.mjs	接入	待核对	待核对
 A	electron/boot-head-start.mjs	接入	待核对	待核对
 A	electron/boot-head-start.node-test.mjs	接入	待核对	待核对
-A	electron/bot-link-address.d.mts	自有适配	3	待核对
-A	electron/bot-link-address.mjs	自有适配	3	待核对
-A	electron/bot-link-main.mjs	自有适配	3	待核对
-A	electron/bot-link-main.node-test.mjs	自有适配	3	待核对
+A	electron/bot-link-address.d.mts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	electron/bot-link-address.mjs	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	electron/bot-link-main.mjs	自有适配	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	electron/bot-link-main.node-test.mjs	自有适配	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 M	electron/bridge-contract.json	接入	待核对	待核对
 M	electron/chrome-rail.d.mts	接入	待核对	待核对
 M	electron/chrome-rail.mjs	接入	待核对	待核对
@@ -674,12 +674,12 @@ D	server/bot-directory.ts	接入	待核对	待核对
 M	server/bot-folder.ts	接入	待核对	待核对
 A	server/bot-limit.test.ts	接入	待核对	待核对
 A	server/bot-limit.ts	接入	待核对	待核对
-A	server/bot-link.e2e.test.ts	自有适配	3	待核对
-A	server/bot-link/address.test.ts	自有适配	3	待核对
-A	server/bot-link/dial.ts	自有适配	3	待核对
-A	server/bot-link/link.test.ts	自有适配	3	待核对
-A	server/bot-link/link.ts	自有适配	3	待核对
-A	server/bot-link/protocol.ts	自有适配	3	待核对
+A	server/bot-link.e2e.test.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	server/bot-link/address.test.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	server/bot-link/dial.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	server/bot-link/link.test.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	server/bot-link/link.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	server/bot-link/protocol.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 M	server/bot-logins.test.ts	接入	待核对	待核对
 M	server/bot-logins.ts	接入	待核对	待核对
 A	server/bot-memory-cap-live.test.ts	接入	待核对	待核对
@@ -1355,8 +1355,8 @@ A	server/host/bot-frames.test.ts	接入	待核对	待核对
 A	server/host/bot-frames.ts	接入	待核对	待核对
 A	server/host/bot-holds.test.ts	接入	4	暂停/恢复已接入并隔离验证
 A	server/host/bot-holds.ts	接入	4	暂停/恢复已接入并隔离验证
-A	server/host/bot-link-host.ts	自有适配	3	待核对
-A	server/host/bot-link-rooms.ts	自有适配	3	待核对
+A	server/host/bot-link-host.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	server/host/bot-link-rooms.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 A	server/host/bot-memory-cap-host.ts	接入	待核对	待核对
 M	server/host/brief.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	server/host/brief.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
@@ -1484,7 +1484,7 @@ M	server/host/sign-in-settle.test.ts	接入	待核对	待核对
 M	server/host/sign-in-settle.ts	接入	待核对	待核对
 M	server/host/skills-library.ts	接入	6	待核对
 M	server/host/sse-replay.ts	接入	待核对	待核对
-A	server/host/stand-in-guard.ts	接入	待核对	待核对
+A	server/host/stand-in-guard.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 A	server/host/suggested-selection.test.ts	接入	待核对	待核对
 A	server/host/suggested-selection.ts	接入	待核对	待核对
 A	server/host/team-box-scope.linux.test.ts	接入	待核对	待核对
@@ -1834,7 +1834,7 @@ M	server/room-queue.ts	接入	5	定向回复及忙碌排队；隔离工作流通
 A	server/room-quoted-replies.e2e.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	server/room-round-turns.test.ts	接入	待核对	待核对
 M	server/room-round-turns.ts	接入	待核对	待核对
-A	server/room-routing-members.test.ts	自有适配	2	待核对
+A	server/room-routing-members.test.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 A	server/room-routing-members.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	server/room-steer-addressee.e2e.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	server/room-steer-addressee.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
@@ -1849,7 +1849,7 @@ A	server/routes/app-settings.ts	接入	6	待核对
 M	server/routes/bot-access.ts	接入	4	待核对
 A	server/routes/bot-holds.ts	接入	4	暂停/恢复已接入并隔离验证
 M	server/routes/bot-lifecycle.ts	接入	待核对	待核对
-A	server/routes/bot-link.ts	自有适配	3	待核对
+A	server/routes/bot-link.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 M	server/routes/bot-messages-apps.test.ts	接入	4	待核对
 M	server/routes/bot-messages.test.ts	接入	4	待核对
 M	server/routes/bot-messages.ts	接入	4	待核对
@@ -2748,8 +2748,8 @@ A	src/components/ResetCloudComputerButton.tsx	接入	待核对	待核对
 M	src/components/RichMessageRow.tsx	接入	待核对	待核对
 M	src/components/RichTable.fit.test.ts	接入	待核对	待核对
 M	src/components/RoomClusterLabel.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
-A	src/components/RoomFarMembers.dom.test.ts	接入	待核对	待核对
-A	src/components/RoomFarMembers.tsx	接入	待核对	待核对
+A	src/components/RoomFarMembers.dom.test.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
+A	src/components/RoomFarMembers.tsx	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 M	src/components/RoomHeader.tsx	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 M	src/components/RoomQueueList.tsx	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	src/components/RoomTextMessage.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对

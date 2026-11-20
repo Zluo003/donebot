@@ -7932,5 +7932,16 @@
   "room.queue.busyIn": "正在 {place} 工作 · 排队中（{position}/{of}），完成后开始",
   "room.queue.busyElsewhere": "正在其他会话工作 · 排队中（{position}/{of}），完成后开始",
   "room.queue.busyInAfter": "正在 {place} 工作 · 排在 {name} 之后（{position}/{of}），两项工作完成后开始",
-  "room.queue.busyElsewhereAfter": "正在其他会话工作 · 排在 {name} 之后（{position}/{of}），两项工作完成后开始"
+  "room.queue.busyElsewhereAfter": "正在其他会话工作 · 排在 {name} 之后（{position}/{of}），两项工作完成后开始",
+  "server.rooms.linkedAway": "{bot} 所在的 {place} 现在已关闭或休眠。{place} 恢复后它会在这里回复。",
+  "server.rooms.linkedGone": "{bot} 位于 {place}。与 {place} 的连接现在已关闭，连接恢复后它才能在这里回复。",
+  "server.rooms.linkedMissing": "{bot} 已不在 {place} 上，所以无法在这里回复。请把它从这个群组聊天的成员中移除。",
+  "server.rooms.linkedEnded": "{place} 已有 30 天没有连接，与它的连接已结束。已不在这个群组聊天中：{bots}。",
+  "server.rooms.linkedNotSent": "无法把 {bot} 的发言机会传给 {place}。再次提及 {bot} 可重试。",
+  "server.rooms.linkedNoAnswer": "{bot} 在 {place} 上完成了，但没有给这个群组聊天的回复。",
+  "server.rooms.linkedFailed": "{bot} 无法从 {place} 回复。",
+  "room.members.far.place": "位于 {place}",
+  "room.members.far.off": "连接已关闭",
+  "room.members.far.missing": "已不可用",
+  "server.rooms.linkedOffline": "{bot} 在 {place} 上运行，该设备当前离线，本次请求未发送。请在 {place} 上线后重新提及 {bot}。"
 }

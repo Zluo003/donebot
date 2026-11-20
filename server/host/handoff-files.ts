@@ -233,6 +233,17 @@ export function createHandoffFiles(deps: HandoffFilesDeps) {
     return true;
   }
 
+
+
+  function crossed(assignmentId: string, way: Way, from: { botId: string; name: string }, files: readonly PassedFile[]): void {
+    if (!files.length || batchOf(assignmentId, way)) return;
+    load().batches.push({ assignmentId, way, from, files: files.slice(0, HANDOFF_FILES_PER_ASSIGNMENT), at: now() });
+    save();
+  }
+
+  const carriedOne = (assignmentId: string, way: Way): readonly PassedFile[] => batchOf(assignmentId, way)?.files ?? [];
+
+
   function sentWith(assignmentId: string): Attached {
     return attachedRow(batchOf(assignmentId, "sent")?.files);
   }
@@ -459,7 +470,7 @@ export function createHandoffFiles(deps: HandoffFilesDeps) {
     else if (change.type === "bot.deleted" && change.botId && id.test(change.botId)) forget({ botId: change.botId });
   });
 
-  return { stage, drop, reserveDay, releaseDay, sent, attached, sentWith, returnedWith, forTurn, around, coordinate, forget };
+  return { stage, drop, reserveDay, releaseDay, sent, attached, sentWith, returnedWith, forTurn, around, coordinate, forget, crossed, carried: carriedOne };
 }
 
 export type HandoffFiles = ReturnType<typeof createHandoffFiles>;

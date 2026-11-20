@@ -3525,5 +3525,15 @@
   "server.routines.turnedBackOnMany": "Wieder eingeschaltet: {names}. Eine frühere Version hatte sie ausgeschaltet, nachdem ihre Cloud-Desktops nicht gestartet waren.",
   "inbox.settled.read": "Gelesen",
   "inbox.settled.title": "Erledigt",
-  "inbox.markAllRead": "Alle als gelesen markieren"
+  "inbox.markAllRead": "Alle als gelesen markieren",
+  "server.rooms.linkedAway": "{bot} läuft auf {place}, das gerade aus ist oder schläft. Die Antwort kommt hier, sobald {place} wieder da ist.",
+  "server.rooms.linkedGone": "{bot} läuft auf {place}. Die Verbindung zu {place} ist gerade aus; eine Antwort kommt hier erst, wenn sie zurück ist.",
+  "server.rooms.linkedMissing": "{bot} gibt es auf {place} nicht mehr und kann hier deshalb nicht antworten. Entferne diesen Bot aus den Mitgliedern dieses Raums.",
+  "server.rooms.linkedEnded": "{place} hat sich 30 Tage lang nicht verbunden, deshalb wurde die Verbindung dorthin beendet. Nicht mehr in diesem Raum: {bots}.",
+  "server.rooms.linkedNotSent": "{bot} konnte auf {place} nicht an die Reihe kommen. Erwähne {bot} noch einmal, um es erneut zu versuchen.",
+  "server.rooms.linkedNoAnswer": "{bot} ist auf {place} fertig geworden, ohne eine Antwort für diesen Raum.",
+  "server.rooms.linkedFailed": "{bot} konnte von {place} aus nicht antworten.",
+  "room.members.far.place": "auf {place}",
+  "room.members.far.off": "Verbindung ist aus",
+  "room.members.far.missing": "Nicht mehr verfügbar"
 }

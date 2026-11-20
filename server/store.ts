@@ -154,7 +154,9 @@ export function titleFromLlm(raw: string): string | null {
 export interface BotRecord extends Omit<WireBot, "avatarUrl" | "tasks"> {
   tasks?: TaskRecord[];
   avatarUrl?: string;
-  resumeCursors: Record<string, unknown>; mainThreadChoice?: string; // mainThreadChoice ("Set as main thread") is host-only; clients get mainThreadId.
+  resumeCursors: Record<string, unknown>;
+  home?: { place: string; placeName: string; botId: string; kind?: "computer" | "cloud"; gone?: "off" | "missing" };
+  mainThreadChoice?: string; // mainThreadChoice ("Set as main thread") is host-only; clients get mainThreadId.
   /** Elevation journal: Full/Custom runs as Ask until Electron confirms the prepared reply; a marker surviving a restart is revoked on load. */
   approvalGrant?: {
     requestId: string;
@@ -171,7 +173,7 @@ export interface BotRecord extends Omit<WireBot, "avatarUrl" | "tasks"> {
   assignedSkills?: string[];
 }
 
-export type BotWirePrivateKeys = "resumeCursors" | "mainThreadChoice" | "tasks" | "avatarUrl" | "approvalGrant" | "lastProfileRequestId" | "lastTeamSetupReceipt" | "packageBase" | "assignedSkills";
+export type BotWirePrivateKeys = "resumeCursors" | "home" | "mainThreadChoice" | "tasks" | "avatarUrl" | "approvalGrant" | "lastProfileRequestId" | "lastTeamSetupReceipt" | "packageBase" | "assignedSkills";
 export type BotWireProjection = Pick<BotRecord, Exclude<keyof BotRecord, BotWirePrivateKeys>>;
 export type BotWireProjectionIsExact = AssertExact<Omit<WireBot, "avatarUrl" | "tasks">, BotWireProjection> & AssertSameKeys<Omit<WireBot, "avatarUrl" | "tasks">, BotWireProjection>;
 export const botWireProjectionIsExact: BotWireProjectionIsExact = true;
@@ -262,6 +264,7 @@ function taskCountsAsBotUnread(task: { unread?: boolean; routineRunId?: string }
 
 export class Store {
   bots: BotRecord[] = [];
+  standIns = new Map<string, BotRecord>();
   groups: GroupRecord[] = []; /** Told before a delete of these conversations is tried; "thread.deleted" follows only for those that went. Must not throw. */ threadsGoing: (threadIds: readonly string[]) => void = () => {};
   private threads = new ThreadCache(() => this.busyThreadIds());
   private defaultSelection: () => ModelSelection;
@@ -436,8 +439,8 @@ export class Store {
     for (const g of this.groups) {
       g.busyBotId = null;
       delete g.turnStartedAt;
-      if (botsLoaded && !g.dm && g.memberIds.some((id) => !botIds.has(id))) {
-        g.memberIds = g.memberIds.filter((id) => botIds.has(id));
+      if (botsLoaded && !g.dm && g.memberIds.some((id) => !botIds.has(id) && !id.startsWith("link-"))) {
+        g.memberIds = g.memberIds.filter((id) => botIds.has(id) || id.startsWith("link-"));
         groupsMigrated = true;
       }
       const normalized = normalizeGroupDefaultResponder(g.defaultResponder, g.memberIds, Boolean(g.dm));
@@ -1304,6 +1307,10 @@ export class Store {
   }
 
   bot(id: string) {
+    return this.bots.find((b) => b.id === id) ?? this.standIns.get(id) ?? null;
+  }
+
+  private own(id: string) {
     return this.bots.find((b) => b.id === id) ?? null;
   }
 
@@ -1382,7 +1389,7 @@ export class Store {
   }
 
   applyTeamSetup(request: TeamSetupRequest): TeamSetupResult {
-    const chief = this.bot(request.botId);
+    const chief = this.own(request.botId);
     if (!chief) throw new Error("The requesting Chief no longer exists");
     if (chief.lastTeamSetupReceipt?.requestId === request.requestId) return chief.lastTeamSetupReceipt.result;
     const managedSections = [...new Set([...(chief.managedSections ?? []), ...request.newTeams])];
@@ -1464,7 +1471,7 @@ export class Store {
   }
 
   applyModelDefault(id: string, modelSelection: ModelSelection): BotRecord | null {
-    const previous = this.bot(id);
+    const previous = this.own(id);
     if (!previous) return null;
     const next: BotRecord = { ...previous, modelSelection: structuredClone(modelSelection), tasks: this.withDefaultModel(previous, modelSelection) };
     this.saveBots(this.bots.map((candidate) => candidate.id === id ? next : candidate));
@@ -1474,12 +1481,12 @@ export class Store {
   }
 
   deleteBot(id: string, setupRequest?: TeamSetupRequest): boolean {
-    const bot = this.bot(id);
+    const bot = this.own(id);
     if (!bot) return false;
     if (bot.defaultBot) throw Object.assign(new Error(defaultBotRefusal(bot.name)), { status: 409 });
     let nextBots = this.bots.filter((b) => b.id !== id); this.threadsGoing([bot.threadId, ...(bot.tasks ?? []).map((t) => t.threadId)]);
     if (setupRequest) {
-      const chief = this.bot(setupRequest.botId);
+      const chief = this.own(setupRequest.botId);
       if (!chief || chief.id === id || setupRequest.deletion?.botId !== id) throw new Error("The reviewed deletion no longer has a valid owner");
       const lastTeamSetupReceipt: NonNullable<BotRecord["lastTeamSetupReceipt"]> = { requestId: setupRequest.requestId, result: { state: "applied", newTeams: [], bots: [
         { id: bot.id, name: bot.name, action: "deleted" },
@@ -1520,7 +1527,7 @@ export class Store {
   }
 
   patchBot(id: string, patch: Partial<BotRecord>): BotRecord | null {
-    const bot = this.bot(id);
+    const bot = this.own(id);
     if (!bot) return null; patch = reshowWhenMoved(bot, patch);
     if (patch.connectorTools !== undefined) {
       const parsed = parseConnectorTools(patch.connectorTools);
@@ -1575,7 +1582,7 @@ export class Store {
   }
 
   patchBotProfile(id: string, patch: BotProfilePatch & Partial<Pick<BotRecord, "cwd" | "lastProfileRequestId">>): BotRecord | null {
-    const bot = this.bot(id);
+    const bot = this.own(id);
     if (!bot) return null;
     const next = { ...bot, ...reshowWhenMoved(bot, patch) };
     if (patch.soul !== undefined) {
@@ -1602,7 +1609,7 @@ export class Store {
     section: string,
   ): { ok: true; bots: BotRecord[] } | { ok: false; reason: "unavailable" | "chief-conflict" } {
     const ids = [...new Set(botIds)];
-    const targets = ids.map((id) => this.bot(id));
+    const targets = ids.map((id) => this.own(id));
     if (targets.some((bot) => !bot || bot.hidden)) return { ok: false, reason: "unavailable" };
 
     const targetSection = sectionKey(section);
@@ -1630,7 +1637,7 @@ export class Store {
       for (const botId of changedIds) this.emit({ type: "bot", botId });
     }
     this.rememberSections([targetSection]);
-    return { ok: true, bots: ids.map((id) => this.bot(id)!) };
+    return { ok: true, bots: ids.map((id) => this.own(id)!) };
   }
 
   updateTeamMembers(section: string, addIds: string[], removeIds: string[]):
@@ -1640,7 +1647,7 @@ export class Store {
     const adds = new Set(addIds), removes = new Set(removeIds);
     const ids = new Set([...adds, ...removes]);
     for (const id of ids) {
-      const bot = this.bot(id);
+      const bot = this.own(id);
       if (!bot || bot.hidden) return { ok: false, reason: "unavailable" };
       if (adds.has(id) && removes.has(id)) return { ok: false, reason: "membership-changed" };
       if (removes.has(id) && sectionKey(bot.section) !== key) return { ok: false, reason: "membership-changed" };
@@ -1657,7 +1664,7 @@ export class Store {
   }
 
   setActivity(botId: string, activity: BotActivity): BotRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot) return null;
     if ((this.legacyActivities.get(botId) ?? "idle") === activity) return bot;
     this.legacyActivities.set(botId, activity);
@@ -1667,7 +1674,7 @@ export class Store {
   }
 
   setTaskActivity(botId: string, threadId: string, activity: BotActivity, noTurnRunning = false): BotRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
     const busy = ACTIVITY_BUSY.has(activity) && !noTurnRunning;
@@ -1696,7 +1703,7 @@ export class Store {
   /** Makes `id` its scope's one Chief (its owner's on a Team Cloud, else its department's), or with no `id` leaves
    * `section` without one. */
   setChiefOfStaff(id: string | null, section?: string | null): BotRecord[] | null {
-    const selected = id ? this.bot(id) : null;
+    const selected = id ? this.own(id) : null;
     if (id && !selected) return null;
     const scope = selected ? chiefScope(selected) : chiefScope({ section: section ?? undefined });
     const changed: BotRecord[] = [];
@@ -1836,7 +1843,7 @@ export class Store {
   }
 
   setResumeCursor(botId: string, instanceId: string, cursor: unknown, threadId?: string) {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot) return;
     const task = threadId ? this.taskByThread(botId, threadId) : this.activeTask(botId), mirrored = !threadId || bot.threadId === threadId;
     if (isDeepStrictEqual(task?.resumeCursors[instanceId], cursor) && (!mirrored || isDeepStrictEqual(bot.resumeCursors[instanceId], cursor))) return;
@@ -1910,7 +1917,7 @@ export class Store {
   }
 
   pinTaskCwd(botId: string, threadId: string, fallbackCwd?: string, opts: { none?: boolean; privateOnly?: boolean } = {}): string | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = bot ? this.taskByThread(botId, threadId) : undefined;
     if (!bot || !task) return null;
     if (opts.privateOnly && task.cwd === undefined) {
@@ -1957,11 +1964,11 @@ export class Store {
   }
 
   project(botId: string, projectId: string): BotProjectRecord | undefined {
-    return this.bot(botId)?.projects?.find((project) => project.id === projectId);
+    return this.own(botId)?.projects?.find((project) => project.id === projectId);
   }
 
   createProject(botId: string, name: string, emoji?: string | null): BotProjectRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot || !name.trim() || (emoji != null && !isProjectEmoji(emoji))) return null;
     const project: BotProjectRecord = {
       id: newId(), name: name.trim().slice(0, 80),
@@ -1985,7 +1992,7 @@ export class Store {
   }
 
   reorderProjects(botId: string, projectIds: string[]): BotProjectRecord[] | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const projects = bot?.projects ?? [];
     if (!bot || projectIds.length !== projects.length || new Set(projectIds).size !== projects.length) return null;
     const byId = new Map(projects.map((project) => [project.id, project]));
@@ -2011,7 +2018,7 @@ export class Store {
   }
 
   deleteProject(botId: string, projectId: string): BotRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot || !this.project(botId, projectId)) return null;
     bot.projects = bot.projects!.filter((project) => project.id !== projectId);
     for (const task of bot.tasks ?? []) {
@@ -2028,16 +2035,16 @@ export class Store {
   }
 
   tasks(botId: string): TaskRecord[] {
-    return this.bot(botId)?.tasks ?? [];
+    return this.own(botId)?.tasks ?? [];
   }
 
   activeTask(botId: string): TaskRecord | undefined {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     return bot?.tasks?.find((t) => t.threadId === bot.threadId);
   }
 
   taskByThread(botId: string, threadId: string): TaskRecord | undefined {
-    return this.bot(botId)?.tasks?.find((t) => t.threadId === threadId);
+    return this.own(botId)?.tasks?.find((t) => t.threadId === threadId);
   }
 
   workThread(botId: string, fromBotId: string, fromThreadId: string, roomLane = false, also: (task: TaskRecord) => boolean = () => true): TaskRecord | undefined {
@@ -2046,7 +2053,7 @@ export class Store {
   }
 
   projectBotForTask(botId: string, threadId: string): BotRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
     return {
@@ -2065,7 +2072,7 @@ export class Store {
   }
 
   patchTask(botId: string, threadId: string, patch: TaskPatch, options: { turnEnd?: true } = {}): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
     if (patch.projectId !== undefined && !this.project(botId, patch.projectId)) return null;
@@ -2095,7 +2102,7 @@ export class Store {
   }
 
   clearAutoSurfacePins(botId: string, destination: Destination): number {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const stale = bot?.tasks?.filter((task) => task.surface !== undefined && task.surfaceSource === "auto" && task.surface !== destination) ?? [];
     if (!bot || !stale.length) return 0;
     this.commitBotChange(bot, "the threads' destinations", () => {
@@ -2111,7 +2118,7 @@ export class Store {
   /** One write: never publish a new provider before its approval downgrade. */
   switchTaskModel(botId: string, threadId: string, selection: ModelSelection,
     updateBotDefault: boolean, resetApprovalToAsk: boolean, taskPatch: TaskPatch = {}): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
     const approval = resetApprovalToAsk ? structuredClone(ASK_NOW) : {};
@@ -2130,7 +2137,7 @@ export class Store {
 
   followBotModel(botId: string, threadIds: readonly string[],
     reset: (from: ModelSelection, to: ModelSelection) => Partial<TaskRecord> = () => ({})): string[] {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot?.tasks) return [];
     const listed = new Set(threadIds);
     const patches = bot.tasks.map((task): Partial<TaskRecord> | null => !listed.has(task.threadId) || task.modelSelection === undefined ? null : {
@@ -2150,7 +2157,7 @@ export class Store {
   }
 
   setAllThreadApprovalMode(botId: string, mode: Exclude<ApprovalMode, "custom">): BotRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot) return null;
     const patch = { approvalMode: mode, autoApprove: mode === "auto", ...(mode === "full" ? { alwaysAllow: [] } : {}) };
     const tasks = (bot.tasks ?? []).map(task => ({ ...task, ...patch }));
@@ -2164,7 +2171,7 @@ export class Store {
 
   /** An uncommitted grant is ignored, so a refresh cannot copy the temporary Ask mask. */
   refreshTaskPermissions(botId: string, threadId: string): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
     const mode = approvalModeFor({ ...bot, approvalGrant: undefined });
@@ -2184,7 +2191,7 @@ export class Store {
 
   createTask(botId: string, title?: string, activate = true, projectId?: string, openedBy?: TaskOpenedBy, approvalMode?: "ask" | "full",
     modelSelection?: ModelSelection, cwd?: string, beforeShown?: (task: TaskRecord) => void): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot) return null;
     if (projectId !== undefined && !this.project(botId, projectId)) return null;
     const task = buildTask(bot, title, projectId, openedBy, approvalMode, modelSelection, cwd);
@@ -2197,7 +2204,7 @@ export class Store {
   }
 
   forkTask(botId: string, sourceThreadId: string, messageId: string): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const source = this.taskByThread(botId, sourceThreadId);
     if (!bot || !source) return null;
     const sourceView = this.projectBotForTask(botId, sourceThreadId)!;
@@ -2209,7 +2216,7 @@ export class Store {
   }
 
   setTaskOpenedBy(botId: string, threadId: string, openedBy: TaskOpenedBy): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
     this.commitBotChange(bot, "who opened the thread", () => { task.openedBy = structuredClone(openedBy); });
@@ -2227,7 +2234,7 @@ export class Store {
   }
 
   setTaskClosedBy(botId: string, threadId: string, closedBy: TaskClosedBy | null): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
     if (!closedBy && !task.closedBy) return task;
@@ -2240,7 +2247,7 @@ export class Store {
   }
 
   switchTask(botId: string, threadId: string): BotRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = bot?.tasks?.find((t) => t.threadId === threadId);
     if (!bot || !task) return null;
     this.commitBotChange(bot, "the thread switch", () => this.mirrorActiveTask(bot, task));
@@ -2253,7 +2260,7 @@ export class Store {
   }
 
   titleTaskFromFirstMessage(botId: string, text: string, threadId?: string): TaskRecord | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     const task = threadId ? this.taskByThread(botId, threadId) : this.activeTask(botId);
     if (!bot || !task || task.titleFromFirstMessage || (task.title !== UNTITLED_TASK && task.title !== UNTITLED_THREAD)) return null;
     this.commitBotChange(bot, "the thread's title", () => {
@@ -2277,7 +2284,7 @@ export class Store {
 
   /** Transcript rows and bots.json commit together, so either failing leaves every task, log file and subscriber untouched. */
   deleteTasks(botId: string, threadIds: string[]): { bot: BotRecord; deleted: string[]; missing: string[] } | null {
-    const bot = this.bot(botId);
+    const bot = this.own(botId);
     if (!bot?.tasks) return null;
     const present = new Set(bot.tasks.map((t) => t.threadId));
     const unique = [...new Set(threadIds)];

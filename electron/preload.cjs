@@ -162,6 +162,11 @@ const bridge = {
     probe: (address, code) => ipcRenderer.invoke("workspaces:probe", String(address ?? ""), String(code ?? "")),
     openCloud: (id, accountId) => ipcRenderer.invoke("donebot-cloud:open", String(id), String(accountId)),
     reconnectCloud: () => ipcRenderer.invoke("donebot-cloud:reconnect"),
+    botLink: {
+      state: () => ipcRenderer.invoke("donebot-bot-link:state"),
+      set: (enabled, accountId, instanceId) => isLocalPage
+        ? ipcRenderer.invoke("donebot-bot-link:set", enabled, String(accountId), String(instanceId)) : Promise.reject(new Error("只能在这台电脑设置协作。")),
+    },
     returnLocal: () => navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("donebot-cloud:local") : Promise.reject(new Error("Choose to return to this computer.")),
     // The colour of the place this page is (never another's): read, and changed only from the person's click.

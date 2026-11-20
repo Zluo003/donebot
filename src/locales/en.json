@@ -10450,5 +10450,16 @@
   "room.queue.busyElsewhere": "Busy in another conversation · queued ({position} of {of}), starts when it finishes",
   "room.queue.busyInAfter": "Busy in {place} · queued after {name} ({position} of {of}), starts when both finish",
   "room.queue.busyElsewhereAfter": "Busy in another conversation · queued after {name} ({position} of {of}), starts when both finish",
-  "room.queue.aTeammate": "a teammate"
+  "room.queue.aTeammate": "a teammate",
+  "server.rooms.linkedAway": "{bot} lives on {place}, which is off or asleep now. It answers here when {place} is back.",
+  "server.rooms.linkedGone": "{bot} lives on {place}. The link to {place} is off now, so it can't answer here until the link is back.",
+  "server.rooms.linkedMissing": "{bot} is no longer on {place}, so it can't answer here. Remove it from this room's members.",
+  "server.rooms.linkedEnded": "{place} has not connected for 30 days, so the link to it ended. No longer in this room: {bots}.",
+  "server.rooms.linkedNotSent": "{bot}'s turn could not be passed to {place}. Mention {bot} again to try once more.",
+  "server.rooms.linkedNoAnswer": "{bot} finished on {place} without an answer for this room.",
+  "server.rooms.linkedFailed": "{bot} could not answer from {place}.",
+  "room.members.far.place": "on {place}",
+  "room.members.far.off": "Link is off",
+  "room.members.far.missing": "No longer available",
+  "server.rooms.linkedOffline": "{bot} lives on {place}, which is offline. This request was not sent. Mention {bot} again when {place} is online."
 }

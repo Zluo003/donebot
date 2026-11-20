@@ -174,6 +174,11 @@ const __APP_VERSION__: string;
          * `profileName` its own name when it has one (a workspace added from ＋); `donebotCloud`: this account's Cloud,
          * displayed under its localized name without its connection address. */
         state: () => Promise<{ local: boolean; name: string; origin?: string; color?: string; home?: boolean; role?: string; localPath?: string; profile?: string; profileName?: string; donebotCloud?: boolean }>;
+        /** Personal collaboration consent is bound to the signed-in account and its personal Cloud. No link credentials are returned. */
+        botLink?: {
+          state(): Promise<{ enabled: boolean; connected: boolean; available: boolean; error: string }>;
+          set(enabled: boolean, accountId: string, instanceId: string): Promise<{ enabled: boolean; connected: boolean; available: boolean; error: string }>;
+        };
         /** The native server menu; resolves when it closes. `from: "howto"`: the Show me how tip opened it. */
         menu: (options?: { from?: "howto" }) => Promise<void>;
         /** One plain line for the next page: a team this person is no longer in (served once), or, while it runs, that the

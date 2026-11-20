@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Cloud, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@/state/api";
 import type { DoneBotCloudAction, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudSnapshot } from "../../shared/donebot-cloud";
+import { DoneBotBotLink } from "./BotLink";
 
 const button = "ui-button inline-flex items-center gap-2 disabled:opacity-50";
 const problem = (cause: unknown) => cause instanceof Error ? cause.message : "Cloud 请求未完成，请刷新状态后重试。";
@@ -118,6 +119,7 @@ export function DoneBotCloudAccess({ heading = true }: { heading?: boolean }) {
       </div>
       {!snapshot.plan.enabled && !instance && <p className="text-[13px] text-ink-secondary">Cloud 暂未开放开通。</p>}
       {ready && !snapshot.connection_available && <p className="text-[13px] text-ink-secondary">云实例连接尚未配置，请联系管理员。</p>}
+      {instance && <DoneBotBotLink key={`${snapshot.account_id}:${instance.id}`} accountId={snapshot.account_id} instanceId={instance.id} ready={ready && snapshot.connection_available} />}
       {pending && <div role="group" aria-label="Cloud 操作确认" className="w-full space-y-3 rounded-lg border border-hairline bg-inset p-4 text-[13px]">
         <h4 className="font-semibold text-ink">{pending.action === "keep" ? "确认开启自动续费？" : pending.action === "cancel" ? "确认取消自动续费？" : renewable ? "确认启动 Cloud？" : "确认购买 Cloud 云主机？"}</h4>
         <p className="leading-relaxed text-ink-secondary">{pending.action === "keep" ? `开启后将在已付费期限结束时，从当前账号余额扣除届时的月费（当前 ${pending.monthly_price} / 月）。本次不扣款，不改变当前到期时间。`

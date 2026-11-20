@@ -1674,8 +1674,8 @@ M	server/message-db.test.ts	接入	4	待核对
 M	server/message-db.ts	接入	4	待核对
 M	server/message-file.test.ts	接入	4	待核对
 M	server/message-file.ts	接入	4	待核对
-A	server/message-media-links.test.ts	接入	4	待核对
-A	server/message-media-links.ts	接入	4	待核对
+A	server/message-media-links.test.ts	接入	6	已接入并通过隔离附件流程与浏览器验收
+A	server/message-media-links.ts	接入	6	已接入；保留 DoneBot 手机设备身份绑定
 M	server/message-redaction.ts	接入	4	待核对
 M	server/message-search-query.ts	接入	4	待核对
 A	server/message-search-unicode.test.ts	接入	4	待核对
@@ -1936,7 +1936,7 @@ A	server/routes/team-slack.ts	接入	待核对	待核对
 M	server/routes/teams.ts	接入	待核对	待核对
 A	server/routes/threads-one-bot.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	server/routes/threads-page-leaf.test.ts	接入	待核对	待核对
-M	server/routes/threads.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对；批5 定向回复/排队隐私已接入，其余差异待核对
+M	server/routes/threads.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对；批5 定向回复/排队隐私已接入，其余差异待核对；批6 大媒体链接已接入，其余差异待核对
 M	server/routes/tts.test.ts	接入	待核对	待核对
 M	server/routes/tts.ts	接入	待核对	待核对
 M	server/routes/update-check.test.ts	接入	待核对	待核对
@@ -2473,11 +2473,11 @@ M	src/components/AppearanceSelectRows.tsx	接入	待核对	待核对
 A	src/components/ApprovalCard.cloud-guest.dom.test.ts	接入	待核对	待核对
 M	src/components/ApprovalCard.tsx	接入	待核对	待核对
 M	src/components/AskCard.tsx	接入	待核对	待核对
-M	src/components/AttachmentGallery.test.ts	接入	待核对	待核对
-M	src/components/AttachmentGallery.tsx	接入	待核对	待核对
-A	src/components/AttachmentGallery.video.dom.test.ts	接入	待核对	待核对
+M	src/components/AttachmentGallery.test.ts	接入	6	大媒体链接子集已接入并验证，其余差异待核对
+M	src/components/AttachmentGallery.tsx	接入	6	大媒体链接子集已接入并验证，其余差异待核对
+A	src/components/AttachmentGallery.video.dom.test.ts	接入	6	按需播放器及解码失败下载已接入并验证
 M	src/components/AttachmentPreview.test.ts	接入	待核对	待核对
-M	src/components/AttachmentPreview.tsx	接入	待核对	待核对
+M	src/components/AttachmentPreview.tsx	接入	6	播放链接选项已接入并验证，其余差异待核对
 M	src/components/AttachmentStorageSettings.tsx	接入	待核对	待核对
 M	src/components/AutomaticRecoverySettings.test.ts	接入	待核对	待核对
 M	src/components/AutomaticRecoverySettings.tsx	接入	待核对	待核对

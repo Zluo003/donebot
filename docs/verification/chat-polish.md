@@ -47,8 +47,35 @@ pnpm check:contrast
 The server/driver fixtures cover bounded/redacted previews, structured JSON inside
 text, binary omission, renderer HTTP hydration and SQLite persistence. Compact
 model-facing control transcripts deliberately omit the new display-only fields.
-Attachment tests cover existing file authorization, MIME checks, a 25 MB cap
-(including chunked streams), aborted reads and encoded filenames.
+Attachment tests cover existing file authorization, MIME checks, the 25 MB
+image/legacy Blob cap (including chunked streams), aborted reads and encoded
+filenames. Supported audio/video can use the authorized streaming route below.
+
+## Large audio/video streaming
+
+```sh
+node --experimental-strip-types scripts/verify-media-streaming.ts
+pnpm exec vitest run server/message-media-links.test.ts server/message-media-streaming.e2e.test.ts src/components/AttachmentGallery.video.dom.test.ts
+```
+
+Open the printed preview URL, complete the fixture welcome screen if shown,
+then select Media fixture. Before clicking Load video or Play audio, neither
+file should load. Load both, play and seek using the native controls. The video
+is a valid MP4 padded to 30 MiB; the synthetic WAV is 16 minutes. Each source
+must be a message-scoped `?media=` link, with 206 responses capped at 8 MiB.
+Saving without Range still downloads the full file. The isolated server test
+also covers different and revoked sessions, wrong messages, file replacement,
+symlink escapes, missing files and unsupported types.
+
+2026-11-21: Chromium decoded the MP4 (14.033333 seconds), advanced playback and
+sought to 10 seconds. WAV playback advanced and sought to 900 of 960 seconds.
+Both had readyState 4 and no media error. At 390×844 document scroll width was
+390. The only console error was the fixture's missing favicon. Screenshots,
+media state, network requests and range headers are retained under
+`output/playwright/media-streaming/`. The server log is
+`server-1795206199704-17289.log` in the launcher's verification-evidence directory.
+The named browser and exact fixture were closed and the temporary data removed.
+This does not qualify packaged Electron, physical phones or Cloud proxies.
 
 ## Evidence: 2026-09-13
 

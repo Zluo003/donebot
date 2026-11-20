@@ -49,3 +49,17 @@
 - `/tmp/donebot-mcp-ownership-types-final.log`、`/tmp/donebot-mcp-ownership-lint.log`：类型和定向 lint 通过。
 
 本项不宣称 DoneBot 团队 Cloud 的执行授权已完成，相关能力继续关闭。
+
+## 大音视频按需播放
+
+接入固定上游 fd393a7d8、aed2714e8。受授权的消息附件可换取短期不透明播放链接，每次读取仍校验当前身份、消息、路径及 MIME；每段最多 8 MiB，无 Range 的保存继续流式传输完整文件。保留 DoneBot 的 ETag、If-Range、416、附件根目录及原有图片预览行为；手机代理链接额外绑定认证设备，不能与桌面或另一设备互用。旧服务不支持播放链接时仍回退原有有界 Blob，视频解码失败显示下载入口。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-media-streaming-regression.log`：6 文件 / 148 项通过，覆盖附件、授权、播放器和旧服务兼容。
+- `/tmp/donebot-media-streaming-route-regression.log`：4 项已有真实服务附件流程通过，329 项按名称未运行。
+- `/tmp/donebot-media-streaming-workflow-complete.log`：新增真实隔离服务流程通过，覆盖 30 MB 文件、范围和完整读取、两个 cookie 会话、撤权、文件替换、越界符号链接及错误类型。
+- `output/playwright/media-streaming/`：真实 Chromium 完成按需加载、解码、播放和拖动进度；MP4 14.033333 秒跳至 10 秒，WAV 960 秒跳至 900 秒，媒体错误为空；390 px 无横向溢出，两类响应均为 206 / 8 MiB。
+- 类型、定向 lint 和 16 个语言目录校验通过，命令及使用方式见 `docs/verification/chat-polish.md`。
+
+已关闭该命名浏览器和临时服务。未访问真实网关、用户文件或应用；打包 Electron、物理手机和 Cloud 代理留至整体验收。

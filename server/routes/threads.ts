@@ -1,5 +1,6 @@
 import { userError } from "../user-errors.ts";
 import { messageFileResponse } from "../message-file-response.ts";
+import { MessageMediaLinks, STREAMABLE_MEDIA_MIMES } from "../message-media-links.ts";
 import { artifactPage, collectBotArtifacts, type ArtifactThread } from "../bot-artifacts.ts";
 import { basename, join } from "node:path";
 
@@ -77,6 +78,7 @@ export interface ThreadRouteDeps {
 }
 
 export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
+  const mediaLinks = new MessageMediaLinks();
   const {
     store, userName: userNameFor, sessions, groupUsageReader, lendingEnabled,
     hostedWorkspace: HOSTED_WORKSPACE, sessionCookie: SESSION_COOKIE, loopback: LOOPBACK, defaultPage: DEFAULT_PAGE,
@@ -217,7 +219,8 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
     const streamsMessagePreview = Boolean(
       m && method === "GET" && url.searchParams.get("preview") === "1",
     );
-    if (m && (method === "POST" || streamsMessagePreview)) {
+    const mediaId = m && method === "GET" && !streamsMessagePreview ? url.searchParams.get("media") : null;
+    if (m && (method === "POST" || streamsMessagePreview || mediaId)) {
       if (method === "POST" && !String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
         return json(res, 415, { error: "content-type must be application/json" });
       }
@@ -232,15 +235,18 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         return json(res, 403, { error: "that message does not share this file" });
       }
       const messageText = message.text ?? "";
+      const mediaGrant = mediaId ? mediaLinks.use(mediaId, threadId, message.id, auth) : null;
+      if (mediaId && !mediaGrant) return json(res, 404, { error: "that media link has expired", code: "media_link_expired" });
       const body = method === "POST" ? await readBody(req) : null;
+      const asksMediaLink = body?.media === true;
       const rawReference = streamsMessagePreview ? url.searchParams.get("ref") : null;
       const previewPath = streamsMessagePreview ? url.searchParams.get("path") : null;
       if (streamsMessagePreview && !previewPath && (!rawReference || !/^\d+$/.test(rawReference))) {
         return json(res, 400, { error: "ref must identify a rendered image" });
       }
-      const href = method === "POST"
+      const href = mediaGrant?.path ?? (method === "POST"
         ? (typeof body.path === "string" ? body.path : "")
-        : previewPath ?? messageImageTargetAt(messageText, Number(rawReference));
+        : previewPath ?? messageImageTargetAt(messageText, Number(rawReference)));
       if (!href) return json(res, 400, { error: "path is required" });
 
       let roots: string[];
@@ -271,7 +277,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         roots = [...new Set([...messageFileRootsForThread(senderId, threadId), ...fromRun])];
       }
 
-      const folderEntry = method === "POST" && body.entry !== undefined
+      const folderEntry = mediaGrant ? mediaGrant.entry : method === "POST" && body.entry !== undefined
         ? messageFolderEntryName(body.entry)
         : undefined;
       if (folderEntry === null) return json(res, 400, { error: "entry must be one file name" });
@@ -305,25 +311,36 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         await file.handle.close();
         return json(res, 415, { error: "unsupported inline preview type" });
       }
+      if ((asksMediaLink || mediaGrant) && !STREAMABLE_MEDIA_MIMES.has(file.mime)) {
+        await file.handle.close();
+        return json(res, 415, { error: "only audio and video can be played here" });
+      }
+      if (asksMediaLink) {
+        await file.handle.close();
+        const id = mediaLinks.issue({ threadId, messageId: message.id, path: href, ...(folderEntry ? { entry: folderEntry } : {}) }, auth);
+        res.setHeader("x-donebot-media", "1");
+        res.setHeader("cache-control", "private, no-store");
+        return json(res, 200, { url: `/api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(message.id)}/file?media=${id}`, mime: file.mime, bytes: file.bytes });
+      }
+      const inline = streamsMessagePreview || Boolean(mediaGrant);
+      const disposition = messageFileDisposition(messageFileDownloadName(downloadName, file.name));
       await messageFileResponse(req, res, file, {
         "content-type": file.mime,
         "content-length": String(file.bytes),
-        ...(streamsMessagePreview
-          ? { "content-disposition": "inline" }
-          : { "content-disposition": messageFileDisposition(messageFileDownloadName(downloadName, file.name)) }),
+        "content-disposition": mediaGrant ? disposition.replace(/^attachment;/, "inline;") : streamsMessagePreview ? "inline" : disposition,
         "cache-control": "private, no-store",
         "cdn-cache-control": "no-store",
         "cloudflare-cdn-cache-control": "no-store",
         pragma: "no-cache",
         vary: "Authorization",
         "x-content-type-options": "nosniff",
-        ...(streamsMessagePreview
+        ...(inline
           ? {
               "cross-origin-resource-policy": "same-origin",
               "referrer-policy": "no-referrer",
             }
           : {}),
-      });
+      }, Boolean(mediaGrant));
       return;
     }
 

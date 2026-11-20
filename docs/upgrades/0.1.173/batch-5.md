@@ -13,3 +13,17 @@ DoneBot 保留当前共享协议和统一网关；状态行、取消和错误文
 - `/tmp/donebot-checkback-types.log`、`/tmp/donebot-checkback-lint.log`、`/tmp/donebot-checkback-i18n.log`：类型、lint 和 16 个语言目录校验通过。工具目录差异仅增加 check_back 及相关自动化说明，既有字节预算检查保持。
 
 尚未完成：委派状态及其余自动化、收件箱功能；上述测试不替代跨成员本机和真实镜像验收。团队新增能力继续关闭。
+
+## 委派状态
+
+接入 20aaf4f30，直接读取协调器任务记录：对话中的发送行和收件箱展示同一状态，支持已接单、工作中、等待成员或 Bot、完成、失败。群聊保留原 comm 状态；不修改执行流程和既有权限。状态变化再推送，重启恢复活动跟踪。
+
+补齐上游边界：最近 200 个完成状态也持久保存；成员资料或请求人信息缺失时，仍依照会话实际受众隐藏私聊标题和失败内容。私聊标题在首次写入及广播前隐藏，之后的状态行复查继续保留。简繁中文状态文案已补齐。
+
+2026-11-20 验证：
+
+- `/tmp/donebot-handoff-status-regression.log`：10 文件 / 286 项通过。含任务状态、独立会话/收件箱组件、重启后完成状态、成员信息缺失的隐私边界、写入前隐藏标题、协调器、附件和请求认证。
+- `/tmp/donebot-handoff-status-workflow-final.log`：3 文件 / 20 项真实隔离服务测试通过。Lead → Coder → Writer 无人操作推进及双处同步状态；团队私聊的读取、写入、搜索、附件、SSE 和离队权限；现有委派附件机制回归。
+- `/tmp/donebot-handoff-status-types.log`、`/tmp/donebot-handoff-status-lint.log`、`/tmp/donebot-handoff-status-i18n.log`：typecheck、lint、16 语言校验通过。
+
+其余批次 5 的长 brief、定向回复、完整文件传递、Webhook/自动化与收件箱改进继续实施；真实跨节点团队与手机验收未完成。

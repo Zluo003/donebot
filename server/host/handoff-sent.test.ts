@@ -46,3 +46,11 @@ describe("outsideRoomNote", () => {
     expect(outsideRoomNote(undefined, "direct")).toBe("");
   });
 });
+
+it("omits private titles before the row is saved or broadcast", () => {
+  for (const target of [recipient, sender]) {
+    const row = sentRow({ sender, recipient: target, threadId: "private", title: "confidential salary", private: true, via: "direct" });
+    expect(row.threadRef?.title).toBe("");
+    expect(JSON.stringify(row)).not.toContain("salary");
+  }
+});

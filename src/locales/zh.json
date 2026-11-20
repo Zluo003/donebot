@@ -7890,5 +7890,15 @@
   "server.checkBack.failed": "未能在 {when} 跟进",
   "chat.checkBack.cancel": "取消",
   "chat.checkBack.cancelFailed": "取消失败，请重试。",
-  "activity.tool.team.checkBack": "定时跟进"
+  "activity.tool.team.checkBack": "定时跟进",
+  "chat.handoff.claimed": "已接单",
+  "chat.handoff.working": "工作中",
+  "chat.handoff.waitingOn": "等待 {name}",
+  "chat.handoff.waitingOnTeammate": "等待协作 Bot",
+  "chat.handoff.waitingOnYou": "等待你的回复",
+  "chat.handoff.done": "已完成",
+  "chat.handoff.failed": "失败",
+  "chat.handoff.failedWhy": "失败：{why}",
+  "chat.handoff.for": "{status} · 请求人：{name}",
+  "chat.handoff.forPrivate": "{status} · 请求人：{name}（私聊）"
 }

@@ -33874,7 +33874,17 @@
       "chat.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
       "chat.checkBack.cancel": "19766ed6ccb2f4a32778eed80d1928d2c87a18d7c275ccb163ec6709d3eb2e27",
       "chat.checkBack.cancelFailed": "53e54b214d436f1d7d15adc952c37bff1fae08072df576385e5a585cab11e563",
-      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497"
+      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497",
+      "chat.handoff.claimed": "ddcd2779294a61f056090b2bbc47444816ff791ed0cf9ec295821e82a384ef81",
+      "chat.handoff.working": "a92f0449a9f7235bf69dc2e8ff7070bfae3f00ec8f8f26e5457a9beac53466ac",
+      "chat.handoff.waitingOn": "0490d4688a8b10975f8a699160335c86d886648978b2830e3b5eb9f325186c9b",
+      "chat.handoff.waitingOnTeammate": "58f24027bd3787dd51386feecd1e7cdcb3bc1b3c507b012c9410c0b39952c6cb",
+      "chat.handoff.waitingOnYou": "57dccc5db9b096172f80ed94d7ba1886dbd8ad7c582831c78f0a3e4ab095ceec",
+      "chat.handoff.done": "11a6767d5674c7e45f7e00dc525762275b3a48491ad6045427d2609cc496c516",
+      "chat.handoff.failed": "031a8f0f659df890dfd53c92e45295b0f14c997185bae46e168831e403b273f7",
+      "chat.handoff.failedWhy": "b416b1b54286d7e5e190e45f55302919733eb9d49a4669bd5b48ba0bf6346461",
+      "chat.handoff.for": "9427284f056b533b51d4da44851d78d99e004e34d9570fcda6cf08f4b2424368",
+      "chat.handoff.forPrivate": "7a97280c29860d2f2c718f36f08fb74eb7a4c7b5a40a3408ff0e9ba12ebeae34"
     },
     "zh": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -41540,7 +41550,17 @@
       "chat.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
       "chat.checkBack.cancel": "19766ed6ccb2f4a32778eed80d1928d2c87a18d7c275ccb163ec6709d3eb2e27",
       "chat.checkBack.cancelFailed": "53e54b214d436f1d7d15adc952c37bff1fae08072df576385e5a585cab11e563",
-      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497"
+      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497",
+      "chat.handoff.claimed": "ddcd2779294a61f056090b2bbc47444816ff791ed0cf9ec295821e82a384ef81",
+      "chat.handoff.working": "a92f0449a9f7235bf69dc2e8ff7070bfae3f00ec8f8f26e5457a9beac53466ac",
+      "chat.handoff.waitingOn": "0490d4688a8b10975f8a699160335c86d886648978b2830e3b5eb9f325186c9b",
+      "chat.handoff.waitingOnTeammate": "58f24027bd3787dd51386feecd1e7cdcb3bc1b3c507b012c9410c0b39952c6cb",
+      "chat.handoff.waitingOnYou": "57dccc5db9b096172f80ed94d7ba1886dbd8ad7c582831c78f0a3e4ab095ceec",
+      "chat.handoff.done": "11a6767d5674c7e45f7e00dc525762275b3a48491ad6045427d2609cc496c516",
+      "chat.handoff.failed": "031a8f0f659df890dfd53c92e45295b0f14c997185bae46e168831e403b273f7",
+      "chat.handoff.failedWhy": "b416b1b54286d7e5e190e45f55302919733eb9d49a4669bd5b48ba0bf6346461",
+      "chat.handoff.for": "9427284f056b533b51d4da44851d78d99e004e34d9570fcda6cf08f4b2424368",
+      "chat.handoff.forPrivate": "7a97280c29860d2f2c718f36f08fb74eb7a4c7b5a40a3408ff0e9ba12ebeae34"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -51514,7 +51534,17 @@
       "chat.checkBack.failed": "cab3bc124333339d06dc937a01b485c192040fad067a74e7558db8df3e2b0dda",
       "chat.checkBack.cancel": "19766ed6ccb2f4a32778eed80d1928d2c87a18d7c275ccb163ec6709d3eb2e27",
       "chat.checkBack.cancelFailed": "53e54b214d436f1d7d15adc952c37bff1fae08072df576385e5a585cab11e563",
-      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497"
+      "activity.tool.team.checkBack": "a9016295adbf242d7e966205f0ec872efe9d1f2bc33e20e62d72cfafb4b81497",
+      "chat.handoff.claimed": "ddcd2779294a61f056090b2bbc47444816ff791ed0cf9ec295821e82a384ef81",
+      "chat.handoff.working": "a92f0449a9f7235bf69dc2e8ff7070bfae3f00ec8f8f26e5457a9beac53466ac",
+      "chat.handoff.waitingOn": "0490d4688a8b10975f8a699160335c86d886648978b2830e3b5eb9f325186c9b",
+      "chat.handoff.waitingOnTeammate": "58f24027bd3787dd51386feecd1e7cdcb3bc1b3c507b012c9410c0b39952c6cb",
+      "chat.handoff.waitingOnYou": "57dccc5db9b096172f80ed94d7ba1886dbd8ad7c582831c78f0a3e4ab095ceec",
+      "chat.handoff.done": "11a6767d5674c7e45f7e00dc525762275b3a48491ad6045427d2609cc496c516",
+      "chat.handoff.failed": "031a8f0f659df890dfd53c92e45295b0f14c997185bae46e168831e403b273f7",
+      "chat.handoff.failedWhy": "b416b1b54286d7e5e190e45f55302919733eb9d49a4669bd5b48ba0bf6346461",
+      "chat.handoff.for": "9427284f056b533b51d4da44851d78d99e004e34d9570fcda6cf08f4b2424368",
+      "chat.handoff.forPrivate": "7a97280c29860d2f2c718f36f08fb74eb7a4c7b5a40a3408ff0e9ba12ebeae34"
     },
     "uk": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",

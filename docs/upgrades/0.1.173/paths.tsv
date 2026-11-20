@@ -190,7 +190,7 @@ A	docs/verification/evidence/teams-whats-new/before-menu-desktop-dark.jpg	接入
 A	docs/verification/evidence/teams-whats-new/before-menu-desktop-light.jpg	接入	待核对	待核对
 A	docs/verification/evidence/teams-whats-new/before-phone-dark.jpg	自有适配	7	待核对
 A	docs/verification/evidence/teams-whats-new/before-phone-light.jpg	自有适配	7	待核对
-A	docs/verification/handoff-status.md	接入	5	待核对
+A	docs/verification/handoff-status.md	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	docs/verification/inbox.md	接入	5	待核对
 A	docs/verification/included-hosting.md	接入	待核对	待核对
 A	docs/verification/kimi-models.md	接入	待核对	待核对
@@ -417,7 +417,7 @@ A	packages/phone-protocol/src/environment.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/failed-turn.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/first-reply-rescue.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/group-goal-run.ts	自有适配	7	待核对
-A	packages/phone-protocol/src/handoff-status.ts	自有适配	7	待核对
+A	packages/phone-protocol/src/handoff-status.ts	自有适配	5	已接入；隐私及隔离流程通过；跨节点待验收
 A	packages/phone-protocol/src/helper-followup.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/inbox.ts	自有适配	7	待核对
 A	packages/phone-protocol/src/json.ts	自有适配	7	待核对
@@ -1292,7 +1292,7 @@ M	server/group-local-vm.e2e.test.ts	接入	待核对	待核对
 A	server/group-task-state.ts	接入	待核对	待核对
 A	server/handed-waits.e2e.test.ts	接入	待核对	待核对
 A	server/handoff-files.e2e.test.ts	接入	5	待核对
-A	server/handoff-status.e2e.test.ts	接入	5	待核对
+A	server/handoff-status.e2e.test.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	server/harness-capabilities.ts	接入	待核对	待核对
 M	server/harness/bus.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	server/harness/bus.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -1411,8 +1411,8 @@ A	server/host/handoff-inbox.test.ts	接入	5	待核对
 A	server/host/handoff-inbox.ts	接入	5	待核对
 M	server/host/handoff-sent.test.ts	接入	5	待核对
 M	server/host/handoff-sent.ts	接入	5	待核对
-A	server/host/handoff-status.test.ts	接入	5	待核对
-A	server/host/handoff-status.ts	接入	5	待核对
+A	server/host/handoff-status.test.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
+A	server/host/handoff-status.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	server/host/helper-suggestion.ts	接入	待核对	待核对
 A	server/host/included-hosting.test.ts	接入	待核对	待核对
 A	server/host/included-hosting.ts	接入	待核对	待核对
@@ -2339,7 +2339,7 @@ M	shared/first-reply-rescue.ts	接入	待核对	待核对
 M	shared/grok-import.test.ts	接入	待核对	待核对
 M	shared/grok-import.ts	接入	待核对	待核对
 M	shared/group-goal-run.ts	接入	待核对	待核对
-A	shared/handoff-status.ts	接入	5	待核对
+A	shared/handoff-status.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	shared/helper-followup.ts	接入	待核对	待核对
 M	shared/image-generation.ts	接入	待核对	待核对
 A	shared/import-name.test.ts	接入	待核对	待核对
@@ -2634,8 +2634,8 @@ M	src/components/GroupView.speaker.test.ts	接入	待核对	待核对
 M	src/components/GroupView.tsx	自有适配	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/HandoffReply.test.ts	接入	待核对	待核对
 M	src/components/HandoffReply.tsx	接入	待核对	待核对
-A	src/components/HandoffStatusChip.test.ts	接入	待核对	待核对
-A	src/components/HandoffStatusChip.tsx	接入	待核对	待核对
+A	src/components/HandoffStatusChip.test.ts	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
+A	src/components/HandoffStatusChip.tsx	接入	5	已接入；隐私及隔离流程通过；跨节点待验收
 M	src/components/HelperIntro.test.ts	接入	待核对	待核对
 M	src/components/HelperKeySuggestion.test.ts	接入	待核对	待核对
 M	src/components/HelperKeySuggestion.tsx	接入	待核对	待核对

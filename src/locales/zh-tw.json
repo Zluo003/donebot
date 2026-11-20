@@ -10124,5 +10124,15 @@
   "server.checkBack.failed": "未能在 {when} 跟進",
   "chat.checkBack.cancel": "取消",
   "chat.checkBack.cancelFailed": "取消失敗，請重試。",
-  "activity.tool.team.checkBack": "定時跟進"
+  "activity.tool.team.checkBack": "定時跟進",
+  "chat.handoff.claimed": "已接單",
+  "chat.handoff.working": "工作中",
+  "chat.handoff.waitingOn": "等待 {name}",
+  "chat.handoff.waitingOnTeammate": "等待協作 Bot",
+  "chat.handoff.waitingOnYou": "等待你的回覆",
+  "chat.handoff.done": "已完成",
+  "chat.handoff.failed": "失敗",
+  "chat.handoff.failedWhy": "失敗：{why}",
+  "chat.handoff.for": "{status} · 請求人：{name}",
+  "chat.handoff.forPrivate": "{status} · 請求人：{name}（私聊）"
 }

@@ -35,6 +35,7 @@ export interface McpServersHostDeps {
   start?: McpHealthDeps["start"];
   /** A server's `vault:<id>` keys, read when it is launched or called. */
   keys?: McpKeys;
+  forgetSignIn?(name: string): void;
 }
 
 const CLAIMED_FILE = (dataDir: string) => join(dataDir, "mcp-bot-servers.json");
@@ -151,7 +152,21 @@ export function createMcpServersHost(deps: McpServersHostDeps) {
       const next = withoutBotMcpServers(before, botId);
       if (!next) return;
       deps.persist(next);
-      for (const name of Object.keys(before ?? {})) if (!Object.hasOwn(next, name)) deps.keys?.forgetServer(name);
+      const failures: unknown[] = [];
+      for (const name of Object.keys(before ?? {})) {
+        if (Object.hasOwn(next, name)) continue;
+        try {
+          deps.keys?.forgetServer(name);
+        } catch (error) {
+          failures.push(error);
+        }
+        try {
+          deps.forgetSignIn?.(name);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      if (failures.length) throw failures[0];
     },
     /** At start: the first time bots run boxed here, servers in one existing bot's folders become its own (said once);
      * then every server is checked. A server added after that stays as it was added. */

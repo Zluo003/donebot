@@ -801,7 +801,7 @@ M	server/cloud-computer-tools.test.ts	接入	待核对	待核对
 M	server/cloud-computer-tools.ts	接入	待核对	待核对
 A	server/cloud-computer-unattended.test.ts	接入	待核对	待核对
 A	server/cloud-computer-wake.test.ts	接入	待核对	待核对
-M	server/cloud-connections-stayed.ts	接入	待核对	待核对
+M	server/cloud-connections-stayed.ts	接入	待核对	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 M	server/cloud-credit-provider.ts	接入	待核对	待核对
 M	server/cloud-credit.e2e.test.ts	接入	待核对	待核对
 M	server/cloud-health.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
@@ -1426,10 +1426,10 @@ M	server/host/limit-takeover.ts	接入	待核对	待核对
 M	server/host/login-mail-codes.test.ts	接入	待核对	待核对
 M	server/host/login-mail-codes.ts	接入	待核对	待核对
 M	server/host/loop-guard.ts	接入	待核对	待核对
-M	server/host/mcp-config.test.ts	接入	6	待核对
-M	server/host/mcp-config.ts	接入	6	待核对
-M	server/host/mcp-servers-host.test.ts	接入	6	待核对
-M	server/host/mcp-servers-host.ts	接入	6	待核对
+M	server/host/mcp-config.test.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/host/mcp-config.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/host/mcp-servers-host.test.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/host/mcp-servers-host.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 A	server/host/member-bots.ts	自有适配	2	待核对
 A	server/host/member-uploads.test.ts	自有适配	2	待核对
 M	server/host/member-uploads.ts	自有适配	2	待核对
@@ -1539,7 +1539,7 @@ A	server/included-hosting.e2e.test.ts	接入	待核对	待核对
 M	server/included-services.ts	接入	待核对	待核对
 M	server/independent-task-store.test.ts	接入	待核对	待核对
 M	server/index.test.ts	接入	待核对	待核对
-M	server/index.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
+M	server/index.ts	接入	5	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 M	server/instance-fleets.ts	接入	待核对	待核对
 A	server/job-slots-urgent.test.ts	接入	待核对	待核对
 A	server/job-slots.test.ts	接入	待核对	待核对
@@ -1608,10 +1608,10 @@ M	server/managed-policy.test.ts	接入	待核对	待核对
 M	server/managed-policy.ts	接入	待核对	待核对
 A	server/mcp-app-cancellation.test.ts	接入	6	待核对
 M	server/mcp-app-connections.ts	接入	6	待核对
-M	server/mcp-bot-rules.test.ts	接入	6	待核对
-M	server/mcp-bot-rules.ts	接入	6	待核对
-M	server/mcp-bot-servers.test.ts	接入	6	待核对
-M	server/mcp-bot-servers.ts	接入	6	待核对
+M	server/mcp-bot-rules.test.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/mcp-bot-rules.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/mcp-bot-servers.test.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/mcp-bot-servers.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 A	server/mcp-bridge.spawn.test.ts	接入	6	待核对
 M	server/mcp-bridge.ts	接入	6	待核对
 A	server/mcp-empty-event.test.ts	接入	6	待核对
@@ -1638,8 +1638,8 @@ M	server/mcp-oauth.ts	自有适配	2	部分接入并验证（MCP 授权/环境/�
 M	server/mcp-probe.test.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
 M	server/mcp-probe.ts	接入	6	部分接入并验证（MCP 授权/环境/分页，其他差异待核对）
 A	server/mcp-proxy-cidr.test.ts	接入	6	待核对
-M	server/mcp-registry.test.ts	接入	6	待核对
-M	server/mcp-registry.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
+M	server/mcp-registry.test.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/mcp-registry.ts	接入	4	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 M	server/mcp-remote-proxy.test.ts	接入	6	待核对
 M	server/mcp-remote-proxy.ts	接入	6	待核对
 M	server/mcp-result-budget.ts	接入	6	待核对
@@ -1710,7 +1710,7 @@ M	server/own-home.test.ts	接入	待核对	待核对
 M	server/own-home.ts	接入	待核对	待核对
 M	server/package-export.test.ts	接入	待核对	待核对
 M	server/package-export.ts	接入	待核对	待核对
-M	server/package-import.ts	接入	待核对	待核对
+M	server/package-import.ts	接入	待核对	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 M	server/pages/access.ts	接入	待核对	待核对
 M	server/pages/bundle.ts	接入	待核对	待核对
 M	server/parallel-threads.e2e.test.ts	接入	待核对	待核对
@@ -1896,8 +1896,8 @@ M	server/routes/image-tools.ts	接入	待核对	待核对
 M	server/routes/inbox.test.ts	自有适配	5	收件箱置顶/完成/已读/上下文与定位已核对并验证，其他差异待核对
 M	server/routes/inbox.ts	自有适配	5	收件箱置顶/完成/已读/上下文与定位已核对并验证，其他差异待核对
 M	server/routes/instances.ts	接入	待核对	待核对
-M	server/routes/internal-mcp.test.ts	接入	6	待核对
-M	server/routes/internal-mcp.ts	接入	6	待核对
+M	server/routes/internal-mcp.test.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/routes/internal-mcp.ts	接入	6	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 M	server/routes/internal-models.test.ts	接入	待核对	待核对
 M	server/routes/internal-models.ts	接入	待核对	待核对
 M	server/routes/internal-threads.test.ts	接入	待核对	待核对
@@ -2046,7 +2046,7 @@ A	server/server-update.ts	接入	待核对	待核对
 M	server/server-writes.e2e.test.ts	接入	待核对	待核对
 M	server/sessions.test.ts	接入	待核对	待核对
 M	server/sessions.ts	接入	待核对	待核对
-M	server/setup-import.ts	接入	待核对	待核对
+M	server/setup-import.ts	接入	待核对	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
 M	server/setup-mode.test.ts	接入	待核对	待核对
 M	server/setup-mode.ts	接入	待核对	待核对
 M	server/setup-suggestions.test.ts	接入	待核对	待核对

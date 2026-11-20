@@ -57,3 +57,7 @@ or code exchange, and the existing automatic loopback callback.
 `server/mcp-environment.test.ts`、`server/mcp-gate.test.ts` 和
 `server/mcp-tool-schema.test.ts`。设置面板 fixture 为浏览器代理创建并清理
 短 socket 临时目录，不使用用户浏览器或用户凭据。
+
+`server/mcp-ownership.e2e.test.ts` 用两个合成 Bot 和同一 loopback OAuth 服务，
+验证并发登录、每 Bot 挂载、其它 Bot 管理操作的拒绝及删除后的令牌清理。
+公开新增 MCP 保持共享默认，专用归属由管理员的已有编辑接口设置。

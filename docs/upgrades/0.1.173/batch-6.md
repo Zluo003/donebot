@@ -34,3 +34,18 @@
 - `/tmp/donebot-mcp-reliability-types.log`、`/tmp/donebot-mcp-reliability-lint.log`：类型和 lint 通过。
 
 未访问真实 OAuth 账号或用户应用。npm 权限路径覆盖为单元环境与真实命令子进程测试，不替代真实 Linux 团队隔离。
+
+## MCP 专用连接及名额
+
+接入 8db69909c、b57c6c098、1d53cbb99 和 88d0d4327。HTTP/SSE 连接复用命令连接的 bot 归属，列表和执行挂载均按 Bot 过滤；其它 Bot 即使伪造 bot 字段，也不能测试、登录、注销、修改、删除、重启或切换该连接。管理员通过已有编辑接口设置归属；公开新增接口保持原版共享默认。修改预算等字段保留归属和同一 OAuth 授权。
+
+每 Bot 最多 20 个可用连接（共享加专用），安装合计最多 100 个；新增、编辑归属、JSON 导入、安装包导入和既有配置导入共用检查。Bot 私有程序的归属由真实工作目录推导，不能由 Bot 请求自行指定。删除 Bot 会取消待完成登录并清除其 OAuth；清理某项密码库或命令规则失败时仍继续其它连接和保存登录的清理，不影响其它 Bot 的连接。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-mcp-ownership-units.log`：9 文件 / 260 项通过，覆盖名额、归属、修改、导入和密码库失败清理。
+- `/tmp/donebot-mcp-ownership-workflow-final.log`：新增真实隔离流程通过。两个 Bot 同时登录同一服务、各自取得不同凭据，回合仅挂载自己的连接；另一 Bot 的八种管理操作均拒绝且不触达提供方；删除取消待登录回调，同名重建不继承令牌。
+- `/tmp/donebot-mcp-ownership-workflows.log`：已有登录卡及开启审批四项流程通过；同次新增流程的初始 fixture 假设失败已由上述最终证据替代。
+- `/tmp/donebot-mcp-ownership-types-final.log`、`/tmp/donebot-mcp-ownership-lint.log`：类型和定向 lint 通过。
+
+本项不宣称 DoneBot 团队 Cloud 的执行授权已完成，相关能力继续关闭。

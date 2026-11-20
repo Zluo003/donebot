@@ -30,8 +30,8 @@ export interface BotRowProps {
   showThreads?: boolean;
 }
 
-export function botRowProps(
-  state: AppState,
+export function botRowProps<State extends Pick<AppState, "activeView" | "selectedId" | "revealThread" | "deletingBots" | "mascotMotion" | "pendingQueued" | "instances" | "liveCall" | "config">>(
+  state: State,
   dispatch: Dispatch<Action>,
   bot: Bot,
   layout: Pick<BotRowProps, "density" | "query" | "onMenu" | "renameRequest" | "botDrag" | "botDrop" | "botDragging" | "advancedLayout" | "showThreads">,

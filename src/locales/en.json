@@ -10374,5 +10374,6 @@
   "pause.resumeAll": "Resume every bot",
   "pause.byAll": "Paused with every bot: resume every bot",
   "pause.badge": "Paused",
-  "routines.botHeld": "Its bot is paused, so this routine won’t run until the bot is resumed."
+  "routines.botHeld": "Its bot is paused, so this routine won’t run until the bot is resumed.",
+  "server.skill.targetBot": "Target bot: {name} ({id})"
 }

@@ -7851,5 +7851,6 @@
   "pause.resumeAll": "恢复所有 Bot",
   "pause.byAll": "所有 Bot 均已暂停，请从此菜单恢复。",
   "pause.badge": "已暂停",
-  "routines.botHeld": "此 Bot 已暂停，恢复后才能运行此自动化。"
+  "routines.botHeld": "此 Bot 已暂停，恢复后才能运行此自动化。",
+  "server.skill.targetBot": "目标 Bot：{name}（{id}）"
 }

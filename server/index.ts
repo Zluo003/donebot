@@ -11349,7 +11349,7 @@ function appendSkillRequestCard(args: {
     from: from ? { botId: from.id, name: from.name, color: from.color } : undefined,
     card: {
       title: copy.title,
-      subtitle: `${args.targetBotId ? `Target bot: ${args.targetBotName} (${args.targetBotId})\n\n` : ""}${copy.subtitle}`,
+      subtitle: `${args.targetBotId ? `${serverLine(conversationLanguage(args.threadId), "server.skill.targetBot", { name: args.targetBotName ?? args.targetBotId, id: args.targetBotId })}\n\n` : ""}${copy.subtitle}`,
       options: args.applied ? [] : [args.staged.action === "create" ? "Enable" : "Update", "Deny"],
       ...(args.applied ? { answered: "allow", autoApplied: true, title: `Skill "${args.staged.name}" ${args.staged.action === "create" ? "enabled" : "updated"}` } : {}),
       requestId,

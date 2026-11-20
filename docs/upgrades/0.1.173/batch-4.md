@@ -18,9 +18,11 @@
 
 暂停子批验证（2026-11-20）：
 
-- 12 文件 402 项中 401 项通过；唯一失败是未改动的两处技能卡片 `Target bot` 英文未本地化（`server-lines.test.ts`），已记录留待设置/技能子批修复，无新增豁免。其余 11 文件全部通过。日志 `/tmp/donebot-pause-final-tests.log`。
+- 12 文件 402 项中 401 项通过；唯一失败是未改动的两处技能卡片 `Target bot` 英文未本地化（`server-lines.test.ts`），后续独立修复已将两处目标 Bot 标题接入会话语言，未新增豁免。其余 11 文件全部通过。日志 `/tmp/donebot-pause-final-tests.log`。
 - 真实临时 home/data 服务使用挂起假引擎，4 个流程通过：停止单 Bot、部门暂停及改名、全部暂停与新增 Bot/恢复/停止全部、活动群聊中断与恢复。日志 `/tmp/donebot-pause-room.log`。此前界面 10 文件 326 项通过，新增群聊流程随后单独验证。
 - `scripts/verify-donebot-teams.ts` 重新运行通过：Member 对暂停及停止接口得到 403，Owner 可读取；未签名 loopback 及跨团队拒绝继续通过。日志 `/tmp/donebot-pause-team-auth.log`。
 - `pnpm lint`、`pnpm typecheck`、`node scripts/generate-locale.mjs --check` 通过。中文新增全部暂停相关文案及占位符检查通过。
 
 这些测试不替代批次 8 的真实 Linux、Windows、手机及多执行节点验收。
+
+技能卡片本地化回归修复：`server-lines.test.ts` 与 `skill-switch-host.test.ts` 2 文件 17 项通过，lint、typecheck、16 语言目录检查通过。日志 `/tmp/donebot-skill-card-locale-tests.log`。

@@ -13,7 +13,7 @@ import { UNDO_STALE, type DirectApply } from "../direct-apply.ts";
 import { setImportedSkillEnabled } from "../imported-skills.ts";
 import { applySkillWriteWithReceipt, listSkills, readSkillFile, readSkillReferences, rejectStagedSkillWrite, removeSkill, setSkillEnabled, stageSkillWrite } from "../skills.ts";
 import { skillSwitchCardCopy, skillSwitchStillMatches, skillSwitchTarget, type SkillSwitchTarget, type SwitchableSkill } from "../skill-switch.ts";
-import { conversationLanguage } from "../server-lines.ts";
+import { conversationLanguage, serverLine } from "../server-lines.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
 
 export interface SkillSwitchHostDeps {
@@ -105,7 +105,7 @@ export function createSkillSwitchHost(deps: SkillSwitchHostDeps) {
       from: from ? { botId: from.id, name: from.name, color: from.color } : undefined,
       card: {
         title: copy.title,
-        subtitle: `${args.targetBotId ? `Target bot: ${args.targetBotName} (${args.targetBotId})\n\n` : ""}${copy.subtitle}`,
+        subtitle: `${args.targetBotId ? `${serverLine(conversationLanguage(args.threadId), "server.skill.targetBot", { name: args.targetBotName ?? args.targetBotId, id: args.targetBotId })}\n\n` : ""}${copy.subtitle}`,
         options: applied ? [] : [copy.option, "Deny"],
         ...(applied ? { answered: "allow" as const, autoApplied: true, title: copy.done } : {}),
         requestId,

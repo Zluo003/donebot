@@ -169,12 +169,38 @@ describe("Simple mode's bot menu", () => {
     point(more(), 200);
     await wait(320);
     expect(flyout()).not.toBeNull();
-    expect([...flyout()!.querySelectorAll("button")].map((node) => node.textContent)).toEqual(["Edit profile", "Make Chief of Staff", "Duplicate", "Delete all conversations…"]);
+    expect([...flyout()!.querySelectorAll("button")].map((node) => node.textContent)).toEqual(["Edit profile", "Pause bot", "Pause every bot", "Make Chief of Staff", "Duplicate", "Delete all conversations…"]);
     point(pin, 80);
     await wait(20);
     expect(flyout()).toBeNull();
     flushSync(() => more().click());
     await wait(20);
     expect(flyout()).not.toBeNull();
+  });
+});
+
+
+describe("pause controls", () => {
+  it("offers pause and resume for every bot in the advanced menu", async () => {
+    const request = vi.fn(async () => new Response(JSON.stringify({ stopped: 0 }), { headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", request);
+    draw();
+    flushSync(() => button("Pause every bot").click());
+    await expect.poll(() => request.mock.calls.length).toBe(1);
+    expect(JSON.parse(String((request.mock.calls[0] as unknown as [unknown, RequestInit])[1].body))).toEqual({ kind: "all", paused: true });
+    state = { ...state, config: { ...state.config, pausedByPerson: { bots: [], departments: [], all: true }, heldBots: [bot.id] } as NonNullable<AppState["config"]> };
+    draw();
+    expect(button("Pause bot").disabled).toBe(true);
+    expect(button("Pause bot").title).toBeTruthy();
+    flushSync(() => button("Resume every bot").click());
+    await expect.poll(() => request.mock.calls.length).toBe(2);
+    expect(JSON.parse(String((request.mock.calls[1] as unknown as [unknown, RequestInit])[1].body))).toEqual({ kind: "all", paused: false });
+  });
+
+  it("hides pause controls from thread-pinned remote clients", () => {
+    window.ogb = { remoteClient: { active: true } } as typeof window.ogb;
+    draw();
+    expect(button("Pause bot")).toBeUndefined();
+    expect(button("Pause every bot")).toBeUndefined();
   });
 });

@@ -7838,5 +7838,18 @@
   "server.room.still": "仍在等待服务器资源。当前运行：{running} 个任务，前面还有 {ahead} 个。",
   "server.room.turns": "正在排队：服务器最多同时运行 {limit} 个任务，前面还有 {ahead} 个。任务结束后会自动开始。",
   "server.room.turnsStill": "仍在排队：服务器最多同时运行 {limit} 个任务，前面还有 {ahead} 个。",
-  "chat.notice.outOfProcesses": "服务器暂时无法启动新进程（{code}），此任务未能运行。未向 AI 发送请求，资源可用后会自动重试。"
+  "chat.notice.outOfProcesses": "服务器暂时无法启动新进程（{code}），此任务未能运行。未向 AI 发送请求，资源可用后会自动重试。",
+  "server.botHeld": "{bot} 已暂停。请在侧栏菜单中恢复后再继续。",
+  "server.botHeldDepartment": "{bot} 所在的 {department} 部门已暂停。请在部门菜单中恢复后再继续。",
+  "server.botHeldAll": "所有 Bot 均已暂停，{bot} 暂不接受新任务。请在侧栏 Bot 菜单中恢复后再继续。",
+  "pause.pauseBot": "暂停 Bot",
+  "pause.resumeBot": "恢复 Bot",
+  "pause.pauseDepartment": "暂停部门",
+  "pause.resumeDepartment": "恢复部门",
+  "pause.byDepartment": "此 Bot 随部门暂停，请从部门菜单恢复。",
+  "pause.pauseAll": "暂停所有 Bot",
+  "pause.resumeAll": "恢复所有 Bot",
+  "pause.byAll": "所有 Bot 均已暂停，请从此菜单恢复。",
+  "pause.badge": "已暂停",
+  "routines.botHeld": "此 Bot 已暂停，恢复后才能运行此自动化。"
 }

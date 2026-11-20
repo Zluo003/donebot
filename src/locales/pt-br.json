@@ -10221,5 +10221,18 @@
   "server.room.still": "Ainda aguardando espaço neste servidor. Tarefas em execução: {running}. À frente desta: {ahead}.",
   "server.room.turns": "Aguardando a vez: este servidor roda {limit} tarefas ao mesmo tempo. À frente desta: {ahead}. Ela começa sozinha quando uma terminar.",
   "server.room.turnsStill": "Ainda aguardando: este servidor roda {limit} tarefas ao mesmo tempo. À frente desta: {ahead}.",
-  "chat.notice.outOfProcesses": "Não há espaço para iniciar outro programa ({code}), então esta tarefa não pôde rodar. Nada foi enviado à IA. Ela começa de novo sozinha quando houver espaço."
+  "chat.notice.outOfProcesses": "Não há espaço para iniciar outro programa ({code}), então esta tarefa não pôde rodar. Nada foi enviado à IA. Ela começa de novo sozinha quando houver espaço.",
+  "server.botHeld": "{bot} está pausado e não recebe trabalho novo. Retome-o pelo menu dele na barra lateral.",
+  "server.botHeldDepartment": "{bot} está pausado junto com o departamento {department} e não recebe trabalho novo. Retome o departamento pelo menu dele na barra lateral.",
+  "server.botHeldAll": "Todos os bots estão pausados, então {bot} não recebe trabalho novo. Retome todos os bots pelo menu de qualquer bot na barra lateral.",
+  "pause.pauseBot": "Pausar bot",
+  "pause.resumeBot": "Retomar bot",
+  "pause.pauseDepartment": "Pausar departamento",
+  "pause.resumeDepartment": "Retomar departamento",
+  "pause.byDepartment": "Pausado junto com o departamento: retome o departamento",
+  "pause.pauseAll": "Pausar todos os bots",
+  "pause.resumeAll": "Retomar todos os bots",
+  "pause.byAll": "Pausado junto com todos os bots: retome todos os bots",
+  "pause.badge": "Pausado",
+  "routines.botHeld": "O bot está pausado, então esta rotina não roda até ele ser retomado."
 }

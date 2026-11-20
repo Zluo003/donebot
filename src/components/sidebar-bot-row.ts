@@ -1,3 +1,4 @@
+import { isBotHeld } from "@/lib/bot-pause";
 import type { Dispatch } from "react";
 import type { Action, AppState, Bot, InstanceInfo } from "@/state/store";
 import { llmThreadTitlesEnabled } from "@/lib/feature-flags";
@@ -11,6 +12,7 @@ export interface BotRowProps {
   bot: Bot;
   selected: boolean;
   deleting: boolean;
+  held?: boolean;
   mascotMotion: AppState["mascotMotion"];
   reveal: AppState["revealThread"];
   pendingQueued: AppState["pendingQueued"];
@@ -43,6 +45,7 @@ export function botRowProps<State extends Pick<AppState, "activeView" | "selecte
     bot,
     selected,
     deleting: state.deletingBots[bot.id] === true,
+    held: isBotHeld(state.config, bot.id),
     mascotMotion: selected && state.mascotMotion?.botId === bot.id ? state.mascotMotion : null,
     reveal: reveal && (bot.threadId === reveal.threadId || bot.tasks?.some((task) => task.threadId === reveal.threadId)) ? reveal : null,
     pendingQueued: state.pendingQueued,

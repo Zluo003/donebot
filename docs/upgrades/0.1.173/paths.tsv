@@ -126,7 +126,7 @@ M	docs/image-generation.md	接入	待核对	待核对
 M	docs/ios-companion.md	接入	待核对	待核对
 M	docs/mcp-server.md	接入	6	待核对
 A	docs/multi-device.md	接入	待核对	待核对
-A	docs/pausing-bots.md	接入	待核对	待核对
+A	docs/pausing-bots.md	接入	4	暂停/恢复已接入并隔离验证
 A	docs/phone-push.md	自有适配	7	待核对
 M	docs/phone-relay-server.md	自有适配	7	待核对
 M	docs/phone-web-app.md	自有适配	7	待核对
@@ -689,7 +689,7 @@ M	server/bot-moves.test.ts	接入	待核对	待核对
 M	server/bot-moves.ts	接入	待核对	待核对
 M	server/bot-overview.test.ts	接入	待核对	待核对
 M	server/bot-overview.ts	接入	待核对	待核对
-A	server/bot-pause.e2e.test.ts	接入	4	待核对
+A	server/bot-pause.e2e.test.ts	接入	4	暂停/恢复已接入并隔离验证
 M	server/bot-projects-api.test.ts	接入	待核对	待核对
 A	server/bot-thread-frames.e2e.test.ts	接入	待核对	待核对
 M	server/bot-thread-limits.ts	接入	待核对	待核对
@@ -1353,8 +1353,8 @@ M	server/host/bot-access-gate.ts	接入	4	待核对
 A	server/host/bot-footprint-owners.ts	接入	待核对	待核对
 A	server/host/bot-frames.test.ts	接入	待核对	待核对
 A	server/host/bot-frames.ts	接入	待核对	待核对
-A	server/host/bot-holds.test.ts	接入	待核对	待核对
-A	server/host/bot-holds.ts	接入	待核对	待核对
+A	server/host/bot-holds.test.ts	接入	4	暂停/恢复已接入并隔离验证
+A	server/host/bot-holds.ts	接入	4	暂停/恢复已接入并隔离验证
 A	server/host/bot-link-host.ts	自有适配	3	待核对
 A	server/host/bot-link-rooms.ts	自有适配	3	待核对
 A	server/host/bot-memory-cap-host.ts	接入	待核对	待核对
@@ -1539,7 +1539,7 @@ A	server/included-hosting.e2e.test.ts	接入	待核对	待核对
 M	server/included-services.ts	接入	待核对	待核对
 M	server/independent-task-store.test.ts	接入	待核对	待核对
 M	server/index.test.ts	接入	待核对	待核对
-M	server/index.ts	自有适配	4	流式/长历史子集已接入；其余目标差异继续核对
+M	server/index.ts	自有适配	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
 M	server/instance-fleets.ts	接入	待核对	待核对
 A	server/job-slots-urgent.test.ts	接入	待核对	待核对
 A	server/job-slots.test.ts	接入	待核对	待核对
@@ -1847,7 +1847,7 @@ A	server/routes/app-hosting.ts	接入	待核对	待核对
 A	server/routes/app-settings.test.ts	接入	6	待核对
 A	server/routes/app-settings.ts	接入	6	待核对
 M	server/routes/bot-access.ts	接入	4	待核对
-A	server/routes/bot-holds.ts	接入	待核对	待核对
+A	server/routes/bot-holds.ts	接入	4	暂停/恢复已接入并隔离验证
 M	server/routes/bot-lifecycle.ts	接入	待核对	待核对
 A	server/routes/bot-link.ts	自有适配	3	待核对
 M	server/routes/bot-messages-apps.test.ts	接入	4	待核对
@@ -2702,7 +2702,7 @@ A	src/components/OtherPlaceBots.tsx	接入	待核对	待核对
 M	src/components/PageBoundary.tsx	接入	待核对	待核对
 A	src/components/PairedPhones.remove.dom.test.ts	接入	待核对	待核对
 M	src/components/PairedPhones.tsx	接入	待核对	待核对
-A	src/components/PauseMenus.dom.test.ts	接入	待核对	待核对
+A	src/components/PauseMenus.dom.test.ts	接入	4	暂停/恢复已接入并隔离验证
 A	src/components/PeerExchange.test.ts	接入	待核对	待核对
 A	src/components/PeerExchange.tsx	接入	待核对	待核对
 M	src/components/PendingApproval.command-allowlist.test.ts	接入	待核对	待核对
@@ -2798,13 +2798,13 @@ A	src/components/Sidebar.pinned-show-all.dom.test.ts	接入	待核对	待核对
 M	src/components/Sidebar.plus-menu.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/Sidebar.simple-layout.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/Sidebar.simple-mode.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
-M	src/components/Sidebar.tsx	自有适配	4	流式/长历史子集已接入；其余目标差异继续核对
+M	src/components/Sidebar.tsx	自有适配	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
 M	src/components/SidebarBotActivity.test.ts	接入	待核对	待核对
 M	src/components/SidebarBotActivity.tsx	接入	待核对	待核对
 M	src/components/SidebarBotListItem.expansion.test.ts	接入	待核对	待核对
 M	src/components/SidebarBotListItem.test.ts	接入	待核对	待核对
-M	src/components/SidebarBotMenu.tsx	接入	待核对	待核对
-M	src/components/SidebarBotRead.test.ts	接入	待核对	待核对
+M	src/components/SidebarBotMenu.tsx	接入	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
+M	src/components/SidebarBotRead.test.ts	接入	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
 A	src/components/SidebarBotThreadsPeek.dom.test.ts	接入	待核对	待核对
 A	src/components/SidebarBotThreadsPeek.test.ts	接入	待核对	待核对
 A	src/components/SidebarBotThreadsPeek.tsx	接入	待核对	待核对
@@ -2829,7 +2829,7 @@ M	src/components/SidebarRowMarkers.tsx	接入	待核对	待核对
 M	src/components/SidebarSectionHeader.naming.dom.test.ts	接入	待核对	待核对
 M	src/components/SidebarSectionHeader.test.ts	接入	待核对	待核对
 M	src/components/SidebarSectionHeader.tsx	接入	待核对	待核对
-M	src/components/SidebarTeamMenu.tsx	接入	待核对	待核对
+M	src/components/SidebarTeamMenu.tsx	接入	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
 A	src/components/SidebarThreadRow.ime.test.ts	接入	待核对	待核对
 M	src/components/SidebarThreadRow.test.ts	接入	待核对	待核对
 M	src/components/SidebarThreadRow.tsx	接入	待核对	待核对
@@ -3104,7 +3104,7 @@ A	src/lib/avatar-marks.ts	接入	待核对	待核对
 M	src/lib/bot-duplicate.test.ts	接入	待核对	待核对
 M	src/lib/bot-duplicate.ts	接入	待核对	待核对
 M	src/lib/bot-overview-text.ts	接入	待核对	待核对
-A	src/lib/bot-pause.ts	接入	4	待核对
+A	src/lib/bot-pause.ts	接入	4	暂停/恢复已接入并隔离验证
 M	src/lib/bot-presets.test.ts	接入	待核对	待核对
 M	src/lib/bottom-follow.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/lib/bottom-follow.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -3346,7 +3346,7 @@ A	src/state/bot-read.ts	接入	4	流式/长历史子集已接入；其余目标�
 A	src/state/bot-thread-frame.test.ts	接入	待核对	待核对
 A	src/state/bot-thread-frame.ts	接入	待核对	待核对
 M	src/state/card-answer-recovery.test.ts	接入	待核对	待核对
-M	src/state/config-status.ts	接入	待核对	待核对
+M	src/state/config-status.ts	接入	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
 A	src/state/fork-panel.test.ts	接入	4	待核对
 A	src/state/fork-panel.ts	接入	4	待核对
 A	src/state/frame-batching.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -3366,7 +3366,7 @@ A	src/state/store-context.ts	接入	4	流式/长历史子集已接入；其余�
 A	src/state/store-select.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/state/store-select.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/state/store.test.ts	接入	待核对	待核对
-M	src/state/store.tsx	自有适配	4	流式/长历史子集已接入；其余目标差异继续核对
+M	src/state/store.tsx	自有适配	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
 M	src/state/task-write-recovery.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/state/team-launch.test.ts	接入	待核对	待核对
 M	src/state/team-people.test.ts	自有适配	2	待核对

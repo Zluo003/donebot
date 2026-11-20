@@ -682,7 +682,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
   const visible = useVisibleMessages(bot);
   const last = lastNonReceipt(visible);
   const title = bot.title.trim();
-  const details = [title, bot.chiefOfStaff ? t("sidebar.bot.chiefOfStaff") : ""].filter(Boolean);
+  const details = [props.held ? t("pause.badge") : "", title, bot.chiefOfStaff ? t("sidebar.bot.chiefOfStaff") : ""].filter(Boolean);
   const rowClass = cn(
     "flex w-full items-center rounded-xl text-left transition-colors duration-150", SIMPLE_ROW_FOCUS,
     iconOnly
@@ -773,6 +773,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
               </Phone>
             )}
             {!simpleList && title && !renaming && <SidebarBotRole role={title} />}
+            {props.held && !renaming && <span className="shrink-0 text-[11px] font-normal text-ink-secondary" data-bot-held>{t("pause.badge")}</span>}
           </span>
           {last && !renaming && !expanded && (
             <span className={cn(

@@ -3494,5 +3494,8 @@
   "server.room.still": "Wartet weiter auf Platz auf diesem Server. Läuft gerade: {running}. Davor in der Reihe: {ahead}.",
   "server.room.turns": "Wartet auf einen Platz: Dieser Server führt {limit} Aufgaben gleichzeitig aus. Davor in der Reihe: {ahead}. Es startet von selbst, sobald eine fertig ist.",
   "server.room.turnsStill": "Wartet noch: Dieser Server führt {limit} Aufgaben gleichzeitig aus. Davor in der Reihe: {ahead}.",
-  "chat.notice.outOfProcesses": "Es ist kein Platz, um ein weiteres Programm zu starten ({code}), deshalb konnte diese Aufgabe nicht laufen. An die KI wurde nichts gesendet. Sie startet von selbst neu, sobald Platz ist."
+  "chat.notice.outOfProcesses": "Es ist kein Platz, um ein weiteres Programm zu starten ({code}), deshalb konnte diese Aufgabe nicht laufen. An die KI wurde nichts gesendet. Sie startet von selbst neu, sobald Platz ist.",
+  "server.botHeld": "{bot} ist pausiert und nimmt keine neue Arbeit an. Setze ihn über sein Menü in der Seitenleiste fort.",
+  "server.botHeldDepartment": "{bot} ist mit der Abteilung {department} pausiert und nimmt keine neue Arbeit an. Setze die Abteilung über ihr Menü in der Seitenleiste fort.",
+  "server.botHeldAll": "Alle Bots sind pausiert, daher nimmt {bot} keine neue Arbeit an. Setze alle Bots über das Menü eines beliebigen Bots in der Seitenleiste fort."
 }

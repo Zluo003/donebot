@@ -42,6 +42,10 @@ try {
     assert.equal((await call("/api/bots", "member", "GET", { team_id: randomUUID() })).status, 401);
     assert.equal((await call("/api/donebot/account", "owner")).status, 403);
     assert.deepEqual(await (await call("/api/auth/stream-ticket", "member", "POST")).json(), { ticket: null });
+    for (const path of ["/api/paused", "/api/turns/stop"]) {
+      assert.equal((await call(path, "member", "POST")).status, 403);
+    }
+    assert.equal((await call("/api/paused", "owner")).status, 200);
     results.runtime = "passed";
   } finally { await runtime.close(); }
   writeFileSync(fixture.info.logPath + ".teams.json", JSON.stringify(results, null, 2));

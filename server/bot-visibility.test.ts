@@ -327,6 +327,36 @@ describe("a Team Cloud's audiences", () => {
   const open = bots.map(({ visibility: _v, ...bot }) => bot);
   const openGroups = [{ id: "room-pub", threadId: "t-room-pub", memberIds: ["pub"], tasks: [{ threadId: "t-room-pub-2" }] }];
 
+  it.each([BOB, BEN_ADMIN])("withholds private busy locations from HTTP, live and initial room frames for $kind", (viewer) => {
+    const visible = new VisibleSet(open, openGroups, viewer, undefined, { of: audienceOf, person: BEN_KEY });
+    const queue = [
+      { botId: "pub", threadId: "t-room-pub", state: "queued", busyIn: { threadId: "t-pub-2" } },
+      { botId: "pub", threadId: "t-room-pub", state: "queued", busyIn: { threadId: "t-pub" } },
+      { botId: "pub", threadId: "t-room-pub", state: "queued", busyIn: { groupId: "room-pub", threadId: "t-room-pub-2" } },
+      { botId: "pub", threadId: "t-room-pub", state: "queued", busyIn: { groupId: "secret-room", threadId: "t-pub-2" } },
+    ];
+    const group = { id: "room-pub", audienceFloor: "everyone", queue };
+    const shown = { ...group, queue: queue.map((entry, index) => {
+      if (index === 1 || index === 2) return entry;
+      const { busyIn: _busy, ...rest } = entry;
+      return { ...rest, busyElsewhere: true };
+    }) };
+    if (viewer.kind === "member") delete (shown as { audienceFloor?: unknown }).audienceFloor;
+    for (const body of [{ group }, { groups: [group] }, { result: { group } }]) {
+      const sent = memberBody(body, visible);
+      expect(JSON.stringify(sent)).not.toMatch(/t-pub-2|secret-room/);
+      expect(sent).toEqual("group" in body ? { group: shown } : "groups" in body ? { groups: [shown] } : { result: { group: shown } });
+    }
+    const ctx: FrameContext = { visible, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => group };
+    for (const groups of [new Set<string>(), new Set(["room-pub"])]) {
+      const sent = frameForMember({ kind: "group", group }, ctx, { bots: new Set(), groups });
+      expect(sent).toEqual({ kind: "group", group: shown });
+      expect(JSON.stringify(sent)).not.toMatch(/t-pub-2|secret-room/);
+    }
+    expect(group.queue).toBe(queue);
+    expect(queue[0]?.busyIn).toEqual({ threadId: "t-pub-2" });
+  });
+
   it("a member sees the team's conversations, the rooms they see and their own; never another member's", () => {
     const ada = new VisibleSet(open, openGroups, ADA, undefined, { of: audienceOf, person: ADA_KEY });
     expect(ada.everything).toBe(false);

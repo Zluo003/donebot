@@ -10446,5 +10446,10 @@
   "chat.unreadContext.title": "Previous message",
   "inbox.settled.title": "Finished",
   "chat.unreadContext.files": "File",
-  "inbox.markAllRead": "Mark all as read"
+  "inbox.markAllRead": "Mark all as read",
+  "room.queue.busyIn": "Busy in {place} · queued ({position} of {of}), starts when it finishes",
+  "room.queue.busyElsewhere": "Busy in another conversation · queued ({position} of {of}), starts when it finishes",
+  "room.queue.busyInAfter": "Busy in {place} · queued after {name} ({position} of {of}), starts when both finish",
+  "room.queue.busyElsewhereAfter": "Busy in another conversation · queued after {name} ({position} of {of}), starts when both finish",
+  "room.queue.aTeammate": "a teammate"
 }

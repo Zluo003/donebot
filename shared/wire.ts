@@ -922,6 +922,10 @@ export interface RoomQueueEntry {
   of: number;
   /** Who a queued member waits on: the member running now, else the one speaking (or the one ahead). */
   waitingForBotId?: string;
+  /** The visible room or own conversation where this member is currently running. */
+  busyIn?: { groupId?: string; threadId: string };
+  /** Busy in a conversation this viewer cannot access; its identifiers are withheld. */
+  busyElsewhere?: true;
   assignmentId?: string;
 }
 

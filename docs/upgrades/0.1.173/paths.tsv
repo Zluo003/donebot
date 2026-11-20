@@ -586,8 +586,8 @@ M	server/admin-activity.e2e.test.ts	接入	待核对	待核对
 M	server/admin-activity.test.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/admin-activity.ts	接入	4	已核对；见 batch-4.md 批量设置与工具权限继承
 M	server/admin-audit-plan.ts	接入	待核对	待核对
-M	server/admission-golden.test.ts	接入	待核对	待核对
-M	server/admission.ts	接入	待核对	待核对
+M	server/admission-golden.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+M	server/admission.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 M	server/agent-tool-policy.test.ts	接入	待核对	待核对
 M	server/agents-bridge-gates.test.ts	接入	待核对	待核对
 M	server/agents-bridge-names.ts	接入	待核对	待核对
@@ -694,8 +694,8 @@ M	server/bot-projects-api.test.ts	接入	待核对	待核对
 A	server/bot-thread-frames.e2e.test.ts	接入	待核对	待核对
 M	server/bot-thread-limits.ts	接入	待核对	待核对
 M	server/bot-visibility.e2e.test.ts	接入	待核对	待核对
-M	server/bot-visibility.test.ts	接入	待核对	待核对
-M	server/bot-visibility.ts	接入	待核对	待核对
+M	server/bot-visibility.test.ts	接入	待核对	待核对；批5 定向回复/排队隐私已接入，其余差异待核对
+M	server/bot-visibility.ts	接入	待核对	待核对；批5 定向回复/排队隐私已接入，其余差异待核对
 A	server/bounded-file-read.test.ts	接入	6	待核对
 A	server/box-cpus.ts	接入	待核对	待核对
 M	server/brand.test.ts	接入	待核对	待核对
@@ -752,8 +752,8 @@ A	server/cache-keepwarm-target.test.ts	接入	待核对	待核对
 M	server/cache-keepwarm.ts	接入	待核对	待核对
 A	server/calendar-transparency.test.ts	接入	待核对	待核对
 M	server/card-answerers.e2e.test.ts	接入	待核对	待核对
-M	server/channel-queue.test.ts	接入	待核对	待核对
-M	server/channel-queue.ts	接入	待核对	待核对
+M	server/channel-queue.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+M	server/channel-queue.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 M	server/chat-notices.test.ts	接入	4	待核对
 M	server/chat-notices.ts	接入	4	待核对
 M	server/chat-widgets.test.ts	接入	4	待核对
@@ -1462,8 +1462,8 @@ A	server/host/representative-calendar-limit.test.ts	接入	待核对	待核对
 A	server/host/representative-wait.test.ts	接入	待核对	待核对
 M	server/host/representative.ts	接入	待核对	待核对
 M	server/host/room-access.ts	接入	待核对	待核对
-A	server/host/room-jobs.test.ts	接入	待核对	待核对
-M	server/host/room-jobs.ts	接入	待核对	待核对
+A	server/host/room-jobs.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+M	server/host/room-jobs.ts	自有适配	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 M	server/host/room-reads.test.ts	接入	待核对	待核对
 M	server/host/room-reads.ts	接入	待核对	待核对
 M	server/host/room-sessions.test.ts	接入	待核对	待核对
@@ -1539,7 +1539,7 @@ A	server/included-hosting.e2e.test.ts	接入	待核对	待核对
 M	server/included-services.ts	接入	待核对	待核对
 M	server/independent-task-store.test.ts	接入	待核对	待核对
 M	server/index.test.ts	接入	待核对	待核对
-M	server/index.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/index.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
 M	server/instance-fleets.ts	接入	待核对	待核对
 A	server/job-slots-urgent.test.ts	接入	待核对	待核对
 A	server/job-slots.test.ts	接入	待核对	待核对
@@ -1828,17 +1828,17 @@ M	server/room-coordination.e2e.test.ts	接入	待核对	待核对
 A	server/room-pages-point.e2e.test.ts	接入	待核对	待核对
 A	server/room-pointed.test.ts	接入	待核对	待核对
 A	server/room-pointed.ts	接入	待核对	待核对
-M	server/room-queue.e2e.test.ts	接入	待核对	待核对
-M	server/room-queue.test.ts	接入	待核对	待核对
-M	server/room-queue.ts	接入	待核对	待核对
-A	server/room-quoted-replies.e2e.test.ts	接入	待核对	待核对
+M	server/room-queue.e2e.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+M	server/room-queue.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+M	server/room-queue.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+A	server/room-quoted-replies.e2e.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	server/room-round-turns.test.ts	接入	待核对	待核对
 M	server/room-round-turns.ts	接入	待核对	待核对
 A	server/room-routing-members.test.ts	自有适配	2	待核对
-A	server/room-routing-members.ts	自有适配	2	待核对
-A	server/room-steer-addressee.e2e.test.ts	接入	待核对	待核对
-A	server/room-steer-addressee.test.ts	接入	待核对	待核对
-A	server/room-steer-addressee.ts	接入	待核对	待核对
+A	server/room-routing-members.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+A	server/room-steer-addressee.e2e.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+A	server/room-steer-addressee.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+A	server/room-steer-addressee.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	server/room-stop-id.e2e.test.ts	接入	待核对	待核对
 A	server/room-turns-per-member.e2e.test.ts	自有适配	2	待核对
 A	server/routes/announcements.ts	自有适配	7	待核对
@@ -1866,7 +1866,7 @@ M	server/routes/burst.test.ts	接入	待核对	待核对
 M	server/routes/burst.ts	接入	待核对	待核对
 A	server/routes/call-route.test.ts	接入	待核对	待核对
 A	server/routes/call-route.ts	接入	待核对	待核对
-M	server/routes/channels.ts	接入	待核对	待核对
+M	server/routes/channels.ts	接入	待核对	待核对；批5 定向回复/排队隐私已接入，其余差异待核对
 A	server/routes/check-backs.test.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	server/routes/check-backs.ts	接入	5	已接入并通过隔离回归；手机/真实镜像待批次8
 A	server/routes/cli-login.test.ts	接入	待核对	待核对
@@ -1936,7 +1936,7 @@ A	server/routes/team-slack.ts	接入	待核对	待核对
 M	server/routes/teams.ts	接入	待核对	待核对
 A	server/routes/threads-one-bot.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	server/routes/threads-page-leaf.test.ts	接入	待核对	待核对
-M	server/routes/threads.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
+M	server/routes/threads.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对；批5 定向回复/排队隐私已接入，其余差异待核对
 M	server/routes/tts.test.ts	接入	待核对	待核对
 M	server/routes/tts.ts	接入	待核对	待核对
 M	server/routes/update-check.test.ts	接入	待核对	待核对
@@ -2439,7 +2439,7 @@ M	shared/widget-chart.ts	接入	待核对	待核对
 M	shared/widget-text.ts	接入	待核对	待核对
 M	shared/widget.ts	接入	待核对	待核对
 M	shared/wire-tool.ts	接入	待核对	待核对
-M	shared/wire.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
+M	shared/wire.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对；批5 定向回复/排队隐私已接入，其余差异待核对
 M	shared/your-computer.test.ts	接入	待核对	待核对
 M	shared/your-computer.ts	接入	待核对	待核对
 A	skills/openmausbot-docs/SKILL.md	接入	6	待核对
@@ -2628,7 +2628,7 @@ M	src/components/GroupCallView.tsx	接入	待核对	待核对
 M	src/components/GroupView.auto.test.ts	接入	待核对	待核对
 A	src/components/GroupView.live-reply.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/GroupView.message-actions.test.ts	接入	4	待核对
-M	src/components/GroupView.queue.test.ts	接入	待核对	待核对
+M	src/components/GroupView.queue.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	src/components/GroupView.render-count.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/GroupView.speaker.test.ts	接入	待核对	待核对
 M	src/components/GroupView.tsx	自有适配	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -2750,8 +2750,8 @@ M	src/components/RichTable.fit.test.ts	接入	待核对	待核对
 M	src/components/RoomClusterLabel.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/components/RoomFarMembers.dom.test.ts	接入	待核对	待核对
 A	src/components/RoomFarMembers.tsx	接入	待核对	待核对
-M	src/components/RoomHeader.tsx	接入	待核对	待核对
-M	src/components/RoomQueueList.tsx	接入	待核对	待核对
+M	src/components/RoomHeader.tsx	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+M	src/components/RoomQueueList.tsx	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 A	src/components/RoomTextMessage.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/RoomTurnTimeoutSettings.tsx	接入	待核对	待核对
 A	src/components/RoutineCalendarPage.ime.test.ts	接入	待核对	待核对
@@ -3245,8 +3245,8 @@ A	src/lib/room-addressees.test.ts	接入	4	流式/长历史子集已接入；其
 A	src/lib/room-addressees.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/lib/room-setup.ts	接入	待核对	待核对
 M	src/lib/room-speaker.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
-M	src/lib/room-threads.test.ts	接入	待核对	待核对
-M	src/lib/room-threads.ts	接入	待核对	待核对
+M	src/lib/room-threads.test.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
+M	src/lib/room-threads.ts	接入	5	定向回复及忙碌排队；隔离工作流通过，平台验收待完成
 M	src/lib/routine-display.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/lib/routines.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/lib/run-card-preferences.ts	接入	待核对	待核对
@@ -3315,7 +3315,7 @@ A	src/lib/window-prefs.ts	接入	待核对	待核对
 A	src/locales/command-words.test.ts	接入	待核对	待核对
 M	src/locales/de.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/departments.test.ts	接入	待核对	待核对
-M	src/locales/en.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/en.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
 M	src/locales/es.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/everyday-words.test.ts	接入	待核对	待核对
 M	src/locales/fr.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
@@ -3324,7 +3324,7 @@ M	src/locales/it.json	接入	5	026dd777a 调度可靠性已接入；通用准备
 M	src/locales/ja.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/ko.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/pl.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
-M	src/locales/pt-br.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/pt-br.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
 M	src/locales/ru.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/server-lines.test.ts	接入	待核对	待核对
 A	src/locales/settings-words.test.ts	接入	6	待核对
@@ -3333,8 +3333,8 @@ M	src/locales/tr.json	接入	5	026dd777a 调度可靠性已接入；通用准备
 M	src/locales/uk.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/vi.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/vocabulary.test.ts	接入	待核对	待核对
-M	src/locales/zh-tw.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
-M	src/locales/zh.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/zh-tw.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
+M	src/locales/zh.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
 M	src/main.tsx	接入	待核对	待核对
 A	src/state/always-allow-save.test.ts	接入	待核对	待核对
 A	src/state/app-store.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对

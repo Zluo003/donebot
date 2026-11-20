@@ -95,3 +95,18 @@ DoneBot 将结果通知产生时的消息编号持久保存，后续回复和重
 - `/tmp/donebot-inbox-overlay-types-1121.log`、`/tmp/donebot-inbox-lint-1121.log`、`/tmp/donebot-inbox-i18n-1121.log`：类型、lint、16 个语言目录校验。
 
 尚未验证真实长历史滚动、原生手机、跨工作空间切换以及跨成员本机执行。剩余长 brief、定向回复、跨节点协作和最终平台验收继续实施；团队新增能力保持关闭。
+
+## 定向回复与忙碌排队
+
+接入固定上游 45fdc09f9、1310f7611、f836bc67c、3a04350c7、0cd7b5910 及 a765ea999 至 c8e8ebfd4 的排队修复。回复 Bot 消息优先由该 Bot 回答，明确点名优先；不同引用目标不合并排队。自动路由排除全局暂停和房间暂停的 Bot，保留可用备用及目标任务原协调者。未指名的插话不注入他人正在执行的委派任务。
+
+排队提示同时说明当前等待成员和 Bot 实际忙碌位置，不把尚未轮到的房间当作运行位置。DoneBot 在 HTTP、首次实时推送和重连回放均按会话受众过滤 busyIn；Owner 和 Admin 也不能取得其他成员的私聊编号。无法访问的位置只发送 busyElsewhere，不依赖前端隐藏名称。保持当前协调器 API 和共享协议布局。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-room-routing-units-final.log`：8 文件 / 96 项通过，包含路由、排队合并、准入、忙碌状态、HTTP/SSE 过滤及界面提示。
+- `/tmp/donebot-room-routing-workflows-final.log`：3 文件 / 31 个真实隔离服务测试通过。包含引用目标、暂停与目标协调者、插话不串任务、同房间串行与并行任务、其他房间忙碌及队列清空。
+- `/tmp/donebot-room-routing-privacy-workflow.log`：真实 Team fixture 通过。Owner、Admin、另一 Member 的 HTTP 列表、实时帧和回放没有私聊编号；本人仍可见其忙碌位置。
+- `/tmp/donebot-room-routing-types-complete.log`、`/tmp/donebot-room-routing-lint-final.log`、`/tmp/donebot-room-routing-i18n-final.log`：类型、lint、16 语言目录校验通过。
+
+尚未验证真实手机和跨节点行为；长 brief 与其余批次继续实施，团队新增能力保持关闭。

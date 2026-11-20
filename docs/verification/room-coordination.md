@@ -471,3 +471,12 @@ now explicitly require real coordination receipts for named-bot participation;
 this is guidance, not a guarantee that every model report is truthful. The
 explicit nested run proves actual recipient execution, not merely a plausible
 final summary. These live results do not establish every provider's quality.
+
+## Reply routing and busy locations
+
+```sh
+pnpm exec vitest run server/room-steer-addressee.e2e.test.ts server/room-quoted-replies.e2e.test.ts server/room-queue.e2e.test.ts server/room-queue-private.e2e.test.ts
+pnpm exec vitest run server/bot-visibility.test.ts server/channel-queue.test.ts server/admission-golden.test.ts server/room-steer-addressee.test.ts server/host/room-jobs.test.ts server/room-queue.test.ts src/lib/room-threads.test.ts src/components/GroupView.queue.test.ts
+```
+
+Disposable local and Team fixtures verify reply targets survive batching, paused members are excluded from Auto routing, unnamed steer does not enter another member's handed task, and queued jobs identify actual running work. Busy private conversation identifiers are withheld from HTTP lists, live events and replay even for the Owner/Admin; only the private chat's member gets its location. These fixtures do not qualify native mobile or cross-node execution.

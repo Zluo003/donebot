@@ -487,11 +487,24 @@ export function memberFramePayload(payload: Record<string, unknown>): Record<str
   return bot && typeof bot === "object" && "vpsAlias" in bot ? { ...payload, bot: withoutServerAlias(bot) } : payload;
 }
 
-/** A room as a member receives it: without its audience floor. */
-export function memberGroup<T extends object>(group: T): T {
-  if (!("audienceFloor" in group)) return group;
-  const { audienceFloor: _floor, ...rest } = group as T & { audienceFloor?: unknown };
-  return rest as T;
+export function memberGroup<T extends object>(group: T, visible: VisibleSet): T {
+  const record = group as T & Record<string, unknown>;
+  let out = record;
+  if (!visible.everything && visible.member && "audienceFloor" in record) {
+    const { audienceFloor: _floor, ...rest } = record;
+    out = rest as typeof record;
+  }
+  if (visible.everything || !Array.isArray(record.queue)) return out;
+  const original = record.queue;
+  const queue = original.map((entry: unknown) => {
+    if (!entry || typeof entry !== "object" || !("busyIn" in entry)) return entry;
+    const place = entry.busyIn as { groupId?: unknown; threadId?: unknown } | null;
+    if (place && typeof place.threadId === "string" && visible.thread(place.threadId) &&
+      (place.groupId === undefined || (typeof place.groupId === "string" && visible.group(place.groupId)))) return entry;
+    const { busyIn: _place, ...rest } = entry;
+    return { ...rest, busyElsewhere: true };
+  });
+  return queue.some((entry, index) => entry !== original[index]) ? { ...out, queue } : out;
 }
 
 export function memberBody(body: unknown, visible: VisibleSet): unknown {
@@ -501,16 +514,14 @@ export function memberBody(body: unknown, visible: VisibleSet): unknown {
     const record = value as Record<string, unknown>;
     let out: Record<string, unknown> | null = null;
     for (const [key, child] of Object.entries(record)) {
-      // A member who can see every bot and room, and an admin, are sent the rooms as they are; bots still narrow.
-      if ((visible.everything || !visible.member) && (key === "group" || key === "groups")) continue;
       let next = child;
       if (key === "bot" && child && typeof child === "object" && !Array.isArray(child)) next = memberBot(child, visible);
       else if (key === "bots" && Array.isArray(child)) {
         const shown = child.map((bot) => (bot && typeof bot === "object" ? memberBot(bot as object, visible) : bot));
         if (shown.some((bot, index) => bot !== child[index])) next = shown;
-      } else if (key === "group" && child && typeof child === "object" && !Array.isArray(child)) next = memberGroup(child);
+      } else if (key === "group" && child && typeof child === "object" && !Array.isArray(child)) next = memberGroup(child, visible);
       else if (key === "groups" && Array.isArray(child)) {
-        next = child.map((group) => (group && typeof group === "object" ? memberGroup(group as object) : group));
+        next = child.map((group) => (group && typeof group === "object" ? memberGroup(group as object, visible) : group));
       } else if (depth > 0 && key !== "messages" && child && typeof child === "object" && !Array.isArray(child)) next = narrow(child, depth - 1);
       if (next !== child) (out ??= { ...record })[key] = next;
     }
@@ -565,14 +576,13 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
         if (!seen.groups.delete(id)) return undefined;
         return { kind: "group.deleted", groupId: id };
       }
-      // An admin's copy of a room keeps its audience floor.
-      const asSent = (record: Record<string, unknown>) => (visible.member ? memberGroup(record) : record);
       if (!seen.groups.has(id)) {
         seen.groups.add(id);
         const fresh = ctx.freshGroup(id);
-        if (fresh) return { ...payload, group: asSent({ ...fresh, ...group }) };
+        if (fresh) return { ...payload, group: memberGroup({ ...fresh, ...group }, visible) };
       }
-      return visible.member && "audienceFloor" in group ? { ...payload, group: memberGroup(group) } : payload;
+      const shown = memberGroup(group, visible);
+      return shown === group ? payload : { ...payload, group: shown };
     }
     case "group.deleted":
       return seen.groups.delete(str(payload.groupId)) ? payload : undefined;

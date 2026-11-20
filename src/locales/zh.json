@@ -7927,5 +7927,10 @@
   "chat.unreadContext.title": "之前的消息",
   "inbox.settled.title": "已完成",
   "chat.unreadContext.files": "文件",
-  "inbox.markAllRead": "全部标为已读"
+  "inbox.markAllRead": "全部标为已读",
+  "room.queue.aTeammate": "一位队友",
+  "room.queue.busyIn": "正在 {place} 工作 · 排队中（{position}/{of}），完成后开始",
+  "room.queue.busyElsewhere": "正在其他会话工作 · 排队中（{position}/{of}），完成后开始",
+  "room.queue.busyInAfter": "正在 {place} 工作 · 排在 {name} 之后（{position}/{of}），两项工作完成后开始",
+  "room.queue.busyElsewhereAfter": "正在其他会话工作 · 排在 {name} 之后（{position}/{of}），两项工作完成后开始"
 }

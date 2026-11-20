@@ -111,7 +111,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         groups: store.groups.filter((g) => visible.group(g.id)).map((g) => {
           const group = publicGroupState(g);
           const room = { ...(deps.groupFor?.(auth, group) ?? group), ...messagePage(g.threadId, limit) };
-          return visible.everything || !visible.member ? room : memberGroup(room);
+          return memberGroup(room, visible);
         }),
         computerControl: Object.fromEntries(
           shownBots.map((bot) => {

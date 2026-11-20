@@ -10153,5 +10153,10 @@
   "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start.",
   "inbox.settled.read": "已讀",
   "inbox.settled.title": "已完成",
-  "inbox.markAllRead": "全部標示為已讀"
+  "inbox.markAllRead": "全部標示為已讀",
+  "room.queue.aTeammate": "一位隊友",
+  "room.queue.busyIn": "正在 {place} 工作 · 排隊中（{position}/{of}），完成後開始",
+  "room.queue.busyElsewhere": "正在其他對話工作 · 排隊中（{position}/{of}），完成後開始",
+  "room.queue.busyInAfter": "正在 {place} 工作 · 排在 {name} 之後（{position}/{of}），兩項工作完成後開始",
+  "room.queue.busyElsewhereAfter": "正在其他對話工作 · 排在 {name} 之後（{position}/{of}），兩項工作完成後開始"
 }

@@ -10278,5 +10278,10 @@
   "chat.unreadContext.title": "Mensagem anterior",
   "inbox.settled.title": "Concluído",
   "chat.unreadContext.files": "Arquivo",
-  "inbox.markAllRead": "Marcar tudo como lido"
+  "inbox.markAllRead": "Marcar tudo como lido",
+  "room.queue.busyIn": "Ocupado em {place} · na fila ({position} de {of}), começa quando terminar",
+  "room.queue.busyElsewhere": "Ocupado em outra conversa · na fila ({position} de {of}), começa quando terminar",
+  "room.queue.busyInAfter": "Ocupado em {place} · na fila depois de {name} ({position} de {of}), começa quando os dois terminarem",
+  "room.queue.busyElsewhereAfter": "Ocupado em outra conversa · na fila depois de {name} ({position} de {of}), começa quando os dois terminarem",
+  "room.queue.aTeammate": "um colega"
 }

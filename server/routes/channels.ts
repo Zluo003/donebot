@@ -27,7 +27,8 @@ import type { RoutineManager } from "../routines.ts";
 import { acceptedSendMatch, parseSendId, sendFingerprint, type SendSequencer } from "../send-idempotency.ts";
 import type { SkillReview } from "../skill-review.ts";
 import { assertWithinBudget } from "../spend.ts";
-import type { BotRecord, GroupRecord, GroupTaskPatch, Message, Store } from "../store.ts";
+import { mentionedBots, type BotRecord, type GroupRecord, type GroupTaskPatch, type Message, type Store } from "../store.ts";
+import { roomLeadId, steerMeantForSpeaker } from "../room-steer-addressee.ts";
 import type { ThreadStarters } from "../thread-starters.ts";
 import { extractSteerImages } from "../turn-images.ts";
 import type { UsageTrigger } from "../usage-ledger.ts";
@@ -97,6 +98,7 @@ export interface ChannelRouteDeps {
   ): Message;
   applyRoomHoldsFromMessage(groupId: string, text: string, mentions?: readonly string[]): void;
   cancelGroupTurnOperations(groupId: string, threadId: string): void;
+  speakerOnHandedWork(threadId: string, botId: string): boolean;
   drainQueuedChannelSends(): void;
   clearTurnDigestState(threadId: string): void;
   closeOpenApprovals(threadId: string): void;
@@ -114,7 +116,7 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
     groupWithThread, updateChannel, groupIsWorking, groupThreadIsWorking, readCursor, pageSize, messagePage,
     resolveReplyTarget, runningTurnInstance, startGroupTurn, engineSteersImages, applyRoomHoldsFromMessage, cancelGroupTurnOperations,
     drainQueuedChannelSends, clearTurnDigestState, closeOpenApprovals, revokeInternalCapabilitiesForThread,
-    stagedSkillCleanupsForThread, rejectDeletedThreadSkillStages,
+    stagedSkillCleanupsForThread, rejectDeletedThreadSkillStages, speakerOnHandedWork,
   } = deps; const owners = routeRunOwners(deps.runOwners, deps.runActor);
   const DESKTOP_MANAGED = deps.desktopManaged;
   const deleteRefusal = (auth: RequestAuth, groupId: string, threadId: string): { status: 403 | 404 | 409; error: string } | null => {
@@ -502,8 +504,16 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
         return json(res, 403, { error: waitsItsTurn, code: "waits_its_turn" });
       }
       const steerInput = extractSteerImages(headGroup.map((item) => item.text));
+      const members = current.memberIds.map((id) => store.bot(id)).filter((bot): bot is BotRecord => Boolean(bot));
+      const mentioned = [...new Set(headGroup.flatMap((item) => mentionedBots(item.text, members, item.mentions ?? []).map((bot) => bot.id)))];
       const decision = admit("room-steer", {
         speakerPresent: Boolean(speaker),
+        speakerAddressed: !speaker || steerMeantForSpeaker({
+          speakerId: speaker.id,
+          mentioned,
+          leadId: roomLeadId(current.defaultResponder),
+          speakerOnHandedWork: speakerOnHandedWork(targetThreadId, speaker.id),
+        }),
         engineCanSteer: Boolean(instance?.adapter.capabilities.queueing && instance.adapter.steer),
         carriesImages: !steerInput || steerInput.images.length > 0,
         engineCanSteerImages: Boolean(steerInput) && engineSteersImages(instance),

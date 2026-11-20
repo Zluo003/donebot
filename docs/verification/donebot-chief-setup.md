@@ -68,7 +68,7 @@ in the main command and 8 avatar-editor tests passed. Lint, locale validation
 and production build passed. Evidence is in
 `.omb-scratch/verify-evidence/donebot-chief-{local,cloud,prompt}.json`, with
 screenshots in `output/playwright/donebot-chief-*.png`. A wider run of
-`BotSettingsDialog.simple.test.ts` still has an unrelated assertion expecting
+`src/components/BotSettingsDialog.simple.test.ts` still has an unrelated assertion expecting
 three profile tabs when the existing UI exposes the Artifacts tab as well.
 The fixtures do not prove a deployed Cloud image, native Electron permissions
 or actual provider adherence to personality preferences.

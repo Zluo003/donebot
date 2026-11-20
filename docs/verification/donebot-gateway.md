@@ -337,7 +337,7 @@ fixture 仍为首轮直接提交、能力查询 0 次、图片付费 POST 1 次�
 
 ## 软件内购买算力（2026-11-18）
 
-设置中的「购买算力」复用 DoneBot-api 的账号 JWT 和 `/api/v1/payment/` 接口，仅开放支付宝和微信。服务端读取 `config`、`checkout-info` 和余额充值订单；真实 `methods` 响应通过是否包含对应支付方式表示启用状态，不要求 `available` 或 `daily_remaining` 字段。金额、手续费、优惠和最终入账仍由网关结算。
+设置中的「购买算力」复用 DoneBot-api 的账号 JWT 和 `https://donebot.cn/api/v1/payment/` 接口，仅开放支付宝和微信。服务端读取 `config`、`checkout-info` 和余额充值订单；真实 `methods` 响应通过是否包含对应支付方式表示启用状态，不要求 `available` 或 `daily_remaining` 字段。金额、手续费、优惠和最终入账仍由网关结算。
 
 ```sh
 pnpm exec vitest run server/donebot/payments.test.ts src/donebot/Payments.dom.test.ts src/components/SettingsModal.simple.test.ts server/donebot-payments.e2e.test.ts src/components/SettingsModal.groups.test.ts --maxWorkers=1

@@ -41,7 +41,7 @@ DONEBOT_UI_E2E=1 pnpm exec vitest run scripts/testing/inbox-upgrade-ui.e2e.test.
 pnpm exec vitest run server/cloud-team-inbox.e2e.test.ts server/place-inbox.e2e.test.ts
 ```
 
-The unread-context card shows the person's previous question only when it is outside the initial viewport or rendered history window. `src/components/UnreadContextOverlay.dom.test.ts` checks visible questions stay hidden, jump targets, Escape/Close for one visit and conversation changes. Citation and attachment rendering are covered by `UnreadContextCard.test.ts` and `src/lib/unread-context.test.ts`. These DOM checks do not prove long-history scrolling in a real browser or native mobile behavior.
+The unread-context card shows the person's previous question only when it is outside the initial viewport or rendered history window. `src/components/UnreadContextOverlay.dom.test.ts` checks visible questions stay hidden, jump targets, Escape/Close for one visit and conversation changes. Citation and attachment rendering are covered by `src/components/UnreadContextCard.test.ts` and `src/lib/unread-context.test.ts`. These DOM checks do not prove long-history scrolling in a real browser or native mobile behavior.
 
 ## The rail, in a real build
 

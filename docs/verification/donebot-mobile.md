@@ -39,7 +39,7 @@ pnpm exec vitest run server/donebot/installation-identity.test.ts src/state/stor
 
 在网关项目运行 `DONEBOT_MOBILE_PG_FIXTURE=1 go -C backend test -tags integration ./internal/mobilehub -run 'TestPostgres(Reinstall|DeviceNames|DevicePresence)' -count=1 -v`，
 覆盖真实凭据轮换 SQL、旧连接授权撤销、禁止跨账号重绑、UTF-8 名称与离线列表。
-手机项目的 `tests/controller.test.ts` 和 `tests/workspace-picker.test.ts` 覆盖同名设备保留、
+手机项目的 [手机测试 controller](https://github.com/Zluo003/DoneBot-Mobile/blob/main/tests/controller.test.ts) 和 [手机测试 workspace-picker](https://github.com/Zluo003/DoneBot-Mobile/blob/main/tests/workspace-picker.test.ts) 覆盖同名设备保留、
 离线标识、移除失败及退出登录后的迟到响应。这些检查使用合成数据，不代表已验证实体 iPhone 重装。
 
 ## 手机移除离线电脑与恢复连接
@@ -58,7 +58,7 @@ pnpm exec vitest run server/donebot/installation-identity.test.ts src/state/stor
 PATH=/opt/homebrew/opt/postgresql@17/bin:$PATH DONEBOT_MOBILE_PG_FIXTURE=1 DONEBOT_MOBILE_DESKTOP_ROOT=/Users/zluo/Dev/DoneBot DONEBOT_MOBILE_RELAY_ROOT=/Users/zluo/Dev/DoneBot-Relay go -C ../donebot-api/backend test -tags integration ./internal/mobilehub -run '^TestPostgres(Remove|DesktopMobileWorkflow)' -count=1 -v -timeout 150s
 ```
 
-手机 `tests/session.test.ts` 核对删除路径和在线冲突文案，`tests/controller.test.ts` 检查
+手机 [session 测试](https://github.com/Zluo003/DoneBot-Mobile/blob/main/tests/session.test.ts) 核对删除路径和在线冲突文案，[手机测试 controller](https://github.com/Zluo003/DoneBot-Mobile/blob/main/tests/controller.test.ts) 检查
 失败/离线/Cloud 拒绝、移除后的旧刷新响应、后续正常发现和退出登录隔离。
 
 ## Cloud 安装凭据

@@ -60,7 +60,7 @@ LLM 输出是脚本化参数，这证明工具和传输接线，不证明真实�
 ## 2026-11-18 统一协议回归记录
 
 - 客户端协议、首备、工具指导与路由，加上慢推理 notice 的聊天／状态／侧栏过滤：8 个测试文件、143 项通过。
-- `media-settings.e2e.test.ts`：6 项通过；临时 HOME／工作区中启动真实服务和 Gemini 工具传输，loopback 合成网关创建任务并返回原会话附件，没有真实收费调用。运行证据保存在上述 result.json，含 fixture 的独立日志路径。
+- `server/donebot/media-settings.e2e.test.ts`：6 项通过；临时 HOME／工作区中启动真实服务和 Gemini 工具传输，loopback 合成网关创建任务并返回原会话附件，没有真实收费调用。运行证据保存在上述 result.json，含 fixture 的独立日志路径。
 - `pnpm typecheck` 通过。
 - 网关 service／handler 专项命令通过，包含普通 Key 图片创建→统一结果→越权拒绝、普通 Key 视频创建→查询→下载等待→越权拒绝、持久任务协议标记恢复与图层元数据。
 - 本记录不表示生产网关或已安装桌面已更新，不证明真实供应商接受了请求。

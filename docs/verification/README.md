@@ -201,7 +201,7 @@ media downloads through an isolated production request handler.
 The [published Cloud image record](cloud-images-2026-11-17-attachments.md) identifies the
 verified image digests and the controlled upgrade procedure for existing nodes;
 the [attachment resume image record](cloud-images-2026-11-17.md) and the
-[earlier image record](cloud-images-2026-11-16.md) remain available for history.
+[earlier image record](cloud-images-2026-11-16.md) and [initial image record](cloud-images-2026-11-15.md) remain available for history.
 
 The [loading screen and tray smoke](startup-tray.md) checks the startup close
 button, hidden handoff, tray restore, and Quit in a disposable Electron profile.

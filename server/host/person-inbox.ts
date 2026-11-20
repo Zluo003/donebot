@@ -243,10 +243,9 @@ export function createPersonInbox(deps: PersonInboxDeps) {
   const mark = (threadId: string) => { changedAt.set(threadId, Math.max(now(), (changedAt.get(threadId) ?? 0) + 1)); };
   const touch = (threadId: string) => { mark(threadId); deps.changed?.(threadId); };
 
-  /** The tab a line is listed in: an ask by its card where it was asked, anything else by its answer or the person's done. */
   function tabOf(item: Item, copy?: Message): InboxTab {
     if (item.kind === "ask" && item.requestId) return askWaits(item, copy) ? "needs-you" : "done";
-    return item.done || settled(item) ? "done" : "info";
+    return item.done || settled(item) || (item.kind === "result" && item.seen === true) ? "done" : "info";
   }
 
   /** How many asks in this inbox wait on its person: questions, approvals and work handed on, open here and where they
@@ -277,6 +276,11 @@ export function createPersonInbox(deps: PersonInboxDeps) {
     };
   }
 
+  const focusOf = (threadId: string): { messageId?: string } => {
+    const newest = store.messagesFor(threadId).at(-1)?.id;
+    return newest ? { messageId: newest } : {};
+  };
+
   function deliver(to: string, delivery: Delivery): Item | null {
     const at = home(to);
     const origin = delivery.origin;
@@ -287,7 +291,7 @@ export function createPersonInbox(deps: PersonInboxDeps) {
     }
     const wire: InboxItem = {
       kind: delivery.kind, from: delivery.from, ...(delivery.via ? { via: delivery.via } : {}),
-      ...(origin && deps.sees(to, origin.threadId) ? { origin: { ...origin, title: titleOf(origin) } } : {}),
+      ...(origin && deps.sees(to, origin.threadId) ? { origin: { ...origin, title: titleOf(origin), ...(origin.messageId ? {} : focusOf(origin.threadId)) } } : {}),
       ...(delivery.to ? { replies: true as const } : {}),
       ...(delivery.assistant ? { assistant: true as const } : {}),
     };
@@ -503,6 +507,14 @@ export function createPersonInbox(deps: PersonInboxDeps) {
       if (!item) return false;
       if (!item.seen) { item.seen = true; save(); touch(item.threadId); }
       return true;
+    },
+    markAllRead(person: string): number {
+      const unread = items.filter((item) => item.person === person && !item.seen && !settled(item));
+      if (!unread.length) return 0;
+      for (const item of unread) item.seen = true;
+      save();
+      for (const inbox of new Set(unread.map((item) => item.threadId))) touch(inbox);
+      return unread.length;
     },
     /** The person wrote in a conversation: their inbox's list changes when a message from there waited on them. */
     wrote(person: string, threadId: string): void {

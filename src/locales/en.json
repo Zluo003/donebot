@@ -10439,5 +10439,12 @@
   "routines.server.part.notStarted": "the previous run of this routine has not started yet",
   "routines.server.part.computerNoStart": "its cloud desktop has not started, so its next tries are spaced out",
   "server.routines.turnedBackOn": "Turned back on: {names}. An earlier version switched it off after its cloud desktop failed to start.",
-  "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start."
+  "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start.",
+  "chat.unreadContext.moreCitations": "and {count} more",
+  "chat.unreadContext.images": "Image",
+  "inbox.settled.read": "Read",
+  "chat.unreadContext.title": "Previous message",
+  "inbox.settled.title": "Finished",
+  "chat.unreadContext.files": "File",
+  "inbox.markAllRead": "Mark all as read"
 }

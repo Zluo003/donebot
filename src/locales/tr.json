@@ -5616,5 +5616,8 @@
   "routines.server.part.notStarted": "the previous run of this routine has not started yet",
   "routines.server.part.computerNoStart": "its cloud desktop has not started, so its next tries are spaced out",
   "server.routines.turnedBackOn": "Turned back on: {names}. An earlier version switched it off after its cloud desktop failed to start.",
-  "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start."
+  "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start.",
+  "inbox.settled.read": "Okundu",
+  "inbox.settled.title": "Tamamlandı",
+  "inbox.markAllRead": "Tümünü okundu olarak işaretle"
 }

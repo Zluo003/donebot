@@ -32,7 +32,7 @@ export const PLACE_MESSAGES_HOURLY = 10;
 
 const id = z.string().min(1).max(512);
 const lineSchema = z.object({
-  id, botId: id, threadId: id, groupId: id.optional(), kind: z.enum(["message", "result", "notice"]),
+  id, botId: id, threadId: id, groupId: id.optional(), messageId: id.optional(), kind: z.enum(["message", "result", "notice"]),
   from: z.string().max(200), workingFor: z.object({ botId: id, name: z.string().max(200) }).optional(),
   /** The guest whose conversation this is: it is theirs, not the owner's. */
   guest: id.optional(),
@@ -121,7 +121,8 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     return false;
   }
 
-  const lineTab = (line: Line): InboxRow["tab"] => (line.done || answeredThere(line) ? "done" : "info");
+  const readWork = (line: Line): boolean => line.kind === "result" && line.seen === true;
+  const lineTab = (line: Line): InboxRow["tab"] => (line.done || answeredThere(line) || readWork(line) ? "done" : "info");
   const lineFor = (auth: RequestAuth, line: Line): boolean => {
     const viewer = deps.viewer(auth);
     if (viewer.kind === "nobody" || !deps.sees(auth, line.threadId)) return false;
@@ -170,18 +171,26 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     return [...rows.values()];
   }
 
-  const lineRow = (line: Line): InboxRow => ({
-    id: line.id, kind: line.kind, tab: lineTab(line), from: { name: line.from, botId: line.botId }, ...(line.workingFor ? { workingFor: line.workingFor } : {}),
-    origin: { botId: line.botId, threadId: line.threadId, title: titleOf(line.botId, line.threadId), ...(line.groupId ? { groupId: line.groupId } : {}), messageId: line.id },
-    text: clip(line.text, ROW_TEXT_MAX), at: line.at, unread: !line.seen, ...(line.kind === "message" ? { replies: true as const } : {}),
-  });
+  const focusOf = (line: Line): string | undefined => line.kind === "message" ? line.id : line.messageId ?? store.messagesFor(line.threadId).at(-1)?.id;
+
+  const lineRow = (line: Line): InboxRow => {
+    const focus = focusOf(line);
+    return {
+      id: line.id, kind: line.kind, tab: lineTab(line), from: { name: line.from, botId: line.botId }, ...(line.workingFor ? { workingFor: line.workingFor } : {}),
+      origin: { botId: line.botId, threadId: line.threadId, title: titleOf(line.botId, line.threadId), ...(line.groupId ? { groupId: line.groupId } : {}), ...(focus ? { messageId: focus } : {}) },
+      text: clip(line.text, ROW_TEXT_MAX), at: line.at, unread: !line.seen, ...(line.kind === "message" ? { replies: true as const } : {}),
+    };
+  };
 
   function view(auth: RequestAuth): InboxView {
-    const rows = [...askRows(auth), ...lines.filter((line) => lineFor(auth, line)).map(lineRow)].sort((a, b) => b.at - a.at).slice(0, VIEW_ROWS);
+    const visible = [...askRows(auth), ...lines.filter((line) => lineFor(auth, line)).map(lineRow)].sort((a, b) => b.at - a.at);
+    const rows = [...visible.filter((row) => row.tab !== "done"), ...visible.filter((row) => row.tab === "done")].slice(0, VIEW_ROWS);
     return { botId: null, threadId: null, rows, anchor: null };
   }
 
   function addLine(line: Line): Line {
+    const messageId = focusOf(line);
+    if (messageId) line.messageId = messageId;
     if (line.job) lines = lines.filter((one) => one.job !== line.job || one.seen || one.done);
     lines.push(line);
     save();
@@ -267,6 +276,13 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
       if (!askRows(auth).some((row) => row.id === lineId)) return false;
       if (!seenAsks.has(lineId)) { seenAsks.add(lineId); save(); }
       return true;
+    },
+    markAllRead(auth: RequestAuth): number {
+      let changed = 0;
+      for (const line of lines) if (!line.seen && lineFor(auth, line)) { line.seen = true; changed++; }
+      for (const row of askRows(auth)) if (!seenAsks.has(row.id)) { seenAsks.add(row.id); changed++; }
+      if (changed) save();
+      return changed;
     },
     markDone(auth: RequestAuth, lineId: string): "done" | "unknown" | "an ask" {
       const line = lines.find((one) => one.id === lineId && lineFor(auth, one));

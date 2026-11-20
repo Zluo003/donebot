@@ -386,6 +386,35 @@ it("lists Ben's inbox by tab, settles an ask answered from its row, and keeps ne
   await until(idle);
 }, hostTimeout(120_000));
 
+it("keeps read and Done changes inside the signed-in member's own inbox", async () => {
+  const made = await team.as(cleo, "POST", "/api/bots", { name: "Cleo's Chief", reportsTo: CLEO.email });
+  expect(made.status, JSON.stringify(made.body)).toBe(201);
+  expect((await team.as(cleo, "PATCH", `/api/bots/${made.body.bot.id}`, { chiefOfStaff: true })).status).toBe(200);
+  await passFromScout("Ben-only inbox isolation check");
+  const bearer = await team.capability(scout.id, benThread);
+  const sent = await fetch(`${team.base}/api/internal/people/message`, {
+    method: "POST", headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+    body: JSON.stringify({ to: "Cleo", message: "Cleo-only inbox isolation check" }),
+  });
+  expect(sent.status, await sent.clone().text()).toBe(200);
+  type Listed = { id: string; tab: string; unread: boolean; text: string };
+  const listed = async (token: string) => (await team.as(token, "GET", "/api/inbox")).body.rows as Listed[];
+  const benRow = (await listed(ben)).find((row) => row.text === "Ben-only inbox isolation check")!;
+  const cleoRow = (await listed(cleo)).find((row) => row.text === "Cleo-only inbox isolation check")!;
+  expect(benRow).toMatchObject({ tab: "info", unread: true });
+  expect(cleoRow).toMatchObject({ tab: "info", unread: true });
+  expect((await team.as(cleo, "POST", `/api/inbox/${benRow.id}/read`)).status).toBe(404);
+  expect((await team.as(cleo, "POST", `/api/inbox/${benRow.id}/done`)).status).toBe(404);
+  expect((await team.as(ben, "POST", "/api/inbox/read-all")).status).toBe(200);
+  expect((await listed(ben)).find((row) => row.id === benRow.id)).toMatchObject({ tab: "info", unread: false });
+  expect((await listed(cleo)).find((row) => row.id === cleoRow.id)).toMatchObject({ tab: "info", unread: true });
+  expect((await listed(ben)).some((row) => row.id === cleoRow.id)).toBe(false);
+  expect((await listed(cleo)).some((row) => row.id === benRow.id)).toBe(false);
+  expect((await team.as(ben, "POST", `/api/inbox/${benRow.id}/done`)).status).toBe(200);
+  expect((await listed(ben)).find((row) => row.id === benRow.id)).toMatchObject({ tab: "done", unread: false });
+  expect((await listed(cleo)).find((row) => row.id === cleoRow.id)).toMatchObject({ tab: "info", unread: true });
+}, hostTimeout(90_000));
+
 it("opens Ben's inbox on his first arrival of the day, and forgets it once he leaves", async () => {
   await passFromScout("Can you book the meeting room for Friday?");
   const arrived = await team.as(ben, "POST", "/api/presence/active", { source: "desktop" });

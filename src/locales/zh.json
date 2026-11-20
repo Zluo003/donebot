@@ -7920,5 +7920,12 @@
   "routines.server.part.notStarted": "这个例行任务的上一次运行还没有开始",
   "routines.server.part.computerNoStart": "它的云端桌面未能启动，所以之后的尝试会隔得更久",
   "server.routines.turnedBackOn": "已重新开启：{names}。之前的版本在它的云端桌面未能启动后把它关闭了。",
-  "server.routines.turnedBackOnMany": "已重新开启：{names}。之前的版本在它们的云端桌面未能启动后把它们关闭了。"
+  "server.routines.turnedBackOnMany": "已重新开启：{names}。之前的版本在它们的云端桌面未能启动后把它们关闭了。",
+  "chat.unreadContext.moreCitations": "还有 {count} 条引用",
+  "chat.unreadContext.images": "图片",
+  "inbox.settled.read": "已读",
+  "chat.unreadContext.title": "之前的消息",
+  "inbox.settled.title": "已完成",
+  "chat.unreadContext.files": "文件",
+  "inbox.markAllRead": "全部标为已读"
 }

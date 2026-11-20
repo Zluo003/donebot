@@ -393,6 +393,11 @@ export function createTeamMessages(deps: TeamMessagesDeps) {
       const me = sessionPerson(auth);
       return Boolean(team && me && inbox.markRead(me.key, id));
     },
+    markAllRead(auth: RequestAuth): number | null {
+      if (!team && deps.place) return deps.place.markAllRead(auth);
+      const me = sessionPerson(auth);
+      return team && me ? inbox.markAllRead(me.key) : null;
+    },
     /** This person's Needs you lines: the messages in their inbox they have not opened, newest first. */
     needsYou(auth: RequestAuth): NeedsYouItem[] {
       const me = sessionPerson(auth);

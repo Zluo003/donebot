@@ -79,3 +79,19 @@ DoneBot 额外保护：准备检查同步抛错或异步拒绝时阻止执行；
 - `/tmp/donebot-routine-reliability-types-final.log`、`/tmp/donebot-routine-reliability-lint-final.log`、`/tmp/donebot-routine-reliability-i18n-final.log`：类型、lint 和语言校验通过。
 
 剩余长 brief、定向回复、收件箱、实际跨节点和真实 Linux 压力验证继续实施。团队能力仍关闭。
+
+## 收件箱置顶、完成与消息定位
+
+接入固定上游 bedfa6f5f、7616670cb、b0acbabbb 和 ed5d8be7d。收件箱展示已置顶会话和最近十个已读、空闲的完成会话，排除私聊房间、忙碌及排队中的任务；通知和活动会话的未读计数去重。结果点击后进入原会话、定位原消息，并保留在可展开的完成列表。问题和可回复消息继续在阅读面板处理，上一条/下一条不会意外跳出面板。批量标记已读不代替审批或回答问题。
+
+DoneBot 将结果通知产生时的消息编号持久保存，后续回复和重启不改变定位目标；旧记录保留兼容回退。成员读取、完成和批量已读由服务端核验本人身份与受众。未读上下文卡片仅在进入会话时原问题位于首屏或历史窗口外显示，引用和附件保持可读，关闭只作用于本次停留。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-inbox-regression-1121.log`：14 文件 / 211 项通过，覆盖通知状态、未读去重、置顶/完成、阅读面板、批量已读竞态、请求认证与消息定位持久化。
+- `/tmp/donebot-inbox-overlay-1121.log`：4 项通过，覆盖首屏可见性、窗口外上下文、跳转、关闭和跨会话清理。
+- `/tmp/donebot-inbox-workflow-1121.log`：2 文件 / 25 项真实隔离服务测试通过，覆盖两个成员独立状态、本机与个人 Cloud 的结果回传和读取、不重复执行。
+- `/tmp/donebot-inbox-ui-1121.log`：真实浏览器流程通过，覆盖置顶、取消置顶、结果定位、完成列表及 390px 手机弹层；截图已人工检查。证据为 `output/playwright/inbox-upgrade/receipt.json`、`desktop.png` 和 `phone.png`。
+- `/tmp/donebot-inbox-overlay-types-1121.log`、`/tmp/donebot-inbox-lint-1121.log`、`/tmp/donebot-inbox-i18n-1121.log`：类型、lint、16 个语言目录校验。
+
+尚未验证真实长历史滚动、原生手机、跨工作空间切换以及跨成员本机执行。剩余长 brief、定向回复、跨节点协作和最终平台验收继续实施；团队新增能力保持关闭。

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { InboxView } from "../../shared/inbox";
-import { inboxView, messageRow } from "@/testing/inbox-fixture";
+import { approvalRow, inboxView, messageRow, reportRow } from "@/testing/inbox-fixture";
 import { api } from "./api";
-import { currentInbox, doneInboxRow, readInboxRow, refreshInbox, setInboxView } from "./inbox";
+import { currentInbox, doneInboxRow, markAllInboxRead, readInboxRow, refreshInbox, setInboxView } from "./inbox";
 
 vi.mock("./api", () => ({ api: vi.fn() }));
 
@@ -87,4 +87,32 @@ it.each(["done", "read"] as const)("puts the row back when %s fails and the read
   await reply(2, inboxView([{ ...messageRow, text: "Reconciled text", unread: false }]));
   await loading;
   expect(currentInbox()?.rows[0]).toMatchObject({ tab: "info", unread: false, text: "Reconciled text" });
+});
+
+it("marks news and asks read in bulk without answering an ask", async () => {
+  setInboxView(inboxView([approvalRow, messageRow, reportRow]));
+  markAllInboxRead();
+  markAllInboxRead();
+  expect(requests.map((request) => request.path)).toEqual(["/api/inbox/read-all"]);
+  expect(currentInbox()?.rows.every((row) => !row.unread)).toBe(true);
+  expect(currentInbox()?.rows.find((row) => row.id === approvalRow.id)?.tab).toBe("needs-you");
+  await reply(0, inboxView([{ ...approvalRow, unread: false }, { ...messageRow, unread: false }, { ...reportRow, unread: false, tab: "done" }]));
+  expect(currentInbox()?.rows.find((row) => row.id === reportRow.id)?.tab).toBe("done");
+  expect(currentInbox()?.rows.find((row) => row.id === approvalRow.id)?.tab).toBe("needs-you");
+});
+
+it("keeps a later Done when bulk-read answers with an older list", async () => {
+  markAllInboxRead();
+  doneInboxRow(messageRow);
+  await reply(1, done);
+  await reply(0, inboxView([{ ...messageRow, unread: false }]));
+  expect(currentInbox()?.rows[0]).toMatchObject({ tab: "done", unread: false });
+});
+
+it("reconciles a refused bulk-read against the server", async () => {
+  markAllInboxRead();
+  await fail(0);
+  expect(requests[1]?.path).toBe("/api/inbox");
+  await reply(1, inboxView([messageRow]));
+  expect(currentInbox()?.rows[0]).toMatchObject({ tab: "info", unread: true });
 });

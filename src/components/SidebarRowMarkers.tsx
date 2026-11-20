@@ -8,6 +8,8 @@ export function rowSurface(selected: boolean): string {
     : "[--row:var(--color-panel)] max-md:[--row:var(--color-app)] hover:[--row:color-mix(in_srgb,var(--color-raised)_50%,var(--color-panel))]";
 }
 
+export const rowSelectedSurface = "bg-raised";
+
 export type RowActivity = "working" | "teammate" | "queued";
 
 const ACTIVITY = {

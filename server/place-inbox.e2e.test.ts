@@ -17,7 +17,7 @@ const TOKEN = `ops_fake-inbox-${randomBytes(8).toString("hex")}`;
 
 type Card = { requestId?: string; tool?: string; answered?: string };
 type Row = { id: string; kind: string; tab: string; unread: boolean; replies?: true; text: string; from: { name: string; botId?: string }; workingFor?: { name: string }; askedBy?: { name: string };
-  origin?: { botId: string; threadId: string; title: string }; card?: Card };
+  origin?: { botId: string; threadId: string; title: string; messageId?: string }; card?: Card };
 type Note = { kind: string; botId: string; threadId: string; title: string; body: string };
 type Bot = { id: string; name: string; threadId: string; busy?: boolean; activity?: string };
 type Call = (method: string, path: string, body?: unknown) => Promise<{ status: number; body: any }>;
@@ -173,7 +173,13 @@ describe.each([
     const news = await results();
     expect(news).toHaveLength(1);
     expect(news[0]!.unread).toBe(true);
+    const origin = news[0]!.origin!;
+    expect(origin.messageId).toBeTruthy();
+    expect((await h.messages(origin.threadId)).some((message) => message.id === origin.messageId)).toBe(true);
+    const executions = h.turns(mira.id).length + h.turns(eli.id).length;
     expect((await call("POST", `/api/inbox/${news[0]!.id}/read`)).status).toBe(200);
+    expect((await h.inbox()).rows.find((row) => row.id === news[0]!.id)).toMatchObject({ tab: "done", unread: false });
+    expect(h.turns(mira.id).length + h.turns(eli.id).length).toBe(executions);
     expect(await h.count()).toBe(0);
   }, hostTimeout(180_000));
 

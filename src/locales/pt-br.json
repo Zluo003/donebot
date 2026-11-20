@@ -10271,5 +10271,12 @@
   "routines.server.part.notStarted": "a execução anterior desta rotina ainda não começou",
   "routines.server.part.computerNoStart": "o desktop na nuvem dela não iniciou, então as próximas tentativas ficam mais espaçadas",
   "server.routines.turnedBackOn": "Rotina ligada novamente: {names}. Uma versão anterior tinha desligado essa rotina depois que o desktop na nuvem dela não iniciou.",
-  "server.routines.turnedBackOnMany": "Rotinas ligadas novamente: {names}. Uma versão anterior tinha desligado essas rotinas depois que o desktop na nuvem delas não iniciou."
+  "server.routines.turnedBackOnMany": "Rotinas ligadas novamente: {names}. Uma versão anterior tinha desligado essas rotinas depois que o desktop na nuvem delas não iniciou.",
+  "chat.unreadContext.moreCitations": "e mais {count}",
+  "chat.unreadContext.images": "Imagem",
+  "inbox.settled.read": "Lido",
+  "chat.unreadContext.title": "Mensagem anterior",
+  "inbox.settled.title": "Concluído",
+  "chat.unreadContext.files": "Arquivo",
+  "inbox.markAllRead": "Marcar tudo como lido"
 }

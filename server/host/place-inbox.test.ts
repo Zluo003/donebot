@@ -79,6 +79,17 @@ describe("finished work reaches the inbox once", () => {
     expect(f.inbox.count(OWNER)).toBe(1);
   });
 
+  it("keeps the result's message target after newer messages and a restart", () => {
+    const f = setup();
+    const report = f.store.appendMessage("mira-pricing", { role: "bot", text: "Pricing page updated." });
+    f.inbox.handedResult(work("mira-pricing"), asked);
+    f.tick(1);
+    f.store.appendMessage("mira-pricing", { role: "bot", text: "A different later reply." });
+    expect(infoRows(f)[0]!.origin?.messageId).toBe(report.id);
+    const restarted = setup({ store: f.store as unknown as PlaceInboxDeps["store"] }, f.dataDir);
+    expect(restarted.inbox.view(OWNER).rows[0]!.origin?.messageId).toBe(report.id);
+  });
+
   it("keeps one row per job: the next teammate's result and then the summary replace it", () => {
     const f = setup();
     f.inbox.handedResult(work("mira-pricing"), asked);
@@ -98,7 +109,18 @@ describe("finished work reaches the inbox once", () => {
     f.inbox.route({ kind: "done", botId: "eli", botName: "Eli", threadId: "eli-main", title: "Done", body: "Weekly report." } as Notification, { routine: true });
     f.tick(1);
     f.inbox.route(summary, { summary: true });
-    expect(infoRows(f).map((row) => row.text).sort()).toEqual(["All three pages are live.", "Pricing page updated.", "Second.", "Weekly report."]);
+    expect(infoRows(f).map((row) => row.text).sort()).toEqual(["All three pages are live.", "Second.", "Weekly report."]);
+    expect(f.inbox.view(OWNER).rows.find((row) => row.text === "Pricing page updated.")).toMatchObject({ tab: "done", unread: false });
+  });
+
+  it("takes finished work out of the inbox once the person has read it", () => {
+    const f = setup();
+    f.inbox.route(summary, { routine: true });
+    expect(infoRows(f)).toHaveLength(1);
+    f.inbox.markRead(OWNER, f.inbox.view(OWNER).rows[0]!.id);
+    expect(infoRows(f), "finished work the person has read leaves the inbox").toEqual([]);
+    expect(f.inbox.view(OWNER).rows[0]!.tab).toBe("done");
+    expect(f.inbox.count(OWNER), "nothing waits on the person any more").toBe(0);
   });
 
   it("adds no line for a muted bot, an empty reply or a plain turn's done, and a restart keeps the row", () => {
@@ -293,6 +315,23 @@ describe("the inbox of a place that is no team's", () => {
     expect(f.inbox.markDone(OWNER, "card-q")).toBe("an ask");
     expect(f.inbox.markRead(OWNER, "not-a-line")).toBe(false);
     expect(f.inbox.markDone(OWNER, "not-a-line")).toBe("unknown");
+  });
+
+  it("reads every line and open ask at once for the viewer who has them, answers nothing, and repeats harmlessly", () => {
+    const f = setup();
+    f.guests.set("guest-chat", "p_guest");
+    f.ask("eli-main", "q");
+    f.inbox.message("eli", "eli-main", "News");
+    f.inbox.message("eli", "guest-chat", "For the guest");
+    expect(f.inbox.markAllRead(OWNER)).toBe(2);
+    expect(f.inbox.view(OWNER).rows.map((row) => [row.kind, row.tab, row.unread])).toEqual(expect.arrayContaining([["ask", "needs-you", false], ["message", "info", false]]));
+    expect(f.inbox.count(OWNER), "the ask still waits on them").toBe(1);
+    expect(f.inbox.markDone(OWNER, "card-q")).toBe("an ask");
+    expect(f.inbox.view(GUEST).rows.map((row) => row.unread), "the guest's line is not the owner's to read").toEqual([true]);
+    expect(f.inbox.markAllRead(OWNER)).toBe(0);
+    expect(f.inbox.markAllRead(SHELL)).toBe(0);
+    const again = setup({ openCards: () => f.cards, store: f.store as unknown as PlaceInboxDeps["store"] }, f.dataDir);
+    expect(again.inbox.view(OWNER).rows.every((row) => !row.unread)).toBe(true);
   });
 
   it("opening a conversation reads what waited there", () => {

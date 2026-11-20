@@ -27,6 +27,22 @@ by its own card kind and answered with the chat's own card for it.
 pnpm exec vitest run src/components/inbox/InboxReading.dom.test.ts src/components/inbox/InboxPanel.dom.test.ts src/components/inbox/InboxEverywhere.dom.test.ts
 ```
 
+## Pins, finished conversations and read results
+
+`scripts/testing/inbox-upgrade-ui.e2e.test.ts` launches `control-omb ui` with a disposable home and fake engine. It pins and unpins a conversation, runs an automation on a different bot, opens its result from the Inbox, verifies the original message is focused and the read result remains under Done, then opens the same Inbox in a 390-pixel phone sheet. The sheet must fit its viewport without horizontal overflow. Screenshots and the fixture log reference are saved under `output/playwright/inbox-upgrade/`.
+
+```sh
+DONEBOT_UI_E2E=1 pnpm exec vitest run scripts/testing/inbox-upgrade-ui.e2e.test.ts
+```
+
+`server/cloud-team-inbox.e2e.test.ts` checks two members with different private notices: listing, reading, Done and bulk-read stay scoped to the actual member. Bulk-read marks questions and approvals read without answering them. `server/place-inbox.e2e.test.ts` checks local and personal Cloud result navigation, retained Done and no additional engine execution. Unit coverage also verifies result message targets survive later messages and a restart.
+
+```sh
+pnpm exec vitest run server/cloud-team-inbox.e2e.test.ts server/place-inbox.e2e.test.ts
+```
+
+The unread-context card shows the person's previous question only when it is outside the initial viewport or rendered history window. `src/components/UnreadContextOverlay.dom.test.ts` checks visible questions stay hidden, jump targets, Escape/Close for one visit and conversation changes. Citation and attachment rendering are covered by `UnreadContextCard.test.ts` and `src/lib/unread-context.test.ts`. These DOM checks do not prove long-history scrolling in a real browser or native mobile behavior.
+
 ## The rail, in a real build
 
 `scripts/verify-place-inbox-rail.mjs` runs the packaged app, production main process and all, on a GitHub macOS runner

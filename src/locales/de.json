@@ -3522,5 +3522,8 @@
   "routines.server.part.notStarted": "the previous run of this routine has not started yet",
   "routines.server.part.computerNoStart": "its cloud desktop has not started, so its next tries are spaced out",
   "server.routines.turnedBackOn": "Wieder eingeschaltet: {names}. Eine frühere Version hatte sie ausgeschaltet, nachdem ihr Cloud-Desktop nicht gestartet war.",
-  "server.routines.turnedBackOnMany": "Wieder eingeschaltet: {names}. Eine frühere Version hatte sie ausgeschaltet, nachdem ihre Cloud-Desktops nicht gestartet waren."
+  "server.routines.turnedBackOnMany": "Wieder eingeschaltet: {names}. Eine frühere Version hatte sie ausgeschaltet, nachdem ihre Cloud-Desktops nicht gestartet waren.",
+  "inbox.settled.read": "Gelesen",
+  "inbox.settled.title": "Erledigt",
+  "inbox.markAllRead": "Alle als gelesen markieren"
 }

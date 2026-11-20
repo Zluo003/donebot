@@ -146,7 +146,7 @@ M	docs/team-sharing.md	接入	待核对	待核对
 A	docs/team-slack.md	接入	待核对	待核对
 M	docs/tool-selection.md	接入	待核对	待核对
 A	docs/usage-caps.md	接入	待核对	待核对
-M	docs/verification/README.md	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	docs/verification/README.md	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	docs/verification/app-settings.md	接入	6	待核对
 A	docs/verification/assets/call-button-working/after-daylight.png	接入	待核对	待核对
 A	docs/verification/assets/call-button-working/after-midnight.png	接入	待核对	待核对
@@ -804,8 +804,8 @@ A	server/cloud-computer-wake.test.ts	接入	待核对	待核对
 M	server/cloud-connections-stayed.ts	接入	待核对	待核对
 M	server/cloud-credit-provider.ts	接入	待核对	待核对
 M	server/cloud-credit.e2e.test.ts	接入	待核对	待核对
-M	server/cloud-health.test.ts	接入	待核对	待核对
-M	server/cloud-health.ts	接入	待核对	待核对
+M	server/cloud-health.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/cloud-health.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	server/cloud-home-server.test.ts	接入	待核对	待核对
 M	server/cloud-home-start.ts	接入	待核对	待核对
 M	server/cloud-home.test.ts	接入	待核对	待核对
@@ -1358,8 +1358,8 @@ A	server/host/bot-holds.ts	接入	4	暂停/恢复已接入并隔离验证
 A	server/host/bot-link-host.ts	自有适配	3	待核对
 A	server/host/bot-link-rooms.ts	自有适配	3	待核对
 A	server/host/bot-memory-cap-host.ts	接入	待核对	待核对
-M	server/host/brief.test.ts	接入	待核对	待核对
-M	server/host/brief.ts	接入	待核对	待核对
+M	server/host/brief.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/host/brief.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	server/host/browser-daemons.test.ts	接入	待核对	待核对
 A	server/host/browser-daemons.ts	接入	待核对	待核对
 M	server/host/browser.test.ts	接入	待核对	待核对
@@ -1468,8 +1468,8 @@ M	server/host/room-reads.test.ts	接入	待核对	待核对
 M	server/host/room-reads.ts	接入	待核对	待核对
 M	server/host/room-sessions.test.ts	接入	待核对	待核对
 M	server/host/routine-checks.ts	接入	5	待核对
-A	server/host/routines-turned-back-on.test.ts	接入	5	待核对
-A	server/host/routines-turned-back-on.ts	接入	5	待核对
+A	server/host/routines-turned-back-on.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/host/routines-turned-back-on.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	server/host/secret-cards.test.ts	接入	待核对	待核对
 M	server/host/secret-cards.ts	接入	待核对	待核对
 A	server/host/setting-nudges.test.ts	接入	待核对	待核对
@@ -1539,7 +1539,7 @@ A	server/included-hosting.e2e.test.ts	接入	待核对	待核对
 M	server/included-services.ts	接入	待核对	待核对
 M	server/independent-task-store.test.ts	接入	待核对	待核对
 M	server/index.test.ts	接入	待核对	待核对
-M	server/index.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/index.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	server/instance-fleets.ts	接入	待核对	待核对
 A	server/job-slots-urgent.test.ts	接入	待核对	待核对
 A	server/job-slots.test.ts	接入	待核对	待核对
@@ -1950,48 +1950,48 @@ M	server/routes/waits.test.ts	接入	待核对	待核对
 M	server/routes/waits.ts	接入	待核对	待核对
 M	server/routes/webhooks.test.ts	接入	5	待核对
 M	server/routes/webhooks.ts	接入	5	待核对
-M	server/routine-attachments.ts	接入	5	待核对
-A	server/routine-bounds.test.ts	接入	5	待核对
-A	server/routine-bounds.ts	接入	5	待核对
+M	server/routine-attachments.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-bounds.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-bounds.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	server/routine-catch-up.test.ts	接入	5	待核对
 A	server/routine-catch-up.ts	接入	5	待核对
 A	server/routine-cron-text-zh.test.ts	接入	5	待核对
 M	server/routine-cron-text.ts	接入	5	待核对
 M	server/routine-cron.e2e.test.ts	接入	5	待核对
-M	server/routine-due.test.ts	接入	5	待核对
-M	server/routine-due.ts	接入	5	待核对
-M	server/routine-execution.ts	接入	5	待核对
+M	server/routine-due.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/routine-due.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/routine-execution.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	server/routine-failure-spacing.test.ts	接入	5	待核对
 A	server/routine-failure-spacing.ts	接入	5	待核对
-A	server/routine-file.test.ts	接入	5	待核对
-A	server/routine-file.ts	接入	5	待核对
-A	server/routine-health.test.ts	接入	5	待核对
-A	server/routine-health.ts	接入	5	待核对
+A	server/routine-file.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-file.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-health.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-health.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	server/routine-input.ts	接入	5	待核对
 A	server/routine-ledger-faults.test.ts	接入	5	待核对
 A	server/routine-ledger.test.ts	接入	5	待核对
 A	server/routine-ledger.ts	接入	5	待核对
 M	server/routine-lines.test.ts	接入	5	待核对
-M	server/routine-lines.ts	接入	5	待核对
-M	server/routine-load.ts	接入	5	待核对
-A	server/routine-no-start.test.ts	接入	5	待核对
-A	server/routine-no-start.ts	接入	5	待核对
+M	server/routine-lines.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/routine-load.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-no-start.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-no-start.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	server/routine-occurrences.ts	接入	5	待核对
 A	server/routine-once-range.test.ts	接入	5	待核对
 M	server/routine-outcomes.ts	接入	5	待核对
 M	server/routine-recovery.e2e.test.ts	接入	5	待核对
 M	server/routine-recovery.test.ts	接入	5	待核对
-M	server/routine-recovery.ts	接入	5	待核对
-A	server/routine-reliability.test.ts	接入	5	待核对
-M	server/routine-request-schemas.ts	接入	5	待核对
-M	server/routine-requests.test.ts	接入	5	待核对
-M	server/routine-requests.ts	接入	5	待核对
+M	server/routine-recovery.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-reliability.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/routine-request-schemas.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/routine-requests.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/routine-requests.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	server/routine-restarts.test.ts	接入	1	待核对
 A	server/routine-restarts.ts	接入	1	待核对
 M	server/routine-results.e2e.test.ts	接入	5	待核对
 M	server/routine-run-definition.ts	接入	5	待核对
-A	server/routine-run-gate.test.ts	接入	5	待核对
-A	server/routine-run-gate.ts	接入	5	待核对
+A	server/routine-run-gate.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-run-gate.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	server/routine-run-history.test.ts	接入	5	待核对
 A	server/routine-run-history.ts	接入	5	待核对
 A	server/routine-run-watch.ts	接入	5	待核对
@@ -2001,17 +2001,17 @@ A	server/routine-same-conversation.ts	接入	5	部分接入：0a9d843a6/46859b32
 A	server/routine-schedule-report.test.ts	接入	5	待核对
 A	server/routine-schedule-report.ts	接入	5	待核对
 M	server/routine-schedules.ts	接入	5	待核对
-A	server/routine-skips.test.ts	接入	5	待核对
-A	server/routine-skips.ts	接入	5	待核对
-A	server/routine-stops.ts	接入	5	待核对
+A	server/routine-skips.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-skips.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+A	server/routine-stops.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	server/routine-turn-live.test.ts	接入	5	待核对
 A	server/routine-turn-live.ts	接入	5	待核对
 A	server/routine-wake-retry.test.ts	接入	5	待核对
 A	server/routine-wake-retry.ts	接入	5	待核对
 M	server/routines-limit-reset.test.ts	接入	5	待核对
 M	server/routines-startup.test.ts	接入	5	待核对
-M	server/routines.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
-M	server/routines.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
+M	server/routines.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/routines.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	server/runtime-coordination.e2e.test.ts	接入	待核对	待核对
 A	server/runtime-coordinator-reads.test.ts	接入	待核对	待核对
 M	server/runtime-coordinator.test.ts	接入	待核对	待核对
@@ -2278,8 +2278,8 @@ M	server/webhooks.test.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过�
 M	server/webhooks.ts	接入	5	部分接入：0a9d843a6/46859b327 事件过滤与会话连续性；其余差异继续审计
 M	server/workspace-backup-policy.test.ts	接入	1	待核对
 M	server/workspace-backup-policy.ts	接入	1	待核对
-M	server/workspace-backup.test.ts	接入	1	待核对
-M	server/workspace-backup.ts	接入	1	待核对
+M	server/workspace-backup.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	server/workspace-backup.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	server/workspace.test.ts	自有适配	2	待核对
 M	server/workspace.ts	自有适配	2	待核对
 A	server/x-research-pagination.test.ts	接入	待核对	待核对
@@ -2370,7 +2370,7 @@ M	shared/package-fixtures/manifest.json	接入	待核对	待核对
 D	shared/package-fixtures/newer.v3.json	接入	待核对	待核对
 A	shared/package-fixtures/newer.v4.json	接入	待核对	待核对
 M	shared/package-format.test.ts	接入	待核对	待核对
-M	shared/package-format.ts	接入	待核对	待核对
+M	shared/package-format.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	shared/pairing-code.ts	接入	待核对	待核对
 M	shared/pairing-link.ts	接入	待核对	待核对
 M	shared/person-wait.test.ts	接入	待核对	待核对
@@ -2391,10 +2391,10 @@ M	shared/published-page.ts	接入	待核对	待核对
 M	shared/reactions.ts	接入	待核对	待核对
 M	shared/redact.ts	接入	待核对	待核对
 M	shared/reply-style.ts	接入	待核对	待核对
-M	shared/routine-request.ts	接入	5	待核对
+M	shared/routine-request.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	shared/routine-run.ts	接入	5	待核对
 M	shared/routine-schedule.ts	接入	5	待核对
-M	shared/routines.ts	接入	5	待核对
+M	shared/routines.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	shared/runtime-events.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	shared/saved-steps.ts	接入	待核对	待核对
 M	shared/server-text.ts	接入	待核对	待核对
@@ -2412,7 +2412,7 @@ A	shared/skill-files.test.ts	接入	6	待核对
 A	shared/skill-files.ts	接入	6	待核对
 M	shared/skill-request.ts	接入	6	待核对
 A	shared/task-provenance.ts	接入	待核对	待核对
-M	shared/team-backup.ts	接入	1	待核对
+M	shared/team-backup.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	shared/team-files.ts	自有适配	7	待核对
 M	shared/team-presence.ts	接入	待核对	待核对
 A	shared/team-setup.test.ts	接入	待核对	待核对
@@ -2755,7 +2755,7 @@ M	src/components/RoomQueueList.tsx	接入	待核对	待核对
 A	src/components/RoomTextMessage.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/RoomTurnTimeoutSettings.tsx	接入	待核对	待核对
 A	src/components/RoutineCalendarPage.ime.test.ts	接入	待核对	待核对
-M	src/components/RoutineCalendarPage.tsx	接入	待核对	待核对
+M	src/components/RoutineCalendarPage.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/components/RoutineResultsNavigation.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/Select.tsx	接入	待核对	待核对
 M	src/components/ServerList.test.ts	接入	待核对	待核对
@@ -2868,8 +2868,8 @@ M	src/components/ThreadCleanupSettings.tsx	接入	待核对	待核对
 M	src/components/ThreadConcurrencySettings.test.ts	接入	待核对	待核对
 M	src/components/ThreadConcurrencySettings.tsx	接入	待核对	待核对
 A	src/components/ToolPageShell.tsx	接入	待核对	待核对
-M	src/components/TriggerCard.tsx	接入	待核对	待核对
-M	src/components/TriggersPage.tsx	接入	待核对	待核对
+M	src/components/TriggerCard.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/components/TriggersPage.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/components/TurnNarrationRun.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/TurnPresence.tsx	接入	待核对	待核对
 A	src/components/UnreadContextCard.test.ts	接入	待核对	待核对
@@ -2934,7 +2934,7 @@ M	src/components/bot-panel/MemoryPage.team.test.ts	接入	待核对	待核对
 M	src/components/bot-panel/MemoryPage.text.test.ts	接入	待核对	待核对
 M	src/components/bot-panel/PanelShell.dom.test.ts	接入	待核对	待核对
 M	src/components/bot-panel/SettingsPage.tsx	接入	待核对	待核对
-M	src/components/bot-panel/pages.tsx	接入	待核对	待核对
+M	src/components/bot-panel/pages.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	src/components/bot-panel/rows.test.ts	接入	待核对	待核对
 M	src/components/bot-panel/rows.tsx	接入	待核对	待核对
 M	src/components/bot-settings/AccessSection.test.ts	接入	6	待核对
@@ -2943,7 +2943,7 @@ M	src/components/bot-settings/BotApiCard.dom.test.ts	接入	6	待核对
 M	src/components/bot-settings/BotApiCard.tsx	接入	6	待核对
 A	src/components/bot-settings/ConnectorScopesControl.dom.test.ts	接入	6	待核对
 M	src/components/bot-settings/ModelSection.tsx	接入	6	待核对
-M	src/components/bot-settings/RoutinesSection.tsx	接入	6	待核对
+M	src/components/bot-settings/RoutinesSection.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	src/components/bot-settings/SkillsSection.test.ts	接入	6	待核对
 M	src/components/bot-settings/SkillsSection.tsx	接入	6	待核对
 A	src/components/bot-settings/ToolGroupsCard.test.ts	接入	6	待核对
@@ -3024,8 +3024,8 @@ M	src/components/remote-desktop-panel.test.ts	接入	待核对	待核对
 M	src/components/remote-desktop-panel.tsx	接入	待核对	待核对
 M	src/components/room-panel/ResponderPage.tsx	接入	待核对	待核对
 M	src/components/room-panel/RoomPanel.dom.test.ts	接入	待核对	待核对
-M	src/components/routines/RoutineList.tsx	接入	5	待核对
-M	src/components/routines/RoutineViews.test.ts	接入	5	待核对
+M	src/components/routines/RoutineList.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/components/routines/RoutineViews.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/components/send-key.test.ts	接入	待核对	待核对
 A	src/components/settings/AdvancedSection.tsx	接入	6	待核对
 A	src/components/settings/DesktopKinds.tsx	接入	6	待核对
@@ -3098,8 +3098,8 @@ A	src/lib/approval-mode-options.test.ts	接入	待核对	待核对
 M	src/lib/approval-mode-options.ts	接入	待核对	待核对
 M	src/lib/attach-notice.test.ts	接入	待核对	待核对
 M	src/lib/attach-notice.ts	接入	待核对	待核对
-M	src/lib/automations.test.ts	接入	待核对	待核对
-M	src/lib/automations.ts	接入	待核对	待核对
+M	src/lib/automations.test.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/lib/automations.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	src/lib/avatar-marks.ts	接入	待核对	待核对
 M	src/lib/bot-duplicate.test.ts	接入	待核对	待核对
 M	src/lib/bot-duplicate.ts	接入	待核对	待核对
@@ -3247,8 +3247,8 @@ M	src/lib/room-setup.ts	接入	待核对	待核对
 M	src/lib/room-speaker.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/lib/room-threads.test.ts	接入	待核对	待核对
 M	src/lib/room-threads.ts	接入	待核对	待核对
-M	src/lib/routine-display.ts	接入	5	待核对
-M	src/lib/routines.ts	接入	5	待核对
+M	src/lib/routine-display.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/lib/routines.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/lib/run-card-preferences.ts	接入	待核对	待核对
 A	src/lib/saved-servers.ts	接入	待核对	待核对
 M	src/lib/send-key.ts	接入	待核对	待核对
@@ -3313,28 +3313,28 @@ A	src/lib/window-pref-changes.ts	接入	待核对	待核对
 A	src/lib/window-prefs.test.ts	接入	待核对	待核对
 A	src/lib/window-prefs.ts	接入	待核对	待核对
 A	src/locales/command-words.test.ts	接入	待核对	待核对
-M	src/locales/de.json	接入	待核对	待核对
+M	src/locales/de.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/departments.test.ts	接入	待核对	待核对
-M	src/locales/en.json	接入	待核对	待核对
-M	src/locales/es.json	接入	待核对	待核对
+M	src/locales/en.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/es.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/everyday-words.test.ts	接入	待核对	待核对
-M	src/locales/fr.json	接入	待核对	待核对
-M	src/locales/hi.json	接入	待核对	待核对
-M	src/locales/it.json	接入	待核对	待核对
-M	src/locales/ja.json	接入	待核对	待核对
-M	src/locales/ko.json	接入	待核对	待核对
-M	src/locales/pl.json	接入	待核对	待核对
-M	src/locales/pt-br.json	接入	待核对	待核对
-M	src/locales/ru.json	接入	待核对	待核对
+M	src/locales/fr.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/hi.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/it.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/ja.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/ko.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/pl.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/pt-br.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/ru.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/server-lines.test.ts	接入	待核对	待核对
 A	src/locales/settings-words.test.ts	接入	6	待核对
-M	src/locales/source-hashes.json	接入	待核对	待核对
-M	src/locales/tr.json	接入	待核对	待核对
-M	src/locales/uk.json	接入	待核对	待核对
-M	src/locales/vi.json	接入	待核对	待核对
+M	src/locales/source-hashes.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/tr.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/uk.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/vi.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/vocabulary.test.ts	接入	待核对	待核对
-M	src/locales/zh-tw.json	接入	待核对	待核对
-M	src/locales/zh.json	接入	待核对	待核对
+M	src/locales/zh-tw.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	src/locales/zh.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/main.tsx	接入	待核对	待核对
 A	src/state/always-allow-save.test.ts	接入	待核对	待核对
 A	src/state/app-store.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -3346,7 +3346,7 @@ A	src/state/bot-read.ts	接入	4	流式/长历史子集已接入；其余目标�
 A	src/state/bot-thread-frame.test.ts	接入	待核对	待核对
 A	src/state/bot-thread-frame.ts	接入	待核对	待核对
 M	src/state/card-answer-recovery.test.ts	接入	待核对	待核对
-M	src/state/config-status.ts	接入	4	暂停/恢复已接入并隔离验证；其余目标差异继续核对
+M	src/state/config-status.ts	接入	5	暂停/恢复已接入并隔离验证；其余目标差异继续核对；026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 A	src/state/fork-panel.test.ts	接入	4	待核对
 A	src/state/fork-panel.ts	接入	4	待核对
 A	src/state/frame-batching.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对

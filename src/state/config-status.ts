@@ -74,6 +74,7 @@ export interface ConfigStatus {
   pausedByPerson?: { bots: string[]; departments: string[]; all?: true };
   /** Every bot taking no new work because the person paused it or its department. */
   heldBots?: string[];
+  routinesUnreadable?: true;
   threads?: { maxConcurrentPerBot: number; eventLogMaxBytes?: number; eventLogRetentionDays?: number };
   automaticRecovery?: { enabled: boolean; backup?: ModelSelection };
   /** Prompt-cache keep-warm for idle Claude threads. Absent from older servers. */

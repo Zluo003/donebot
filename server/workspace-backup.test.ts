@@ -253,6 +253,7 @@ describe("encrypted full workspace backups", () => {
         expect(followup).not.toHaveProperty("prompt");
       } finally { restoredDb.close(); }
       expect(readJson(join(target, "routines.json"))).toMatchObject({ routines: [{ enabled: false }], runs: [{ status: "failed" }, { status: "completed" }] });
+      expect(Date.now() - readJson(join(target, "routines.json")).routines[0].updatedAt).toBeLessThan(5 * 60_000);
       expect(readJson(join(target, "webhooks.json"))).toMatchObject({ webhooks: [{ enabled: false }], deliveries: [{ id: "delivery" }] });
       expect(readJson(join(target, "webhooks.json")).webhooks[0].secretHash).toMatch(/^[a-f0-9]{64}$/);
       expect(readJson(join(target, "webhooks.json")).webhooks[0].secretHash).not.toBe("a".repeat(64));

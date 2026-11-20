@@ -60,3 +60,22 @@ Webhook 可指定最多 10 个字段的精确值过滤，支持点路径、数�
 - `/tmp/donebot-event-automations-types-final.log`、`/tmp/donebot-event-automations-lint-final.log`、`/tmp/donebot-event-automations-i18n-final.log`：类型、lint 和 16 语言校验通过。
 
 续跑工作流证据：`/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/restartable-1795191164085-57589.log.continuity.json`。团队新增能力继续关闭；调度可靠性、收件箱及跨节点验收继续实施。
+
+## 调度可靠性与损坏配置恢复
+
+接入固定上游 026dd777a，以及其依赖的运行准备门和停止辅助机制。失败不再自动关闭周期任务；特定桌面启动失败连续三次后按一小时、四小时间隔重试，跳过的周期合并为有原因和次数的台账。较早版本自动关闭的任务只在识别出同一失败时间戳、三次相同失败且未超过 30 天时恢复一次；用户暂停、编辑、恢复备份、保留状态或冻结的任务保持原意。
+
+默认普通运行累计工作三小时、目标运行十二小时；用户指定的时限沿用已有计时规则。默认计数每轮有上限，睡眠或时钟跳变不计作持续工作。周期任务忙等超过一小时记为错过，外部事件和用户手动请求继续等待。停止等待最多十秒，未确认的停止仍阻止同一自动化立即再跑，五分钟内重试并记录确认结果。暂停、删除会取消排队和等待输入的运行，保留已开始工作和用户后来发起的个人轮次；保存失败时不发送取消。
+
+无法读取的 routines.json 不会被空状态覆盖，最多保存五个按内容命名的 0600 副本；配置和健康状态可报告故障，写入返回 503。文件恢复可读后，本地重接归属和结果线路，Cloud 重新启动以先完成运行归属核对。恢复备份会更新定义时间戳，避免误判成旧版自动关闭。健康报告从持久台账计算连续失败，重启不清零；合并漏跑行不参与成功率或最近执行结果。
+
+DoneBot 额外保护：准备检查同步抛错或异步拒绝时阻止执行；暂停、删除立即撤销准备检查；未保存的暂停不得中止等待中的轮次。这里只接入通用准备钩子，实际 DoneBot 云桌面就绪适配留待第 7 批，不引入原版 Boat 自动重建或替换桌面。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-routine-reliability-units-complete.log`：13 文件 / 412 项通过，覆盖退避、漏跑、计时、停止确认、损坏文件、失败恢复、暂停/删除竞态及准备失败。
+- `/tmp/donebot-routine-reliability-workflow.log`：11 文件 / 145 项通过、1 项平台跳过；包含真实隔离服务重启、自动化生命周期、结果回传、事件续跑、转发、界面状态及备份恢复。
+- `/tmp/donebot-routine-file-workflow.log`：真实隔离服务流程通过。实际损坏配置并重启，检查拒绝写入、原字节和私有副本、修复后执行一次、再重启无重跑及日志无秘密值。
+- `/tmp/donebot-routine-reliability-types-final.log`、`/tmp/donebot-routine-reliability-lint-final.log`、`/tmp/donebot-routine-reliability-i18n-final.log`：类型、lint 和语言校验通过。
+
+剩余长 brief、定向回复、收件箱、实际跨节点和真实 Linux 压力验证继续实施。团队能力仍关闭。

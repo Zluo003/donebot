@@ -81,6 +81,7 @@ Use only mapped, tested commands:
 - [Waits: tell me when, with no AI while waiting](waits.md)
 - [同会话定时跟进](check-backs.md)
 - [Webhook 过滤与同会话续跑](webhook-continuity.md)
+- [自动化可靠性与损坏配置恢复](routine-reliability.md)
 - [A new Cloud's first hour](first-hour.md)
 - [Chat widgets](widgets.md)
 - [Pages and apps in a room](room-pages.md)

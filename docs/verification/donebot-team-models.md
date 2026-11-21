@@ -41,7 +41,7 @@ pnpm lint
 
 2026-11-21：客户端接受独立的 `settled` 结算状态，保留旧服务的 `recorded`。合成网关验证 completed 和 uncertain 均可返回人民币结算金额，重启后只查原执行，不重提。`/tmp/donebot-team-settlement-client-full.log` 四文件 33 项通过，服务端类型与定向 lint 分别见 `/tmp/donebot-team-settlement-types.log`、`/tmp/donebot-team-settlement-lint.log`。
 
-网关一次性 PostgreSQL、真实 HTTP 与生产转发/RecordUsage 流程验证并发派发、幂等扣费、付款归属、结算回执、清理日志后查询及异常响应，race 通过，日志 `/tmp/donebot-team-settlement-race.log`。该流程使用明确选择的合成供应商账号，未运行生产处理器的完整调度选路。raw Chat 的结束证明与费用分别保存；其它协议继续 uncertain。计费队列溢出不丢团队任务，但尚无进程崩溃后待结算恢复，不能开启生产团队执行。
+网关一次性 PostgreSQL、真实 HTTP 与生产转发/RecordUsage 流程验证并发派发、幂等扣费、付款归属、结算回执、清理日志后查询及异常响应，race 通过，日志 `/tmp/donebot-team-settlement-race.log`。该流程使用明确选择的合成供应商账号，未运行生产处理器的完整调度选路。raw Chat 的结束证明与费用分别保存；其它协议继续 uncertain。持久待结算恢复已补充，见下一节；仍不能开启生产团队执行。
 
 ## 真实 Linux 镜像复测
 
@@ -54,3 +54,14 @@ node scripts/verify-team-linux.mjs --image LOCAL_IMAGE
 脚本只使用精确 image ID，不拉取镜像；容器无外网，资料位于 tmpfs。返回 0 仅代表隔离自检和成员 HTTP 边界通过，尚未执行团队模型任务；返回 2 代表隔离不可用并验证真实聊天拒绝执行，不能当作隔离验收通过；返回 1 代表验证失败。stdout 指向完整日志及 receipt。没有公开网络的正向 egress 验证，不替代最终真实 Linux 全项恶意探测。
 
 2026-11-21 的 arm64 镜像构建及 `userns-refused` 拒绝执行证据见 [批次 8](../upgrades/0.1.173/batch-8.md)。
+
+
+## 持久账单恢复
+
+2026-11-21：`/tmp/donebot-team-pending-race.log` 使用一次性 PostgreSQL 集群、独立 schema、真实 HTTP 生产转发/RecordUsage 和合成供应商，通过 Go race。五条 handler 提交路径在队列可用时也直接落盘，调用取消只保留执行编号而不复制凭据。已保存命令不能改价、改归属或删除；扣账前中断可恢复；用量日志插入失败回滚扣账及幂等占位；子进程提交扣账后立即 exit(42)，八路新恢复器仍只扣一次、写一行日志及一张结算回执。恢复与重放不增加供应商调用。
+
+团队费用只进入团队台账和 Owner 付款余额，不改变个人平台用量或其缓存。余额与团队专用 Key 限额仍检查，个人请求的原平台限额继续检查。缓存刷新失败保留恢复记录，刷新成功才完成；进程启动恢复未完成记录，停止会取消活动查询，停止后不能重新启动。
+
+最新客户端 `team-model-gateway`、`team-runtime`、`llm-driver`、`llm-protocol` 四文件实际为 104 项通过，日志 `/tmp/donebot-team-pending-client-regression.log`；此前结算记录中的 33 为当时计数误记。已保存用量的恢复不等于供应商侧对账：未观察到用量或首次保存前退出仍不能重提，媒体、其它协议结束证明、真实 Linux 和跨成员执行仍未验收。
+
+`/tmp/donebot-team-pending-full-regression.log`：带 `unit` 标签的 service/handler/repository 用量、计费、平台额度和转发回归通过。扩大筛选首次暴露旧计费错误测试缺少 HTTP Request 的夹具缺陷，补齐合成 Request 后整组重测通过。`/tmp/donebot-team-pending-compile.log`：全部 Go 包仅编译通过，不等同全量运行测试。网关本地提交 `55eeb4f`，未推送。

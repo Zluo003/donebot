@@ -172,3 +172,19 @@ export function CommandLine({ command, copyLabel = "Copy command" }: { command: 
     </div>
   );
 }
+
+export function SettingsField({ label, children, hint }: { label: ReactNode; children: ReactNode; hint?: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5" data-settings-field="">
+      <label className="flex flex-col gap-1.5">
+        <span className="text-[13px] font-medium leading-[18px] text-ink">{label}</span>
+        {children}
+      </label>
+      {hint && <div className="text-[12px] leading-4 text-ink-secondary">{hint}</div>}
+    </div>
+  );
+}
+/** A field's 0.5 px edge is an inset hairline, like a card's: a 0.5 px border is rounded up to a whole pixel on some
+ * screens, which drew fields heavier than the cards and dividers around them. Keyboard focus is the 2 px ring. */
+export const FIELD_EDGE = "border-0 shadow-[inset_0_0_0_0.5px_var(--settings-edge,var(--color-hairline))]";
+export const SETTINGS_INPUT = `h-8 w-full rounded-lg ${FIELD_EDGE} bg-app px-2 text-[13px] leading-5 text-ink outline-none placeholder:text-ink-tertiary focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus disabled:opacity-40`;

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { z } from "zod";
 
 import { HELD_SECRET_MASK } from "../shared/redact.ts";
-import { LOGIN_FIELD_MAX, LOGIN_HOSTS_MAX, loginMatchesHost, loginSite, loginUsableBy, type LoginBots, type LoginPlace, type LoginSummary } from "../shared/logins.ts";
+import { LOGIN_FIELD_MAX, LOGIN_HOSTS_MAX, loginMatchesHost, loginSite, loginUsableBy, type BitwardenCredentials, type LoginBots, type LoginPlace, type LoginSummary } from "../shared/logins.ts";
 import { SECRET_VALUE_MAX_BYTES, VAULT_SECRET_NAME_MAX, vaultNameKey, type VaultSecret } from "../shared/vault.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { decryptBrowserState, encryptBrowserState } from "./browser-sites.ts";
@@ -61,6 +61,7 @@ const fileSchema = z.object({
   version: z.literal(1),
   logins: z.array(diskLoginSchema),
   secrets: z.array(diskSecretSchema).optional(),
+  bitwarden: z.object({ serverUrl: z.string(), clientId: z.string(), clientSecret: z.string(), password: z.string(), connectionId: z.string().optional(), connectedAt: z.number() }).optional(),
   onePassword: z.object({ token: z.string().min(1), connectedAt: z.number() }).optional(),
   /** Vault id → the bots that may use its logins; a vault not named here is for every bot. Kept across reconnects. */
   onePasswordGrants: z.record(z.string(), botsSchema).optional(),
@@ -414,6 +415,18 @@ export class VaultStore {
     this.write(Object.keys(others).length ? { ...rest, mcpKeys: others } : rest);
   }
 
+  bitwardenCredentials(): BitwardenCredentials | null {
+    const saved = this.read().bitwarden;
+    return saved ? { serverUrl: saved.serverUrl, clientId: saved.clientId, clientSecret: saved.clientSecret, password: saved.password } : null;
+  }
+
+  bitwardenConnectionId(): string | undefined { return this.read().bitwarden?.connectionId; }
+
+  setBitwardenCredentials(credentials: BitwardenCredentials | null, connectionId: string = randomUUID()): void {
+    const { bitwarden: _previous, ...rest } = this.read();
+    this.write(credentials ? { ...rest, bitwarden: { ...credentials, connectionId, connectedAt: this.now() } } : rest);
+  }
+
   onePasswordToken(): string | null {
     return this.read().onePassword?.token ?? null;
   }
@@ -442,6 +455,7 @@ export class VaultStore {
     return [
       ...data.logins.flatMap((login) => [login.password, ...(login.totp ? [login.totp.secret] : [])]),
       ...(data.onePassword ? [data.onePassword.token] : []),
+      ...(data.bitwarden ? [data.bitwarden.clientSecret, data.bitwarden.password] : []),
       ...(data.secrets ?? []).map((secret) => secret.value),
     ];
   }

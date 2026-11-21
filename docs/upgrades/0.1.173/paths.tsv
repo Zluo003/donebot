@@ -103,7 +103,7 @@ A	docs/announcements.md	自有适配	7	待核对
 M	docs/approval-levels.md	接入	待核对	待核对
 M	docs/assets/sponsors/boat-logo-white.svg	接入	待核对	待核对
 M	docs/assets/sponsors/boat-logo.svg	接入	待核对	待核对
-A	docs/bitwarden.md	接入	待核对	待核对
+A	docs/bitwarden.md	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收
 M	docs/bot-api.md	接入	待核对	待核对
 M	docs/bot-box.md	接入	待核对	待核对
 M	docs/browser-packaging.md	接入	待核对	待核对
@@ -538,7 +538,7 @@ M	scripts/testing/key-readback.e2e.test.ts	接入	待核对	待核对
 M	scripts/testing/lazy-server-modules.test.ts	接入	待核对	待核对
 M	scripts/testing/lend-automatically-preview.tsx	接入	待核对	待核对
 M	scripts/testing/modelgo-links.test.ts	接入	待核对	待核对
-A	scripts/testing/no-bitwarden-dependency.test.ts	接入	待核对	待核对
+A	scripts/testing/no-bitwarden-dependency.test.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收
 M	scripts/testing/one-workspace-fixture.ts	自有适配	2	待核对
 M	scripts/testing/one-workspace-ui.e2e.test.ts	自有适配	2	待核对
 M	scripts/testing/org-library-ui.e2e.test.ts	接入	待核对	待核对
@@ -681,7 +681,7 @@ A	server/bot-link/link.test.ts	接入	3	已审计：batch-3；个人连接复用
 A	server/bot-link/link.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 A	server/bot-link/protocol.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 M	server/bot-logins.test.ts	接入	待核对	待核对
-M	server/bot-logins.ts	接入	待核对	待核对
+M	server/bot-logins.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 A	server/bot-memory-cap-live.test.ts	接入	待核对	待核对
 A	server/bot-memory-cap.test.ts	接入	待核对	待核对
 A	server/bot-memory-cap.ts	接入	待核对	待核对
@@ -719,7 +719,7 @@ M	server/browser/cdp/s4-pages.e2e.test.ts	接入	待核对	待核对
 M	server/browser/chrome/flags.ts	接入	待核对	待核对
 M	server/browser/chrome/host-setup.test.ts	接入	待核对	待核对
 M	server/browser/chrome/host-setup.ts	接入	待核对	待核对
-M	server/browser/chrome/install.ts	接入	待核对	待核对
+M	server/browser/chrome/install.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	server/browser/chrome/launch.ts	接入	待核对	待核对
 M	server/browser/chrome/launcher.test.ts	接入	待核对	待核对
 M	server/browser/chrome/launcher.ts	接入	待核对	待核对
@@ -1345,10 +1345,10 @@ A	server/host-files.test.ts	接入	6	待核对
 M	server/host-lazy-claim.e2e.test.ts	接入	待核对	待核对
 A	server/host/app-publisher.test.ts	接入	待核对	待核对
 A	server/host/app-publisher.ts	接入	待核对	待核对
-A	server/host/bitwarden-cli.test.ts	接入	待核对	待核对
-A	server/host/bitwarden-cli.ts	接入	待核对	待核对
-A	server/host/bitwarden-vault.test.ts	接入	6	待核对
-A	server/host/bitwarden-vault.ts	接入	6	待核对
+A	server/host/bitwarden-cli.test.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收
+A	server/host/bitwarden-cli.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收
+A	server/host/bitwarden-vault.test.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收
+A	server/host/bitwarden-vault.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收
 M	server/host/bot-access-gate.ts	接入	4	待核对
 A	server/host/bot-footprint-owners.ts	接入	待核对	待核对
 A	server/host/bot-frames.test.ts	接入	待核对	待核对
@@ -1539,7 +1539,7 @@ A	server/included-hosting.e2e.test.ts	接入	待核对	待核对
 M	server/included-services.ts	接入	待核对	待核对
 M	server/independent-task-store.test.ts	接入	待核对	待核对
 M	server/index.test.ts	接入	待核对	待核对
-M	server/index.ts	接入	5	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/index.ts	接入	5	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）；09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	server/instance-fleets.ts	接入	待核对	待核对
 A	server/job-slots-urgent.test.ts	接入	待核对	待核对
 A	server/job-slots.test.ts	接入	待核对	待核对
@@ -1906,7 +1906,7 @@ M	server/routes/internal-tools.ts	接入	待核对	待核对
 M	server/routes/live.test.ts	接入	待核对	待核对
 M	server/routes/live.ts	接入	待核对	待核对
 M	server/routes/logins.test.ts	接入	待核对	待核对
-M	server/routes/logins.ts	接入	待核对	待核对
+M	server/routes/logins.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 A	server/routes/me.test.ts	接入	待核对	待核对
 M	server/routes/me.ts	接入	待核对	待核对
 M	server/routes/openai-compat-endpoints.test.ts	接入	待核对	待核对
@@ -1945,7 +1945,7 @@ A	server/routes/usage-caps.ts	接入	待核对	待核对
 A	server/routes/usage-not-billed.test.ts	接入	待核对	待核对
 M	server/routes/usage.ts	接入	待核对	待核对
 M	server/routes/vault.test.ts	接入	6	待核对
-M	server/routes/vault.ts	接入	6	待核对
+M	server/routes/vault.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	server/routes/waits.test.ts	接入	待核对	待核对
 M	server/routes/waits.ts	接入	待核对	待核对
 M	server/routes/webhooks.test.ts	接入	5	待核对
@@ -2100,8 +2100,8 @@ M	server/store.ts	接入	待核对	待核对
 M	server/surface-pins.e2e.test.ts	接入	待核对	待核对
 M	server/surface.test.ts	接入	待核对	待核对
 M	server/surface.ts	接入	待核对	待核对
-M	server/system-prompt.test.ts	接入	待核对	待核对
-M	server/system-prompt.ts	接入	待核对	待核对
+M	server/system-prompt.test.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
+M	server/system-prompt.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	server/task-cwd-api.test.ts	接入	待核对	待核对
 A	server/task-record.ts	接入	待核对	待核对
 M	server/team-backup.ts	接入	1	待核对
@@ -2243,10 +2243,10 @@ M	server/use-my-mac.e2e.test.ts	接入	待核对	待核对
 M	server/user-errors.test.ts	接入	待核对	待核对
 M	server/user-errors.ts	接入	待核对	待核对
 M	server/vault-store.test.ts	接入	6	待核对
-M	server/vault-store.ts	接入	6	待核对
+M	server/vault-store.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	server/vault/mcp-keys.test.ts	接入	6	待核对
 M	server/vault/mcp-keys.ts	接入	6	待核对
-M	server/vault/providers.ts	接入	6	待核对
+M	server/vault/providers.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	server/vps-command.ts	接入	待核对	待核对
 M	server/vps-computer.runner.test.ts	接入	待核对	待核对
 M	server/vps-computer.test.ts	接入	待核对	待核对
@@ -2352,7 +2352,7 @@ M	shared/live-approval.ts	接入	待核对	待核对
 M	shared/live-call-wire.ts	接入	待核对	待核对
 M	shared/live-call.test.ts	接入	待核对	待核对
 M	shared/live-call.ts	接入	待核对	待核对
-M	shared/logins.ts	接入	待核对	待核对
+M	shared/logins.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	shared/markdown-plain-paths.ts	接入	待核对	待核对
 M	shared/mascot-bodies.ts	接入	待核对	待核对
 M	shared/mcp-request.ts	接入	6	待核对
@@ -2484,7 +2484,7 @@ M	src/components/AutomaticRecoverySettings.tsx	接入	待核对	待核对
 M	src/components/Avatar.test.ts	接入	待核对	待核对
 M	src/components/Avatar.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/AvatarImageGenerator.tsx	接入	待核对	待核对
-A	src/components/BitwardenConnection.tsx	接入	待核对	待核对
+A	src/components/BitwardenConnection.tsx	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收
 M	src/components/BoatOffer.tsx	接入	待核对	待核对
 A	src/components/BotLiveVoiceSelect.tsx	接入	待核对	待核对
 M	src/components/BotProfileAvatarCard.test.ts	接入	6	待核对
@@ -2779,7 +2779,7 @@ M	src/components/SettingsModal.search.test.ts	接入	待核对	待核对
 M	src/components/SettingsModal.serverPairing.test.ts	接入	待核对	待核对
 D	src/components/SettingsModal.simple.test.ts	接入	待核对	待核对
 M	src/components/SettingsModal.tsx	接入	待核对	待核对
-M	src/components/SettingsPrimitives.tsx	接入	待核对	待核对
+M	src/components/SettingsPrimitives.tsx	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 D	src/components/SettingsSimplePages.member.test.ts	自有适配	2	待核对
 D	src/components/SettingsSimplePages.tsx	接入	待核对	待核对
 A	src/components/ShareDepartmentDialog.tsx	接入	待核对	待核对
@@ -2887,8 +2887,8 @@ A	src/components/UsageSection.model-colors.test.ts	接入	待核对	待核对
 M	src/components/UsageSection.tsx	接入	待核对	待核对
 A	src/components/UsbPhoneTakeoverSettings.test.ts	接入	待核对	待核对
 A	src/components/UsbPhoneTakeoverSettings.tsx	接入	待核对	待核对
-M	src/components/VaultSettings.test.ts	接入	待核对	待核对
-M	src/components/VaultSettings.tsx	接入	待核对	待核对
+M	src/components/VaultSettings.test.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
+M	src/components/VaultSettings.tsx	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	src/components/VoiceEveryReplySetting.tsx	接入	待核对	待核对
 M	src/components/VoicePicker.tsx	接入	待核对	待核对
 M	src/components/VoiceSettings.test.ts	接入	待核对	待核对
@@ -3029,7 +3029,7 @@ M	src/components/routines/RoutineViews.test.ts	接入	5	026dd777a 调度可靠�
 M	src/components/send-key.test.ts	接入	待核对	待核对
 A	src/components/settings/AdvancedSection.tsx	接入	6	待核对
 A	src/components/settings/DesktopKinds.tsx	接入	6	待核对
-A	src/components/settings/SettingsDialog.tsx	接入	6	待核对
+A	src/components/settings/SettingsDialog.tsx	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 A	src/components/settings/SettingsNav.tsx	接入	6	待核对
 A	src/components/settings/SettingsPageHeader.test.ts	接入	6	待核对
 A	src/components/settings/SettingsPageHeader.tsx	接入	6	待核对
@@ -3193,7 +3193,7 @@ M	src/lib/live-events.ts	接入	4	流式/长历史子集已接入；其余目标
 M	src/lib/local-computer.test.ts	接入	待核对	待核对
 A	src/lib/locale-memo.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/lib/locale-memo.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
-M	src/lib/logins.ts	接入	待核对	待核对
+M	src/lib/logins.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 A	src/lib/markdown-stream-blocks.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/lib/markdown-stream-blocks.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/lib/markdown-stream-pieces.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -3307,7 +3307,7 @@ M	src/lib/usage-trace.test.ts	接入	待核对	待核对
 M	src/lib/usage-trace.ts	接入	待核对	待核对
 M	src/lib/use-composer-dictation.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 A	src/lib/use-connect-link.ts	接入	待核对	待核对
-M	src/lib/vault.ts	接入	6	待核对
+M	src/lib/vault.ts	接入	6	09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	src/lib/whats-new.test.ts	接入	待核对	待核对
 A	src/lib/window-pref-changes.ts	接入	待核对	待核对
 A	src/lib/window-prefs.test.ts	接入	待核对	待核对
@@ -3315,7 +3315,7 @@ A	src/lib/window-prefs.ts	接入	待核对	待核对
 A	src/locales/command-words.test.ts	接入	待核对	待核对
 M	src/locales/de.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/departments.test.ts	接入	待核对	待核对
-M	src/locales/en.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
+M	src/locales/en.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对；09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	src/locales/es.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/everyday-words.test.ts	接入	待核对	待核对
 M	src/locales/fr.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
@@ -3324,7 +3324,7 @@ M	src/locales/it.json	接入	5	026dd777a 调度可靠性已接入；通用准备
 M	src/locales/ja.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/ko.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/pl.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
-M	src/locales/pt-br.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
+M	src/locales/pt-br.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对；09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	src/locales/ru.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/server-lines.test.ts	接入	待核对	待核对
 A	src/locales/settings-words.test.ts	接入	6	待核对
@@ -3333,8 +3333,8 @@ M	src/locales/tr.json	接入	5	026dd777a 调度可靠性已接入；通用准备
 M	src/locales/uk.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/vi.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/locales/vocabulary.test.ts	接入	待核对	待核对
-M	src/locales/zh-tw.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
-M	src/locales/zh.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对
+M	src/locales/zh-tw.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对；09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
+M	src/locales/zh.json	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；批5 定向回复/排队隐私已接入，其余差异待核对；09805bb19 个人 Bitwarden 已接入并隔离验证；真实账号/Windows/团队待验收；其余差异待核对
 M	src/main.tsx	接入	待核对	待核对
 A	src/state/always-allow-save.test.ts	接入	待核对	待核对
 A	src/state/app-store.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对

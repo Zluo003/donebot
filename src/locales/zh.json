@@ -7961,5 +7961,19 @@
   "teamShare.skip.skill_file_large": "文件超过 128 KB",
   "teamShare.skip.skill_file_secret": "文件疑似包含凭据",
   "teamShare.skip.skill_file_duplicate": "路径与其他文件冲突",
-  "teamShare.skip.skill_file_full": "技能已达到文件数或总大小限制"
+  "teamShare.skip.skill_file_full": "技能已达到文件数或总大小限制",
+  "settings.logins.source.bitwarden": "来自 Bitwarden",
+  "settings.vault.bitwarden.title": "Bitwarden",
+  "settings.vault.bitwarden.line": "允许 Bot 使用 Bitwarden 账号中的登录信息和密钥。",
+  "settings.vault.bitwarden.connected": "已连接 {account} · {count} 项登录信息和密钥",
+  "settings.vault.bitwarden.connect": "连接 Bitwarden",
+  "settings.vault.bitwarden.disconnect": "断开 Bitwarden",
+  "settings.vault.bitwarden.team": "供整个团队使用。请使用仅能访问指定集合的专用 Bitwarden 账号。",
+  "settings.vault.bitwarden.guide": "请使用仅能访问指定集合的专用 Bitwarden 账号。在该账号中打开账号设置 → 安全 → 密钥 → 查看 API 密钥，在此填写 client_id、client_secret 和主密码。首次使用时将从 Bitwarden 下载其命令行工具。",
+  "settings.vault.bitwarden.server": "服务器",
+  "settings.vault.bitwarden.selfHosted": "自建服务器或 Vaultwarden",
+  "settings.vault.bitwarden.address": "服务器地址",
+  "settings.vault.bitwarden.password": "主密码",
+  "settings.vault.bitwarden.note": "加密保存在当前运行的电脑上，不会再次显示。登录信息会出现在上方列表中；修改请在 Bitwarden 中进行。",
+  "settings.vault.bitwarden.error": "无法连接 Bitwarden，请重试。"
 }

@@ -1,5 +1,6 @@
 // No answer ever carries a password, a 2FA key or the token: a saved secret is only ever replaced.
-import { LOGIN_FIELD_MAX, loginPlace, normalizeLoginHost, type LoginBots, type LoginSummary, type OnePasswordStatus } from "../../shared/logins.ts";
+import { LOGIN_FIELD_MAX, loginPlace, normalizeLoginHost, type BitwardenCredentials, type BitwardenStatus, type LoginBots, type LoginSummary, type OnePasswordStatus } from "../../shared/logins.ts";
+import { BitwardenProblem, bitwardenServerUrl } from "../host/bitwarden-vault.ts";
 import type { LoginPatch, NewLogin } from "../vault-store.ts";
 import { parseTotpKey, type TotpKey } from "../totp.ts";
 import { PASS, type RouteHandler } from "./table.ts";
@@ -10,6 +11,13 @@ export interface LoginRouteDeps {
   update(id: string, patch: LoginPatch): LoginSummary | null;
   remove(id: string): boolean;
   botExists(id: string): boolean;
+  bitwarden?: {
+    status(): BitwardenStatus;
+    list(): LoginSummary[];
+    connect(credentials: BitwardenCredentials): Promise<BitwardenStatus>;
+    refresh(): Promise<BitwardenStatus>;
+    disconnect(): Promise<BitwardenStatus>;
+  };
   onePassword: {
     status(): OnePasswordStatus;
     list(): LoginSummary[];
@@ -72,15 +80,42 @@ export function isJson(req: { headers: Record<string, string | string[] | undefi
   return String(req.headers["content-type"] ?? "").split(";", 1)[0]!.trim().toLowerCase() === "application/json";
 }
 
+export function parseBitwardenCredentials(raw: unknown): Parsed<BitwardenCredentials> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "Enter the Bitwarden API key and master password." };
+  const body = raw as Record<string, unknown>;
+  const serverUrl = bitwardenServerUrl(body.serverUrl);
+  if (!serverUrl) return { ok: false, error: "Enter an HTTPS Bitwarden server address without credentials or a query." };
+  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const clientSecret = typeof body.clientSecret === "string" ? body.clientSecret.trim() : "";
+  if (!/^user\.[\w-]{1,195}$/u.test(clientId) || !clientSecret || clientSecret.length > 256 || /\s/u.test(clientSecret)) return { ok: false, error: "Enter the personal Bitwarden client_id and client_secret." };
+  if (typeof body.password !== "string" || !body.password || body.password.length > 1024) return { ok: false, error: "Enter the Bitwarden master password." };
+  return { ok: true, value: { serverUrl, clientId, clientSecret, password: body.password } };
+}
+
 export function createLoginRoutes(deps: LoginRouteDeps): RouteHandler {
   return async ({ req, res, path, method, json, readBody }) => {
     if (path !== "/api/logins" && !path.startsWith("/api/logins/")) return PASS;
     res.setHeader("cache-control", "no-store");
     if (path === "/api/logins" && method === "GET") {
-      return json(res, 200, { logins: [...deps.list(), ...deps.onePassword.list()], onePassword: deps.onePassword.status() });
+      return json(res, 200, { logins: [...deps.list(), ...deps.onePassword.list(), ...(deps.bitwarden?.list() ?? [])], onePassword: deps.onePassword.status(), ...(deps.bitwarden ? { bitwarden: deps.bitwarden.status() } : {}) });
     }
     // JSON only, so a form posted from another local page cannot add or change one.
     if (method !== "GET" && method !== "DELETE" && !isJson(req)) return json(res, 415, { error: "content-type must be application/json" });
+    if (path === "/api/logins/bitwarden" || path.startsWith("/api/logins/bitwarden/")) {
+      if (!deps.bitwarden) return json(res, 404, { error: "Bitwarden is not available in this workspace." });
+      try {
+        if (path === "/api/logins/bitwarden" && method === "POST") {
+          const credentials = parseBitwardenCredentials(await readBody(req, 16_384));
+          if (!credentials.ok) return json(res, 400, { error: credentials.error });
+          return json(res, 200, { bitwarden: await deps.bitwarden.connect(credentials.value) });
+        }
+        if (path === "/api/logins/bitwarden" && method === "DELETE") return json(res, 200, { bitwarden: await deps.bitwarden.disconnect() });
+        if (path === "/api/logins/bitwarden/refresh" && method === "POST") return json(res, 200, { bitwarden: await deps.bitwarden.refresh() });
+        return json(res, 405, { error: "method not allowed" });
+      } catch (error) {
+        return json(res, 400, { error: error instanceof BitwardenProblem ? error.message : "Bitwarden could not be read. Try again, or connect it again." });
+      }
+    }
     // 1Password's own paths, ahead of the /api/logins/:id pattern they would match.
     if (path === ONE_PASSWORD && method === "POST") {
       const body = await readBody(req, 16_384);
@@ -121,6 +156,7 @@ export function createLoginRoutes(deps: LoginRouteDeps): RouteHandler {
     }
     const id = path.slice("/api/logins/".length);
     if (/^1password(?::|%3a)/iu.test(id)) return json(res, 409, { error: LOGIN_ERRORS.readOnly });
+    if (/^bitwarden(?::|%3a)/iu.test(id)) return json(res, 409, { error: "This login is in Bitwarden. Change or remove it there." });
     if (!ID.test(id)) return json(res, 404, { error: "no such login" });
     if (method === "DELETE") {
       return deps.remove(id) ? json(res, 200, { ok: true }) : json(res, 404, { error: "no such login" });

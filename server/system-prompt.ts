@@ -151,17 +151,18 @@ const SECRET_NAMES_SHOWN = 40;
 const SECRET_NAME_SHOWN_MAX = 80;
 
 /** Names only, never a value. */
-export function savedSecretsPrompt(secrets: ReadonlyArray<{ name: string; refOnly?: true }>): string {
+export function savedSecretsPrompt(secrets: ReadonlyArray<{ name: string; refOnly?: true }>, bitwarden = false): string {
   const names = new Map<string, string>();
   for (const secret of [...secrets].sort((a, b) => Number(Boolean(a.refOnly)) - Number(Boolean(b.refOnly)))) {
     const name = secret.name.replace(/[\p{Cc}\s]+/gu, " ").trim().slice(0, SECRET_NAME_SHOWN_MAX);
     const key = vaultNameKey(name);
     if (key && !names.has(key)) names.set(key, `${JSON.stringify(name)}${secret.refOnly ? " (ref only)" : ""}`);
   }
-  if (!names.size) return "";
+  const reference = bitwarden ? " Bitwarden references are also available as request_credential labels: bw://<item id or name>[/<field>], with password (the default for logins), username, totp, notes or a custom field. Use an item id when names are ambiguous; never print secret values." : "";
+  if (!names.size) return reference;
   const shown = [...names.values()].slice(0, SECRET_NAMES_SHOWN);
   const more = names.size > shown.length ? ` and ${names.size - shown.length} more` : "";
-  return ` Secrets in the Vault you may use: ${shown.join(", ")}${more}. To use one, call request_credential with its name as the label: DoneBot hands it over at once with no card, and you never see the value.`;
+  return ` Secrets in the Vault you may use: ${shown.join(", ")}${more}. To use one, call request_credential with its name as the label: DoneBot hands it over at once with no card, and you never see the value.${reference}`;
 }
 
 export function computerPrompt(kind: ComputerPromptKind | null): string {

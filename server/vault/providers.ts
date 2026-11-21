@@ -17,6 +17,11 @@ export interface VaultProvider {
   readonly id: string;
   /** Shown to the person and the bot, such as 1Password. */
   readonly label: string;
+  /** Changes when the connected account is replaced or disconnected, invalidating outstanding references. */
+  readonly connectionId?: string;
+  /** Referenceable fields, without values, so redeemed pointers survive a server restart. */
+  referenceItems?(): Array<{ secret: LinkedSecret; field?: string }>;
+  resolve?(reference: string): { secret: LinkedSecret; field?: string } | null;
   /** Reads the manager's list again once it is older than the provider allows. */
   fresh(): Promise<void>;
   /** Every item and the bots that may use it, never a value. */
@@ -35,10 +40,14 @@ export function linkedSites(provider: VaultProvider, bots: string | readonly str
 }
 
 export function linkedCandidates(provider: VaultProvider, pageHost: string, bots: string | readonly string[]): FillCandidate[] {
+  const connection = provider.connectionId;
+  const current = (id: string) => connection === provider.connectionId && logins(provider, bots).some((login) => login.id === id && loginMatchesHost(login, pageHost));
   return logins(provider, bots).filter((login) => loginMatchesHost(login, pageHost)).map((login) => ({
     id: login.id, site: login.site, hosts: [...login.hosts], exactHost: login.exactHost, username: login.username, source: login.source,
     secrets: async () => {
+      if (!current(login.id)) throw new Error("This login is no longer available to this bot.");
       const { password, totp } = await provider.read(login.id);
+      if (!current(login.id)) throw new Error("This login is no longer available to this bot.");
       if (!password) throw new Error(`This login is no longer in ${provider.label}, or has no password there.`);
       return { password, totp: totp ?? null };
     },
@@ -63,6 +72,8 @@ export interface LinkedSecretUse {
 export function findLinkedSecret(providers: readonly VaultProvider[], name: string, botId: string): LinkedSecretUse | null {
   const key = vaultNameKey(name);
   for (const provider of providers) {
+    const named = provider.resolve?.(name);
+    if (named && loginUsableBy(named.secret, botId)) return { provider, ...named };
     for (const secret of linkedSecrets(provider, botId)) {
       const found = linkedSecretNames(secret).find((one) => vaultNameKey(one.name) === key);
       if (found) return { provider, secret, ...(found.field ? { field: found.field } : {}) };

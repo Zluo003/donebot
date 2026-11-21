@@ -1,15 +1,16 @@
 import { createHash } from "node:crypto";
 
-import { browserMatesOf, loginPageCheck, loginPlace, loginSite, type LoginBots, type LoginPlace } from "../shared/logins.ts";
+import { browserMatesOf, loginPageCheck, loginPlace, loginSite, loginUsableBy, type LoginBots, type LoginPlace } from "../shared/logins.ts";
 import type { LinkedSecret } from "../shared/vault.ts";
 import type { FillCandidate } from "./login-fill.ts";
 import { receiveLoginHandoff, type ConnectionHandoffAnswer, type ConnectionHandoffWhat, type LoginHandoffResult } from "./login-handoff.ts";
 import type { VaultStore } from "./vault-store.ts";
+import type { BitwardenLogins } from "./host/bitwarden-vault.ts";
 import type { OnePasswordLogins } from "./onepassword.ts";
 import type { LoginRouteDeps } from "./routes/logins.ts";
 import { findLinkedSecret, linkedCandidates, linkedSecretNames, linkedSecrets, linkedSites, readLinkedSecret, type VaultProvider } from "./vault/providers.ts";
 
-const linkedItemId = (secretId: string, field: string | undefined) => `linked-${createHash("sha256").update(`${secretId}\0${field ?? ""}`).digest("hex").slice(0, 32)}`;
+const linkedItemId = (secretId: string, field: string | undefined, connection?: string) => `linked-${createHash("sha256").update(`${secretId}\0${field ?? ""}${connection === undefined ? "" : `\0${connection}`}`).digest("hex").slice(0, 32)}`;
 
 /** What the bot's browser shows while the person answers a sign-in card. */
 export interface ObservedPage {
@@ -55,14 +56,16 @@ export class BotLogins {
   readonly onePassword: OnePasswordLogins;
   readonly providers: readonly VaultProvider[];
   private readonly bots: () => ReadonlyArray<{ id: string; browserProfile?: string | null }>;
+  private readonly bitwarden: BitwardenLogins | undefined;
   private readonly hold: (value: string) => void;
 
   /** `hold` masks a value read from a linked manager wherever text crosses to a bot or a transcript. */
   constructor(store: VaultStore, onePassword: OnePasswordLogins, bots: () => ReadonlyArray<{ id: string; browserProfile?: string | null }> = () => [],
-    hold: (value: string) => void = () => {}) {
+    hold: (value: string) => void = () => {}, bitwarden?: BitwardenLogins) {
     this.store = store;
     this.onePassword = onePassword;
-    this.providers = [onePassword];
+    this.bitwarden = bitwarden;
+    this.providers = [onePassword, ...(bitwarden ? [bitwarden] : [])];
     this.bots = bots;
     this.hold = hold;
   }
@@ -122,23 +125,42 @@ export class BotLogins {
     await this.fresh();
     const use = findLinkedSecret(this.providers, name, botId);
     if (!use) return null;
+    const connection = use.provider.connectionId;
     const value = await readLinkedSecret(use);
     this.hold(value);
-    return { id: linkedItemId(use.secret.id, use.field), name: use.field ? `${use.secret.name} ${use.field}` : use.secret.name, value };
+    const current = findLinkedSecret(this.providers, name, botId);
+    if (connection !== use.provider.connectionId || !current || current.secret.id !== use.secret.id || current.field !== use.field || !loginUsableBy(current.secret, botId)) return null;
+    const id = linkedItemId(use.secret.id, use.field, connection);
+    return { id, name: use.field ? `${use.secret.name} ${use.field}` : use.secret.name, value };
   }
 
   /** The linked secret `linkedSecret` gave this id: who may use it, and its value read from the manager when asked. */
   linkedById(id: string): { bots: LoginBots; read(): Promise<string> } | null {
-    for (const provider of this.providers) {
-      for (const secret of linkedSecrets(provider)) {
-        const name = linkedSecretNames(secret).find(({ field }) => linkedItemId(secret.id, field) === id);
-        if (!name) continue;
-        return { bots: secret.bots, read: async () => {
-          const value = await readLinkedSecret({ provider, secret, ...(name.field ? { field: name.field } : {}) });
-          this.hold(value);
-          return value;
-        } };
+    const find = () => {
+      for (const provider of this.providers) {
+        for (const use of provider.referenceItems?.() ?? []) {
+          if (linkedItemId(use.secret.id, use.field, provider.connectionId) === id) return { provider, ...use };
+        }
+        for (const secret of linkedSecrets(provider)) {
+          const name = linkedSecretNames(secret).find(({ field }) => linkedItemId(secret.id, field, provider.connectionId) === id);
+          if (name) return { provider, secret, ...(name.field ? { field: name.field } : {}) };
+        }
       }
+      return null;
+    };
+    const current = find();
+    if (current) {
+      const bots = current.secret.bots === "all" ? "all" : [...current.secret.bots];
+      const connection = current.provider.connectionId;
+      return { bots, read: async () => {
+        const use = find();
+        if (!use || connection !== use.provider.connectionId) throw new Error("This secret is no longer available.");
+        const value = await readLinkedSecret(use);
+        this.hold(value);
+        const after = find();
+        if (!after || connection !== after.provider.connectionId || JSON.stringify(after.secret.bots) !== JSON.stringify(bots)) throw new Error("This secret is no longer available.");
+        return value;
+      } };
     }
     return null;
   }
@@ -155,6 +177,17 @@ export class BotLogins {
       update: (id, patch) => this.store.update(id, patch),
       remove: (id) => this.store.remove(id),
       botExists,
+      ...(this.bitwarden ? { bitwarden: {
+        status: () => this.bitwarden!.status(),
+        list: () => this.bitwarden!.items().flatMap(({ kind, ...item }) => kind === "login" ? [item as import("../shared/logins.ts").LoginSummary] : []),
+        connect: (credentials: import("../shared/logins.ts").BitwardenCredentials) => this.bitwarden!.connect(credentials, (accepted, connectionId) => this.store.setBitwardenCredentials(accepted, connectionId)),
+        refresh: () => this.bitwarden!.refresh(),
+        disconnect: async () => {
+          this.store.setBitwardenCredentials(null);
+          await this.bitwarden!.disconnect();
+          return this.bitwarden!.status();
+        },
+      } } : {}),
       onePassword: {
         status: () => this.onePassword.status(),
         list: () => { void this.onePassword.fresh(); return this.onePassword.list(); },

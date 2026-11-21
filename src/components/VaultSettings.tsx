@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, KeyRound, Loader2, LockKeyhole, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
 
-import { loginHeldBackFor, type LoginBots, type LoginSummary, type OnePasswordStatus, type OnePasswordVault } from "../../shared/logins";
+import { loginHeldBackFor, type BitwardenStatus, type LoginBots, type LoginSummary, type OnePasswordStatus, type OnePasswordVault } from "../../shared/logins";
 import type { LinkedSecret, VaultSecret } from "../../shared/vault";
 import { t } from "@/lib/i18n";
 import { addLogin, changeLogin, connectOnePassword, deleteLogin, disconnectOnePassword, grantVault, refreshOnePassword } from "@/lib/logins";
@@ -12,6 +12,7 @@ import { useStore } from "@/state/store";
 import { Segmented } from "./bot-panel/rows";
 import { LoginBotPicker, LoginForm } from "./LoginForm";
 import { Card } from "./SettingsPrimitives";
+import { BitwardenConnection } from "./BitwardenConnection";
 import { EnvImportForm, SecretForm } from "./VaultSecretForms";
 
 // Security: a row never shows a password or a secret, which no route returns. A saved value can only be replaced.
@@ -20,6 +21,7 @@ const SOURCE_KEYS = {
   card: "settings.logins.source.card",
   settings: "settings.logins.source.settings",
   "1password": "settings.logins.source.1password",
+  bitwarden: "settings.logins.source.bitwarden",
   linked: "settings.logins.source.1password",
 } as const;
 
@@ -47,6 +49,7 @@ export function VaultSettings() {
   const [logins, setLogins] = useState<LoginSummary[] | null>(null);
   const [secrets, setSecrets] = useState<Array<VaultSecret | LinkedSecret>>([]);
   const [onePassword, setOnePassword] = useState<OnePasswordStatus>({ connected: false });
+  const [bitwarden, setBitwarden] = useState<BitwardenStatus | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -69,6 +72,7 @@ export function VaultSettings() {
       setLogins(answer.logins ?? []);
       setSecrets(answer.secrets ?? []);
       setOnePassword(answer.onePassword ?? { connected: false });
+      setBitwarden(answer.bitwarden);
       setError(null);
     }
     catch (cause) { setError(cause instanceof Error && cause.message ? cause.message : t("settings.vault.loadError")); }
@@ -148,7 +152,7 @@ export function VaultSettings() {
             </div>
           )}
         </div>
-        {login.source !== "1password" && rowButtons(login.id, "login", login.site, () => startEdit(login.id, login))}
+        {login.source !== "1password" && login.source !== "bitwarden" && rowButtons(login.id, "login", login.site, () => startEdit(login.id, login))}
       </div>
       {editing === login.id && (
         <div className="ms-6 rounded-lg bg-inset/60 p-3">
@@ -181,7 +185,7 @@ export function VaultSettings() {
         <div className="min-w-0 flex-1">
           <div dir="auto" className="truncate text-[13px] font-medium text-ink" title={secret.name}>{secret.name}</div>
           <div className="mt-0.5 text-[12px] leading-snug text-ink-tertiary">
-            {[t(SOURCE_KEYS[secret.source]), botNames(secret.bots), used(secret.lastUsedAt)].join(" · ")}
+            {[t(secret.source === "linked" && secret.provider === "bitwarden" ? "settings.logins.source.bitwarden" : SOURCE_KEYS[secret.source]), botNames(secret.bots), used(secret.lastUsedAt)].join(" · ")}
           </div>
         </div>
         {secret.source !== "linked" && rowButtons(secret.id, "secret", secret.name, () => startEdit(secret.id))}
@@ -268,6 +272,8 @@ export function VaultSettings() {
             {t("keys.row.open")}
           </button>
         </div>
+        {bitwarden && <BitwardenConnection status={bitwarden} disabled={logins === null}
+          onChange={async (next) => { setBitwarden(next); await load(); }} />}
         <OnePasswordConnection status={onePassword} disabled={logins === null} bots={bots} botNames={botNames}
           onChange={async (next) => { setOnePassword(next); await load(); }} />
       </div>

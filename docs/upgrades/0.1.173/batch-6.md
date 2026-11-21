@@ -113,7 +113,7 @@ fixture 更新欢迎版本和界面标签，图表选择器限定到 Data 面板
 
 模板导出回归发现既有协调技能被错误列入用户技能，因其描述字段不一致阻断整个部门导出；现在排除应用内置技能及引擎原生/项目技能，用户安装技能不受 display-only source 字段影响。原组织签章通道不支持脚本时在修改 Bot 前明确拒绝，避免静默丢失；未扩展原组织或 enterprise 集成。
 
-实际验收边界和命令见 `docs/verification/template-skill-files.md`。模板主菜单仍关闭，界面验证使用隔离入口挂载真实组件和真实导入导出 API，目录仅为合成本地空目录。新文件夹模板、私有 GitHub、密码库、团队共享模板与正式入口整合仍待接入。
+实际验收边界和命令见 `docs/verification/template-skill-files.md`。模板主菜单仍关闭，界面验证使用隔离入口挂载真实组件和真实导入导出 API，目录仅为合成本地空目录。新文件夹模板、私有 GitHub、团队共享模板与正式入口整合仍待接入；个人 Bitwarden 接入记录见下文。
 
 2026-11-21 验证：
 
@@ -122,3 +122,11 @@ fixture 更新欢迎版本和界面标签，图表选择器限定到 Data 面板
 - `/tmp/donebot-template-skill-client-types.log`、`/tmp/donebot-template-skill-server-types.log`、`/tmp/donebot-template-skill-lint.log`、`/tmp/donebot-template-skill-i18n.log`：客户端/服务端类型、定向 lint、16 个语言目录校验通过。
 
 初次 fixture 发现空数据目录尚无 workspaces，界面初稿错误地寻找隐藏的产品菜单和不存在的 summary 引用；修正为已声明的隔离组件入口、原生键盘展开和导入包原有文件名后重测通过。这些是验收脚本问题，未放宽产品权限或安全检查。
+
+## 个人 Bitwarden 密码库
+
+接入固定上游 `09805bb19905216cf513f9cb567ded3a14f4281d`，复用 OSS CLI 独立进程、原有加密存储、登录填充和密钥引用。没有引入上游尚不存在于当前底座的团队 VaultReader、成员密码库或凭据报告前置机制；团队运行环境不提供 Bitwarden 路由或界面。
+
+补充连接串行化和失效代次，CLI 每次等待后校验连接是否仍有效；断开和重连阻止旧结果恢复缓存。持久化的随机连接 ID 使 MCP 引用在重启后有效，重连后失效；已授权账号的同名项目不会替代旧账号引用。读完密钥后重新检查元数据和权限。凭据保存失败会清缓存和退出 CLI，表单取消会处理 DELETE 先于 POST 的乱序；公共错误只返回固定信息。
+
+2026-11-21：主回归 14 文件 / 201 项通过，1 项大小写文件系统检查跳过；相邻下载、MCP 密钥和备份策略 3 文件 / 53 项通过。真实临时服务、加密文件和独立 fake CLI 完成连接、引用、重启、断开与脱敏检查。实际 Chromium 验证密码错误、迟到连接取消、只读列表、刷新、键盘焦点及 390 px 浅深色布局。类型、定向 lint 和 16 个语言目录通过。验证命令、证据及尚未验收的真实账号、Windows、团队和 Electron 范围见 `docs/verification/bitwarden.md`。本批其余内容仍在实施，未标为完成。

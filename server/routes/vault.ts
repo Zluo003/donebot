@@ -6,7 +6,7 @@ import { isJson, parseBots, type LoginRouteDeps } from "./logins.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface VaultRouteDeps {
-  logins: Pick<LoginRouteDeps, "list" | "botExists" | "onePassword">;
+  logins: Pick<LoginRouteDeps, "list" | "botExists" | "onePassword" | "bitwarden">;
   secrets: Pick<VaultStore, "listSecrets" | "saveSecret" | "receiveSecret" | "updateSecret" | "removeSecret">;
   /** A linked password manager's secrets, listed beside the saved ones and changed only in the manager. */
   linked?: () => LinkedSecret[];
@@ -43,7 +43,7 @@ export function createVaultRoutes(deps: VaultRouteDeps): RouteHandler {
     res.setHeader("cache-control", "no-store");
     if (path === "/api/vault") {
       if (method !== "GET") return json(res, 405, { error: "method not allowed" });
-      return json(res, 200, { logins: [...deps.logins.list(), ...deps.logins.onePassword.list()], secrets: [...deps.secrets.listSecrets(), ...(deps.linked?.() ?? [])], onePassword: deps.logins.onePassword.status() });
+      return json(res, 200, { logins: [...deps.logins.list(), ...deps.logins.onePassword.list(), ...(deps.logins.bitwarden?.list() ?? [])], secrets: [...deps.secrets.listSecrets(), ...(deps.linked?.() ?? [])], onePassword: deps.logins.onePassword.status(), ...(deps.logins.bitwarden ? { bitwarden: deps.logins.bitwarden.status() } : {}) });
     }
     if (path !== SECRETS && !path.startsWith(`${SECRETS}/`)) return json(res, 404, { error: "not found" });
     // JSON only, so a form posted from another local page cannot add or change one.

@@ -63,6 +63,7 @@ Use only mapped, tested commands:
 - [DoneBot original service entry controls](donebot-services.md)
 - [DoneBot self-hosted cloud desktop](donebot-desktop.md)
 - [Per-bot tool selection and local-model checks](tool-selection.md)
+- [Bitwarden 密码库与引用](bitwarden.md)
 - [OpenCode model variants through ACP](opencode-variants.md)
 - [Bot setup, model scope, and file continuity](bot-continuity.md)
 - [Reviewed Chief team setup and scoped deletion](team-setup.md)

@@ -43,7 +43,7 @@ async function render() {
 const button = (label: string) => [...host.querySelectorAll("button")].find((candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === label)!;
 async function click(label: string) { await act(async () => button(label).click()); }
 async function type(name: string, value: string) {
-  const input = host.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+  const input = document.body.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -189,6 +189,107 @@ describe("Settings → Vault: logins", () => {
     await click("Connect 1Password");
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(host.querySelector("[data-onepassword] [role=alert]")!.textContent).toBe("1Password did not accept the token.");
+  });
+
+  it("connects Bitwarden with its server, API key and master password, sent once and forgotten, with the setup to use in one line", async () => {
+    const on = { connected: true, server: "vw.example.test", account: "bots@acme.test", items: 2 };
+    const linked = { id: "bitwarden:i1", name: "Stripe", fields: [], source: "linked", provider: "bitwarden", bots: "all", readOnly: true };
+    const login = { ...VAULT_LOGIN, id: "bitwarden:i2:github.com", site: "github.com", hosts: ["github.com"], source: "bitwarden" };
+    fixture.config = { cloudHome: true };
+    fixture.api
+      .mockResolvedValueOnce({ logins: [], secrets: [], onePassword: OFF, bitwarden: OFF })
+      .mockResolvedValueOnce({ bitwarden: on })
+      .mockResolvedValueOnce({ logins: [login], secrets: [linked], onePassword: OFF, bitwarden: on })
+      .mockResolvedValueOnce({ bitwarden: OFF })
+      .mockResolvedValueOnce({ logins: [], secrets: [], onePassword: OFF, bitwarden: OFF });
+    await render();
+    expect(host.querySelector("[data-bitwarden-team]")).toBeNull();
+    await click("Connect Bitwarden");
+    const dialog = () => document.body.querySelector("[data-settings-dialog]")!;
+    expect(dialog().querySelector("[data-bitwarden-guide]")!.textContent).toMatch(/^Use a dedicated Bitwarden account that can only see one collection\./u);
+    expect(dialog().querySelector('input[name="bitwardenServerUrl"]'), "no address field for bitwarden.com").toBeNull();
+    await act(async () => {
+      const select = dialog().querySelector<HTMLSelectElement>('select[name="bitwardenServer"]')!;
+      select.value = "self-hosted";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await type("bitwardenServerUrl", "https://vw.example.test");
+    await type("bitwardenClientId", "user.fake-id");
+    await type("bitwardenClientSecret", "fake-client-secret");
+    await type("bitwardenPassword", "fake-master");
+    for (const name of ["bitwardenClientSecret", "bitwardenPassword"]) expect(document.body.querySelector<HTMLInputElement>(`input[name="${name}"]`)!.type).toBe("password");
+    await act(async () => [...dialog().querySelectorAll("button")].find((one) => one.textContent === "Connect Bitwarden")!.click());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(fixture.api).toHaveBeenNthCalledWith(2, "/api/logins/bitwarden", { method: "POST",
+      body: JSON.stringify({ serverUrl: "https://vw.example.test", clientId: "user.fake-id", clientSecret: "fake-client-secret", password: "fake-master" }) });
+    expect(host.querySelector("[data-bitwarden-line]")!.textContent).toBe("Connected as bots@acme.test · 2 logins and secrets");
+    expect(host.innerHTML).not.toContain("fake-master");
+    expect(host.querySelector('[data-secret-row="Stripe"]')!.textContent).toContain("From Bitwarden · All bots");
+    const row = host.querySelector('[data-login-row="github.com"]')!;
+    expect(row.textContent).toContain("From Bitwarden");
+    expect(row.querySelectorAll("button"), "read-only here").toHaveLength(0);
+    await click("Disconnect Bitwarden");
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(fixture.api).toHaveBeenNthCalledWith(4, "/api/logins/bitwarden", { method: "DELETE" });
+    await click("Connect Bitwarden");
+    expect(document.body.querySelector<HTMLInputElement>('input[name="bitwardenPassword"]')!.value).toBe("");
+  });
+
+  it("forgets a rejected connection's form before the response and allows a fresh attempt", async () => {
+    let reject!: (error: Error) => void;
+    const response = new Promise<never>((_, fail) => { reject = fail; });
+    fixture.api.mockResolvedValueOnce({ logins: [], secrets: [], onePassword: OFF, bitwarden: OFF })
+      .mockImplementationOnce(() => response);
+    await render();
+    await click("Connect Bitwarden");
+    await type("bitwardenClientId", "user.fixture");
+    await type("bitwardenClientSecret", "fake-client-key");
+    await type("bitwardenPassword", "fake-wrong");
+    await act(async () => document.querySelector<HTMLFormElement>("#bitwarden-connect")!.requestSubmit());
+    for (const input of document.querySelectorAll<HTMLInputElement>("#bitwarden-connect input")) {
+      expect(input.value).toBe("");
+      expect(input.disabled).toBe(true);
+    }
+    await act(async () => reject(new Error("Bitwarden did not accept the master password.")));
+    expect(document.querySelector("[data-settings-dialog] [role=alert]")!.textContent).toBe("Bitwarden did not accept the master password.");
+    expect(document.querySelector<HTMLButtonElement>('[form="bitwarden-connect"]')!.disabled).toBe(true);
+    await type("bitwardenClientId", "user.fixture");
+    await type("bitwardenClientSecret", "fake-client-key");
+    await type("bitwardenPassword", "fake-master");
+    expect(document.querySelector<HTMLButtonElement>('[form="bitwarden-connect"]')!.disabled).toBe(false);
+  });
+
+  it("cancels a pending connection and disconnects again after a late response before permitting another attempt", async () => {
+    let accept!: (value: unknown) => void;
+    const response = new Promise((resolve) => { accept = resolve; });
+    fixture.api.mockResolvedValueOnce({ logins: [], secrets: [], onePassword: OFF, bitwarden: OFF })
+      .mockImplementationOnce(() => response)
+      .mockResolvedValueOnce({ bitwarden: OFF })
+      .mockResolvedValueOnce({ bitwarden: OFF })
+      .mockResolvedValueOnce({ logins: [], secrets: [], onePassword: OFF, bitwarden: OFF });
+    await render();
+    await click("Connect Bitwarden");
+    await type("bitwardenClientId", "user.fixture");
+    await type("bitwardenClientSecret", "fake-client-key");
+    await type("bitwardenPassword", "fake-master");
+    await act(async () => document.querySelector<HTMLFormElement>("#bitwarden-connect")!.requestSubmit());
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>("[data-settings-dialog] button")].find((one) => one.textContent === "Cancel")!.click());
+    expect(document.querySelector("[data-settings-dialog]")).toBeNull();
+    expect(fixture.api).toHaveBeenNthCalledWith(3, "/api/logins/bitwarden", { method: "DELETE" });
+    expect(button("Connect Bitwarden").disabled).toBe(true);
+    await act(async () => accept({ bitwarden: { connected: true, account: "late@example.test", items: 2 } }));
+    expect(fixture.api).toHaveBeenNthCalledWith(4, "/api/logins/bitwarden", { method: "DELETE" });
+    expect(host.textContent).not.toContain("late@example.test");
+    expect(button("Connect Bitwarden").disabled).toBe(false);
+    await click("Connect Bitwarden");
+    expect(document.querySelector<HTMLInputElement>('input[name="bitwardenPassword"]')!.value).toBe("");
+  });
+
+  it("shows no Bitwarden row where the server does not offer it", async () => {
+    fixture.api.mockResolvedValueOnce({ logins: [], secrets: [], onePassword: OFF });
+    await render();
+    expect(host.querySelector("[data-onepassword]")).not.toBeNull();
+    expect(host.querySelector("[data-bitwarden]")).toBeNull();
   });
 
   it("is for admins only", async () => {

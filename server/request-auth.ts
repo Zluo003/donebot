@@ -410,6 +410,7 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/team-files(?:\/file)?$/ },
   { methods: ["PUT"], path: /^\/api\/team-files\/file$/ },
   { methods: ["POST"], path: /^\/api\/team-files\/(?:folder|rename|delete)$/ },
+  { methods: ["GET"], path: /^\/api\/team-templates(?:\/[a-z0-9][a-z0-9-]{0,47})?$/ },
   // voice: labels and audio, never the key
   { methods: ["GET"], path: /^\/api\/tts\/voices$/ },
   { methods: ["POST"], path: /^\/api\/tts\/prepare$/ },

@@ -79,6 +79,7 @@ import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./donebot/team-runtime.ts";
 import { createDoneBotTeamFiles } from "./donebot/team-files.ts";
 import { createTeamFilesRoutes } from "./routes/team-files.ts";
+import { createTeamTemplateRoutes } from "./routes/team-templates.ts";
 import { createShareGithubAccess } from "./host/share-github-access.ts";
 import { createTemplateRoutes } from "./routes/templates.ts";
 import { createTemplatePublications } from "./template-publications.ts";
@@ -12511,6 +12512,7 @@ ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));
 ROUTES.push(createTeamFilesRoutes({ ...donebotTeamFiles, personName: person => teamHost.personName(person), botName: botId => store.bot(botId)?.name }));
+ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles));
 ROUTES.push(createTeamRoutes({
   store,
   cfg,

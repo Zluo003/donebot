@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTeamFiles, type TeamFilesActor } from "../host/team-files.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { teamRuntimeActor, type DoneBotTeamRuntime } from "./team-runtime.ts";
+import { createTeamTemplates } from "../team-templates.ts";
 
 const bytes = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
@@ -15,11 +16,12 @@ export function donebotTeamFileLimits(runtime: DoneBotTeamRuntime | null, env: N
 export function createDoneBotTeamFiles(runtime: DoneBotTeamRuntime | null, dataDir: string, env: NodeJS.ProcessEnv) {
   const limits = donebotTeamFileLimits(runtime, env);
   const files = limits ? createTeamFiles({ dataDir, ...limits }) : null;
+  const templates = files && env.DONEBOT_TEAM_TEMPLATES_ENABLED === "1" ? createTeamTemplates(dataDir, files) : null;
   const actor = (auth: RequestAuth): TeamFilesActor | null => {
     if (!files || !runtime || auth.kind !== "session") return null;
     const verified = teamRuntimeActor(runtime, auth.session);
     if (!verified) return null;
     return { person: verified.person, admin: auth.session.teamRole === "owner" || auth.session.teamRole === "admin" };
   };
-  return { files, actor };
+  return { files, templates, actor };
 }

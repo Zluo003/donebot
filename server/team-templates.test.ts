@@ -8,19 +8,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import * as atomic from "./atomic.ts";
 import { createTeamFiles, type TeamFiles } from "./host/team-files.ts";
 import { createTeamTemplates } from "./team-templates.ts";
-import { parsePackageDocument } from "../shared/package-format.ts";
+import { teamTemplateFixture as fixtureDocument } from "./testing/team-template-fixture.ts";
 import { readShareFolder, writeShareFolder } from "../shared/share-folder.ts";
 
 const roots: string[] = [];
 afterEach(() => { vi.restoreAllMocks(); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
 const admin = { person: "admin", admin: true }, member = { person: "member", admin: false };
-const fixtureDocument = (release = "1.0.0") => parsePackageDocument({ format: "openmaus.package", version: 2, package: {
-  id: "helper", release, name: "Shared helper", tagline: "Synthetic template.", summary: "Review before installing.", category: "Testing",
-  author: { name: "Fixture" }, license: "MIT", outcomes: ["Read files."], setupMinutes: 2, requirements: { apps: [], capabilities: [] }, team: { name: "Shared helper" },
-  agents: [{ key: "helper", name: "Helper", appearance: { color: "blue" }, skills: ["report"] }],
-  skills: { version: 1, entries: [{ name: "report", description: "Report steps.", instructions: "---\nname: report\ndescription: Report steps.\n---\nRead scripts/report.py.\n",
-    files: [{ path: "scripts/report.py", content: "raise RuntimeError('TEMPLATE_SCRIPT_MUST_NOT_RUN')\n" }] }] },
-} });
 const allocate = () => { const root = mkdtempSync(join(tmpdir(), "donebot-team-templates-")); roots.push(root); return root; };
 function setup(cap = 100_000, uploadMax = cap) {
   const root = allocate(), files = createTeamFiles({ dataDir: root, cap, uploadMax });
@@ -91,6 +84,16 @@ it("refuses stale publication and removal, and notices valid but unreviewed file
   writeFileSync(join(root, "team-files/templates/helper/bot.md"), writeShareFolder(fixtureDocument("3.0.0"), "bot")["bot.md"]!);
   expect(() => library.files("helper")).toThrowError(expect.objectContaining({ status: 409 }));
   library.remove("helper", admin, undefined, second.revision);
+});
+
+it("does not replace the retained version when the exact same publication is confirmed twice", () => {
+  const { root, library, files } = setup();
+  library.add("helper", fixtureDocument(), "bot", admin);
+  const second = library.add("helper", fixtureDocument("2.0.0"), "bot", admin).template;
+  const repeated = library.add("helper", fixtureDocument("2.0.0"), "bot", { person: "another-admin", admin: true }, undefined, second.revision);
+  expect(repeated.template).toEqual(second);
+  expect(files.used()).toBe(bytes() + bytes("2.0.0"));
+  expect(readFileSync(join(root, "team-files/templates/helper.previous/bot.md"), "utf8")).toContain("1.0.0");
 });
 
 it("respects single-file limits and unrelated uploads' byte reservations", async () => {

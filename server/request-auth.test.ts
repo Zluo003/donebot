@@ -93,6 +93,10 @@ describe("request source for the lockout", () => {
 });
 
 describe("scopes", () => {
+  it("lets members read team templates while reserving publication and removal for administrators", () => {
+    for (const path of ["/api/team-templates", "/api/team-templates/helper"]) expect(requiredScope("GET", path)).toBe("client");
+    for (const [method, path] of [["POST", "/api/team-templates"], ["DELETE", "/api/team-templates/helper"], ["GET", "/api/team-templates/helper/extra"]]) expect(requiredScope(method!, path!)).toBe("admin");
+  });
   it("allows public connected-app status and enable-only automation routes while keeping other mutations admin-only", () => {
     expect(requiredScope("GET", "/api/connectors/connected")).toBe("client");
     for (const kind of ["webhooks", "app-triggers"]) {

@@ -2121,7 +2121,7 @@ D	server/team-share.e2e.test.ts	接入	待核对	待核对
 A	server/team-slack.test.ts	接入	待核对	待核对
 A	server/team-slack.ts	接入	待核对	待核对
 M	server/team-small-fixes.e2e.test.ts	接入	待核对	待核对
-A	server/team-templates.ts	自有适配	7	已接入带配额及中断恢复的存储模块；签名 HTTP 与完整工作流待接入
+A	server/team-templates.ts	自有适配	7	已接入带配额及中断恢复的存储模块；签名 HTTP 路由及 Go 代理撤权通过；正式 UI、审核安装和 worker/Linux 待验收
 M	server/team-welcome.e2e.test.ts	接入	待核对	待核对
 A	server/team-welcome.test.ts	接入	待核对	待核对
 M	server/team-welcome.ts	接入	待核对	待核对

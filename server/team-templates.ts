@@ -28,7 +28,7 @@ type Journal = z.infer<typeof journalSchema>;
 const admin = { person: "template-recovery", admin: true };
 const unavailable = () => new TeamFilesError(503, "unavailable", "The template library could not be read safely. Restore or repair it before publishing.");
 const gone = () => new TeamFilesError(404, "not_found", "This template is no longer in the team's library.");
-const fingerprint = (files: ShareFolderFiles) => createHash("sha256").update(JSON.stringify(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)).map(([path, bytes]) => [path, createHash("sha256").update(bytes).digest("hex")]))).digest("hex");
+const fingerprint = (files: ShareFolderFiles) => createHash("sha256").update(JSON.stringify(Object.entries(files).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([path, bytes]) => [path, createHash("sha256").update(bytes).digest("hex")]))).digest("hex");
 const checkRevision = (entry: Index["templates"][string] | undefined, expected: string | null | undefined) => {
   if (expected !== undefined && (entry?.revision ?? null) !== expected) throw new TeamFilesError(409, "exists", "The template changed. Review its current version before publishing or removing it.");
 };
@@ -187,16 +187,18 @@ export function createTeamTemplates(dataDir: string, files: TeamFiles, now: () =
     syncDirectory(share);
     readIndex();
   });
-  const transact = (slug: string, incomingFiles: ShareFolderFiles | null, update: (before: Index) => Index, actor: TeamFilesActor, assertAllowed: () => void) => {
+  const transact = (slug: string, incomingFiles: ShareFolderFiles | null, update: (before: Index, hadTarget: boolean) => Index | null, actor: TeamFilesActor, assertAllowed: () => void) => {
     enter(actor, guard => {
       assertAllowed();
       const target = join(root, slug), previous = `${target}.previous`;
       assertTree(target); assertTree(previous);
       const hadTarget = directory(target), hadPrevious = directory(previous);
+      const before = readIndex(), next = update(before, hadTarget);
+      if (!next) return;
+      const after = indexSchema.parse(next);
       const bytes = Object.values(incomingFiles ?? {}).reduce((sum, value) => sum + Buffer.byteLength(value), 0);
       if (Object.values(incomingFiles ?? {}).some(value => Buffer.byteLength(value) > files.uploadMax)) throw new TeamFilesError(413, "too_large", "A template file exceeds the team's file limit.");
       guard.assertRoom(bytes, hadTarget ? `templates/${slug}.previous` : undefined);
-      const before = readIndex(), after = indexSchema.parse(update(before));
       const journal: Journal = { v: 1, id: randomUUID(), slug, operation: incomingFiles ? "add" : "remove", state: "pending", hadTarget, hadPrevious, before, after };
       const staged = join(share, transactionName.parse(journal.id));
       mkdirSync(staged, { mode: 0o700 });
@@ -257,10 +259,16 @@ export function createTeamTemplates(dataDir: string, files: TeamFiles, now: () =
       const incoming = writeShareFolder(parsed, scope);
       readShareFolder(incoming);
       let replaced = false;
-      const entry = entrySchema.parse({ name: parsed.package.name, scope, tagline: parsed.package.tagline, release: parsed.package.release, revision: fingerprint(incoming), addedBy: actor.person, addedAt: now() });
-      transact(slug, incoming, before => {
+      let entry = entrySchema.parse({ name: parsed.package.name, scope, tagline: parsed.package.tagline, release: parsed.package.release, revision: fingerprint(incoming), addedBy: actor.person, addedAt: now() });
+      transact(slug, incoming, (before, hadTarget) => {
         checkRevision(before.templates[slug], expectedRevision);
         replaced = Boolean(before.templates[slug]);
+        const existing = before.templates[slug];
+        if (existing?.revision === entry.revision && hadTarget) {
+          let unchanged = false;
+          try { unchanged = fingerprint(readTemplateFolder(join(root, slug))) === entry.revision; } catch {}
+          if (unchanged) { entry = existing; return null; }
+        }
         if (!replaced && Object.keys(before.templates).length >= MAX_TEMPLATES) throw new TeamFilesError(409, "exists", "The team library holds at most 500 templates. Remove one first.");
         return { v: 1, templates: { ...before.templates, [slug]: entry } };
       }, actor, assertAllowed);

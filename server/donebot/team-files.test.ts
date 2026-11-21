@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -18,6 +18,17 @@ it("defaults off and refuses missing, invalid or excessive trusted limits", () =
   expect(donebotTeamFileLimits(runtime, limits)).toEqual({ cap: 2048, uploadMax: 512 });
   for (const patch of [{ DONEBOT_TEAM_MAX_FILE_BYTES: "2049" }, { DONEBOT_TEAM_SHARED_QUOTA_BYTES: "0" }, { DONEBOT_TEAM_MAX_FILE_BYTES: "" },
     { DONEBOT_TEAM_SHARED_QUOTA_BYTES: "9007199254740992" }, { DONEBOT_TEAM_MAX_FILE_BYTES: "1.5" }]) expect(() => donebotTeamFileLimits(runtime, { ...limits, ...patch })).toThrow();
+});
+
+it("requires explicit template opt-in, signed runtime and configured shared-file storage", () => {
+  const root = mkdtempSync(join(tmpdir(), "donebot-team-template-flags-"));
+  try {
+    expect(createDoneBotTeamFiles(runtime, root, limits).templates).toBeNull();
+    expect(createDoneBotTeamFiles(null, root, { ...limits, DONEBOT_TEAM_TEMPLATES_ENABLED: "1" }).templates).toBeNull();
+    expect(createDoneBotTeamFiles(runtime, root, { DONEBOT_TEAM_TEMPLATES_ENABLED: "1" }).templates).toBeNull();
+    expect(existsSync(join(root, "team-files"))).toBe(false);
+    expect(createDoneBotTeamFiles(runtime, root, { ...limits, DONEBOT_TEAM_TEMPLATES_ENABLED: "1" }).templates?.list()).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 it("derives ownership and role only from a grant verified for this runtime", () => {

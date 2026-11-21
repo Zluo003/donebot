@@ -837,7 +837,7 @@ A	server/cloud-team-check-backs.e2e.test.ts	自有适配	5	已接入并通过隔
 M	server/cloud-team-connections.e2e.test.ts	自有适配	2	待核对
 A	server/cloud-team-conversation-share.e2e.test.ts	自有适配	2	待核对
 M	server/cloud-team-engine-homes.e2e.test.ts	自有适配	2	待核对
-A	server/cloud-team-files.e2e.test.ts	自有适配	7	待核对
+A	server/cloud-team-files.e2e.test.ts	自有适配	7	改为 DoneBot 签名团队服务 fixture；工作流通过；代理/Linux 待验收
 M	server/cloud-team-gateway-mcp.e2e.test.ts	自有适配	2	待核对
 M	server/cloud-team-inbox.e2e.test.ts	自有适配	5	收件箱置顶/完成/已读/上下文与定位已核对并验证，其他差异待核对
 A	server/cloud-team-included-hosting.e2e.test.ts	自有适配	2	待核对
@@ -1494,8 +1494,8 @@ M	server/host/team-connections-host.test.ts	接入	待核对	待核对
 M	server/host/team-connections-host.ts	接入	待核对	待核对
 A	server/host/team-files-host.test.ts	自有适配	7	待核对
 A	server/host/team-files-host.ts	自有适配	7	待核对
-A	server/host/team-files.test.ts	自有适配	7	待核对
-A	server/host/team-files.ts	自有适配	7	待核对
+A	server/host/team-files.test.ts	自有适配	7	已接入原测试并补充并发与存储边界；133 项回归通过
+A	server/host/team-files.ts	自有适配	7	已接入成员文件存储；显式套餐配额/并发预留/归属保护；Bot 挂载待接入
 M	server/host/team-member-left.test.ts	自有适配	2	待核对
 M	server/host/team-member-left.ts	自有适配	2	待核对
 A	server/host/team-memory-saves.ts	自有适配	7	待核对
@@ -1931,7 +1931,7 @@ M	server/routes/status.ts	接入	待核对	待核对
 M	server/routes/table.ts	接入	待核对	待核对
 M	server/routes/tasks.ts	接入	待核对	待核对
 M	server/routes/team-connections.test.ts	接入	待核对	待核对
-A	server/routes/team-files.ts	自有适配	7	待核对
+A	server/routes/team-files.ts	自有适配	7	已接入签名成员接口；流中断/撤权/权限通过；真实代理待验收
 A	server/routes/team-slack.ts	接入	待核对	待核对
 M	server/routes/teams.ts	接入	待核对	待核对
 A	server/routes/threads-one-bot.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -2413,7 +2413,7 @@ A	shared/skill-files.ts	接入	6	844b91ecb 文件契约已接入；路径、凭�
 M	shared/skill-request.ts	接入	6	待核对
 A	shared/task-provenance.ts	接入	待核对	待核对
 M	shared/team-backup.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
-A	shared/team-files.ts	自有适配	7	待核对
+A	shared/team-files.ts	自有适配	7	已接入原 wire types；增加不可读取目录的拒绝码
 M	shared/team-presence.ts	接入	待核对	待核对
 A	shared/team-setup.test.ts	接入	待核对	待核对
 M	shared/team-setup.ts	接入	待核对	待核对

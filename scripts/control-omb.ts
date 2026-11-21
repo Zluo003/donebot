@@ -285,7 +285,7 @@ export async function launchVerificationServer(
   donebotCloudCredential?: { installationId: string; credential: string; user: { id: string; email: string } },
   donebotDesktopSocket?: string,
   donebotMobileRelay?: string,
-  teamRuntime?: { id: string; name: string; instanceId: string; publicKey: string },
+  teamRuntime?: { id: string; name: string; instanceId: string; publicKey: string; files?: { cap: number; uploadMax: number } },
 ): Promise<VerificationServer> {
   if (donebotMobileRelay && (!donebotFixtureOrigin || !/^ws:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(donebotMobileRelay))) throw new ControlOmbError("Mobile relay verification requires an owned loopback relay");
   if (donebotDesktopSocket && (!donebotCloudCredential || !/^\/tmp\/dbc-[\w/-]+\.sock$/.test(donebotDesktopSocket))) throw new ControlOmbError("Cloud desktop verification requires an owned fixture socket");
@@ -380,7 +380,8 @@ export async function launchVerificationServer(
   if (teamRuntime) {
     if (!donebotFixtureOrigin) throw new ControlOmbError("Team verification requires an owned synthetic gateway");
     const teamEnv = { DONEBOT_TEAM_RUNTIME: "1", DONEBOT_TEAM_ID: teamRuntime.id, DONEBOT_TEAM_NAME: teamRuntime.name,
-      DONEBOT_TEAM_INSTANCE_ID: teamRuntime.instanceId, DONEBOT_TEAM_PUBLIC_KEY: teamRuntime.publicKey };
+      DONEBOT_TEAM_INSTANCE_ID: teamRuntime.instanceId, DONEBOT_TEAM_PUBLIC_KEY: teamRuntime.publicKey,
+      ...(teamRuntime.files ? { DONEBOT_TEAM_FILES_ENABLED: "1", DONEBOT_TEAM_SHARED_QUOTA_BYTES: String(teamRuntime.files.cap), DONEBOT_TEAM_MAX_FILE_BYTES: String(teamRuntime.files.uploadMax) } : {}) };
     teamRuntimeConfiguration(teamEnv);
     Object.assign(childEnv, teamEnv);
   }

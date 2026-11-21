@@ -77,6 +77,8 @@ import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./donebot/team-runtime.ts";
+import { createDoneBotTeamFiles } from "./donebot/team-files.ts";
+import { createTeamFilesRoutes } from "./routes/team-files.ts";
 import { createShareGithubAccess } from "./host/share-github-access.ts";
 import { createTemplateRoutes } from "./routes/templates.ts";
 import { createTemplatePublications } from "./template-publications.ts";
@@ -731,6 +733,7 @@ const CLOUD_SECRETS = BOOT_CLOUD_SECRETS;
 const CLOUD_ENV: NodeJS.ProcessEnv = { ...process.env, ...CLOUD_SECRETS };
 const CLOUD_HOME = cloudHomeConfiguration(CLOUD_ENV);
 const DONEBOT_TEAM_RUNTIME = teamRuntimeConfiguration(process.env);
+const donebotTeamFiles = createDoneBotTeamFiles(DONEBOT_TEAM_RUNTIME, DATA_DIR, process.env);
 const CLOUD_TEAM = DONEBOT_TEAM_RUNTIME?.team ?? CLOUD_HOME?.team ?? null, CLOUD_PERSONAL = CLOUD_HOME !== null && CLOUD_TEAM === null, TEAM_LABEL = CLOUD_TEAM ? { label: CLOUD_TEAM.name } : {};
 /** The language set on this server, else (on a Team Cloud) the team's default from the Admin. threadLanguage: the one a line in a conversation is written in, its one person's, else the place's (server/server-lines.ts). */
 const appLanguage = (): string | undefined => cfg.language ?? CLOUD_TEAM?.language; const personLanguages = createPersonLanguages({ dataDir: DATA_DIR, configured: appLanguage, privateTo: (threadId) => teamHost.privateTo(threadId) }); const threadLanguage = personLanguages.forThread; setConversationLanguage(threadLanguage);
@@ -12507,6 +12510,7 @@ ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA
   cfg: () => cfg, composio,
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));
+ROUTES.push(createTeamFilesRoutes({ ...donebotTeamFiles, personName: person => teamHost.personName(person), botName: botId => store.bot(botId)?.name }));
 ROUTES.push(createTeamRoutes({
   store,
   cfg,

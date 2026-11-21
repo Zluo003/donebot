@@ -111,6 +111,7 @@ Use only mapped, tested commands:
 - [Sharing a whole team](team-sharing.md)
 - [模板附带技能脚本](template-skill-files.md)
 - [文件夹与私有 GitHub 模板](template-folders.md)
+- [团队共享文件接口](team-files.md)
 - [The organization library](org-library.md)
 - [Preset bots](presets.md)
 - [Teams and shared instructions](teams.md)

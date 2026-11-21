@@ -76,6 +76,37 @@ it("prevents private or room contexts from widening their audience while retaini
   }
 });
 
+it("binds helpers to the exact original run and keeps each folded prefix independent after restart", () => {
+  const fx = fixture(), parent = fx.bind("private", "member:member-three");
+  fx.requests.attachRun("turn", parent.id);
+  const input = { runId: "turn", botId: "chief", threadId: "source-thread", operation: "compaction:b3" };
+  const helper = fx.requests.helper(input);
+  expect(helper).toMatchObject({ botId: parent.botId, threadId: parent.threadId, ordinal: 0 });
+  expect(helper.bindingId).not.toBe(parent.id);
+  expect(fx.requests.binding(helper.bindingId)).toMatchObject({ actor: fx.actor, audience: parent.audience, parentId: parent.id, operation: "helper:compaction:b3" });
+  const restarted = new TeamRequestStore(fx.directory, fx.runtime);
+  expect(restarted.helper(input)).toEqual(helper);
+  expect(restarted.helper({ ...input, operation: "compaction:b5" }).bindingId).not.toBe(helper.bindingId);
+  for (const altered of [{ ...input, runId: "missing" }, { ...input, botId: "other" }, { ...input, threadId: "other" }]) {
+    expect(() => restarted.helper(altered)).toThrow();
+  }
+  const next = restarted.derive(parent.id, "step:2");
+  restarted.attachRun("next-turn", next.id);
+  expect(restarted.helper({ ...input, runId: "next-turn" }).bindingId).not.toBe(helper.bindingId);
+});
+
+it("records an authenticated control action under its actual member without inheriting the last writer", () => {
+  const fx = fixture();
+  fx.bind();
+  const actor = { userId: "4", memberVersion: 3, person: "member-four" };
+  const sender = fx.requests.sender({ id: actor.person, name: "Other member" }, actor);
+  fx.requests.captureAction("source-thread", "compact-action", sender);
+  const binding = fx.requests.bind({ sourceId: "compact-action", botId: "chief", threadId: "source-thread", audience: "team", generation: 1 });
+  expect(binding.actor).toEqual(actor);
+  for (const unverified of [undefined, { ...sender }]) expect(() => fx.requests.captureAction("source-thread", "unverified-action", unverified)).toThrow();
+  expect(() => fx.requests.captureAction("source-thread", "compact-action", fx.requests.sender({ id: fx.actor.person, name: "Original" }, fx.actor))).toThrow();
+});
+
 it.each(["direct", "room"] as const)("captures %s queued members before persistence and keeps permission versions separate after restart", async kind => {
   const fx = fixture();
   let requests = fx.requests;

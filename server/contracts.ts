@@ -539,6 +539,8 @@ export interface TextGenerationUsage {
 
 export interface TextGenerationOptions {
   signal?: AbortSignal;
+  /** Harness-owned team operation provenance; never accepted from a tool or a public request. */
+  teamExecution?: { bindingId: string; botId: string; threadId: string; ordinal: number };
   onUsage?: (usage: TextGenerationUsage) => void;
   /** One of this instance's models instead of the driver's quick-call choice: the helper model setting, and the setup
    * card's quick model (side-jobs.ts). */

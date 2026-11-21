@@ -235,3 +235,38 @@ it("carries provenance through the real native driver, separates reasoning, and 
   expect(fx.count(), JSON.stringify(events)).toBe(2);
   expect(events.filter(event => event.type === "turn.retrying")).toHaveLength(0);
 });
+
+it("sends native text helpers with distinct member operations and holds an uncertain helper across restart", async () => {
+  const fx = await fixture();
+  await fx.gateway.refreshCatalog();
+  const create = async (gateway: DoneBotTeamModelGateway) => {
+    const driver = createDoneBotLlmDriver({ imageCacheDir: join(fx.directory, "images"), request: (path, init, context) => gateway.request(path, init, context),
+      authenticated: () => gateway.authenticated(), requiresExecutionContext: true, models: () => doneBotTextModels(gateway.models()), protocol: model => doneBotProtocol(model, gateway.models()) });
+    const instance = await driver.create({ instanceId: "donebot", displayName: "Fixture", environment: {}, enabled: true, config: {} });
+    cleanups.push(async () => { await instance.dispose(); });
+    return instance;
+  };
+  fx.gateway.requests.attachRun("fixture-run", fx.binding.id);
+  const input = { runId: "fixture-run", botId: fx.binding.botId, threadId: fx.binding.threadId, operation: "compaction:b3" };
+  const context = fx.gateway.requests.helper(input);
+  const instance = await create(fx.gateway);
+  await (await fx.gateway.request("/v1/chat/completions", fx.init, fx.context)).body?.cancel();
+  expect(await instance.generateText!("Summarize fixture history", { teamExecution: context })).toBe("fixture answer");
+  expect(fx.count()).toBe(2);
+  expect(fx.records.size).toBe(2);
+  await expect(instance.generateText!("No member context")).rejects.toThrow();
+  await expect(instance.generateText!("Wrong conversation", { teamExecution: { ...context, threadId: "other" } })).rejects.toThrow();
+  expect(fx.count()).toBe(2);
+  const nextInput = { ...input, operation: "compaction:b5" };
+  const next = fx.gateway.requests.helper(nextInput);
+  fx.modes({ modelDrop: true });
+  await expect(instance.generateText!("Summarize later history", { teamExecution: next })).rejects.toThrow();
+  expect(fx.count()).toBe(3);
+  const restarted = fx.create();
+  await restarted.refreshCatalog();
+  const restored = await create(restarted);
+  await expect(restored.generateText!("Summarize later history", { teamExecution: restarted.requests.helper(nextInput) })).rejects.toBeInstanceOf(TeamModelRequestHeld);
+  expect(fx.count()).toBe(3);
+  expect(fx.records.size).toBe(3);
+  for (const record of fx.records.values()) expect(record.body).toMatchObject({ actor_id: "3", member_version: 2, bot_id: fx.binding.botId, thread_id: fx.binding.threadId });
+});

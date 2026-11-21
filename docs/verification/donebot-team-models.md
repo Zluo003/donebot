@@ -25,7 +25,11 @@ pnpm lint
 
 2026-11-21：九文件 283 项通过，日志 `/tmp/donebot-team-lineage-final-tests.log`；新增仅拒绝未执行委派的恢复测试后，相关三文件 130 项通过，日志 `/tmp/donebot-team-lineage-admission.log`。最终服务端类型和 lint 通过，日志 `/tmp/donebot-team-lineage-final-{types,lint}.log`。这些是临时队列、真实磁盘协调器及合成原生网关测试，未证明真实 Linux 团队 HTTP 成功执行。
 
-卡片及桌面选择等独立续跑、辅助模型、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
+会话压缩的工具外文本调用现在携带原始成员及独立子操作。自动压缩绑定本次派发和实际折叠到的消息；手动压缩从经过验证的点击者建立独立控制动作，不能继承最后发言者或请求正文伪造的身份。闲置团队压缩没有活动成员来源时只用已有本地摘录摘要。辅助调用响应丢失、重启及本地主回复同为第零轮时都不会混用操作或再次派发。
+
+2026-11-21：相关六文件 114 项通过，日志 `/tmp/donebot-team-helper-final-units.log`；真实原生驱动连接 loopback 合成网关，验证原成员版本、正文摘要及响应丢失后供应商计数不增加。个人隔离服务的完整压缩流程 11 项通过，日志 `/tmp/donebot-team-helper-compaction-workflow.log`，包含停止、重启、分支和附件保留。服务端类型及定向 lint 通过，日志 `/tmp/donebot-team-helper-final-{types,lint}.log`。这不等于真实团队 HTTP 成功执行，Linux 隔离阻塞仍存在。
+
+卡片及桌面选择等独立续跑、其他辅助模型、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
 
 ## 真实 Linux 镜像复测
 

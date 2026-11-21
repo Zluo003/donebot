@@ -7114,7 +7114,14 @@ const compactConversation = createConversationCompaction({
   nativeCompactTokens: (instance) => nativeCompactTokens(instance),
   engineCompactionOn: (instance) => instance.driverKind !== "claudeAgent" || !claudeCompactionDisabled({ ...process.env, ...cfg.instances?.[instance.instanceId]?.environment }),
   engineCompact: (target, signal) => warmSummaries.compactNow(target, signal),
-  generateText: (botId, instance) => sideJobs.text("compaction", botId, { instance: instance as NonNullable<ReturnType<typeof registry.get>> })?.generateText,
+  generateText: (botId, instance, scope) => {
+    const generate = sideJobs.text("compaction", botId, { instance: instance as NonNullable<ReturnType<typeof registry.get>> })?.generateText;
+    const team = donebotHost.team;
+    if (!team || !generate) return generate;
+    if (scope.idle) return undefined;
+    return (prompt, options) => generate(prompt, { ...options, teamExecution: team.requests.helper({ runId: scope.generation,
+      botId, threadId: scope.threadId, operation: `compaction:${scope.foldedThroughId}` }) });
+  },
   claimIsCurrent: (botId, generation, threadId) => directTurnClaimIsCurrent(botId, generation, threadId),
   controllers: compactionControllers, cancelled: (reason) => new DirectTurnSetupCancelled(reason), idleFraction: HARNESS_IDLE_FRACTION,
 });
@@ -7751,7 +7758,8 @@ async function beginTurn(
   }
 
   const agentsMounted = instance.adapter.capabilities.agentsMcp === true;
-  const teamExecution = teamTurnBinding({ sourceId: opts?.cardContinuation ? opts.requestMessageId : userMessage.id, sourceIds: opts?.excludeMessageIds,
+  if (opts?.compactOnly && donebotHost.team) donebotHost.team.requests.captureAction(threadId, userMessage.id, opts.sender);
+  const teamExecution = teamTurnBinding({ sourceId: opts?.cardContinuation && !opts.compactOnly ? opts.requestMessageId : userMessage.id, sourceIds: opts?.excludeMessageIds,
     botId: bot.id, threadId, workId: opts?.coordination?.id });
 
   const dispatchClaimId = randomUUID();

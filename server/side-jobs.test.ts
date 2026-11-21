@@ -304,6 +304,15 @@ describe("who writes a small job", () => {
     await jobs.text("memory", "pi")!.generateText("p", { signal: controller.signal });
     expect(claude.calls[0]!.options?.signal).toBe(controller.signal);
   });
+
+  it("preserves harness-owned team context on both own-engine and helper summaries", async () => {
+    const { jobs, claude, openrouter } = setup();
+    const teamExecution = { bindingId: "fixture-binding", botId: "fixture-bot", threadId: "fixture-thread", ordinal: 0 };
+    await jobs.text("compaction", "openrouter")!.generateText("own summary", { teamExecution });
+    await jobs.text("compaction", "pi")!.generateText("helper summary", { teamExecution });
+    expect(openrouter.calls[0]!.options?.teamExecution).toEqual(teamExecution);
+    expect(claude.calls[0]!.options?.teamExecution).toEqual(teamExecution);
+  });
 });
 
 describe("the small model a bot's own engine writes on", () => {

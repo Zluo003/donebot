@@ -161,8 +161,22 @@ async function fixture(over: Partial<Record<keyof BotMessageRouteDeps, unknown>>
   };
   const row = (id: string, thread = threadId): Message => store.messagesFor(thread).find((message) => message.id === id)!;
   const sent = (thread = threadId): Message[] => store.messagesFor(thread).filter((message) => message.role === "user");
-  return { store, bot, threadId, state, post, edit, cancelQueued, show, row, sent, patches: vi.spyOn(store, "patchMessage") };
+  const compact = async (body: unknown) => {
+    const response = await fetch(`${base}/api/bots/${bot.id}/compact`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: response.status, body: await response.json() as Record<string, any> };
+  };
+  return { store, bot, threadId, state, post, edit, cancelQueued, compact, show, row, sent, patches: vi.spyOn(store, "patchMessage") };
 }
+
+it("takes manual compaction identity from the authenticated request and refuses an unauthorized conversation", async () => {
+  const sender = { id: "authenticated-member", name: "Member" };
+  const fx = await fixture({ messageSender: () => sender });
+  expect((await fx.compact({ threadId: fx.threadId, sender: { id: "forged-member" } })).status).toBe(202);
+  expect(fx.state.started[0]!.opts).toMatchObject({ sender, threadId: fx.threadId, compactOnly: true, cardContinuation: true });
+  const denied = await fixture({ cloudThreadRefusal: () => "Not your conversation" });
+  expect((await denied.compact({ threadId: denied.threadId })).status).toBe(403);
+  expect(denied.state.started).toHaveLength(0);
+});
 
 describe("editing a message with no AI", () => {
   it("says what a Send says on a team, and starts no turn", async () => {

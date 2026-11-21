@@ -58,7 +58,7 @@ export interface ConversationCompactionDeps {
   engineCompactionOn(instance: CompactionInstance): boolean;
   /** The engine's own compaction of this conversation's session, asked for by the person; false when it has none to offer now. */
   engineCompact(target: { botId: string; threadId: string; instanceId: string }, signal: AbortSignal): Promise<boolean>;
-  generateText(botId: string, instance: CompactionInstance): ((prompt: string, options?: { signal?: AbortSignal }) => Promise<string>) | undefined;
+  generateText(botId: string, instance: CompactionInstance, scope: Pick<CompactConversationInput, "threadId" | "generation" | "idle"> & { foldedThroughId: string }): ((prompt: string, options?: { signal?: AbortSignal }) => Promise<string>) | undefined;
   claimIsCurrent(botId: string, generation: string, threadId: string): boolean;
   controllers: Map<string, { generation: string; controller: AbortController }>;
   cancelled(reason: string): Error;
@@ -110,7 +110,7 @@ export function createConversationCompaction(deps: ConversationCompactionDeps) {
     try {
       if (manual && engineCompacts && await deps.engineCompact({ botId: bot.id, threadId, instanceId: instance.instanceId }, controller.signal)) return;
       controller.signal.throwIfAborted();
-      const summary = await draftSummary(fold.folded, { signal: controller.signal, generateText: deps.generateText(bot.id, instance) });
+      const summary = await draftSummary(fold.folded, { signal: controller.signal, generateText: deps.generateText(bot.id, instance, { threadId, generation, idle, foldedThroughId }) });
       if (!idle && !deps.claimIsCurrent(bot.id, generation, threadId)) throw deps.cancelled("context summarization stopped");
       controller.signal.throwIfAborted();
       if (prefix !== JSON.stringify(sinceFreshStart(store.activePath(threadId)).slice(0, messages.length))) {

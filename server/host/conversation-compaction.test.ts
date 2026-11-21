@@ -96,7 +96,7 @@ describe("compactConversation", () => {
       idleFraction: 0.85,
     };
     const instance = { instanceId: "engine", driverKind: "claudeAgent", adapter: { capabilities: { nativeCompaction: options.nativeCompaction ?? true } } };
-    const run = (manual: boolean) => createConversationCompaction(deps)({ bot, threadId: thread, generation: "g", instance, model: "model", excludedIds: new Set(), manual });
+    const run = (manual: boolean, idle?: AbortSignal) => createConversationCompaction(deps)({ bot, threadId: thread, generation: "g", instance, model: "model", excludedIds: new Set(), manual, idle });
     const folds = () => messages.filter((m) => m.kind === "compaction");
     return { run, folds, asked, deps };
   }
@@ -116,6 +116,29 @@ describe("compactConversation", () => {
     await stuck.run(false);
     expect(stuck.folds()).toHaveLength(1);
     expect(stuck.asked).toEqual([]);
+  });
+
+  it.each([false, true])("passes the exact fold and generation to the helper, manual=%s", async manual => {
+    const fx = setup({ tokens: 191_000, nativeCompaction: false });
+    const scopes: unknown[] = [];
+    fx.deps.generateText = (botId, instance, scope) => {
+      scopes.push({ botId, instanceId: instance.instanceId, ...scope });
+      return async () => "Fixture historical summary";
+    };
+    await fx.run(manual);
+    const foldedThroughId = manual ? "b3" : "b1";
+    expect(scopes).toEqual([{ botId: "bot", instanceId: "engine", threadId: "thread", generation: "g", idle: undefined, foldedThroughId }]);
+    expect(fx.folds()[0]!.compaction).toMatchObject({ foldedThroughId, summary: expect.stringContaining("Fixture historical summary") });
+  });
+
+  it("identifies idle compaction without inventing an active member", async () => {
+    const fx = setup({ tokens: 191_000, nativeCompaction: false });
+    const idle = new AbortController().signal;
+    let scope: unknown;
+    fx.deps.generateText = (_botId, _instance, value) => { scope = value; return undefined; };
+    await fx.run(false, idle);
+    expect(scope).toEqual({ threadId: "thread", generation: "g", idle, foldedThroughId: "b1" });
+    expect(fx.folds()[0]!.compaction?.summary).toContain("ask one");
   });
 
   it("folds at the usual point when the engine's own compaction is switched off", async () => {

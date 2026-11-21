@@ -52,7 +52,7 @@ export interface SideJobBot {
 
 export interface SideJobText {
   via: "engine" | "helper";
-  generateText: (prompt: string, options?: Pick<TextGenerationOptions, "signal" | "timeoutMs">) => Promise<string>;
+  generateText: (prompt: string, options?: Pick<TextGenerationOptions, "signal" | "timeoutMs" | "teamExecution">) => Promise<string>;
 }
 
 export interface SideJobsDeps {

@@ -68,6 +68,11 @@ export class TeamRequestStore {
     if (actor && sender?.id !== actor.person) invalid();
     if (actor) this.saveSource(threadId, queueId, actor);
   }
+  captureAction(threadId: string, sourceId: string, sender: ResolvedSender | undefined): void {
+    const actor = sender && this.senders.get(sender);
+    if (!actor || sender?.id !== actor.person) invalid();
+    this.saveSource(threadId, sourceId, actor);
+  }
   queueIdentity(threadId: string, queueId: string): string {
     try {
       const source = sourceSchema.parse(privateJson(this.sourcePath(threadId, queueId)));
@@ -165,6 +170,12 @@ export class TeamRequestStore {
         !Number.isSafeInteger(input.executions) || !Number.isSafeInteger(input.restarts) || input.restarts < 0 || input.executions <= input.restarts) invalid();
     const step = input.executions - input.restarts;
     return step === 1 ? binding : this.derive(binding.id, `step:${step}`);
+  }
+  helper(input: { runId: string; botId: string; threadId: string; operation: string }): TeamModelRequestContext {
+    const parent = this.forRun(input.runId);
+    if (parent.botId !== input.botId || parent.threadId !== input.threadId) invalid();
+    const binding = this.derive(parent.id, `helper:${input.operation}`);
+    return { bindingId: binding.id, botId: binding.botId, threadId: binding.threadId, ordinal: 0 };
   }
   binding(bindingId: string): TeamRequestBinding {
     if (!/^[a-f0-9]{64}$/.test(bindingId)) invalid();

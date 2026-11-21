@@ -134,3 +134,9 @@ DoneBot 将结果通知产生时的消息编号持久保存，后续回复和重
 接入固定上游 cd9c6cba4。音频或图片准备期间房间切换会话时，回执使用真正写入的 threadId。相同 deliveryId 重试、服务重启或触发器改指其他房间后仍返回原提交目的地，不再次发消息、执行模型或合成音频；旧版只存 runId 的回执保持可读。
 
 2026-11-21 验证：`/tmp/donebot-webhook-receipt-regression.log` 六文件 65 项通过，覆盖会话切换竞态、重复/并发投递、重启及旧回执；`/tmp/donebot-webhook-receipt-workflow.log` 真实隔离服务再次核对重复投递返回原 threadId、仅一条消息和一次语音合成。`/tmp/donebot-data-webhook-types.log` 与 `/tmp/donebot-data-webhook-lint.log` 类型、定向 lint 通过。
+
+## 团队定时跟进的成员归属
+
+定时跟进通过当前可信工具轮次保存私有授权，先于待办记录持久化；保存失败不留下可运行的排期。授权固定原成员版本、Bot、会话受众和完整排期内容，不从待办的 origin 或最后发言者推断付款人。重启后的唤醒读取原绑定，来源缺失、记录改写和运行代次变化均拒绝；下一次跟进从实际唤醒轮次继承。保持原版启动前标记、中断不重跑及暂停等待机制。
+
+2026-11-21：四文件 51 项通过，日志 `/tmp/donebot-team-check-back-units.log`；真实调度器与合成网关覆盖私聊、并发 tick、重启、后续排期、撤权、篡改和响应丢失，供应商计数不增加。两个真实隔离服务文件 3 项流程通过，日志 `/tmp/donebot-team-check-back-workflow.log`；类型与定向 lint 通过，日志 `/tmp/donebot-team-check-back-{types,lint}.log`。隔离服务包含原版 Team fixture 的私聊检查，不证明 DoneBot 签名团队模型端到端成功执行；真实 Linux 验收仍未通过，团队能力继续关闭。

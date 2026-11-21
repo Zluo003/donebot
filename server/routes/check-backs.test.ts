@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createCheckBacks } from "../host/check-backs.ts";
+import { createCheckBacks, type CheckBackRecord } from "../host/check-backs.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { CHECK_BACK_MESSAGES, checkBackRefusal, createCheckBackRoutes, createCheckBackToolRoutes, type CheckBackTurnFacts } from "./check-backs.ts";
 import { PASS, type RouteContext } from "./table.ts";
@@ -21,14 +21,14 @@ function ctx(path: string, method: string, body?: unknown) {
   return { context, sent };
 }
 
-function setup(refusal: string | null = null) {
+function setup(refusal: string | null = null, prepare?: (record: Readonly<CheckBackRecord>) => void) {
   const dir = mkdtempSync(join(tmpdir(), "omb-check-back-routes-"));
   dirs.push(dir);
   const checkBacks = createCheckBacks({ dataDir: dir, now: () => T0, alive: () => true, busy: () => false, line: (record) => `line-${record.id}`, start: async () => {}, log: () => {} });
   let body: unknown;
   const tool = createCheckBackToolRoutes({
     checkBacks, requireActive: () => {}, botId: () => "scout", threadId: () => "t1", refusal: () => refusal, zone: () => "America/New_York",
-    origin: () => ({ kind: "user", request: "watch CI" }), readBody: async () => body, now: () => T0,
+    origin: () => ({ kind: "user", request: "watch CI" }), readBody: async () => body, now: () => T0, prepare,
   });
   const call = async (args: unknown) => {
     body = args;
@@ -57,6 +57,18 @@ describe("checkBackRefusal", () => {
 });
 
 describe("check_back tool route", () => {
+  it("passes only the host's preparation hook and never accepts authority from the tool body", async () => {
+    const prepared: Readonly<CheckBackRecord>[] = [];
+    const { checkBacks, call } = setup(null, record => { prepared.push(record); });
+    expect((await call({ when: "in 5 minutes", note: "CI", actor: "owner", runId: "forged" })).status).toBe(400);
+    expect(prepared).toEqual([]);
+    expect((await call({ when: "in 5 minutes", note: "CI" })).status).toBe(201);
+    expect(prepared).toEqual(checkBacks.list("scout", "t1"));
+    const failed = setup(null, () => { throw new Error("no verified run"); });
+    await expect(failed.call({ when: "in 5 minutes", note: "CI" })).rejects.toThrow("no verified run");
+    expect(failed.checkBacks.list("scout", "t1")).toEqual([]);
+  });
+
   it("passes other paths", async () => {
     const { checkBacks } = setup();
     const tool = createCheckBackToolRoutes({ checkBacks, requireActive: () => {}, botId: () => "b", threadId: () => "t", refusal: () => null, zone: () => "UTC", origin: () => ({ kind: "outside" }), readBody: async () => ({}) });

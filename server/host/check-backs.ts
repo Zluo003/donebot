@@ -181,7 +181,7 @@ export function createCheckBacks(deps: CheckBackDeps) {
   }
 
   return {
-    create(input: NewCheckBack): CreateResult {
+    create(input: NewCheckBack, prepare?: (record: Readonly<CheckBackRecord>) => void): CreateResult {
       const at = now();
       const refused = refusal(input, at);
       if (refused) return { ok: false, error: refused };
@@ -191,6 +191,7 @@ export function createCheckBacks(deps: CheckBackDeps) {
         ...(input.condition ? { condition: input.condition.slice(0, CONDITION_MAX) } : {}),
         dueAt: input.dueAt, createdAt: at, zone: input.zone, origin: origin as WorkOrigin,
       };
+      prepare?.(record);
       commit(() => { records.push(record); });
       drawLine(record, lineOf(record, "pending"));
       if (record.lineMessageId) {

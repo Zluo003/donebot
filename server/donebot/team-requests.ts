@@ -7,6 +7,7 @@ import { audienceMember, parseAudience } from "../audience.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import type { ResolvedSender, WireMessage as Message } from "../../shared/wire.ts";
 import type { DoneBotTeamRuntime } from "./team-runtime.ts";
+import type { CheckBackRecord } from "../host/check-backs.ts";
 
 const id = z.string().min(1).max(200);
 const actorSchema = z.object({ userId: z.string().regex(/^[1-9][0-9]{0,19}$/), memberVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), person: id }).strict();
@@ -35,6 +36,11 @@ export function privateJson(path: string): unknown {
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === "ENOENT";
 function invalid(): never { throw new Error("The team request has no verified member and conversation provenance"); }
+function checkBackOperation(record: Readonly<CheckBackRecord>): string {
+  const origin = record.origin.kind === "user" ? [record.origin.kind, record.origin.request, record.origin.person ?? null, record.origin.lends ?? false] : [record.origin.kind];
+  return `check-back:${hash(JSON.stringify([record.id, record.botId, record.threadId, record.note, record.condition ?? null,
+    record.dueAt, record.createdAt, record.zone, origin]))}`;
+}
 
 export class TeamRequestStore {
   private readonly senders = new WeakMap<ResolvedSender, TeamRequestActor>();
@@ -175,6 +181,19 @@ export class TeamRequestStore {
     const parent = this.forRun(input.runId);
     if (parent.botId !== input.botId || parent.threadId !== input.threadId || parent.audience !== input.audience || parent.generation !== input.generation) invalid();
     return this.derive(parent.id, `continue:${input.operation}`);
+  }
+  scheduleCheckBack(input: { runId: string; record: Readonly<CheckBackRecord>; audience: Audience; generation: number }): void {
+    const { record } = input, parent = this.forRun(input.runId);
+    if (parent.botId !== record.botId || parent.threadId !== record.threadId || parent.audience !== input.audience || parent.generation !== input.generation ||
+        record.origin.kind !== "user" || record.origin.person !== parent.actor.person) invalid();
+    const binding = this.derive(parent.id, checkBackOperation(record));
+    this.attachRun(`check-back:${record.id}`, binding.id);
+  }
+  checkBack(input: { record: Readonly<CheckBackRecord>; audience: Audience; generation: number }): TeamRequestBinding {
+    const { record } = input, binding = this.forRun(`check-back:${record.id}`);
+    if (binding.botId !== record.botId || binding.threadId !== record.threadId || binding.audience !== input.audience || binding.generation !== input.generation ||
+        binding.operation !== checkBackOperation(record)) invalid();
+    return binding;
   }
   helper(input: { runId: string; botId: string; threadId: string; operation: string }): TeamModelRequestContext {
     const parent = this.forRun(input.runId);

@@ -31,7 +31,11 @@ pnpm lint
 
 桌面选择续跑从实际先前派发编号导出独立操作，严格匹配 Bot、会话、受众和运行代次。合成网关验证主回复与续跑分别受理，续跑响应丢失后查询不重提。三文件 135 项通过，日志 `/tmp/donebot-team-continuation-units.log`；个人隔离服务桌面选择 6 项通过、41 项按名称未运行，日志 `/tmp/donebot-team-continuation-workflow-final.log`，包含停止、失败、关闭、手动选择和新消息压过旧续跑。该上游夹具最初误入真实网关模式，已限定 `NODE_ENV=test` 和 `DONEBOT_UPSTREAM_FIXTURE=1`，未改变产品网关限制。类型及定向 lint 通过，日志 `/tmp/donebot-team-continuation-{types,lint}.log`。未证明真实 Linux 团队成功执行。
 
-其他卡片续跑、辅助模型、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
+定时跟进在 pending 记录落盘之前保存原派发的私有成员绑定，并固定任务内容、条件、时间、时区、会话及请求人。唤醒校验原受众和运行代次，不使用最后发言者或普通记录中的身份作为授权；缺失私有来源、记录改写或版本变化均拒绝。唤醒轮次可继续安排下一次跟进，重复 tick 和响应丢失沿用同一操作；启动中断仍按既有规则不重跑。
+
+2026-11-21：`/tmp/donebot-team-check-back-units.log` 四文件 51 项通过，包含真实磁盘调度器和 loopback 合成网关，验证私聊、重启、八路 tick、后续排期、成员撤权、来源缺失、任务改写、运行代次变化和响应丢失。`/tmp/donebot-team-check-back-workflow.log` 两文件 3 项真实隔离服务流程通过，验证个人 Ask 工具调用、到点自动续跑、取消及上游 Team fixture 的私聊隔离；该 Team fixture 不等于 DoneBot 签名团队模型成功执行。服务端类型与定向 lint 通过，日志 `/tmp/donebot-team-check-back-{types,lint}.log`。
+
+其他卡片续跑、辅助模型、周期及事件自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
 
 ## 真实 Linux 镜像复测
 

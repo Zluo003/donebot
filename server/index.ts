@@ -626,7 +626,7 @@ import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createHandoffStatus } from "./host/handoff-status.ts";
-import { createCheckBacks } from "./host/check-backs.ts";
+import { createCheckBacks, type CheckBackRecord } from "./host/check-backs.ts";
 import { writeCheckBackLine } from "./host/check-back-host.ts";
 import { checkBackRefusal, createCheckBackRoutes, createCheckBackToolRoutes } from "./routes/check-backs.ts";
 import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
@@ -879,10 +879,11 @@ function messageSender(auth: RequestAuth): ResolvedSender | undefined {
   return actor && donebotHost.team ? donebotHost.team.requests.sender(sender, actor) : sender;
 }
 
-function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string; continuation?: { runId: string; operation: string } }) {
+function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string; continuation?: { runId: string; operation: string }; checkBack?: Readonly<CheckBackRecord> }) {
   const team = donebotHost.team;
   if (!team) return undefined;
   const generation = team.coordinator().generation, audience = teamHost.audienceOf(input.threadId);
+  if (input.checkBack) return team.requests.checkBack({ record: input.checkBack, audience, generation });
   if (input.continuation) return team.requests.continueRun({ ...input.continuation, botId: input.botId, threadId: input.threadId, audience, generation });
   const node = input.workId ? coordinator.node(input.workId) : undefined;
   if (input.workId && (!node || node.botId !== input.botId || node.threadId !== input.threadId)) throw new Error("团队任务的原始执行记录不可用。");
@@ -7587,6 +7588,7 @@ async function beginTurn(
     computerSelectionContinuation?: boolean;
     /** Harness-owned event in a previously verified run; never accepted from public requests. */
     teamContinuation?: { runId: string; operation: string };
+    teamCheckBack?: Readonly<CheckBackRecord>;
     replyTo?: ReplyTarget;
     sendId?: string;
     via?: "call"; callId?: string;
@@ -7764,7 +7766,7 @@ async function beginTurn(
   const agentsMounted = instance.adapter.capabilities.agentsMcp === true;
   if (opts?.compactOnly && donebotHost.team) donebotHost.team.requests.captureAction(threadId, userMessage.id, opts.sender);
   const teamExecution = teamTurnBinding({ sourceId: opts?.cardContinuation && !opts.compactOnly ? opts.requestMessageId : userMessage.id, sourceIds: opts?.excludeMessageIds,
-    botId: bot.id, threadId, workId: opts?.coordination?.id, continuation: opts?.teamContinuation });
+    botId: bot.id, threadId, workId: opts?.coordination?.id, continuation: opts?.teamContinuation, checkBack: opts?.teamCheckBack });
 
   const dispatchClaimId = randomUUID();
   if (teamExecution) donebotHost.team!.requests.attachRun(dispatchClaimId, teamExecution.id);
@@ -9002,7 +9004,7 @@ calendarCalls = new CalendarCallManager({
   botExists: (botId) => Boolean(store.bot(botId)),
   onDue: deliverCalendarCall,
 });
-const checkBacks = createCheckBacks({ dataDir: DATA_DIR, alive: (botId, threadId) => directChatOf(botId, threadId), busy: (botId, threadId) => threadBusy(botId, threadId), line: (record, line, messageId) => writeCheckBackLine(store, record, line, messageId, threadLanguage(record.threadId)), start: async (record, prompt) => { await startTurn(record.botId, prompt, { threadId: record.threadId, cardContinuation: true, origin: record.origin }); }, paused: (error) => [BOT_HELD_CODE, BOT_PAUSED_CODE].includes(String((error as { code?: unknown } | null)?.code)) });
+const checkBacks = createCheckBacks({ dataDir: DATA_DIR, alive: (botId, threadId) => directChatOf(botId, threadId), busy: (botId, threadId) => threadBusy(botId, threadId), line: (record, line, messageId) => writeCheckBackLine(store, record, line, messageId, threadLanguage(record.threadId)), start: async (record, prompt) => { await startTurn(record.botId, prompt, { threadId: record.threadId, cardContinuation: true, origin: record.origin, teamCheckBack: record }); }, paused: (error) => [BOT_HELD_CODE, BOT_PAUSED_CODE].includes(String((error as { code?: unknown } | null)?.code)) });
 const botWaits = new WaitManager(createWaitHost({ store, directChat: directChatOf, threadBusy, wrote: markTaskContextExternallyUpdated, notify, enqueue: (input) => routines!.enqueueWebhook(input), cloudHome: Boolean(CLOUD_HOME) })); store.onChange((change) => { if (change.type === "bot" && store.bot(change.botId)?.busy) botWaits.noteBotBusy(change.botId); });
 const recoveryOwners = routines.routineRequestReceiptOwners();
 if (recoveryOwners.length > 0) {
@@ -13710,7 +13712,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         });
         return json(res, 201, proposed);
       }
-      if (await dispatchRoutes([createCheckBackToolRoutes({ checkBacks, requireActive: requireActiveInternalCapability, readBody: readInternalBody, botId: () => internalSender.id, threadId: () => internalCapability.threadId, zone: () => proactive.brief.timeZone() ?? routineTimeZone(), origin: () => { const origin = turnOrigin(internalCapability); return origin.kind === "user" ? withPerson(origin, origin.person ?? threadPersonKey(internalCapability.threadId)) : origin; }, refusal: () => { const source = connectorThread(internalSender.id, internalCapability.threadId); return checkBackRefusal({ owned: source !== null, room: Boolean(source?.group), depth: internalCapability.depth, handedOff: Boolean(internalCapability.roomHandoffId), routineRun: Boolean(activeRoutineRunForThread(internalCapability.threadId)), outsideDriven: outsideDrivenThread(internalCapability.threadId) || outsideWorkStaysHere(internalCapability.threadId), personStarted: turnOrigin(internalCapability).kind === "user", guest: cloudGuestDriven(internalCapability.threadId) }); } }), createBurstProposalRoutes({ requireActive: requireActiveInternalCapability, readBody: readInternalBody, refusal: () => burstProposalRefusal({ owner: connectorThread(internalSender.id, internalCapability.threadId), outside: outsideWorkStaysHere(internalCapability.threadId), self: selfThreadRefusal({ handoff: Boolean(internalCapability.roomHandoffId), requestLine: store.activePath(internalCapability.threadId).findLast((line) => line.role === "user" && line.kind === "text") }) }), model: () => burst.model(internalSender, internalCapability.threadId), propose: (plan) => burst.propose({ ...plan, botId: internalSender.id, threadId: internalCapability.threadId }) }), createInternalChiefTeamRoutes({ bot: () => store.bot(internalCapability.botId), requireActive: requireActiveInternalCapability,
+      if (await dispatchRoutes([createCheckBackToolRoutes({ checkBacks, requireActive: requireActiveInternalCapability, readBody: readInternalBody, botId: () => internalSender.id, threadId: () => internalCapability.threadId, zone: () => proactive.brief.timeZone() ?? routineTimeZone(), origin: () => { const origin = turnOrigin(internalCapability); return origin.kind === "user" ? withPerson(origin, donebotHost.team?.requests.forRun(internalCapability.generation).actor.person ?? origin.person ?? threadPersonKey(internalCapability.threadId)) : origin; }, prepare: (record) => { donebotHost.team?.requests.scheduleCheckBack({ runId: internalCapability.generation, record, audience: teamHost.audienceOf(record.threadId), generation: donebotHost.team.coordinator().generation }); }, refusal: () => { const source = connectorThread(internalSender.id, internalCapability.threadId); return checkBackRefusal({ owned: source !== null, room: Boolean(source?.group), depth: internalCapability.depth, handedOff: Boolean(internalCapability.roomHandoffId), routineRun: Boolean(activeRoutineRunForThread(internalCapability.threadId)), outsideDriven: outsideDrivenThread(internalCapability.threadId) || outsideWorkStaysHere(internalCapability.threadId), personStarted: turnOrigin(internalCapability).kind === "user", guest: cloudGuestDriven(internalCapability.threadId) }); } }), createBurstProposalRoutes({ requireActive: requireActiveInternalCapability, readBody: readInternalBody, refusal: () => burstProposalRefusal({ owner: connectorThread(internalSender.id, internalCapability.threadId), outside: outsideWorkStaysHere(internalCapability.threadId), self: selfThreadRefusal({ handoff: Boolean(internalCapability.roomHandoffId), requestLine: store.activePath(internalCapability.threadId).findLast((line) => line.role === "user" && line.kind === "text") }) }), model: () => burst.model(internalSender, internalCapability.threadId), propose: (plan) => burst.propose({ ...plan, botId: internalSender.id, threadId: internalCapability.threadId }) }), createInternalChiefTeamRoutes({ bot: () => store.bot(internalCapability.botId), requireActive: requireActiveInternalCapability,
         teams: teamSetupTeams, bots: () => store.bots, instances: () => registry.describe() }), createInternalModelRoutes({ requireActive: requireActiveInternalCapability, menu: (search) => ownThreads.menu(internalCapability.botId, internalCapability.threadId, search) })], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/team-setup-requests") {
         const parsed = z.object({ fromBotId: z.string().optional(), fromThreadId: z.string().optional(), plan: z.unknown() }).strict().safeParse(await readInternalBody());

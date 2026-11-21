@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import type { Audience } from "../audience.ts";
+import type { CheckBackRecord } from "../host/check-backs.ts";
 import { drainChannelMessages, queueChannelMessage, restoreChannelMessages } from "../channel-queue.ts";
 import { useQueueProvenance } from "../queue-provenance.ts";
 import { Runtime } from "../runtime/runtime.ts";
@@ -121,6 +122,35 @@ it("continues the exact dispatched operation once per event without changing its
   }
   fx.requests.attachRun("continued-turn", continued.id);
   expect(fx.requests.continueRun({ ...input, runId: "continued-turn" }).id).not.toBe(continued.id);
+});
+
+it("saves exact check-back authority across restart without trusting the pending file or latest writer", () => {
+  const fx = fixture(), parent = fx.bind("private", "member:member-three");
+  fx.requests.attachRun("asking-turn", parent.id);
+  const record: CheckBackRecord = { id: randomUUID(), botId: parent.botId, threadId: parent.threadId, note: "Check CI", condition: "CI still running",
+    dueAt: 90_000, createdAt: 1, zone: "UTC", origin: { kind: "user", request: "Fix CI", person: fx.actor.person } };
+  const input = { record, audience: parent.audience as Audience, generation: 1 };
+  fx.requests.scheduleCheckBack({ ...input, runId: "asking-turn" });
+  const bound = fx.requests.checkBack(input);
+  expect(bound).toMatchObject({ actor: fx.actor, audience: parent.audience, parentId: parent.id });
+  expect(bound.id).not.toBe(parent.id);
+  const requests = new TeamRequestStore(fx.directory, fx.runtime);
+  expect(requests.checkBack({ ...input, record: { ...record, lineMessageId: "line", tries: 2, startingAt: 91_000 } })).toEqual(bound);
+  for (const changed of [{ id: randomUUID() }, { botId: "other" }, { threadId: "other" }, { note: "Other job" }, { condition: "Always" }, { dueAt: 95_000 },
+    { createdAt: 2 }, { zone: "Asia/Shanghai" }, { origin: { ...record.origin, request: "Different request" } }]) {
+    expect(() => requests.checkBack({ ...input, record: { ...record, ...changed } })).toThrow();
+  }
+  for (const changed of [{ audience: "team" as const }, { generation: 2 }]) expect(() => requests.checkBack({ ...input, ...changed })).toThrow();
+  for (const changed of [{ runId: "missing" }, { audience: "team" as const }, { generation: 2 }, { record: { ...record, origin: { kind: "outside" as const } } },
+    { record: { ...record, origin: { kind: "user" as const, request: "CI", person: "other-member" } } }]) {
+    expect(() => requests.scheduleCheckBack({ ...input, runId: "asking-turn", ...changed })).toThrow();
+  }
+  requests.attachRun("woken-turn", bound.id);
+  const next = { ...record, id: randomUUID(), createdAt: 91_000, dueAt: 180_000 };
+  requests.scheduleCheckBack({ ...input, record: next, runId: "woken-turn" });
+  expect(requests.checkBack({ ...input, record: next })).toMatchObject({ actor: fx.actor, parentId: bound.id });
+  expect(() => requests.scheduleCheckBack({ ...input, runId: "woken-turn" })).toThrow();
+  expect(requests.checkBack(input)).toEqual(bound);
 });
 
 it.each(["direct", "room"] as const)("captures %s queued members before persistence and keeps permission versions separate after restart", async kind => {

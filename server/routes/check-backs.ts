@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { RequestAuth } from "../request-auth.ts";
 import { parseWhen, validZone, wallClockLabel, WHEN_HELP } from "../host/check-back-time.ts";
-import { checkBackList, CONDITION_MAX, NOTE_MAX, type CheckBacks } from "../host/check-backs.ts";
+import { checkBackList, CONDITION_MAX, NOTE_MAX, type CheckBackRecord, type CheckBacks } from "../host/check-backs.ts";
 import type { WorkOrigin } from "../peer-provenance.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
@@ -44,6 +44,8 @@ export interface CheckBackToolDeps {
   zone(): string;
   /** The origin of the request this turn works for, from the harness's records. */
   origin(): WorkOrigin;
+  /** Persists host-owned authority before the pending job is saved; a failure leaves no scheduled job. */
+  prepare?(record: Readonly<CheckBackRecord>): void;
   readBody(): Promise<unknown>;
   now?: () => number;
 }
@@ -80,7 +82,7 @@ export function createCheckBackToolRoutes(deps: CheckBackToolDeps): RouteHandler
     const when = parseWhen(body.when, at, zone);
     if (!when.ok) return json(res, 400, { error: when.error });
     const condition = body.if?.replace(/\s+/g, " ").trim();
-    const created = deps.checkBacks.create({ botId, threadId, note, ...(condition ? { condition } : {}), dueAt: when.at, zone, origin: deps.origin() });
+    const created = deps.checkBacks.create({ botId, threadId, note, ...(condition ? { condition } : {}), dueAt: when.at, zone, origin: deps.origin() }, deps.prepare);
     if (!created.ok) return json(res, 409, { error: created.error });
     const label = wallClockLabel(when.at, zone);
     return json(res, 201, {

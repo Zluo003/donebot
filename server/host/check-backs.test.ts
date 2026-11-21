@@ -45,6 +45,23 @@ const asked = (over: Partial<NewCheckBack> = {}): NewCheckBack => ({
 });
 
 describe("check-backs", () => {
+  it("prepares private authority before saving a pending job and leaves none when preparation fails", () => {
+    const { h, manager } = harness();
+    let prepared = "";
+    expect(() => manager.create(asked(), record => {
+      prepared = record.id;
+      expect(manager.get(record.id)).toBeNull();
+      expect(h.lines.size).toBe(0);
+      throw new Error("private state unavailable");
+    })).toThrow("private state unavailable");
+    expect(prepared).not.toBe("");
+    expect(manager.list("scout", "t1")).toEqual([]);
+    expect(h.lines.size).toBe(0);
+    const result = manager.create(asked(), record => { prepared = record.id; });
+    expect(result).toMatchObject({ ok: true, record: { id: prepared } });
+    expect(JSON.parse(readFileSync(join(h.dir, CHECK_BACK_FILE), "utf8")).checkBacks).toHaveLength(1);
+  });
+
   it("fires once at its time in the same conversation, with nobody asked, and keeps the asker's origin", async () => {
     const { h, manager } = harness();
     const made = manager.create(asked());

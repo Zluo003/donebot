@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import type { WireMessage as Message } from "../../shared/wire.ts";
 import type { RuntimeEvent } from "../contracts.ts";
+import { createCheckBacks, type CheckBackRecord } from "../host/check-backs.ts";
+import type { CheckBackLine } from "../../shared/check-back.ts";
 import { personKey } from "../person-key.ts";
 import { DoneBotTeamModelGateway, TeamModelRequestHeld } from "./team-model-gateway.ts";
 import { teamRuntimeActor, teamRuntimeConfiguration, teamRuntimeSession } from "./team-runtime.ts";
@@ -285,4 +287,83 @@ it("separates a computer-selection continuation from its first reply and never r
   await expect(restarted.request("/v1/chat/completions", fx.init, { ...fx.context, bindingId: next.id })).rejects.toBeInstanceOf(TeamModelRequestHeld);
   expect(fx.count()).toBe(2);
   expect(fx.records.size).toBe(2);
+});
+
+it("wakes private check-backs after restart for their original member and lets that exact turn schedule the next", async () => {
+  const fx = await fixture();
+  const message = { ...fx.message, id: "private-ask" };
+  fx.gateway.requests.captureMessage(fx.binding.threadId, message);
+  const parent = fx.gateway.requests.bind({ sourceId: message.id, botId: fx.binding.botId, threadId: fx.binding.threadId, audience: `member:${fx.person}`, generation: 1 });
+  fx.gateway.requests.attachRun("asking-turn", parent.id);
+  let clock = Date.now();
+  const lines: CheckBackLine[] = [], bound: string[] = [];
+  const boot = (gateway: DoneBotTeamModelGateway) => createCheckBacks({ dataDir: fx.directory, now: () => clock, alive: () => true, busy: () => false,
+    line: (_record, line) => { lines.push(line); return `line-${line.id}`; },
+    start: async (record) => {
+      const binding = gateway.requests.checkBack({ record, audience: `member:${fx.person}`, generation: 1 });
+      bound.push(binding.id);
+      gateway.requests.attachRun(`wake:${record.id}`, binding.id);
+      await (await gateway.request("/v1/chat/completions", fx.init, { ...fx.context, bindingId: binding.id })).body?.cancel();
+    }, log: () => {},
+  });
+  const input = { botId: parent.botId, threadId: parent.threadId, note: "Check CI", dueAt: clock + 60_000, zone: "UTC",
+    origin: { kind: "user" as const, request: "Fix CI", person: fx.person } };
+  const scheduled = boot(fx.gateway).create(input, record => fx.gateway.requests.scheduleCheckBack({ runId: "asking-turn", record, audience: `member:${fx.person}`, generation: 1 }));
+  if (!scheduled.ok) throw new Error(scheduled.error);
+  const other = fx.gateway.requests.sender({ id: "other", name: "Other" }, { userId: "4", memberVersion: 3, person: "other" });
+  fx.gateway.requests.captureMessage(parent.threadId, { ...message, id: "latest-writer", sender: other });
+  const restarted = fx.create(), manager = boot(restarted);
+  clock += 60_000;
+  await Promise.all(Array.from({ length: 8 }, () => manager.tick()));
+  expect(fx.count()).toBe(1);
+  expect(manager.list(parent.botId, parent.threadId)).toEqual([]);
+  expect(lines.at(-1)).toMatchObject({ status: "started" });
+  const second = manager.create({ ...input, dueAt: clock + 60_000 }, record => restarted.requests.scheduleCheckBack({ runId: `wake:${scheduled.record.id}`, record, audience: `member:${fx.person}`, generation: 1 }));
+  expect(second.ok).toBe(true);
+  clock += 60_000;
+  await manager.tick();
+  expect(new Set(bound).size).toBe(2);
+  expect(fx.count()).toBe(2);
+  for (const record of fx.records.values()) expect(record.body).toMatchObject({ actor_id: "3", member_version: 2, private: true, bot_id: parent.botId, thread_id: parent.threadId });
+});
+
+it.each(["lost-response", "revoked", "missing-provenance", "changed-job", "changed-generation"] as const)("never redispatches a scheduled team request with %s", async mode => {
+  const fx = await fixture();
+  fx.gateway.requests.attachRun("asking-turn", fx.binding.id);
+  let clock = Date.now();
+  const statuses: CheckBackLine[] = [];
+  const boot = (gateway: DoneBotTeamModelGateway) => createCheckBacks({ dataDir: fx.directory, now: () => clock, alive: () => true, busy: () => false,
+    line: (_record, line) => { statuses.push(line); return `line-${line.id}`; }, start: async record => {
+      const binding = gateway.requests.checkBack({ record, audience: "team", generation: mode === "changed-generation" ? 2 : 1 });
+      await (await gateway.request("/v1/chat/completions", fx.init, { ...fx.context, bindingId: binding.id })).body?.cancel();
+    }, log: () => {},
+  });
+  const manager = boot(fx.gateway);
+  const created = manager.create({ botId: fx.binding.botId, threadId: fx.binding.threadId, note: "CI", dueAt: clock + 60_000, zone: "UTC",
+    origin: { kind: "user", request: "Fix CI", person: fx.person } }, record => fx.gateway.requests.scheduleCheckBack({ runId: "asking-turn", record, audience: "team", generation: 1 }));
+  if (!created.ok) throw new Error(created.error);
+  if (mode === "missing-provenance") await rm(join(fx.directory, "donebot-team-execution", "requests"), { recursive: true });
+  if (mode === "changed-job") {
+    const path = join(fx.directory, "check-backs.json"), saved = JSON.parse(await readFile(path, "utf8")) as { checkBacks: CheckBackRecord[] };
+    saved.checkBacks[0]!.note = "Different paid task";
+    await writeFile(path, JSON.stringify(saved));
+  }
+  fx.modes({ modelDrop: mode === "lost-response", revoked: mode === "revoked" });
+  clock += 60_000;
+  const resumed = boot(fx.create());
+  await resumed.tick();
+  expect(fx.count()).toBe(mode === "lost-response" ? 1 : 0);
+  clock += 60_000;
+  await resumed.tick();
+  expect(fx.count()).toBe(mode === "lost-response" ? 1 : 0);
+  expect(statuses.some(line => line.status === "started")).toBe(false);
+  const cut = JSON.parse(await readFile(join(fx.directory, "check-backs.json"), "utf8")) as { checkBacks: CheckBackRecord[] };
+  cut.checkBacks[0]!.startingAt = clock;
+  await writeFile(join(fx.directory, "check-backs.json"), JSON.stringify(cut));
+  const recovery = boot(fx.create());
+  recovery.start(); recovery.stop();
+  await recovery.tick();
+  expect(recovery.list(fx.binding.botId, fx.binding.threadId)).toEqual([]);
+  expect(statuses.at(-1)).toMatchObject({ status: "failed" });
+  expect(fx.count()).toBe(mode === "lost-response" ? 1 : 0);
 });

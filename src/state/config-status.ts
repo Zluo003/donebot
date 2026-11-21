@@ -170,7 +170,7 @@ export interface ConfigStatus {
   cloudHome?: boolean;
   /** A Team Cloud: the team this server is the home of, and the Plan page (DoneBot Cloud) where its people and plan
    * are managed. Absent everywhere else. */
-  team?: { id: string; name: string; cloudPage?: string };
+  team?: { id: string; name: string; cloudPage?: string; sharedFiles?: boolean; sharedTemplates?: boolean };
 }
 
 export interface ManagedPolicySummary {

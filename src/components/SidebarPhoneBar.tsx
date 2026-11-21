@@ -38,6 +38,13 @@ export function SidebarPhoneBar({ query, onQuery }: { query: string; onQuery: (q
       active: state.activeView === "files",
       onSelect: () => dispatch({ type: "showFiles" }),
     }] : []),
+    ...(state.config?.team?.sharedFiles === true ? [{
+      key: "team-files",
+      label: t("teamFiles.title"),
+      icon: <FolderOpen size={18} />,
+      active: state.activeView === "team-files",
+      onSelect: () => dispatch({ type: "showTeamFiles" }),
+    }] : []),
     {
       key: "apps",
       label: t("sidebar.nav.apps"),

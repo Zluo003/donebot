@@ -42,7 +42,7 @@ node --experimental-strip-types scripts/verify-team-files.ts
 
 2026-11-21：接口及页面 9 文件 / 153 项通过，日志 `/tmp/donebot-team-files-ui-regression.log`；类型、lint、词条分别为 `/tmp/donebot-team-files-ui-types.log`、`/tmp/donebot-team-files-ui-server-types.log`、`/tmp/donebot-team-files-ui-lint.log`、`/tmp/donebot-team-files-locales-check.log`。浏览器回执 `/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/server-1795272797858-10291.log.team-files-ui-accepted.json`，截图 `output/playwright/team-files/`。已查看桌面及 390px 窄屏明暗模式；窄屏 scrollWidth 与 viewport 均为 390。夹具 StoreProvider 的非管理员 instances/live 权限拒绝与主动过期签名的 401 为预期错误，未发现文件页脚本错误。
 
-文件页尚未接入正式菜单或能力协商；不能据此启用 shared_files。
+2026-11-22：正式客户端菜单接入独立团队文件视图，桌面、手机工具菜单和简洁模式入口均读取 `/api/config` 的 `team.sharedFiles`。Reducer 在能力缺失或关闭时拒绝导航。服务端只在对应环境开关实际生效时报告能力；当前 Cloud worker 未设置这些开关，因此生产团队入口保持关闭。17 个客户端/服务端测试文件、496 项相关回归通过，覆盖文件与模板能力的独立开关。真实 Cloud worker、真实手机浏览器及 Linux 隔离验收仍未完成。
 
 ## 实际 Go 代理上传撤权
 

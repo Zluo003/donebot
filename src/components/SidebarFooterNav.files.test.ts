@@ -73,6 +73,18 @@ it("keeps Files while signed out or offline, so the page can say what to do", as
   expect(row()).toBeTruthy();
 });
 
+it("shows Team files only when the Team Cloud reports its shared-files capability", async () => {
+  mode.advanced = true;
+  await render("comfortable", { config: { team: { id: "team-1", name: "Fixture", sharedFiles: true } } as AppState["config"] });
+  const teamFiles = host.querySelector<HTMLButtonElement>('[data-sidebar-nav="team-files"]');
+  expect(teamFiles?.textContent).toContain("Team files");
+  await act(async () => teamFiles!.click());
+  expect(dispatch).toHaveBeenCalledWith({ type: "showTeamFiles" });
+  await render("comfortable", { config: { team: { id: "team-1", name: "Fixture", sharedFiles: false } } as AppState["config"] });
+  expect(host.querySelector('[data-sidebar-nav="team-files"]')).toBeNull();
+  expect(row()).toBeNull();
+});
+
 it("in Advanced mode, Files is a row under Tools after Team map, highlighted while open", async () => {
   mode.advanced = true;
   bridge("idle");

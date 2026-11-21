@@ -147,6 +147,15 @@ export function SidebarFooterNav({
     icon={(active) => <FolderOpen size={iconSize} className={tone(active)} />}
     onClick={() => dispatch({ type: "showFiles" })}
   />;
+  const teamFilesRow = state.config?.team?.sharedFiles === true && <NavRow
+    id="team-files"
+    label={t("teamFiles.title")}
+    iconsOnly={iconsOnly}
+    rail={rail}
+    active={state.activeView === "team-files"}
+    icon={(active) => <FolderOpen size={iconSize} className={tone(active)} />}
+    onClick={() => dispatch({ type: "showTeamFiles" })}
+  />;
   if (!advanced && !iconsOnly) return null;
   const appsRow = iconsOnly && <NavRow
     id="apps"
@@ -176,6 +185,7 @@ export function SidebarFooterNav({
         />
       )}
       {filesRow}
+      {teamFilesRow}
       {advanced && webPanels.map((panel) => (
         <NavRow
           key={panel.id}

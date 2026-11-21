@@ -77,6 +77,18 @@ describe("mounted Data view context", () => {
   });
 });
 
+describe("team files navigation", () => {
+  it("requires the server-advertised capability and opens an independent view when enabled", () => {
+    const disabled = reducer(initialState, { type: "showTeamFiles" });
+    expect(disabled).toBe(initialState);
+    const enabled = { ...initialState, config: { ...initialState.config, team: { id: "team-1", name: "Fixture", sharedFiles: true } } } as AppState;
+    const opened = reducer(enabled, { type: "showTeamFiles" });
+    expect(opened).toMatchObject({ activeView: "team-files", selectedId: enabled.selectedId });
+    const revoked = { ...opened, config: { ...opened.config!, team: { id: "team-1", name: "Fixture", sharedFiles: false } } };
+    expect(reducer(revoked, { type: "showTeamFiles" })).toBe(revoked);
+  });
+});
+
 describe("partial profile save responses", () => {
   it.each([true, false])("preserves independently saved fields with about-me response first: %s", aboutFirst => {
     const config = { ...initialState.config, profile: { name: "Old", email: "old@example.invalid", aboutMe: "Old biography" } } as NonNullable<AppState["config"]>;

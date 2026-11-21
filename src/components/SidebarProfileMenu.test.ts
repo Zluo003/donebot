@@ -501,6 +501,15 @@ describe("Simple mode's account menu", () => {
     expect(toolMenuItems({ activeView: "chat", automationsNeedYou: false, onAutomations: noop, onTeamMap: noop, archived: { count: 0, open } }).map((item) => item.key)).toEqual(["automations", "team-map"]);
   });
 
+  it("adds Team files only when the Team Cloud capability is available", () => {
+    const onTeamFiles = vi.fn();
+    const items = toolMenuItems({ activeView: "team-files", automationsNeedYou: false, onAutomations: noop, onTeamMap: noop, onTeamFiles });
+    expect(items.map((item) => [item.key, item.active])).toEqual([["automations", false], ["team-map", false], ["team-files", true]]);
+    items[2]!.onSelect();
+    expect(onTeamFiles).toHaveBeenCalledOnce();
+    expect(toolMenuItems({ activeView: "chat", automationsNeedYou: false, onAutomations: noop, onTeamMap: noop }).map((item) => item.key)).toEqual(["automations", "team-map"]);
+  });
+
   it("names the account button after the person and whatever its dot is raised for", () => {
     expect(accountLabel("You", { automationsNeedYou: false, update: null })).toBe("You");
     expect(accountLabel("Ada", { automationsNeedYou: true, update: "Update failed. Try again." })).toBe("Ada · Automations need you · Update failed. Try again.");

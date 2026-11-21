@@ -6,6 +6,8 @@
 pnpm exec vitest run server/donebot/team-model-gateway.test.ts server/donebot/team-runtime.test.ts server/donebot/llm-driver.test.ts server/donebot/llm-protocol.test.ts server/donebot/gateway.test.ts server/workspace-backup-policy.test.ts
 pnpm exec vitest run server/workspace-backup.test.ts
 pnpm exec vitest run server/donebot/team-requests.test.ts server/donebot/team-model-gateway.test.ts server/channel-queue.test.ts server/steer-queue.test.ts server/drain-coalescing-golden.test.ts server/chat-followups.test.ts server/queue-dispatch-failure.test.ts server/runtime-coordinator.test.ts server/runtime/runtime.test.ts
+pnpm exec vitest run server/donebot/team-requests.test.ts server/donebot/team-model-gateway.test.ts server/host/one-on-one-goals.test.ts server/group-goal-run.test.ts
+pnpm exec vitest run server/group-goal-run-one-on-one.e2e.test.ts server/group-goal-run.e2e.test.ts server/group-goal-wait-cap.e2e.test.ts
 node --experimental-strip-types scripts/verify-donebot-teams.ts
 pnpm exec tsc --noEmit -p tsconfig.server.json
 pnpm lint
@@ -65,3 +67,9 @@ node scripts/verify-team-linux.mjs --image LOCAL_IMAGE
 最新客户端 `team-model-gateway`、`team-runtime`、`llm-driver`、`llm-protocol` 四文件实际为 104 项通过，日志 `/tmp/donebot-team-pending-client-regression.log`；此前结算记录中的 33 为当时计数误记。已保存用量的恢复不等于供应商侧对账：未观察到用量或首次保存前退出仍不能重提，媒体、其它协议结束证明、真实 Linux 和跨成员执行仍未验收。
 
 `/tmp/donebot-team-pending-full-regression.log`：带 `unit` 标签的 service/handler/repository 用量、计费、平台额度和转发回归通过。扩大筛选首次暴露旧计费错误测试缺少 HTTP Request 的夹具缺陷，补齐合成 Request 后整组重测通过。`/tmp/donebot-team-pending-compile.log`：全部 Go 包仅编译通过，不等同全量运行测试。网关本地提交 `55eeb4f`，未推送。
+
+## 连续目标步骤
+
+团队单聊目标固定目标编号和原始来源，每个已受理步骤独立导出操作；忙碌拒绝与同一步重启保留编号。成员、权限版本、运行代次、Bot、会话及私聊受众不可替换。团队单聊和群聊均停用目标循环的外层失败重试，供应商结果不确定时不能生成新步骤再次调用；个人目标保留原版失败重试。
+
+2026-11-21：`/tmp/donebot-team-goal-workflow-final.log` 四文件 57 项通过。真实目标循环、原生驱动及 loopback 网关验证步骤 1/1/2，受理两次；第二次响应丢失后终止，不发起第三步，重启只查询同一执行。`/tmp/donebot-team-goal-personal-workflows.log` 三文件 24 项真实隔离服务流程通过。服务端类型与定向 lint 通过，日志 `/tmp/donebot-team-goal-{types,lint}-final.log`。本项不等于真实 Linux 团队成功执行或其它自动化/续跑链已完成。

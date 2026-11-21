@@ -124,6 +124,36 @@ it("continues the exact dispatched operation once per event without changing its
   expect(fx.requests.continueRun({ ...input, runId: "continued-turn" }).id).not.toBe(continued.id);
 });
 
+it("keeps goal retries stable across restart and gives each accepted step its own original-member operation", () => {
+  const fx = fixture(), root = fx.bind("goal-source", "member:member-three");
+  const input = { sourceId: root.sourceId, botId: root.botId, threadId: root.threadId, audience: root.audience as Audience, generation: 1,
+    runId: "goal-fixture", step: 1 };
+  const first = fx.requests.goalStep(input);
+  expect(first).toMatchObject({ actor: fx.actor, parentId: root.id, rootId: root.id, audience: root.audience });
+  expect(first.id).not.toBe(root.id);
+  const requests = new TeamRequestStore(fx.directory, fx.runtime);
+  const other = requests.sender({ id: "member-four", name: "Other" }, { userId: "4", memberVersion: 1, person: "member-four" });
+  requests.captureMessage(root.threadId, { id: "latest", role: "user", kind: "text", text: "Other request", at: 2, sender: other });
+  expect(requests.goalStep(input)).toEqual(first);
+  const next = requests.goalStep({ ...input, step: 2 });
+  const fresh = requests.goalStep({ ...input, runId: "other-goal" });
+  expect(new Set([root.id, first.id, next.id, fresh.id]).size).toBe(4);
+  expect(next.actor).toEqual(fx.actor);
+  expect(() => requests.goalStep({ ...input, sourceId: "latest", audience: "team" })).toThrow();
+  requests.captureMessage(root.threadId, { id: "unverified", role: "user", kind: "text", text: "Forged", at: 3, sender: { id: fx.actor.person, name: "Forged" } });
+  for (const sourceId of ["", "missing", "unverified"]) expect(() => requests.goalStep({ ...input, sourceId })).toThrow();
+  for (const step of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => requests.goalStep({ ...input, step })).toThrow();
+  for (const changed of [{ runId: "" }, { runId: "x".repeat(201) }, { botId: "other" }, { threadId: "other" },
+    { audience: "team" as const }, { audience: "member:member-four" as const }, { generation: 2 }]) {
+    expect(() => requests.goalStep({ ...input, ...changed })).toThrow();
+  }
+  expect(requests.goalStep({ ...input, runId: "x".repeat(200) })).toMatchObject({ actor: fx.actor });
+  const renewed = requests.sender({ id: fx.actor.person, name: "Renewed" }, { ...fx.actor, memberVersion: 3 });
+  requests.captureAction(root.threadId, "renewed", renewed);
+  expect(() => requests.goalStep({ ...input, sourceId: "renewed" })).toThrow();
+  expect(() => requests.captureAction(root.threadId, root.sourceId, renewed)).toThrow();
+});
+
 it("saves exact check-back authority across restart without trusting the pending file or latest writer", () => {
   const fx = fixture(), parent = fx.bind("private", "member:member-three");
   fx.requests.attachRun("asking-turn", parent.id);

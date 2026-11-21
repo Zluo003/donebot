@@ -182,6 +182,14 @@ export class TeamRequestStore {
     if (parent.botId !== input.botId || parent.threadId !== input.threadId || parent.audience !== input.audience || parent.generation !== input.generation) invalid();
     return this.derive(parent.id, `continue:${input.operation}`);
   }
+  goalStep(input: { sourceId: string; botId: string; threadId: string; audience: Audience; generation: number; runId: string; step: number }): TeamRequestBinding {
+    id.parse(input.runId);
+    if (!Number.isSafeInteger(input.step) || input.step < 1) invalid();
+    const parent = this.bind(input);
+    const goalId = `goal:${hash(input.runId)}`;
+    this.attachRun(goalId, parent.id);
+    return this.derive(parent.id, `${goalId}:step:${input.step}`);
+  }
   scheduleCheckBack(input: { runId: string; record: Readonly<CheckBackRecord>; audience: Audience; generation: number }): void {
     const { record } = input, parent = this.forRun(input.runId);
     if (parent.botId !== record.botId || parent.threadId !== record.threadId || parent.audience !== input.audience || parent.generation !== input.generation ||

@@ -9,7 +9,7 @@ import { GROUP_GOAL_CONTROL_CLOSE, GROUP_GOAL_CONTROL_OPEN, GROUP_GOAL_MAX_TURNS
 import type { BotRecord, Message, TaskRecord } from "../store.ts";
 import type { LiveGoalRun } from "./goal-cards.ts";
 import { createGoalTurns, type GoalLeadTurn } from "./goal-turns.ts";
-import { createOneOnOneGoals } from "./one-on-one-goals.ts";
+import { createOneOnOneGoals, type OneOnOneGoalDeps } from "./one-on-one-goals.ts";
 
 // A one-second cap: the real half hour is thousands of retries, each a timer round of its own.
 vi.mock("../group-goal-run.ts", async (importOriginal) => ({
@@ -21,7 +21,8 @@ const DONE = `${GROUP_GOAL_CONTROL_OPEN}{"status":"completed","detail":"Done."}$
 const refused = (code: string) => Object.assign(new Error("this thread is already working"), { code });
 
 /** A goal in a chat whose startTurn is scripted; the real goal-turns hold the lead, so a reply can be filled in. */
-function goalChat(startTurn: (call: number, lead: GoalLeadTurn, settle: (outcome: HostTurnResult) => void) => Promise<unknown>, canStart: () => boolean = () => true) {
+function goalChat(startTurn: (call: number, lead: GoalLeadTurn, settle: (outcome: HostTurnResult) => void,
+  opts: Parameters<OneOnOneGoalDeps["startTurn"]>[2]) => Promise<unknown>, canStart: () => boolean = () => true, retryFailedSteps?: boolean) {
   const run: LiveGoalRun = {
     runId: "r",
     cardMessageId: "card",
@@ -66,8 +67,9 @@ function goalChat(startTurn: (call: number, lead: GoalLeadTurn, settle: (outcome
       },
     },
     canStart,
+    retryFailedSteps,
     isUnattended: () => false,
-    startTurn: (_botId, _text, opts) => startTurn(++starts, lead, opts.onSettled),
+    startTurn: (_botId, _text, opts) => startTurn(++starts, lead, opts.onSettled, opts),
   }).start("b", "t", "Fix the build");
   // The store's change event for the bot, as the real store fires it when the bot's turn ends.
   return { run, finished, ends, starts: () => starts, botChanged: () => botChanged?.({ type: "bot", botId: "b" }) };
@@ -132,5 +134,32 @@ describe("a one-on-one goal whose turn keeps losing its slot", () => {
     expect(chat.starts()).toBe(2);
     expect(chat.run.turnCount).toBe(1);
     expect(chat.finished).toEqual([{ status: "completed", detail: "Done." }]);
+  });
+
+  it("retains a refused step's identity and advances it only after an admitted turn", async () => {
+    vi.useFakeTimers();
+    const steps: Array<{ runId: string; step: number; messageId: string }> = [];
+    const chat = goalChat(async (call, lead, settle, opts) => {
+      steps.push({ runId: opts.goalRunId, step: opts.goalStep, messageId: opts.requestMessageId });
+      if (call === 1 || call === 3) throw refused("thread_busy");
+      lead.assistantItems.push(call === 4 ? DONE : `${GROUP_GOAL_CONTROL_OPEN}{"status":"continue","next":"b","instruction":"Finish testing"}${GROUP_GOAL_CONTROL_CLOSE}`);
+      settle({ ok: true, text: "" });
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(steps).toEqual([1, 1, 2, 2].map(step => ({ runId: "r", step, messageId: "m1" })));
+    expect(chat.run.turnCount).toBe(2);
+    expect(chat.finished).toEqual([{ status: "completed", detail: "Done." }]);
+  });
+
+  it.each(["provider", "stall", "dispatch"])("does not start a new team step after a %s failure", async kind => {
+    vi.useFakeTimers();
+    const chat = goalChat(async (_call, _lead, settle) => {
+      if (kind === "dispatch") throw new Error("The original execution needs reconciliation");
+      settle({ ok: false, text: "The original execution needs reconciliation", ...(kind === "stall" ? { stalled: true } : {}) });
+    }, () => true, false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(chat.starts()).toBe(1);
+    expect(chat.finished).toEqual([{ status: "failed", detail: expect.stringContaining("needs reconciliation") }]);
+    expect(chat.run.turnCount).toBe(kind === "dispatch" ? 0 : 1);
   });
 });

@@ -882,12 +882,13 @@ function messageSender(auth: RequestAuth): ResolvedSender | undefined {
   return actor && donebotHost.team ? donebotHost.team.requests.sender(sender, actor) : sender;
 }
 
-function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string; continuation?: { runId: string; operation: string }; checkBack?: Readonly<CheckBackRecord> }) {
+function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string; continuation?: { runId: string; operation: string }; checkBack?: Readonly<CheckBackRecord>; goal?: { runId: string; step: number } }) {
   const team = donebotHost.team;
   if (!team) return undefined;
   const generation = team.coordinator().generation, audience = teamHost.audienceOf(input.threadId);
   if (input.checkBack) return team.requests.checkBack({ record: input.checkBack, audience, generation });
   if (input.continuation) return team.requests.continueRun({ ...input.continuation, botId: input.botId, threadId: input.threadId, audience, generation });
+  if (input.goal && !input.workId) return team.requests.goalStep({ ...input.goal, sourceId: input.sourceId ?? "", botId: input.botId, threadId: input.threadId, audience, generation });
   const node = input.workId ? coordinator.node(input.workId) : undefined;
   if (input.workId && (!node || node.botId !== input.botId || node.threadId !== input.threadId)) throw new Error("团队任务的原始执行记录不可用。");
   const binding = node ? team.requests.coordinated({ ...node, audience, generation })
@@ -3650,6 +3651,7 @@ const goalTurns = createGoalTurns({ retireProviderTurn });
 const goalCards = createGoalCards({ store, routines: () => routines, notify, routineSourceOwner, routineSourceThread });
 const oneOnOneGoals = createOneOnOneGoals({
   store, cards: goalCards, turns: goalTurns, canStart: (botId, threadId) => canAdmitDirectTurn(botId, threadId) && !threadsAwaitingTeammates().has(threadId), startTurn, isUnattended,
+  retryFailedSteps: !donebotHost.team,
 });
 
 function groupIsWorking(group: GroupRecord): boolean {
@@ -7607,6 +7609,7 @@ async function beginTurn(
     onSettled?: (outcome: HostTurnResult) => void;
     /** A one-on-one goal step: a card continuation that is still its own turn, as a room goal step is. */
     goalRunId?: string;
+    goalStep?: number;
     coordination?: { id: string; resumed: boolean; settle: (outcome: HostTurnResult) => void };
     /** A person's own send: it may run beside a room turn on another thread. */ allowRoomTurnElsewhere?: boolean;
   },
@@ -7769,7 +7772,8 @@ async function beginTurn(
   const agentsMounted = instance.adapter.capabilities.agentsMcp === true;
   if (opts?.compactOnly && donebotHost.team) donebotHost.team.requests.captureAction(threadId, userMessage.id, opts.sender);
   const teamExecution = teamTurnBinding({ sourceId: opts?.cardContinuation && !opts.compactOnly ? opts.requestMessageId : userMessage.id, sourceIds: opts?.excludeMessageIds,
-    botId: bot.id, threadId, workId: opts?.coordination?.id, continuation: opts?.teamContinuation, checkBack: opts?.teamCheckBack });
+    botId: bot.id, threadId, workId: opts?.coordination?.id, continuation: opts?.teamContinuation, checkBack: opts?.teamCheckBack,
+    ...(opts?.goalRunId ? { goal: { runId: opts.goalRunId, step: opts.goalStep ?? 0 } } : {}) });
 
   const dispatchClaimId = randomUUID();
   if (teamExecution) donebotHost.team!.requests.attachRun(dispatchClaimId, teamExecution.id);
@@ -10831,6 +10835,7 @@ async function runGroupGoalOperation(args: {
   const skillAuthoringClaim = { claimed: false };
   await runGoalRun({
     run,
+    retryFailedSteps: !donebotHost.team,
     coordinator: args.coordinator,
     members: args.members,
     cancelled: () => args.operation.cancelled,

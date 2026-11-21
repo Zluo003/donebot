@@ -1285,9 +1285,9 @@ A	server/grok-move-tunnel.test.ts	接入	待核对	待核对
 A	server/grok-move-tunnel.ts	接入	待核对	待核对
 A	server/group-exec.test.ts	接入	待核对	待核对
 A	server/group-exec.ts	接入	待核对	待核对
-M	server/group-goal-run.e2e.test.ts	接入	待核对	待核对
-M	server/group-goal-run.test.ts	接入	待核对	待核对
-M	server/group-goal-run.ts	接入	待核对	待核对
+M	server/group-goal-run.e2e.test.ts	自有适配	4	原版目标循环已复用；团队步骤身份/禁止失败重提；见 batch-4.md 连续目标
+M	server/group-goal-run.test.ts	自有适配	4	原版目标循环已复用；团队步骤身份/禁止失败重提；见 batch-4.md 连续目标
+M	server/group-goal-run.ts	自有适配	4	原版目标循环已复用；团队步骤身份/禁止失败重提；见 batch-4.md 连续目标
 M	server/group-local-vm.e2e.test.ts	接入	待核对	待核对
 A	server/group-task-state.ts	接入	待核对	待核对
 A	server/handed-waits.e2e.test.ts	接入	待核对	待核对

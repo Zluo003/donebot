@@ -191,6 +191,7 @@ export interface GoalRunDeps<Bot extends GoalRunMember> {
   coordinator: Bot;
   members: readonly Bot[];
   solo?: boolean;
+  retryFailedSteps?: boolean;
   cancelled(): boolean;
   /** The member as the store has it now. */
   current(botId: string): Bot | undefined;
@@ -207,7 +208,7 @@ const TRANSIENT_STEP: ReadonlySet<GoalStepOutcome | undefined> = new Set(["provi
 
 async function stepOnceRetried<Bot extends GoalRunMember>(deps: GoalRunDeps<Bot>, bot: Bot, coordinator: boolean, instructions: string): Promise<GoalStepResult> {
   const first = await deps.step(bot, coordinator, instructions);
-  if (!TRANSIENT_STEP.has(first.outcome) || deps.cancelled()) return first;
+  if (deps.retryFailedSteps === false || !TRANSIENT_STEP.has(first.outcome) || deps.cancelled()) return first;
   const why = { provider_failed: "chat.notice.part.providerFailed", dispatch_failed: "chat.notice.part.dispatchFailed", stalled: "chat.notice.part.goalStalled", timed_out: "chat.notice.part.goalTimedOut" }[first.outcome as "provider_failed" | "dispatch_failed" | "stalled" | "timed_out"];
   const retry = noticeFailure("chat.notice.goalRetry", { name: bot.name, why });
   deps.progress(retry.message, retry.text);

@@ -65,3 +65,15 @@ DoneBot 适配：沿用普通资料/模型设置在各权限级别直接应用�
 - `/tmp/donebot-bulk-final-types.log`、`/tmp/donebot-bulk-final-lint.log`：typecheck 和 lint 通过。
 
 本批的本机聊天管理子项已接入；团队工作空间切换、跨成员本机工具边界及真实 Linux 验证仍依赖后续批次，未宣称整批最终验收。
+
+## 团队连续目标的步骤身份
+
+连续目标每个已受理步骤使用独立模型操作，忙碌拒绝前的重试沿用同一步；绑定固定原请求成员、权限版本、Bot、会话、受众及运行代次。重启不改变同一步编号，后来发言的其他成员不能替换原身份。目标编号的持久绑定不能跨会话或 Bot 复用。团队目标停用外层失败自动重试，防止响应丢失后以新步骤绕过原调用的幂等记录；个人目标沿用原版一次失败重试。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-team-goal-workflow-final.log`：4 文件 / 57 项通过，包含真实目标循环和原生驱动连接 loopback 网关，首步忙碌后重试、第二步响应丢失、重启只查询原执行；供应商恰好受理两次，没有第三步。
+- `/tmp/donebot-team-goal-personal-workflows.log`：3 文件 / 24 项真实隔离服务流程通过，覆盖个人单聊/群聊目标、原有失败重试、取消、排队、等待、自动化及回合上限。旧夹具显式限定测试模式与假引擎，不修改产品网关限制。
+- `/tmp/donebot-team-goal-types-final.log`、`/tmp/donebot-team-goal-lint-final.log`：服务端类型及定向 lint 通过。
+
+仍未通过真实 Linux 团队 HTTP 成功执行及跨成员设备验收；能力继续关闭。

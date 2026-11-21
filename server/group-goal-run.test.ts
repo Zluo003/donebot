@@ -121,7 +121,7 @@ const envelope = (decision: Record<string, string>) =>
 const settled = (replyText: string): GoalStepResult => ({ ran: true, replyText, outcome: "settled" });
 
 /** Drives the real loop with scripted steps; a step that runs counts one turn, as a claimed member turn does. */
-function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: string }>; steps: Array<GoalStepResult | ((call: number) => GoalStepResult)>; cancelAfter?: number }) {
+function goalRun(options: { solo?: boolean; retryFailedSteps?: boolean; members?: Array<{ id: string; name: string }>; steps: Array<GoalStepResult | ((call: number) => GoalStepResult)>; cancelAfter?: number }) {
   const members = options.members ?? [{ id: "solo-id", name: "Solo" }];
   const run = { goal: "Get every test passing", turnCount: 0, maxTurns: GROUP_GOAL_MAX_TURNS, finished: false };
   const calls: Array<{ bot: string; coordinator: boolean; instructions: string }> = [];
@@ -133,6 +133,7 @@ function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: 
     coordinator: members[0]!,
     members,
     solo: options.solo,
+    retryFailedSteps: options.retryFailedSteps,
     cancelled: () => cancelled,
     current: (id) => members.find((member) => member.id === id),
     step: async (bot, coordinator, instructions) => {
@@ -208,6 +209,21 @@ describe("one goal-run loop for a room and a one-on-one chat", () => {
     await goal.done;
     expect(goal.calls).toHaveLength(1);
     expect(goal.finished).toEqual([{ status: "blocked", detail: "Solo did not provide a valid next-step decision." }]);
+  });
+
+  it.each(["lead", "worker"])("does not replace an uncertain team %s execution with a new step", async failed => {
+    const goal = goalRun({
+      retryFailedSteps: false,
+      members: [{ id: "lead-id", name: "Lead" }, { id: "scout-id", name: "Scout" }],
+      steps: [
+        ...(failed === "worker" ? [settled(envelope({ status: "continue", next: "Scout", instruction: "Verify the draft" }))] : []),
+        { ran: true, replyText: "", outcome: "provider_failed", stopReason: "Execution status is uncertain" },
+      ],
+    });
+    await goal.done;
+    expect(goal.calls).toHaveLength(failed === "lead" ? 1 : 2);
+    expect(goal.progress).toEqual([]);
+    expect(goal.finished).toEqual([{ status: "failed", detail: expect.stringContaining("Execution status is uncertain") }]);
   });
 
   it("blocks a room of one that repeats the same next step", async () => {

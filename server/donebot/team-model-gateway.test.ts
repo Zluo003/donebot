@@ -6,6 +6,11 @@ import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import type { WireMessage as Message } from "../../shared/wire.ts";
 import type { RuntimeEvent } from "../contracts.ts";
+import { GROUP_GOAL_CONTROL_CLOSE, GROUP_GOAL_CONTROL_OPEN, type GoalRunEnd } from "../group-goal-run.ts";
+import { createGoalTurns } from "../host/goal-turns.ts";
+import { createOneOnOneGoals } from "../host/one-on-one-goals.ts";
+import type { LiveGoalRun } from "../host/goal-cards.ts";
+import type { BotRecord, TaskRecord } from "../store.ts";
 import { createCheckBacks, type CheckBackRecord } from "../host/check-backs.ts";
 import type { CheckBackLine } from "../../shared/check-back.ts";
 import { personKey } from "../person-key.ts";
@@ -32,6 +37,7 @@ async function fixture(enabled = true) {
   const records = new Map<string, { id: string; state: string; token: string; body: Record<string, unknown> }>();
   const seen: Array<{ url: string; authorization: string; key?: string; body: string; headers: IncomingMessage["headers"] }> = [];
   let modelCalls = 0, prepareDrop = false, modelDrop = false, revoked = false, streaming = false, modelError = false, settled = false;
+  let modelText = "fixture answer";
   const respond = (res: ServerResponse, status: number, value: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value)); };
   const server = createServer(async (req, res) => {
     const bytes: Buffer[] = [];
@@ -62,7 +68,7 @@ async function fixture(enabled = true) {
     if (modelError) return respond(res, 503, {});
     if (streaming) {
       res.writeHead(200, { "content-type": "text/event-stream" });
-      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: "<thinking>fixture reasoning</thinking>fixture answer" }, finish_reason: "stop" }], usage: { prompt_tokens: 2, completion_tokens: 3 } })}\n\ndata: [DONE]\n\n`);
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: `<thinking>fixture reasoning</thinking>${modelText}` }, finish_reason: "stop" }], usage: { prompt_tokens: 2, completion_tokens: 3 } })}\n\ndata: [DONE]\n\n`);
       return;
     }
     respond(res, 200, { choices: [{ message: { content: "fixture answer" }, finish_reason: "stop" }] });
@@ -84,13 +90,14 @@ async function fixture(enabled = true) {
   const init = { method: "POST", headers: { authorization: "Bearer ignored-personal-secret", "X-DoneBot-Installation": "ignored", "X-API-Key": "ignored" }, body: JSON.stringify({ model: "deepseek-flash", messages: [{ role: "user", content: "fixture" }] }) };
   const context = { bindingId: binding.id, botId: "fixture-bot", threadId: "fixture-thread", ordinal: 0 };
   return { directory, runtime, coordinatorFile, coordinator, gateway, create, actor, sender, person, message, binding, context, init, session, seen, records,
-    count: () => modelCalls, modes: (value: { prepareDrop?: boolean; modelDrop?: boolean; revoked?: boolean; streaming?: boolean; modelError?: boolean; settled?: boolean }) => {
+    count: () => modelCalls, modes: (value: { prepareDrop?: boolean; modelDrop?: boolean; revoked?: boolean; streaming?: boolean; modelError?: boolean; settled?: boolean; modelText?: string }) => {
       if (value.prepareDrop !== undefined) prepareDrop = value.prepareDrop;
       if (value.modelDrop !== undefined) modelDrop = value.modelDrop;
       if (value.revoked !== undefined) revoked = value.revoked;
       if (value.streaming !== undefined) streaming = value.streaming;
       if (value.modelError !== undefined) modelError = value.modelError;
       if (value.settled !== undefined) settled = value.settled;
+      if (value.modelText !== undefined) modelText = value.modelText;
     } };
 }
 
@@ -250,6 +257,65 @@ it("carries provenance through the real native driver, separates reasoning, and 
   expect(await run("failure-thread", failure.id)).toMatchObject({ type: "turn.completed", ok: false });
   expect(fx.count(), JSON.stringify(events)).toBe(2);
   expect(events.filter(event => event.type === "turn.retrying")).toHaveLength(0);
+});
+
+it("runs distinct goal steps through the native driver and holds a lost second response without retrying a third step", async () => {
+  const fx = await fixture();
+  fx.modes({ streaming: true, modelText: `${GROUP_GOAL_CONTROL_OPEN}{"status":"continue","next":"fixture-bot","instruction":"Verify the result"}${GROUP_GOAL_CONTROL_CLOSE}` });
+  await fx.gateway.refreshCatalog();
+  const driver = createDoneBotLlmDriver({ imageCacheDir: join(fx.directory, "images"), request: (path, init, context) => fx.gateway.request(path, init, context),
+    authenticated: () => fx.gateway.authenticated(), requiresExecutionContext: true, models: () => doneBotTextModels(fx.gateway.models()), protocol: model => doneBotProtocol(model, fx.gateway.models()) });
+  const instance = await driver.create({ instanceId: "donebot", displayName: "Fixture", environment: {}, enabled: true, config: {} });
+  cleanups.push(async () => { await instance.dispose(); });
+  const turns = createGoalTurns({ retireProviderTurn() {} });
+  let settle = (_event: Extract<RuntimeEvent, { type: "turn.completed" }>) => {};
+  instance.adapter.onEvent(event => {
+    const lead = turns.forEvent(event);
+    if (lead && event.type === "item.completed" && event.itemType === "assistant_text") lead.assistantItems.push(event.text);
+    if (event.type === "turn.completed") settle(event);
+  });
+  const run: LiveGoalRun = { runId: "fixture-goal", cardMessageId: "goal-card", goal: "Verify", coordinatorBotId: "fixture-bot", coordinatorName: "Fixture",
+    turnCount: 0, maxTurns: 13, startedAt: Date.now(), finished: false };
+  let finish!: (value: { status: GoalRunEnd; detail: string }) => void;
+  const finished = new Promise<{ status: GoalRunEnd; detail: string }>(resolve => { finish = resolve; });
+  const steps: number[] = [];
+  const input = { sourceId: fx.message.id, botId: fx.binding.botId, threadId: fx.binding.threadId, audience: "team" as const, generation: 1, runId: run.runId };
+  const goals = createOneOnOneGoals({
+    retryFailedSteps: false, turns, canStart: () => true, isUnattended: () => false,
+    store: { bot: () => ({ id: fx.binding.botId, name: "Fixture" } as BotRecord), taskByThread: () => ({} as TaskRecord), onChange: () => () => {},
+      titleTaskFromFirstMessage: () => null, appendMessage: (_threadId, message) => ({ ...message, id: fx.message.id, at: Date.now() }) },
+    cards: { start: () => run, progress() {}, finish: (_threadId, value, status, detail) => {
+      if (!value || value.finished) return;
+      value.finished = true;
+      finish({ status, detail });
+    } },
+    startTurn: async (_botId, text, opts) => {
+      steps.push(opts.goalStep);
+      if (steps.length === 1) throw Object.assign(new Error("Busy before admission"), { code: "thread_busy" });
+      const binding = fx.gateway.requests.goalStep({ ...input, runId: opts.goalRunId, sourceId: opts.requestMessageId, step: opts.goalStep });
+      if (opts.goalStep === 2) {
+        const other = fx.gateway.requests.sender({ id: "member-four", name: "Other" }, { userId: "4", memberVersion: 1, person: "member-four" });
+        fx.gateway.requests.captureMessage(fx.binding.threadId, { ...fx.message, id: "later-member-message", sender: other });
+        fx.modes({ modelDrop: true });
+      }
+      const completed = new Promise<Extract<RuntimeEvent, { type: "turn.completed" }>>(resolve => { settle = resolve; });
+      await instance.adapter.sendTurn({ threadId: fx.binding.threadId, botId: fx.binding.botId, text, teamExecution: { bindingId: binding.id }, toolScope: { allow: [] } });
+      const outcome = await completed;
+      opts.onSettled({ ok: outcome.ok, text: outcome.ok ? "" : "Original model response lost" });
+    },
+  });
+  goals.start(fx.binding.botId, fx.binding.threadId, "Verify");
+  expect(await finished).toMatchObject({ status: "failed", detail: expect.stringContaining("Original model response lost") });
+  expect(steps).toEqual([1, 1, 2]);
+  expect(run.turnCount).toBe(2);
+  expect(fx.count()).toBe(2);
+  expect(fx.records.size).toBe(2);
+  const restarted = fx.create();
+  const second = restarted.requests.goalStep({ ...input, step: 2 });
+  const original = fx.seen.filter(value => value.url === "/v1/chat/completions").at(-1)!;
+  await expect(restarted.request(original.url, { method: "POST", body: original.body }, { ...fx.context, bindingId: second.id })).rejects.toBeInstanceOf(TeamModelRequestHeld);
+  expect(fx.count()).toBe(2);
+  for (const record of fx.records.values()) expect(record.body).toMatchObject({ actor_id: fx.actor.userId, member_version: fx.actor.memberVersion });
 });
 
 it("sends native text helpers with distinct member operations and holds an uncertain helper across restart", async () => {

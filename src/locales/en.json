@@ -10465,5 +10465,19 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamShare.field.files": "supporting files",
+  "teamImport.skillFiles": "Supporting skill files ({count})",
+  "teamImport.skillFilesReview": "Skills stay off after import. Review the scripts before enabling or running them.",
+  "teamImport.skillFileWarnings": "Review these script warnings",
+  "teamShare.skip.skill_file_name": "the name cannot be stored safely",
+  "teamShare.skip.skill_file_hidden": "hidden files are not shared",
+  "teamShare.skip.skill_file_generated": "generated folders are not shared",
+  "teamShare.skip.skill_file_deep": "the path is too deep",
+  "teamShare.skip.skill_file_secret_name": "the name resembles a credential file",
+  "teamShare.skip.skill_file_binary": "only UTF-8 text files are shared",
+  "teamShare.skip.skill_file_large": "the file is larger than 128 KB",
+  "teamShare.skip.skill_file_secret": "the file appears to contain a credential",
+  "teamShare.skip.skill_file_duplicate": "the path conflicts with another file",
+  "teamShare.skip.skill_file_full": "the skill has reached its file or size limit"
 }

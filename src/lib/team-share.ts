@@ -1,6 +1,7 @@
 import { t, tFromServer } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import type { PackageDocument, PackageSummary } from "../../shared/package-format";
+import type { SkillFileRefusal } from "../../shared/skill-files";
 import { skillChoicesFrom, startingTicks } from "./team-share-skills";
 
 export { includedSkills, requestedSkills, skillChoicesFrom, startingTicks, tickedSkills } from "./team-share-skills";
@@ -12,7 +13,8 @@ export const PICTURES_BASE64_BUDGET = 2 * 1024 * 1024;
 export type ShareSkipReason =
   | "picture_too_large" | "picture_invalid" | "pictures_budget" | "stdio_server" | "insecure_address"
   | "files_not_shared" | "lead_not_in_group_chat" | "notes_too_large" | "skill_changed"
-  | "skill_conflict" | "bot_skill_limit" | "team_skill_limit" | "preset_empty" | "preset_skill_conflict";
+  | "skill_conflict" | "bot_skill_limit" | "team_skill_limit" | "preset_empty" | "preset_skill_conflict"
+  | `skill_file_${SkillFileRefusal}`;
 
 export interface ShareSkip { part: string; reason: ShareSkipReason | string }
 
@@ -178,6 +180,7 @@ const FIELD_WORDS: Record<string, LocaleKey> = {
   prompt: "teamShare.field.prompt",
   instructions: "teamShare.field.skill",
   skills: "teamShare.field.skill",
+  files: "teamShare.field.files",
   mcp: "teamShare.field.address",
   appearance: "teamShare.field.picture",
 };

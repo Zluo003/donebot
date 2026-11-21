@@ -173,6 +173,7 @@ describe("package export", () => {
   it.each([
     { instructions: "---\nname: shared\ndescription: Shared\n---\ntwo" },
     { description: "Different" }, { source: "other" }, { license: "MIT" }, { compatibility: "Other" },
+    { files: [{ path: "scripts/report.py", content: "print('different')\n" }] },
   ])("refuses conflicting portable skill content across selected bots: %j", (patch) => {
     const bot = (id: string): BotRecord => ({
       id,

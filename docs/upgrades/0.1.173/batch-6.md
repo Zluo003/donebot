@@ -106,3 +106,19 @@ fixture 更新欢迎版本和界面标签，图表选择器限定到 Data 面板
 - `/tmp/donebot-app-settings-i18n.log`：16 个语言目录、10467 个英文源字符串校验通过；补齐原来缺失的德语离线群聊提示及相应源哈希。
 
 这些证据只验收当前设置白名单，不替代本批剩余设置、团队协作或平台验收。
+
+## 文件模板携带技能脚本
+
+复用固定上游 844b91ecb 的附带文件契约和准入规则，适配当前 JSON/Markdown 模板通道；不导入尚不存在的 share 文件夹体系。脚本、引用和小文本素材随文件模板/预设导入导出，保持原字节、技能关闭；预览可展开文件并显示危险指令扫描结果。只导出原清单中摘要未变的文件，补充捕获字节校验，以及大小写、Unicode 和文件夹前缀冲突拒绝；不扫描整个技能目录或携带运行产物。
+
+模板导出回归发现既有协调技能被错误列入用户技能，因其描述字段不一致阻断整个部门导出；现在排除应用内置技能及引擎原生/项目技能，用户安装技能不受 display-only source 字段影响。原组织签章通道不支持脚本时在修改 Bot 前明确拒绝，避免静默丢失；未扩展原组织或 enterprise 集成。
+
+实际验收边界和命令见 `docs/verification/template-skill-files.md`。模板主菜单仍关闭，界面验证使用隔离入口挂载真实组件和真实导入导出 API，目录仅为合成本地空目录。新文件夹模板、私有 GitHub、密码库、团队共享模板与正式入口整合仍待接入。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-template-skill-regression.log`：16 文件 / 283 项通过，包括导入导出/预设/原安装与清单/原生技能/中英文预览；`/tmp/donebot-template-skill-followup.log`：部门回传、预设和内置技能边界 18 项通过。
+- `/tmp/donebot-template-skill-ui.log`：真实 Chromium 读取、预览、键盘展开、确认安装及再导出通过；截图已检查。持久回执为 `/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/server-1795249231811-48343-template-skill.json`，对应 fixture 已清理。
+- `/tmp/donebot-template-skill-client-types.log`、`/tmp/donebot-template-skill-server-types.log`、`/tmp/donebot-template-skill-lint.log`、`/tmp/donebot-template-skill-i18n.log`：客户端/服务端类型、定向 lint、16 个语言目录校验通过。
+
+初次 fixture 发现空数据目录尚无 workspaces，界面初稿错误地寻找隐藏的产品菜单和不存在的 summary 引用；修正为已声明的隔离组件入口、原生键盘展开和导入包原有文件名后重测通过。这些是验收脚本问题，未放宽产品权限或安全检查。

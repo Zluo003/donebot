@@ -6,6 +6,7 @@ import { skillCalls, skillCommandTurnText } from "../../shared/skill-command.ts"
 import { isSkillSwitchAction, type SkillRequestCardData, type SkillShareRecord } from "../../shared/skill-request.ts";
 import { narrowestAudience, intersectAudience } from "../bot-visibility.ts";
 import { DATA_DIR, type AppConfig } from "../config.ts";
+import { librarySkillFiles, ownSkillFiles, type StoredSkillFiles } from "../skill-side-files.ts";
 import { appendDecision } from "../decision-log.ts";
 import { UNDO_STALE, type DirectApply } from "../direct-apply.ts";
 import {
@@ -117,6 +118,15 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
     if (readImportedSkills()[name]) return readImportedSkillFile(name);
     const native = nativesFor(bot).find((skill) => skill.name === name);
     return native ? readNativeSkillFile(native) : null;
+  };
+
+  const readBotSkillFiles = (bot: BotRecord, name: string): StoredSkillFiles => {
+    if (builtinsFor(bot).some(skill => skill.manifest.id === name)) return [];
+    if (readSkillFile(bot.id, name) !== null) return ownSkillFiles(bot.id, name);
+    if (listSkills(bot.id).some(skill => skill.name === name)) return null;
+    if (skillsLibraryEnabled(cfg) && listLibrarySkills().some(skill => skill.name === name &&
+      (bot.assignedSkills?.includes(name) || (skill.everyBot && !librarySkillOptOuts(bot.id).has(name))))) return librarySkillFiles(name);
+    return [];
   };
 
   const shareBotsNow = (): ShareBot[] =>
@@ -260,6 +270,7 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
   return {
     listBotSkills,
     readBotSkillFile,
+    readBotSkillFiles,
 
     mode,
 

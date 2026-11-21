@@ -184,16 +184,38 @@ describe("preset store", () => {
 });
 
 describe("creating a bot from a preset", () => {
+  it("refuses supporting files on the unsupported stamped channel before changing bot settings", async () => {
+    const app = await installation();
+    const org = app.org();
+    const document = app.orgDocument("library-only.v2.json");
+    const imported = app.importer.importPackageDocument(document, { trust: "org", mode: "add", org }, app.deps);
+    if (imported.alreadyAdded) throw new Error("unexpected");
+    const resolved = app.presetStore.resolve(imported.presets![0]!.id)!;
+    const name = resolved.preset.skills![0]!;
+    resolved.skills.find(skill => skill.name === name)!.files = [{ path: "run.py", content: "print('fixture')\n" }];
+    const bot = app.store.createBot({ name: "Sky", modelSelection: { instanceId: "claude", model: "default-model" } });
+    const before = structuredClone(app.store.bot(bot.id));
+    expect(() => app.presets.applyPresetToBot(bot.id, resolved, app.applyDeps)).toThrow("supporting skill files");
+    expect(app.store.bot(bot.id)).toEqual(before);
+    expect(app.skills.listSkills(bot.id)).toEqual([]);
+    document.package.skills!.entries[0]!.files = [{ path: "run.py", content: "print('fixture')\n" }];
+    expect(() => app.importer.importPackageDocument(document, { trust: "org", mode: "add", org }, app.deps)).toThrow("supporting skill files");
+  });
+
   it("adds a file preset's skills switched off, its playbooks and starter notes, and stamps where it came from", async () => {
     const app = await installation();
     const input = fixture("full-team.v2.json");
     input.package.presets[0].seed = { memory: { "MEMORY.md": "- Greets by name.\n", "memory/tone.md": "Warm.\n" } };
+    const script = "print('PRESET_SCRIPT_MUST_NOT_RUN')\n";
+    input.package.skills.entries.find((skill: { name: string }) => skill.name === "objection-handling").files = [{ path: "scripts/review.py", content: script }];
     const imported = app.importer.importPackageDocument(app.parsePackageDocument(input), { trust: "file", mode: "add" }, app.deps);
     if (imported.alreadyAdded) throw new Error("unexpected");
     const resolved = app.presetStore.resolve(imported.presets![0]!.id)!;
     const bot = app.store.createBot({ name: "Sky", modelSelection: { instanceId: "claude", model: "default-model" } });
     expect(app.presets.applyPresetToBot(bot.id, resolved, app.applyDeps)).toEqual({ skills: ["objection-handling"], notes: 2 });
     expect(app.skills.listSkills(bot.id)).toEqual([expect.objectContaining({ name: "objection-handling", enabled: false, source: "package:sales-desk" })]);
+    const entry = app.skills.readManifest(bot.id)["objection-handling"]!;
+    expect(readFileSync(join(app.skills.skillDirectory(bot.id, "objection-handling", entry)!, "scripts/review.py"), "utf8")).toBe(script);
     expect(app.skills.skillPackageStamps(bot.id)).toEqual([]);
     expect(app.workspace.readMemoryFile(bot.id).text).toBe("- Greets by name.\n");
     expect(app.workspace.readMemoryTopic(bot.id, "tone.md")).toBe("Warm.\n");

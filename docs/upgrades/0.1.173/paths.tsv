@@ -1482,7 +1482,7 @@ A	server/host/shared-vm-control.test.ts	接入	待核对	待核对
 A	server/host/shared-vm-control.ts	接入	待核对	待核对
 M	server/host/sign-in-settle.test.ts	接入	待核对	待核对
 M	server/host/sign-in-settle.ts	接入	待核对	待核对
-M	server/host/skills-library.ts	接入	6	待核对
+M	server/host/skills-library.ts	接入	6	部分接入：安全读取 Bot/共享库附带文件；其余团队库差异待核对
 M	server/host/sse-replay.ts	接入	待核对	待核对
 A	server/host/stand-in-guard.ts	接入	3	已审计：batch-3；个人连接复用上游，自有账号/实例授权；团队连接不启用
 A	server/host/suggested-selection.test.ts	接入	待核对	待核对
@@ -1709,8 +1709,8 @@ M	server/outside-lineage.e2e.test.ts	接入	待核对	待核对
 M	server/own-home.test.ts	接入	待核对	待核对
 M	server/own-home.ts	接入	待核对	待核对
 M	server/package-export.test.ts	接入	待核对	待核对
-M	server/package-export.ts	接入	待核对	待核对
-M	server/package-import.ts	接入	待核对	部分接入并验证（MCP 专用连接/名额/清理，其他差异待核对）
+M	server/package-export.ts	接入	6	部分接入：附带文件参与同名冲突检查；文件夹模板及其他差异待核对
+M	server/package-import.ts	接入	6	部分接入：MCP 专用连接/清理及文件模板脚本关闭安装已验证；其他差异待核对
 M	server/pages/access.ts	接入	待核对	待核对
 M	server/pages/bundle.ts	接入	待核对	待核对
 M	server/parallel-threads.e2e.test.ts	接入	待核对	待核对
@@ -1781,7 +1781,7 @@ M	server/plan-usage.ts	接入	待核对	待核对
 M	server/pointed.ts	接入	待核对	待核对
 M	server/postiz.e2e.test.ts	接入	待核对	待核对
 M	server/presets.e2e.test.ts	接入	待核对	待核对
-M	server/presets.ts	接入	待核对	待核对
+M	server/presets.ts	接入	6	部分接入：文件预设携带脚本并关闭安装已验证；组织签章脚本明确拒绝；其他差异待核对
 M	server/proactive-routines.e2e.test.ts	接入	5	待核对
 A	server/proc-descendants.test.ts	接入	待核对	待核对
 A	server/proc-descendants.ts	接入	待核对	待核对
@@ -2069,7 +2069,7 @@ M	server/shell-timeout-hint.ts	接入	待核对	待核对
 M	server/side-jobs.test.ts	接入	待核对	待核对
 M	server/side-jobs.ts	接入	待核对	待核对
 M	server/skill-command.test.ts	接入	6	待核对
-M	server/skill-export.ts	接入	6	待核对
+M	server/skill-export.ts	接入	6	部分接入：附带文件及遗漏说明已验证；内置/原生/项目技能排除；其他差异待核对
 M	server/skill-fetch.test.ts	接入	6	待核对
 M	server/skill-fetch.ts	自有适配	6	待核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
 M	server/skill-folder.ts	接入	6	待核对
@@ -2079,7 +2079,7 @@ A	server/skill-openmausbot-docs.test.ts	接入	6	待核对
 A	server/skill-publish-to-netlify.test.ts	接入	6	待核对
 A	server/skill-request-card.test.ts	自有适配	6	待核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
 M	server/skill-request-card.ts	自有适配	6	待核对；部分接入：GitHub技能审批导入与下载后复查 558047fff/8ed728be7/1f08f4912/92585043f
-A	server/skill-side-files.ts	接入	6	待核对
+A	server/skill-side-files.ts	接入	6	844b91ecb 清单附带文件读取已接入；摘要及捕获字节验证通过
 M	server/skill-storage.ts	接入	6	待核对
 M	server/skills.test.ts	接入	6	待核对
 M	server/skills.ts	接入	6	待核对
@@ -2370,7 +2370,7 @@ M	shared/package-fixtures/manifest.json	接入	待核对	待核对
 D	shared/package-fixtures/newer.v3.json	接入	待核对	待核对
 A	shared/package-fixtures/newer.v4.json	接入	待核对	待核对
 M	shared/package-format.test.ts	接入	待核对	待核对
-M	shared/package-format.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
+M	shared/package-format.ts	接入	5/6	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收；844b91ecb 附带文件契约/扫描/代码不脱敏已验证，其他差异待核对
 M	shared/pairing-code.ts	接入	待核对	待核对
 M	shared/pairing-link.ts	接入	待核对	待核对
 M	shared/person-wait.test.ts	接入	待核对	待核对
@@ -2409,7 +2409,7 @@ A	shared/share-folder.ts	接入	待核对	待核对
 A	shared/sign-in-request.test.ts	接入	待核对	待核对
 M	shared/sign-in-request.ts	接入	待核对	待核对
 A	shared/skill-files.test.ts	接入	6	待核对
-A	shared/skill-files.ts	接入	6	待核对
+A	shared/skill-files.ts	接入	6	844b91ecb 文件契约已接入；路径、凭据、大小、Unicode 冲突验证通过
 M	shared/skill-request.ts	接入	6	待核对
 A	shared/task-provenance.ts	接入	待核对	待核对
 M	shared/team-backup.ts	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
@@ -2844,7 +2844,7 @@ M	src/components/SwatchRadios.tsx	接入	待核对	待核对
 M	src/components/TableFilePreview.tsx	接入	待核对	待核对
 M	src/components/TailnetComputers.test.ts	接入	待核对	待核对
 M	src/components/TailnetComputers.tsx	接入	待核对	待核对
-D	src/components/TeamImportDetails.tsx	接入	待核对	待核对
+D	src/components/TeamImportDetails.tsx	接入	6	保留 DoneBot 既有组件并适配附带文件预览；上游删除未照搬，待整合文件夹模板
 M	src/components/TeamLibraryPanel.test.ts	接入	待核对	待核对
 M	src/components/TeamLibraryPanel.tsx	接入	待核对	待核对
 M	src/components/TeamMapPage.tsx	接入	待核对	待核对
@@ -3269,12 +3269,12 @@ M	src/lib/stop-turn.ts	接入	4	流式/长历史子集已接入；其余目标�
 M	src/lib/table-data.ts	接入	6	待核对
 A	src/lib/table-decimal-order.test.ts	接入	待核对	待核对
 D	src/lib/team-import.test.ts	接入	待核对	待核对
-D	src/lib/team-import.ts	接入	待核对	待核对
+D	src/lib/team-import.ts	接入	6	保留既有 JSON/Markdown 预览并校验附带文件；上游删除未照搬，其他差异待核对
 D	src/lib/team-org-chart.test.ts	接入	待核对	待核对
 D	src/lib/team-org-chart.ts	接入	待核对	待核对
 D	src/lib/team-share-skills.ts	接入	6	待核对
 D	src/lib/team-share.test.ts	接入	待核对	待核对
-D	src/lib/team-share.ts	接入	待核对	待核对
+D	src/lib/team-share.ts	接入	6	保留既有分享契约并添加文件遗漏原因；上游删除未照搬，其他差异待核对
 M	src/lib/team-welcome.ts	接入	待核对	待核对
 A	src/lib/teams-whats-new.ts	接入	待核对	待核对
 A	src/lib/template-details.ts	接入	6	待核对

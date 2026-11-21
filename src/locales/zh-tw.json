@@ -10161,5 +10161,19 @@
   "server.appSettings.changed": "已修改{label}",
   "server.appSettings.notSet": "未設定",
   "approval.applied.appSetting": "{name}修改了{title}",
-  "activity.tool.team.appSettings": "應用設定"
+  "activity.tool.team.appSettings": "應用設定",
+  "teamShare.field.files": "技能附帶檔案",
+  "teamImport.skillFiles": "技能附帶檔案（{count} 個）",
+  "teamImport.skillFilesReview": "匯入後技能保持關閉。請先審閱腳本，再啟用或執行。",
+  "teamImport.skillFileWarnings": "請審閱以下腳本提示",
+  "teamShare.skip.skill_file_name": "檔案名稱無法安全儲存",
+  "teamShare.skip.skill_file_hidden": "不共用隱藏檔案",
+  "teamShare.skip.skill_file_generated": "不共用自動產生的目錄",
+  "teamShare.skip.skill_file_deep": "檔案路徑層級過深",
+  "teamShare.skip.skill_file_secret_name": "檔案名稱疑似憑證檔案",
+  "teamShare.skip.skill_file_binary": "僅共用 UTF-8 文字檔案",
+  "teamShare.skip.skill_file_large": "檔案超過 128 KB",
+  "teamShare.skip.skill_file_secret": "檔案疑似包含憑證",
+  "teamShare.skip.skill_file_duplicate": "路徑與其他檔案衝突",
+  "teamShare.skip.skill_file_full": "技能已達到檔案數或總大小限制"
 }

@@ -84,8 +84,9 @@ it("shares one team whole (minus chat history) and imports it back as new, inert
     expect(copyLead.avatarUrl).toMatch(/^\/api\/attachments\//);
     expect(copies.map((bot) => bot.approvalMode)).toEqual(copies.map(() => "full"));
     for (const bot of copies) {
-      const skills = (await ok("GET", `/api/bots/${bot.id}/skills`)).skills as Array<{ enabled: boolean }>;
-      expect(skills.every((skill) => !skill.enabled)).toBe(true);
+      const skills = (await ok("GET", `/api/bots/${bot.id}/skills`)).skills as Array<{ enabled: boolean; source: string }>;
+      expect(skills.filter(skill => !skill.source.startsWith("builtin:")).every(skill => !skill.enabled)).toBe(true);
+      expect(skills.filter(skill => skill.source.startsWith("builtin:")).every(skill => skill.enabled)).toBe(true);
     }
     expect(imported.body.routines.every((routine: { enabled: boolean }) => !routine.enabled)).toBe(true);
     expect(imported.body.routines.map((routine: { target: string }) => routine.target).sort()).toEqual(["bot", "room-goal"]);

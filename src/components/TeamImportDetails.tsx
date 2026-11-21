@@ -58,6 +58,22 @@ export function TeamImportDetails({ pending, importedNames, org = false }: {
           <p className="mt-1 break-words">{pending.presets?.join(", ")}</p>
         </div>
       )}
+      {Boolean(pending.skillFiles?.length) && (
+        <div className="mt-4 rounded-xl border border-hairline px-4 py-3 text-[13px] text-ink-secondary">
+          <div className="font-medium text-ink">{t("teamImport.skillFiles", { count: pending.skillFiles!.length })}</div>
+          <p className="mt-1">{t("teamImport.skillFilesReview")}</p>
+          <div className="mt-2 max-h-72 overflow-auto">
+            {pending.skillFiles!.map(file => <details key={`${file.skill}/${file.path}`} className="py-1">
+              <summary className="cursor-pointer break-all">{file.skill}/{file.path}</summary>
+              <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-raised p-2 text-[12px]">{file.content}</pre>
+            </details>)}
+          </div>
+          {Boolean(pending.skillFileWarnings?.length) && <div className="mt-2">
+            <p className="font-medium text-ink">{t("teamImport.skillFileWarnings")}</p>
+            {pending.skillFileWarnings!.map((warning, index) => <p key={index} className="break-words">{warning}</p>)}
+          </div>}
+        </div>
+      )}
       {Boolean(pending.offeredSkills?.length) && (
         <div className="mt-4 rounded-xl border border-hairline px-4 py-3 text-[13px] text-ink-secondary">
           <div className="font-medium text-ink">{t("teamImport.offeredSkills")}</div>

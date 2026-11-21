@@ -1,7 +1,7 @@
 import { parse as parseYaml } from "yaml";
 import { t } from "./i18n";
 import { parseTeamBackup, TEAM_BACKUP_CONTENTS } from "../../shared/team-backup";
-import { PACKAGE_VERSION, parsePackageDocument, type PackageDocument } from "../../shared/package-format";
+import { PACKAGE_VERSION, packageScanFindings, parsePackageDocument, type PackageDocument } from "../../shared/package-format";
 
 export interface PendingTeamImport {
   manifest: unknown;
@@ -27,6 +27,8 @@ export interface PendingTeamImport {
   notes?: number;
   presets?: string[];
   library?: boolean;
+  skillFiles?: Array<{ skill: string; path: string; content: string }>;
+  skillFileWarnings?: string[];
 }
 
 /** Client-side preview only; the server remains the trust boundary. */
@@ -107,6 +109,7 @@ function sharedTeamPreview(document: PackageDocument, manifest: unknown): Pendin
   const referenced = new Set(pkg.agents.flatMap((agent) => agent.skills ?? []));
   const leader = pkg.team?.leader ? pkg.agents.find((agent) => agent.key === pkg.team?.leader)?.name : undefined;
   return {
+    ...skillFilePreview(document),
     manifest,
     kind: "package",
     version: 2,
@@ -137,6 +140,7 @@ function libraryPreview(document: PackageDocument, manifest: unknown): PendingTe
   const pkg = document.package;
   if (!pkg.presets?.length) throw new Error(t("teamImport.libraryEmpty"));
   return {
+    ...skillFilePreview(document),
     manifest,
     kind: "package",
     version: 2,
@@ -191,6 +195,8 @@ function packagePreview(root: Record<string, unknown>, manifest: unknown): Pendi
     ? (pkg.skills as Record<string, unknown>).entries
     : undefined;
   return {
+    ...(Array.isArray(skills) && skills.some(skill => skill && typeof skill === "object" && "files" in skill)
+      ? skillFilePreview(parsePackageDocument(manifest)) : {}),
     manifest,
     kind: "package",
     version: 1,
@@ -208,4 +214,13 @@ function packagePreview(root: Record<string, unknown>, manifest: unknown): Pendi
       return typeof name === "string" && name.trim() ? [name.trim()] : [];
     }) : [],
   };
+}
+
+function skillFilePreview(document: PackageDocument): Pick<PendingTeamImport, "skillFiles" | "skillFileWarnings"> {
+  const skillFiles = (document.package.skills?.entries ?? []).flatMap(skill =>
+    (skill.files ?? []).map(file => ({ skill: skill.name, ...file })));
+  if (!skillFiles.length) return {};
+  const skillFileWarnings = packageScanFindings(document).filter(finding => /\.files\[\d+\]\.content$/.test(finding.part))
+    .map(finding => `${finding.part}: ${finding.warning}`);
+  return { skillFiles, ...(skillFileWarnings.length ? { skillFileWarnings } : {}) };
 }

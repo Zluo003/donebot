@@ -36,6 +36,12 @@ const ENTRIES = {
   threads: { entry: "/scripts/testing/threads-preview.tsx", route: "/__threads.html", title: "Isolated DoneBot Chat" },
   dictation: { entry: "/scripts/testing/dictation-preview.tsx", route: "/__dictation.html", title: "Isolated dictation verification" },
   settings: { entry: "/src/testing/bot-settings.tsx", route: "/__bot-settings.html", title: "Isolated Bot Settings" },
+  templates: { entry: "/scripts/testing/templates-preview.tsx", route: "/__templates.html", title: "Isolated templates", extraRoutes: [{
+    path: "/api/team-library", handler: (_req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ version: 1, repositoryUrl: "https://fixture.invalid/templates", teams: [], categories: [] }));
+    },
+  }] },
 } as const satisfies Record<string, Parameters<typeof mountPreview>[1]>;
 const FAKE_MODES = ["happy", "exit-early", "hang", "malformed", "stream", "not-logged-in", "slow", "slow-write", "background-result"];
 const SEEDED_BOT = "Pepper";

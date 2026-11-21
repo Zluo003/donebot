@@ -12,6 +12,7 @@ import { redactSecretsInText } from "./redact.ts";
 import { normalizeCronSchedule } from "./routine-schedule.ts";
 import { MAUS_COLOR_NAMES } from "./wire.ts";
 import { isSkillName, parseSkillMd, scanSkillText, SKILL_FILE_MAX_BYTES } from "./skill-md.ts";
+import { skillFilesSchema } from "./skill-files.ts";
 
 export const PACKAGE_FORMAT = "openmaus.package";
 /** The newest version this module reads and writes. */
@@ -90,6 +91,7 @@ const portableSkillSchema = z.object({
   license: optionalText(200),
   compatibility: optionalText(200),
   instructions: skillInstructions,
+  files: skillFilesSchema,
 });
 const soulSchema = z.string().refine((value) => utf8Bytes(value) <= BOT_PROFILE_LIMITS.soul, {
   error: "standing instructions must be at most 24000 bytes",
@@ -848,9 +850,8 @@ export function downgradeToV1(document: PackageDocument):
 
 type TextVisitor = (part: string, value: string) => string | void;
 
-/** Every string leaf of the document, with its part path, except picture
- * bytes. A visitor that returns a string replaces the leaf in place. */
-function visitText(document: PackageDocument, visit: TextVisitor): void {
+// Redaction must not rewrite script contents. Scanning explicitly opts into code as well as prose.
+function visitText(document: PackageDocument, visit: TextVisitor, includeSkillFiles = false): void {
   const walk = (holder: Record<string, unknown> | unknown[], slot: string | number, part: string) => {
     const value = (holder as Record<string | number, unknown>)[slot];
     if (typeof value === "string") {
@@ -865,7 +866,8 @@ function visitText(document: PackageDocument, visit: TextVisitor): void {
     if (!value || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
     for (const name of Object.keys(record)) {
-      if (part.endsWith(".appearance.avatar") && name === "data") continue;
+      if ((part.endsWith(".appearance.avatar") && name === "data") ||
+        (!includeSkillFiles && name === "content" && /^skills\[[^\]]*\]\.files\[\d+\]$/.test(part))) continue;
       walk(record, name, part.endsWith(".seed.memory") ? `${part}[${JSON.stringify(name)}]` : `${part}.${name}`);
     }
   };
@@ -926,7 +928,7 @@ export function packageScanFindings(document: PackageDocument): Array<{ part: st
   const findings: Array<{ part: string; warning: string }> = [];
   visitText(document, (part, value) => {
     for (const warning of scanSkillText(value)) findings.push({ part, warning });
-  });
+  }, true);
   return findings;
 }
 

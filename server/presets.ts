@@ -354,6 +354,9 @@ export function applyPresetToBot(botId: string, resolved: ResolvedPreset, deps: 
   const { row, preset } = resolved;
   const org = row.source === "org";
   const stamped = org && Boolean(row.ref) && ORG_INSTALL_ID.test(row.installId);
+  if (stamped && resolved.skills.some(skill => preset.skills?.includes(skill.name) && skill.files?.length)) {
+    throw new Error("This installation cannot add supporting skill files through the organization channel.");
+  }
   const playbooks = (preset.playbooks ?? []).flatMap((key) => {
     const playbook = resolved.playbooks.find((candidate) => candidate.key === key);
     return playbook ? [{ ...playbook, triggers: [...playbook.triggers] }] : [];
@@ -382,7 +385,7 @@ export function applyPresetToBot(botId: string, resolved: ResolvedPreset, deps: 
       const added = deps.skills.installOrg(botId, source, skill.instructions, stamp);
       if ("error" in added) throw new Error(`The preset's skill "${name}" could not be added: ${added.error}`);
     } else {
-      const added = deps.skills.install(botId, source, [{ path: "SKILL.md", content: skill.instructions }]);
+      const added = deps.skills.install(botId, source, [{ path: "SKILL.md", content: skill.instructions }, ...(skill.files ?? [])]);
       if ("error" in added) throw new Error(`The preset's skill "${name}" could not be added: ${added.error}`);
       if (org) {
         const enabled = deps.skills.setEnabled(botId, name, true);

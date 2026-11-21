@@ -30,6 +30,7 @@ import {
   type PackageRoutineSchedule,
 } from "../shared/package-format.ts";
 import type { ServerTextParams } from "../shared/server-text.ts";
+import type { SkillFileRefusal } from "../shared/skill-files.ts";
 import { USER_ERROR, userError, type UserErrorKey } from "./user-errors.ts";
 
 function portableKey(value: string, fallback: string, used: Set<string>): string {
@@ -74,7 +75,8 @@ export interface ExportablePackageSkill extends Omit<BotPackageSkill, "name" | "
 
 function sameSkill(a: ExportablePackageSkill, b: ExportablePackageSkill): boolean {
   return a.instructions === b.instructions && a.description === b.description &&
-    a.source === b.source && a.license === b.license && a.compatibility === b.compatibility;
+    a.source === b.source && a.license === b.license && a.compatibility === b.compatibility &&
+    JSON.stringify(a.files ?? []) === JSON.stringify(b.files ?? []);
 }
 
 function assignPlaybooks(bots: readonly BotRecord[], idToKey: ReadonlyMap<string, string>) {
@@ -272,7 +274,8 @@ export type TeamExportSkipReason =
   | "bot_skill_limit"
   | "team_skill_limit"
   | "preset_empty"
-  | "preset_skill_conflict";
+  | "preset_skill_conflict"
+  | `skill_file_${SkillFileRefusal}`;
 
 export interface TeamExportSkip { part: string; reason: TeamExportSkipReason }
 

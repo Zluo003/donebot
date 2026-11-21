@@ -3,12 +3,19 @@ import type { SkillsLibraryHost } from "./host/skills-library.ts";
 import type { ExportablePackageSkill, TeamExportSkip } from "./package-export.ts";
 import { isSkillName } from "./skills.ts";
 import type { BotRecord } from "./store.ts";
+import { admitSkillFiles, skillFileRefusalWords } from "../shared/skill-files.ts";
 
 /** The skill side of bot and team package export: which names may be exported, and each bot's exportable copies. */
-export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "readBotSkillFile">) {
+export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "readBotSkillFile"> & Partial<Pick<SkillsLibraryHost, "readBotSkillFiles">>) {
   const { readBotSkillFile } = host;
-  // A skill the engine loads by itself from its own folder (the person's ~/.claude/skills, a project's) is never packed.
-  const listBotSkills = (bot: BotRecord) => host.listBotSkills(bot).filter((skill) => (skill as { origin?: string }).origin !== "native");
+  const filesFor = (bot: BotRecord, name: string) => {
+    const files = host.readBotSkillFiles ? host.readBotSkillFiles(bot, name) : [];
+    return files === null ? null : admitSkillFiles(files);
+  };
+  const listBotSkills = (bot: BotRecord) => host.listBotSkills(bot).filter(skill => {
+    const origin = (skill as { origin?: string }).origin;
+    return origin !== "native" && origin !== "project" && !(skill.editable === false && skill.source === `builtin:${skill.name}`);
+  });
   function checkedExportSkillNames(
     value: unknown,
     bots: readonly BotRecord[],
@@ -41,6 +48,9 @@ export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "rea
         if (instructions === null) {
           throw new Error(`Skill "${listing.name}" changed or is unavailable and cannot be exported safely`);
         }
+        const beside = filesFor(bot, listing.name);
+        if (!beside) throw new Error(`Skill "${listing.name}" has changed files and cannot be exported safely`);
+        if (beside.refused.length) throw new Error(`Skill "${listing.name}" cannot include ${beside.refused.map(file => `${file.path}, which ${skillFileRefusalWords(file.reason)}`).join("; ")}`);
         const skill: ExportablePackageSkill = {
           name: listing.name,
           description: listing.description,
@@ -48,6 +58,7 @@ export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "rea
           ...(listing.license ? { license: listing.license } : {}),
           ...(listing.compatibility ? { compatibility: listing.compatibility } : {}),
           instructions,
+          ...(beside.files.length ? { files: beside.files } : {}),
         };
         assigned.push(skill);
       }
@@ -75,11 +86,16 @@ export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "rea
       for (const listing of listBotSkills(bot)) {
         if (!chosen.has(listing.name)) continue;
         const instructions = readBotSkillFile(bot, listing.name);
-        if (instructions === null) {
+        const beside = filesFor(bot, listing.name);
+        if (instructions === null || beside === null) {
           if (!all) return { ok: false, error: `Skill "${listing.name}" changed or is unavailable and cannot be shared safely`, available };
           const part = `skills[${listing.name}]`;
           if (!skipped.some((skip) => skip.part === part)) skipped.push({ part, reason: "skill_changed" });
           continue;
+        }
+        for (const file of beside.refused) {
+          const part = `skills[${listing.name}].files[${file.path}]`;
+          if (!skipped.some(skip => skip.part === part)) skipped.push({ part, reason: `skill_file_${file.reason}` });
         }
         assigned.push({
           name: listing.name,
@@ -88,6 +104,7 @@ export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "rea
           ...(listing.license ? { license: listing.license } : {}),
           ...(listing.compatibility ? { compatibility: listing.compatibility } : {}),
           instructions,
+          ...(beside.files.length ? { files: beside.files } : {}),
           enabled: listing.enabled,
         });
       }

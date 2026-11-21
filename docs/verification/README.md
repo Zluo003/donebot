@@ -108,6 +108,7 @@ Use only mapped, tested commands:
 - [Qwen model route selection](qwen-models.md)
 - [Team backups](team-backups.md)
 - [Sharing a whole team](team-sharing.md)
+- [模板附带技能脚本](template-skill-files.md)
 - [The organization library](org-library.md)
 - [Preset bots](presets.md)
 - [Teams and shared instructions](teams.md)

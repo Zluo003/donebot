@@ -162,6 +162,9 @@ export function importPackageDocument(
   const library = !pkg.agents.length || !pkg.team;
   if (library && options.trust !== "org" && !deps.presets) throw new PackageImportError("no_bots", NO_BOTS_MESSAGE);
   if (options.trust === "org") {
+    if (pkg.skills?.entries.some(skill => skill.files?.length)) {
+      throw new PackageImportError("invalid_package", "This installation cannot add supporting skill files through the organization channel.");
+    }
     const org = options.org;
     if (!org) throw new PackageImportError("invalid_package", "This package is missing its organization details.");
     if (org.installId !== orgInstallId(org.adminOrigin, org.organizationId, org.packageId)) {
@@ -346,7 +349,7 @@ function runImport(source: ImportSource, options: PackageImportOptions, deps: Pa
         const added = org
           ? deps.skills.installOrg!(created.id, `org:${org.ref}@${pkg!.release}`, skill.instructions,
               { installId: org.installId, key: skill.name, release: pkg!.release, ...pair(skill.instructions, skill.instructions) })
-          : deps.skills.install(created.id, skill.source ?? `package:${pkg!.id}`, [{ path: "SKILL.md", content: skill.instructions }]);
+          : deps.skills.install(created.id, skill.source ?? `package:${pkg!.id}`, [{ path: "SKILL.md", content: skill.instructions }, ...(skill.files ?? [])]);
         if ("error" in added) throw new Error(`Package skill "${skillName}" could not be imported: ${added.error}`);
       }
       for (const [path, text] of Object.entries(agent?.seed?.memory ?? {})) {

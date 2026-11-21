@@ -6740,5 +6740,9 @@
   "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start.",
   "inbox.settled.read": "Letto",
   "inbox.settled.title": "Completato",
-  "inbox.markAllRead": "Segna tutto come letto"
+  "inbox.markAllRead": "Segna tutto come letto",
+  "server.appSettings.changed": "Changed {label}",
+  "server.appSettings.notSet": "not set",
+  "approval.applied.appSetting": "{name} changed {title}",
+  "activity.tool.team.appSettings": "App settings"
 }

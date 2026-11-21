@@ -961,6 +961,11 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       text: `A confirmation card is now visible to the user for ${proposal}.${warningText}\n\n${status} End this turn and wait for the decision.`,
     };
   }
+  if (name === "app_settings") {
+    const r = await apiResponse("/api/internal/app-settings", { method: "POST", body: JSON.stringify(args) });
+    if (!r.ok) return { text: String(r.body.error ?? `app_settings failed (HTTP ${r.status}).`), isError: true };
+    return { text: String(r.body.text ?? "") };
+  }
   if (name === "mcp_server") {
     const r = await apiResponse("/api/internal/mcp-servers", { method: "POST", body: JSON.stringify(args) });
     if (!r.ok) return { text: String(r.body.error ?? `mcp_server failed (HTTP ${r.status}).`), isError: true };

@@ -3347,5 +3347,9 @@
   "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start.",
   "inbox.settled.read": "Lu",
   "inbox.settled.title": "Terminé",
-  "inbox.markAllRead": "Tout marquer comme lu"
+  "inbox.markAllRead": "Tout marquer comme lu",
+  "server.appSettings.changed": "Changed {label}",
+  "server.appSettings.notSet": "not set",
+  "approval.applied.appSetting": "{name} changed {title}",
+  "activity.tool.team.appSettings": "App settings"
 }

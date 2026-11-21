@@ -3538,7 +3538,12 @@
       "server.rooms.linkedFailed": "f2e5123cd9e1fcc6f0d3f6a304455efc779f5fb95c6dd7abb01820b3ab3205d5",
       "room.members.far.place": "312a77edd15104f65401f8127c68968eb1586a75e13c44bc3bc5d28ea4f5125d",
       "room.members.far.off": "5c7291cc0bc0f48f169607324939b4b2bb308c5246d10cda4ad7501ba4883beb",
-      "room.members.far.missing": "4bc7f76d36ade5ee27902c91e3d7918641737b2387f846623c3f986a574177fa"
+      "room.members.far.missing": "4bc7f76d36ade5ee27902c91e3d7918641737b2387f846623c3f986a574177fa",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "server.rooms.linkedOffline": "09d655048ace9ba595b70875bd9ced57a1a1d766674285a88de54abc1daaa726"
     },
     "es": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -9661,7 +9666,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "fr": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -13012,7 +13021,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "hi": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -16215,7 +16228,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "ja": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -24009,7 +24026,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -34305,7 +34326,11 @@
       "server.rooms.linkedFailed": "f2e5123cd9e1fcc6f0d3f6a304455efc779f5fb95c6dd7abb01820b3ab3205d5",
       "room.members.far.place": "312a77edd15104f65401f8127c68968eb1586a75e13c44bc3bc5d28ea4f5125d",
       "room.members.far.off": "5c7291cc0bc0f48f169607324939b4b2bb308c5246d10cda4ad7501ba4883beb",
-      "room.members.far.missing": "4bc7f76d36ade5ee27902c91e3d7918641737b2387f846623c3f986a574177fa"
+      "room.members.far.missing": "4bc7f76d36ade5ee27902c91e3d7918641737b2387f846623c3f986a574177fa",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "zh": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -42252,7 +42277,11 @@
       "room.members.far.place": "312a77edd15104f65401f8127c68968eb1586a75e13c44bc3bc5d28ea4f5125d",
       "room.members.far.off": "5c7291cc0bc0f48f169607324939b4b2bb308c5246d10cda4ad7501ba4883beb",
       "room.members.far.missing": "4bc7f76d36ade5ee27902c91e3d7918641737b2387f846623c3f986a574177fa",
-      "server.rooms.linkedOffline": "09d655048ace9ba595b70875bd9ced57a1a1d766674285a88de54abc1daaa726"
+      "server.rooms.linkedOffline": "09d655048ace9ba595b70875bd9ced57a1a1d766674285a88de54abc1daaa726",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -52413,7 +52442,11 @@
       "room.queue.busyElsewhere": "ecdbe34c1cca24d6d0365a04bf672203b437647795ac4e358fbcf671ef345b97",
       "room.queue.busyInAfter": "a944c189ff63871adf83e91509d65f6ec8044478de1969f5a8874a11d2f15847",
       "room.queue.busyElsewhereAfter": "3432832abb792772c22e30806a674a4edcd22f660ee53d47ba4e2075121a79e8",
-      "room.queue.aTeammate": "1ca7804e31164a622443afee44c7ab79a97c1fb2e169b4df211bff0c10bd4a30"
+      "room.queue.aTeammate": "1ca7804e31164a622443afee44c7ab79a97c1fb2e169b4df211bff0c10bd4a30",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "uk": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -56054,7 +56087,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "vi": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -61677,7 +61714,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "tr": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -67300,7 +67341,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "pl": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -74182,7 +74227,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "ru": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -81126,7 +81175,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "it": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -87870,7 +87923,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -95333,7 +95390,11 @@
       "server.routines.turnedBackOnMany": "b9b1f8055114f9a1b59fc53167a4d2d3be904e945cbe33f829142a8195a1ec4f",
       "inbox.settled.read": "9b9a8d05a7ec353bda84f9c1bb3178c299de3001b5e970508ddc889c487f92ca",
       "inbox.settled.title": "7804f7a79a9eee323b6e89d3f8287c7d36076f4d76291646295f435b0dec736e",
-      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44"
+      "inbox.markAllRead": "d7592650e1c90a85fc6151e5454c57227d9474f1ce9fdbf184178bea34974c44",
+      "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
+      "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
+      "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
     }
   }
 }

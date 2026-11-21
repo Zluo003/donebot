@@ -122,7 +122,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
     perBotLocalVmCountForModeChange, checkedModelSelection, policyModelRefusal, browserSessionSpec, configStatus,
     configForAccess, resyncOpenCodeProviderKeys, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, ownProfile, ownHints, postiz,
   } = deps;
-  return async ({ req, res, url, path, method, auth, json, readBody }) => {
+  return async ({ req, res, url, path, method, auth, json, readBody, assertMutationAllowed }) => {
     // API keys are never echoed back: booleans only.
     if (method === "GET" && path === "/api/config") {
       return json(res, 200, configForAccess(configStatus(), auth));
@@ -510,6 +510,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         if (conflict) return json(res, 409, { error: conflict });
       }
       // Only the named keys change; merged with no await before the save.
+      assertMutationAllowed?.();
       if (patch.opencodeGo?.providerKeys) {
         const merged = mergeOpenCodeProviderKeys(cfg, patch.opencodeGo.providerKeys);
         if (!merged.ok) return json(res, 400, { error: merged.error });

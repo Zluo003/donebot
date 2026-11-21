@@ -7943,5 +7943,9 @@
   "room.members.far.place": "位于 {place}",
   "room.members.far.off": "连接已关闭",
   "room.members.far.missing": "已不可用",
-  "server.rooms.linkedOffline": "{bot} 在 {place} 上运行，该设备当前离线，本次请求未发送。请在 {place} 上线后重新提及 {bot}。"
+  "server.rooms.linkedOffline": "{bot} 在 {place} 上运行，该设备当前离线，本次请求未发送。请在 {place} 上线后重新提及 {bot}。",
+  "server.appSettings.changed": "已修改{label}",
+  "server.appSettings.notSet": "未设置",
+  "approval.applied.appSetting": "{name}修改了{title}",
+  "activity.tool.team.appSettings": "应用设置"
 }

@@ -3535,5 +3535,10 @@
   "server.rooms.linkedFailed": "{bot} konnte von {place} aus nicht antworten.",
   "room.members.far.place": "auf {place}",
   "room.members.far.off": "Verbindung ist aus",
-  "room.members.far.missing": "Nicht mehr verfügbar"
+  "room.members.far.missing": "Nicht mehr verfügbar",
+  "server.appSettings.changed": "{label} geändert",
+  "server.appSettings.notSet": "nicht gesetzt",
+  "approval.applied.appSetting": "{name} changed {title}",
+  "activity.tool.team.appSettings": "App settings",
+  "server.rooms.linkedOffline": "{bot} arbeitet auf {place}. Dieses Gerät ist offline; die Anfrage wurde nicht gesendet. Erwähne {bot} erneut, wenn {place} wieder online ist."
 }

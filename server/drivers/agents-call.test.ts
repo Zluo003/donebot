@@ -658,3 +658,19 @@ describe("blank optional arguments", () => {
     ]);
   });
 });
+
+describe("app settings tool", () => {
+  it("uses the scoped internal endpoint and returns authorization failures unchanged", async () => {
+    const calls: unknown[] = [];
+    const args = { action: "get", id: "general.deviceName" };
+    const client = { api: async () => ({}), apiResponse: async (path: string, init?: RequestInit) => {
+      calls.push({ path, args: JSON.parse(String(init?.body)) });
+      return { ok: false, status: 403, body: { error: "Owner conversation required" } };
+    } };
+    expect(await callTool("app_settings", args, context({ client }))).toEqual({ isError: true, text: "Owner conversation required" });
+    expect(calls).toEqual([{ path: "/api/internal/app-settings", args }]);
+    expect((await callTool("app_settings", { ...args, team: "other" }, context({ client }))).isError).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual({ path: "/api/internal/app-settings", args: { ...args, team: "other" } });
+  });
+});

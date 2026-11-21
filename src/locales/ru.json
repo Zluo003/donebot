@@ -6940,5 +6940,9 @@
   "server.routines.turnedBackOnMany": "Turned back on: {names}. An earlier version switched them off after their cloud desktops failed to start.",
   "inbox.settled.read": "Прочитано",
   "inbox.settled.title": "Завершено",
-  "inbox.markAllRead": "Отметить всё как прочитанное"
+  "inbox.markAllRead": "Отметить всё как прочитанное",
+  "server.appSettings.changed": "Changed {label}",
+  "server.appSettings.notSet": "not set",
+  "approval.applied.appSetting": "{name} changed {title}",
+  "activity.tool.team.appSettings": "App settings"
 }

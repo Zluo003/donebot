@@ -17,6 +17,8 @@ export interface RouteContext {
   auth: RequestAuth;
   json: typeof json;
   readBody: typeof readBody;
+  /** A trusted in-process caller rechecks its turn and snapshot immediately before a configuration commit. */
+  assertMutationAllowed?(): void;
 }
 
 /** Resolve with PASS to decline; anything else means the request was answered. */

@@ -10292,5 +10292,9 @@
   "server.rooms.linkedFailed": "{bot} não conseguiu responder a partir de {place}.",
   "room.members.far.place": "em {place}",
   "room.members.far.off": "Ligação desligada",
-  "room.members.far.missing": "Não está mais disponível"
+  "room.members.far.missing": "Não está mais disponível",
+  "server.appSettings.changed": "Alterado: {label}",
+  "server.appSettings.notSet": "não definido",
+  "approval.applied.appSetting": "{name} alterou {title}",
+  "activity.tool.team.appSettings": "Configurações do app"
 }

@@ -10461,5 +10461,9 @@
   "room.members.far.place": "on {place}",
   "room.members.far.off": "Link is off",
   "room.members.far.missing": "No longer available",
-  "server.rooms.linkedOffline": "{bot} lives on {place}, which is offline. This request was not sent. Mention {bot} again when {place} is online."
+  "server.rooms.linkedOffline": "{bot} lives on {place}, which is offline. This request was not sent. Mention {bot} again when {place} is online.",
+  "server.appSettings.changed": "Changed {label}",
+  "server.appSettings.notSet": "not set",
+  "approval.applied.appSetting": "{name} changed {title}",
+  "activity.tool.team.appSettings": "App settings"
 }

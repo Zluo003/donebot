@@ -2,6 +2,7 @@
  * here is one the server emits in every response and SSE frame that carries
  * the shape. */
 import type { HandoffStatusField } from "./handoff-status.ts";
+import type { AppSettingRequest } from "./app-settings.ts";
 import type { CheckBackLineField } from "./check-back.ts";
 import type { PresenceFrame } from "./team-presence.ts";
 import type { DataBroadcast } from "./data-surface.ts";
@@ -697,6 +698,7 @@ export interface OptionCardData extends WaitCardField, ComputerAskField, AccessR
    * or Full access): clients show a one-line receipt with Undo instead of
    * the approval box. */
   autoApplied?: boolean;
+  appSettingRequest?: AppSettingRequest;
   /** A person undid that change. */
   undone?: boolean;
   /** A durable chat-created routine proposal. */

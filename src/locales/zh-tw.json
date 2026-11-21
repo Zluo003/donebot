@@ -10157,5 +10157,9 @@
   "room.queue.busyIn": "正在 {place} 工作 · 排隊中（{position}/{of}），完成後開始",
   "room.queue.busyElsewhere": "正在其他對話工作 · 排隊中（{position}/{of}），完成後開始",
   "room.queue.busyInAfter": "正在 {place} 工作 · 排在 {name} 之後（{position}/{of}），兩項工作完成後開始",
-  "room.queue.busyElsewhereAfter": "正在其他對話工作 · 排在 {name} 之後（{position}/{of}），兩項工作完成後開始"
+  "room.queue.busyElsewhereAfter": "正在其他對話工作 · 排在 {name} 之後（{position}/{of}），兩項工作完成後開始",
+  "server.appSettings.changed": "已修改{label}",
+  "server.appSettings.notSet": "未設定",
+  "approval.applied.appSetting": "{name}修改了{title}",
+  "activity.tool.team.appSettings": "應用設定"
 }

@@ -89,3 +89,20 @@ fixture 更新欢迎版本和界面标签，图表选择器限定到 Data 面板
 - `/tmp/donebot-archive-catalog-final.log`：原始与桥接工具目录共 90 项通过。桥接快照补齐此前已实现的委派文件、check_back、技能导入及 DoneBot 附件去重说明；逐项审核后按实际目录差额 466–504 字节调整超出范围的旧基线，其中本次压缩包说明为 48 字节，2% 断言保留。没有套用上游预算数值。
 - Chromium 粘贴、真实发送与 390 px 窄屏通过，记录见 `docs/verification/plain-file-attachments.md`。本次 fixture 首轮缺少 scripted reply 导致假引擎失败，补齐合成计划后在全新隔离 home 重测通过；不是生产应用故障。
 - `/tmp/donebot-archive-types-final.log`、`/tmp/donebot-archive-lint.log`、`/tmp/donebot-archive-lint-final.log`、`/tmp/donebot-archive-i18n.log`：类型、定向 lint、16 个语言目录校验通过。
+
+## 对话内设置查找、修改和撤销
+
+按固定上游 053ef1965、a7571ddfd、eb8fc38ad、738ec8847 的 registry/host/route/回执结构接入 DoneBot 设置白名单。五个可写项明确标注工作区作用域；账户、模型价格和更新仅提供入口。没有导入上游第三方 LLM 配置、商业服务、费用上限或私有本地桌面项。团队、托管共享空间、访客和自动化不能写入个人工作区设置。
+
+复用现有配置 route 校验、保存和广播，串行处理 Bot 修改和撤销，并在持久化前重新校验回合、权限及旧值。UI 使用原 AppliedChange 回执，成员不显示工作区撤销入口。重启后保留配置和回执，进程内撤销快照失效时明确返回 409，不恢复猜测值。完整验证与当前范围见 `docs/verification/app-settings.md`。外观窗口偏好、Bot 设置扩展、设置卡片和团队设置仍待后续移植，本批没有标为完成。
+
+工具目录逐项核对：原始 tools/list 仅增加 app_settings（含分隔符 575 字节），各基线仅增加该固定差额，2% 增减断言保留；桥接热目录只增加隐藏工具名，预算不变。未访问真实账号、网关或用户数据。
+
+2026-11-21 验证：
+
+- `/tmp/donebot-app-settings-workflow.log`：2 文件 / 23 项通过。真实隔离服务使用注入的 MCP 工具完成设置查找、改名、回执、撤销、手动修改冲突、伪造身份与未知字段拒绝，并重启验证保存值和旧撤销回执的 409 行为。
+- `/tmp/donebot-app-settings-accepted.log`：9 文件 / 243 项通过，覆盖持久化前撤权、取消、排队和并发撤销、目录快照与预算、中英文回执、成员撤销入口及原有设置搜索和服务端消息。
+- `/tmp/donebot-app-settings-client-types.log`、`/tmp/donebot-app-settings-server-types.log`、`/tmp/donebot-app-settings-lint.log`：客户端和服务端类型、定向 lint 通过。
+- `/tmp/donebot-app-settings-i18n.log`：16 个语言目录、10467 个英文源字符串校验通过；补齐原来缺失的德语离线群聊提示及相应源哈希。
+
+这些证据只验收当前设置白名单，不替代本批剩余设置、团队协作或平台验收。

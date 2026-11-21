@@ -31,7 +31,7 @@ async function fixture(enabled = true) {
   await writeFile(coordinatorFile, JSON.stringify(coordinator), { mode: 0o600 });
   const records = new Map<string, { id: string; state: string; token: string; body: Record<string, unknown> }>();
   const seen: Array<{ url: string; authorization: string; key?: string; body: string; headers: IncomingMessage["headers"] }> = [];
-  let modelCalls = 0, prepareDrop = false, modelDrop = false, revoked = false, streaming = false, modelError = false;
+  let modelCalls = 0, prepareDrop = false, modelDrop = false, revoked = false, streaming = false, modelError = false, settled = false;
   const respond = (res: ServerResponse, status: number, value: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value)); };
   const server = createServer(async (req, res) => {
     const bytes: Buffer[] = [];
@@ -44,7 +44,7 @@ async function fixture(enabled = true) {
         models: [{ id: "deepseek-flash", display_name: "Fixture model", media_types: ["text"], interfaces: ["openai.chat_completions"], platforms: ["openai"], capabilities: { tool_calling: true } }] });
       if (req.method === "GET") {
         const record = [...records.values()].find(value => url.endsWith(`/${value.id}`));
-        return record ? respond(res, 200, { code: 0, data: { id: record.id, state: record.state, receipt_id: record.id, currency: "CNY", billing_state: "pending", actual_amount: null } }) : respond(res, 404, {});
+        return record ? respond(res, 200, { code: 0, data: { id: record.id, state: record.state, receipt_id: record.id, currency: "CNY", billing_state: settled ? "settled" : "pending", actual_amount: settled ? "0.75" : null } }) : respond(res, 404, {});
       }
       const key = req.headers["idempotency-key"] as string, value = JSON.parse(body) as Record<string, unknown>;
       if (value.actor_id !== "3" || value.member_version !== 2 || value.node_version !== 1 || value.node_id !== instanceId) return respond(res, 403, {});
@@ -84,12 +84,13 @@ async function fixture(enabled = true) {
   const init = { method: "POST", headers: { authorization: "Bearer ignored-personal-secret", "X-DoneBot-Installation": "ignored", "X-API-Key": "ignored" }, body: JSON.stringify({ model: "deepseek-flash", messages: [{ role: "user", content: "fixture" }] }) };
   const context = { bindingId: binding.id, botId: "fixture-bot", threadId: "fixture-thread", ordinal: 0 };
   return { directory, runtime, coordinatorFile, coordinator, gateway, create, actor, sender, person, message, binding, context, init, session, seen, records,
-    count: () => modelCalls, modes: (value: { prepareDrop?: boolean; modelDrop?: boolean; revoked?: boolean; streaming?: boolean; modelError?: boolean }) => {
+    count: () => modelCalls, modes: (value: { prepareDrop?: boolean; modelDrop?: boolean; revoked?: boolean; streaming?: boolean; modelError?: boolean; settled?: boolean }) => {
       if (value.prepareDrop !== undefined) prepareDrop = value.prepareDrop;
       if (value.modelDrop !== undefined) modelDrop = value.modelDrop;
       if (value.revoked !== undefined) revoked = value.revoked;
       if (value.streaming !== undefined) streaming = value.streaming;
       if (value.modelError !== undefined) modelError = value.modelError;
+      if (value.settled !== undefined) settled = value.settled;
     } };
 }
 
@@ -108,6 +109,19 @@ it("derives exact native requests from saved member provenance and never forward
   for (const folder of ["requests", "dispatches"]) for (const name of await readdir(join(fx.directory, "donebot-team-execution", folder))) {
     const saved = await readFile(join(fx.directory, "donebot-team-execution", folder, name), "utf8");
     expect(saved).not.toContain("dbtc_"); expect(saved).not.toContain("dbte_"); expect(saved).not.toContain("ignored-personal-secret");
+  }
+});
+
+it("reads a durable settlement independently of completion and never resubmits either state", async () => {
+  for (const state of ["completed", "uncertain"]) {
+    const fx = await fixture();
+    await (await fx.gateway.request("/v1/chat/completions", fx.init, fx.context)).text();
+    const record = [...fx.records.values()][0]!;
+    record.state = state;
+    fx.modes({ settled: true });
+    expect(await fx.create().status(record.id)).toMatchObject({ state, billing_state: "settled", currency: "CNY", actual_amount: "0.75" });
+    await expect(fx.create().request("/v1/chat/completions", fx.init, fx.context)).rejects.toMatchObject({ executionState: state });
+    expect(fx.count()).toBe(1);
   }
 });
 

@@ -37,6 +37,12 @@ pnpm lint
 
 其他卡片续跑、辅助模型、周期及事件自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
 
+## 团队结算回执与结束状态
+
+2026-11-21：客户端接受独立的 `settled` 结算状态，保留旧服务的 `recorded`。合成网关验证 completed 和 uncertain 均可返回人民币结算金额，重启后只查原执行，不重提。`/tmp/donebot-team-settlement-client-full.log` 四文件 33 项通过，服务端类型与定向 lint 分别见 `/tmp/donebot-team-settlement-types.log`、`/tmp/donebot-team-settlement-lint.log`。
+
+网关一次性 PostgreSQL、真实 HTTP 与生产转发/RecordUsage 流程验证并发派发、幂等扣费、付款归属、结算回执、清理日志后查询及异常响应，race 通过，日志 `/tmp/donebot-team-settlement-race.log`。该流程使用明确选择的合成供应商账号，未运行生产处理器的完整调度选路。raw Chat 的结束证明与费用分别保存；其它协议继续 uncertain。计费队列溢出不丢团队任务，但尚无进程崩溃后待结算恢复，不能开启生产团队执行。
+
 ## 真实 Linux 镜像复测
 
 用带有完整 `org.opencontainers.image.revision` 和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签的本地 Cloud service 镜像执行：

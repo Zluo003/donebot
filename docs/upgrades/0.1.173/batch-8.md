@@ -2,6 +2,8 @@
 
 本批进行中，未达到发布条件。团队能力和执行开关仍默认关闭，未发布镜像或操作生产服务。
 
+2026-11-21 的团队结算切片通过 PostgreSQL/HTTP/race、生产转发和用量记录定向回归、全部 Go 包编译，以及客户端四文件 33 项、类型和 lint。证据见 [模型验证](../../verification/donebot-team-models.md)。该夹具没有完整生产调度、持久待结算恢复或真实 Linux 团队执行，不能代替本批验收。
+
 ## Linux 实际镜像隔离（2026-11-21）
 
 从提交 `e91d40d6e4d6d9f97770c923dde728fd6cd314b1` 的 `git archive` 构建 `Dockerfile` 的 `cloud-service`、`linux/arm64` 目标，未使用工作目录中单独保留的 0.1.3 版本修改或用户资料。镜像本地 digest 为 `sha256:90dc85500b02d012bf3a319bf525e16a51b3ed6c93914097a463e6d57bcafe54`；这是隔离验证镜像，不是已发布的生产镜像。

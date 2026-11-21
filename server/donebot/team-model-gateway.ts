@@ -28,7 +28,7 @@ const state = z.enum(["prepared", "accepted", "uncertain", "completed", "failed"
 const grantSchema = z.object({ id: z.uuid(), state, token: canonicalToken("dbte_"), expires_at: z.iso.datetime({ offset: true }) });
 const journalSchema = z.object({ key: z.uuid(), bindingId: z.string().regex(/^[a-f0-9]{64}$/), ordinal: z.number().int().nonnegative(),
   requestHash: z.string().regex(/^[a-f0-9]{64}$/), executionId: z.uuid().optional() }).strict();
-const statusSchema = z.object({ id: z.uuid(), state, receipt_id: z.uuid(), billing_state: z.enum(["pending", "recorded"]), currency: z.literal("CNY"),
+const statusSchema = z.object({ id: z.uuid(), state, receipt_id: z.uuid(), billing_state: z.enum(["pending", "recorded", "settled"]), currency: z.literal("CNY"),
   actual_amount: z.string().regex(/^\d+(?:\.\d+)?$/).nullable() }).strict();
 export type TeamModelExecutionStatus = z.infer<typeof statusSchema>;
 

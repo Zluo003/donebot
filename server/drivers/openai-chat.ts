@@ -234,7 +234,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
     signal?: AbortSignal,
     onDelta?: (delta: string, kind: "assistant_text" | "reasoning_text") => void,
     tools: ChatToolDefinition[] = [],
-    onUsage?: TextGenerationOptions["onUsage"], variant?: string,
+    onUsage?: TextGenerationOptions["onUsage"], variant?: string, teamExecution?: CompletionTransportInput["teamExecution"],
   ): Promise<Completion> => {
     const timeoutController = new AbortController();
     let idleTimer: NodeJS.Timeout | null = null;
@@ -255,7 +255,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
 
       if (options.completionTransport) return await options.completionTransport({
         messages, model, tools, stream, signal: activeSignal, onBytes: resetIdleTimer,
-        replay: message => nativeOutputs.get(message), onDelta, onUsage, variant,
+        replay: message => nativeOutputs.get(message), onDelta, onUsage, variant, ...(teamExecution ? { teamExecution } : {}),
       });
       const served = options.servedModel ? await options.servedModel(model) : model;
       const payload = JSON.stringify(route === "responses"
@@ -441,7 +441,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
     signal?: AbortSignal,
     onDelta?: (delta: string, kind: "assistant_text" | "reasoning_text") => void,
     tools: ChatToolDefinition[] = [],
-    onUsage?: TextGenerationOptions["onUsage"], variant?: string,
+    onUsage?: TextGenerationOptions["onUsage"], variant?: string, teamExecution?: CompletionTransportInput["teamExecution"],
   ): Promise<Completion> => {
     for (;;) {
       let replied = false;
@@ -449,7 +449,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         return await completeOn(routes.routeFor(model, tools.length > 0), messages, model, stream, signal, onDelta && ((text, kind) => {
           replied = true;
           onDelta(text, kind);
-        }), tools, onUsage, variant);
+        }), tools, onUsage, variant, teamExecution);
       } catch (error) {
         if (!(error instanceof ModelRouteRefused) || replied || signal?.aborted) throw error;
         if (!routes.advance(model, error.refusal)) throw new ChatProtocolError(noRouteLeft(error.message));
@@ -639,7 +639,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                 if (streamKind === "assistant_text") answerStreamed = true;
                 const shown = holdback && streamKind === "assistant_text" ? holdback.feed(text) : text;
                 if (shown) delta(shown, streamKind);
-              }, tools.definitions, undefined, turn.variant);
+              }, tools.definitions, undefined, turn.variant, turn.teamExecution ? { ...turn.teamExecution, botId: turn.botId ?? "", threadId: turn.threadId, ordinal: round } : undefined);
               // A reply cut off at the token limit may be a call cut short; running half of one is worse than saying so.
               const written = holdback && !completion.toolCalls.length && completion.finishReason !== "length" ? textToolCalls(completion.text, tools.definitions) : null;
               unreadable = written?.kind === "unreadable" && !askedAgain;

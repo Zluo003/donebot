@@ -50,6 +50,7 @@ Use only mapped, tested commands:
 - [Work summaries and engine hooks](digests.md)
 - [OpenAI-compatible structured tools](openai-tools.md)
 - [DoneBot unified gateway, account flows and media](donebot-gateway.md)
+- [团队模型身份与派发](donebot-team-models.md)
 - [Account and first-use light/dark themes](donebot-auth-theme.md)
 - [DoneBot mobile hub, encrypted relay and notifications](donebot-mobile.md)
 - [Mobile attachment transfer and resume](mobile-file-resume.md)

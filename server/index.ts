@@ -76,7 +76,7 @@ import { doneBotConfigRefusal, doneBotModelRoutes } from "./donebot/model-policy
 import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
-import { teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./donebot/team-runtime.ts";
+import { teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./donebot/team-runtime.ts";
 import { effectiveCloudBackend } from "../shared/cloud-backend.ts";
 import { createExternalContext } from "./host/external-context.ts";
 import { createHandoffAttachments, withHandoffAttachments } from "./host/handoff-attachments.ts";
@@ -269,7 +269,7 @@ import {
   queuedSteerSnapshot,
   queuedSteeredMessage,
   queuedThreadPosition,
-  queueSteeredMessage,
+  queueSteeredMessage as upstreamQueueSteeredMessage,
   restoreSteeredMessages,
 } from "./steer-queue.ts"; import { createDoneNotice } from "./done-notice.ts";
 import {
@@ -815,7 +815,7 @@ let desktopMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefined;
 let companionMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefined;
 const FALLBACK_PUBLIC_URL = process.env.DONEBOT_PUBLIC_URL?.trim().replace(/\/+$/, "") || null; const tailnetShare = createTailnetShare({ port: PORT, handle: (req, res) => handleRequest(req, res), attach: (listener, handle) => upgrades.attach(listener, handle), log: (line) => console.log(line) });
 const cfg = loadConfig();
-const donebotHost = createDoneBotRuntimeHost(DATA_DIR, () => cfg, import.meta.url); const donebotDesktop = createDoneBotDesktopHost(donebotHost.gateway);
+const donebotHost = createDoneBotRuntimeHost(DATA_DIR, () => cfg, import.meta.url, DONEBOT_TEAM_RUNTIME); const donebotDesktop = createDoneBotDesktopHost(donebotHost.gateway);
 const { gateway: donebot, enabled: DONEBOT_GATEWAY } = donebotHost;
 const hostedModels = DONEBOT_GATEWAY ? donebotHost.policy : hostedModelPolicy(DATA_DIR);
 const providerConfigs = () => hostedModels ? hostedModels.configs() : instanceConfigs(cfg);
@@ -868,7 +868,16 @@ function sessionPersonName(session: SessionRecord): string {
 function messageSender(auth: RequestAuth): ResolvedSender | undefined {
   if (auth.kind !== "session") return undefined;
   const name = sessionPersonName(auth.session);
-  return name ? { name, id: actorKey(auth) } : undefined;
+  if (!name) return undefined;
+  const sender = { name, id: actorKey(auth) };
+  const actor = DONEBOT_TEAM_RUNTIME && teamRuntimeActor(DONEBOT_TEAM_RUNTIME, auth.session);
+  return actor && donebotHost.team ? donebotHost.team.requests.sender(sender, actor) : sender;
+}
+
+function queueSteeredMessage(...args: Parameters<typeof upstreamQueueSteeredMessage>): ReturnType<typeof upstreamQueueSteeredMessage> {
+  const queued = upstreamQueueSteeredMessage(...args);
+  donebotHost.team?.requests.captureQueue(args[1], queued.id, args[3]?.sender);
+  return queued;
 }
 
 /** On a Team Cloud, whose conversation this is: the member's own, or the routine run's writer. */
@@ -2853,6 +2862,9 @@ const store = new Store(
   () => appLanguage() ?? Intl.DateTimeFormat().resolvedOptions().locale,
   () => sharedMembership() ? undefined : cfg.profile?.name,
 );
+if (donebotHost.team) store.onChange(change => {
+  if (change.type === "message") donebotHost.team!.requests.captureMessage(change.threadId, change.message);
+});
 const { isExternalContextMarker, markTaskContextExternallyUpdated } = createExternalContext({ store, botForThread, registry });
 const outsideLineage = createOutsideLineage({
   home: Boolean(CLOUD_HOME), team: Boolean(CLOUD_TEAM), solo: () => cloudHome?.solo() === true, store,
@@ -7728,6 +7740,8 @@ async function beginTurn(
   }
 
   const agentsMounted = instance.adapter.capabilities.agentsMcp === true;
+  const teamExecution = donebotHost.team ? donebotHost.team.requests.bind({ sourceId: (opts?.cardContinuation ? opts.requestMessageId : userMessage.id) ?? "", sourceIds: opts?.excludeMessageIds,
+    botId: bot.id, threadId, audience: teamHost.audienceOf(threadId), generation: donebotHost.team.coordinator().generation }) : undefined;
 
   const dispatchClaimId = randomUUID();
   if (guestConfined) guestDrivenTurns.set(threadId, dispatchClaimId);
@@ -8459,6 +8473,7 @@ async function beginTurn(
       const dispatch = await guardTurnDispatch(shareNote.after(savedSteps.dispatch.sendTurn(instance, personLine && !opts?.unattended && !opts?.app?.context && !guestConfined ? { botId: bot.id, message: userMessage, turnText: text, placePicked: wants === "local" && placeSource !== "auto-pin" } : null, {
         threadId,
         botId: bot.id,
+        ...(teamExecution ? { teamExecution: { bindingId: teamExecution.id } } : {}),
         startupRecovery,
         text: withTurnClock(clock, withRecalled(recalled, attachmentsForBox(dispatchContext.turnText, cwd) + shareNote.text + devsReports.note(threadId, Boolean(integrations.agents)))),
         ...(recalled ? { recalled } : {}),

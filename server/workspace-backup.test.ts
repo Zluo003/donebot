@@ -163,6 +163,8 @@ describe("encrypted full workspace backups", () => {
       mkdirSync(join(inboxFile, ".."), { recursive: true });
       writeFileSync(inboxFile, "receiver's edited copy");
       writeFileSync(join(source, "attachment-names.key"), "source-installation-name-key");
+      mkdirSync(join(source, "donebot-team-execution", "requests"), { recursive: true });
+      json(join(source, "donebot-team-execution", "requests", "source.json"), { actor: "source-member" });
       json(join(source, "handoff-files.json"), { batches: [{ assignmentId: "handoff", way: "sent", from: { botId: "scout", name: "Scout" }, to: { botId: "bot", threadId: "thread" },
         files: [{ path: join(source, "attachments", "image.png"), name: "image.png", mime: "image/png", bytes: 1 }],
         placed: { [inboxFile]: "image.png", "/external/inbox/scout/handoff/notes.txt": "image.png" }, at: 1_000 }], days: {} });
@@ -182,6 +184,9 @@ describe("encrypted full workspace backups", () => {
       expect(readFileSync(join(source, "runtime.db"))).toEqual(originalRuntimeDb);
       const target = directory();
       writeFileSync(join(target, "attachment-names.key"), "destination-installation-name-key");
+      const teamDispatch = { executionId: "destination-execution" };
+      mkdirSync(join(target, "donebot-team-execution", "dispatches"), { recursive: true });
+      json(join(target, "donebot-team-execution", "dispatches", "operation.json"), teamDispatch);
       const connections = { xai: { key: "destination-key", url: "https://destination.example" }, instances: { local: { driver: "claudeAgent", config: { configDir: join(target, "providers", "local") } } } };
       json(join(target, "config.json"), { ...connections, language: "en" });
       json(join(target, "bots.json"), [{ id: "old" }]);
@@ -200,6 +205,7 @@ describe("encrypted full workspace backups", () => {
       expect(readStagedWorkspaceBackup(target, staged.id)).not.toHaveProperty("credentials");
       const data = join(target, ".backups", staged.id, "staged", "data");
       expect(existsSync(join(data, "team-computers.json"))).toBe(false);
+      expect(existsSync(join(data, "donebot-team-execution"))).toBe(false);
       expect(existsSync(join(data, "bots.json"))).toBe(true);
       expect(existsSync(join(data, "runtime.db"))).toBe(true);
       expect(existsSync(join(data, "cloud-owner.json"))).toBe(false);
@@ -216,6 +222,8 @@ describe("encrypted full workspace backups", () => {
       expect(readJson(join(target, "handoff-files.json")).batches[0]).toMatchObject({ files: [{ path: join(target, "attachments", "image.png") }], placed: { [restoredCopy]: "image.png" } });
       expect(Object.keys(readJson(join(target, "handoff-files.json")).batches[0].placed)).toEqual([restoredCopy]);
       expect(readFileSync(join(target, "attachment-names.key"), "utf8")).toBe("destination-installation-name-key");
+      expect(readJson(join(target, "donebot-team-execution", "dispatches", "operation.json"))).toEqual(teamDispatch);
+      expect(existsSync(join(target, "donebot-team-execution", "requests", "source.json"))).toBe(false);
       const restoredBot = readJson(join(target, "bots.json"))[0];
       expect(restoredBot).toMatchObject({ id: "bot", cwd: join(target, "task-workspaces", "bot", "thread"), soul: `Each morning read ${join(target, "notes.md")}.`, avatarUrl: "/api/attachments/avatar.png", avatarCrop: "circle" });
       expect(restoredBot).not.toHaveProperty("voice");

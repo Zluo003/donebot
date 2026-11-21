@@ -3,6 +3,7 @@ import type { ChatToolDefinition } from "./chat-mcp-tools.ts";
 import type { OpenAIChatMessage } from "./openai-chat.ts";
 import type { ChatToolCall } from "./openai-chat-protocol.ts";
 import type { ResponseItem } from "./openai-responses.ts";
+import type { TeamModelRequestContext } from "../donebot/team-requests.ts";
 
 export interface ChatCompletionUsage {
   input: number;
@@ -23,6 +24,7 @@ export interface Completion {
 }
 
 export interface CompletionTransportInput {
+  teamExecution?: TeamModelRequestContext;
   messages: OpenAIChatMessage[];
   model: string;
   tools: ChatToolDefinition[];

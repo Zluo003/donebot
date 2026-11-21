@@ -4,9 +4,10 @@ import { ChatProtocolError, ChatReasoningDetails, ChatToolCalls, object } from "
 import { readResponsesStream, responsesRequest, type ResponseItem } from "../drivers/openai-responses.ts";
 import { isGpt62 } from "./capabilities.ts";
 import { TaggedReasoning } from "./llm-reasoning.ts";
+import type { TeamModelRequestContext } from "./team-requests.ts";
 
 export type DoneBotLlmProtocol = "messages" | "gemini" | "responses" | "chat";
-export type DoneBotLlmRequest = (path: string, init: RequestInit) => Promise<Response>;
+export type DoneBotLlmRequest = (path: string, init: RequestInit, teamExecution?: TeamModelRequestContext) => Promise<Response>;
 type Row = Record<string, unknown>;
 type NativeOutput = { protocol: DoneBotLlmProtocol; content: Row[] };
 
@@ -444,7 +445,8 @@ export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: 
       }), stream: input.stream, ...(input.stream ? { stream_options: { include_usage: true } } : {}), ...(input.tools.length ? { tools: input.tools } : {}) };
     }
     else throw new ChatProtocolError("The selected model has no registered native LLM protocol");
-    const response = await request(path, { method: "POST", headers: { "content-type": "application/json", ...(protocol === "messages" ? { "anthropic-version": "2023-06-01" } : {}) }, body: JSON.stringify(body), signal: input.signal, redirect: "error" });
+    const init: RequestInit = { method: "POST", headers: { "content-type": "application/json", ...(protocol === "messages" ? { "anthropic-version": "2023-06-01" } : {}) }, body: JSON.stringify(body), signal: input.signal, redirect: "error" };
+    const response = await (input.teamExecution ? request(path, init, input.teamExecution) : request(path, init));
     if (!response.ok) { await response.body?.cancel().catch(() => {}); throw new Error(`DoneBot gateway model request failed (HTTP ${response.status})`); }
     let result: Completion;
     if (protocol === "messages") result = await readMessages(response, input);

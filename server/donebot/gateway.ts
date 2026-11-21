@@ -94,7 +94,7 @@ function credential(value: unknown): DoneBotCredential | null {
     typeof x.expiresAt === "number" && typeof x.user?.id === "string" && typeof x.user.email === "string" ? x : null;
 }
 
-function catalog(value: unknown): DoneBotCatalog {
+export function parseDoneBotCatalog(value: unknown): DoneBotCatalog {
   const x = value as DoneBotCatalog;
   if (!x || ![3, 4].includes(x.gateway_contract_version) || !Array.isArray(x.models) || typeof x.catalog_scope_id !== "string" ||
       typeof x.catalog_version !== "string" || !x.defaults ||
@@ -373,7 +373,7 @@ export class DoneBotGateway {
     if (epoch !== this.epoch) throw new DoneBotGatewayError(409, "account_changed", "DoneBot account changed.");
     if (res.status === 304 && this.currentCatalog) return this.currentCatalog;
     if (!res.ok) throw new DoneBotGatewayError(res.status, "catalog_unavailable", "DoneBot model list could not be loaded. Refresh or sign in again.");
-    const next = catalog(await this.readGatewayJson(res));
+    const next = parseDoneBotCatalog(await this.readGatewayJson(res));
     this.checkEpoch(epoch);
     this.currentCatalog = next;
     this.etag = res.headers.get("etag");

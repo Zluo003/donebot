@@ -24,6 +24,7 @@ export interface DoneBotLlmDependencies {
   models(): ModelCatalog;
   protocol(model: string): DoneBotLlmProtocol;
   authenticated(): boolean;
+  requiresExecutionContext?: boolean;
   imageInput?(model: string): boolean;
   catalog?(): DoneBotCatalog | null;
   mediaPreferences?(): DoneBotMediaPreferences;
@@ -65,7 +66,7 @@ export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDr
         }, computerUse: true, imageInput: deps.imageInput, toolUse: deps.toolUse, modelVariants: true,
         requestBody: () => { throw new Error("DoneBot models require their registered native protocol"); },
         httpErrorLabel: "DoneBot gateway", missingKeyError: "Sign in to DoneBot to use models", unavailableReason: "Sign in to DoneBot to use models", timeoutMs: 180_000,
-        retryScale: 1,
+        retryScale: deps.requiresExecutionContext ? undefined : 1,
         reasoning: true, billing: "metered", includeUsageInCompleted: true,
         nativeLog: { source: "donebot.native", outgoing: (_turn, messages, model, tools) => ({ model, messageCount: messages.length, tools: tools.map(({ function: fn }) => fn.name) }), incoming: ({ text, reasoning, usage }) => ({ textLength: text.length, reasoningLength: reasoning.length, usage }) },
       });

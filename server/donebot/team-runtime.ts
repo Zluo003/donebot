@@ -4,6 +4,10 @@ import { z } from "zod";
 import { teamRoleScopes, type CloudTeam } from "../cloud-team.ts";
 import type { SessionRecord } from "../sessions.ts";
 import { DONEBOT_TEAMS_PROTOCOL } from "../../shared/donebot-teams.ts";
+import { personKey } from "../person-key.ts";
+import type { TeamRequestActor } from "./team-requests.ts";
+
+const verifiedActors = new WeakMap<SessionRecord, { runtime: DoneBotTeamRuntime; actor: TeamRequestActor }>();
 
 const uuid = z.uuid();
 const claim = z.object({
@@ -41,10 +45,17 @@ export function teamRuntimeSession(runtime: DoneBotTeamRuntime, req: Pick<Incomi
     const value = parsed.data, expiresAt = value.expires * 1000;
     if (value.team_id !== runtime.team.id || value.instance_id !== runtime.instanceId || expiresAt <= now || expiresAt > now + 10_000 ||
         value.runtime_hash !== createHash("sha256").update(`${req.method ?? "GET"}\n${req.url ?? "/"}`).digest("hex")) return null;
-    return { id: `donebot-team:${value.team_id}:${value.user_id}:${value.member_version}`, label: value.email, scopes: teamRoleScopes(value.role),
+    const session: SessionRecord = { id: `donebot-team:${value.team_id}:${value.user_id}:${value.member_version}`, label: value.email, scopes: teamRoleScopes(value.role),
       tokenHash: "", createdAt: now, lastSeenAt: now, expiresAt, userId: value.user_id, email: value.email,
       membershipAuthority: "team", teamRole: value.role, memberCheckedAt: now };
+    verifiedActors.set(session, { runtime, actor: { userId: value.user_id, memberVersion: value.member_version, person: personKey(session) } });
+    return session;
   } catch { return null; }
+}
+
+export function teamRuntimeActor(runtime: DoneBotTeamRuntime, session: SessionRecord): TeamRequestActor | null {
+  const verified = verifiedActors.get(session);
+  return verified?.runtime === runtime ? { ...verified.actor } : null;
 }
 
 /** Team shells cannot read shared HTTP data using loopback trust; internal routes still require their own turn capabilities. */

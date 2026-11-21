@@ -23,6 +23,8 @@ import {
 import { api, useStore } from "@/state/store";
 import type { NewBotDefaults } from "../../shared/new-bot-defaults";
 import type { PackageDocument } from "../../shared/package-format";
+import type { TeamTemplate } from "../../shared/team-templates";
+import type { TeamTemplatePublishTarget } from "./TeamTemplatesTab";
 import { TemplateRepoDialog } from "./TemplateRepoDialog";
 
 export function ShareTeamContents({ preview, includeMemory, localSkips }: {
@@ -117,7 +119,12 @@ export function ShareSkillChoices({ available, ticked, counted, onToggle }: {
   );
 }
 
-export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () => void }) {
+export function ShareTeamDialog({ team, onClose, publishTarget, onPublished }: {
+  team: string;
+  onClose: () => void;
+  publishTarget?: TeamTemplatePublishTarget;
+  onPublished?: () => void;
+}) {
   const { state } = useStore();
   const dialogRef = useRef<HTMLDivElement>(null);
   const teamBots = useMemo(
@@ -141,6 +148,8 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
   const setError = (message: string) => setView((current) => ({ ...current, error: message }));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<ShareResponse | null>(null);
+  const [published, setPublished] = useState<ShareResponse | null>(null);
+  const [publishedTemplate, setPublishedTemplate] = useState<TeamTemplate | null>(null);
   const [githubDocument, setGithubDocument] = useState<PackageDocument | null>(null);
   const request = useRef(0);
 
@@ -219,6 +228,25 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
       setSaving(false);
     }
   };
+  const publishToTeamLibrary = async () => {
+    if (!publishTarget || saving || !preview) return;
+    setSaving(true);
+    setError("");
+    try {
+      const result = await api<ShareResponse>("/api/teams/export", { method: "POST", body: JSON.stringify(shareRequestBody(choices(false))) });
+      const response = await api<{ template: TeamTemplate }>("/api/team-templates", {
+        method: "POST",
+        body: JSON.stringify({ confirm: true, ...publishTarget, document: result.document }),
+      });
+      setPublished(result);
+      setPublishedTemplate(response.template);
+      onPublished?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  };
   const openGithub = async () => {
     if (saving) return;
     setSaving(true); setError("");
@@ -269,12 +297,12 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
           <button aria-label={t("teamShare.close")} disabled={saving} onClick={onClose} className="rounded-lg p-1.5 text-ink-secondary hover:bg-raised"><X size={18} /></button>
         </header>
 
-        {saved ? (
+        {saved || published ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2">
-            <p className="flex items-center gap-2 text-[14px] font-medium text-ink"><Check size={16} className="text-success" />{t("teamShare.saved", { filename: saved.filename })}</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("teamShare.savedHint")}</p>
+            <p className="flex items-center gap-2 text-[14px] font-medium text-ink"><Check size={16} className="text-success" />{published && publishedTemplate ? t("teamTemplates.published", { name: publishedTemplate.name }) : t("teamShare.saved", { filename: saved!.filename })}</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{published ? t("teamTemplates.publishedHint") : t("teamShare.savedHint")}</p>
             <div className="mt-4">
-              <ShareTeamContents preview={saved} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
+              <ShareTeamContents preview={published ?? saved!} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
             </div>
           </div>
         ) : (
@@ -324,7 +352,7 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
 
         {error && <p role="alert" className="mx-6 mb-2 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
         <footer className="flex justify-end gap-2 border-t border-hairline/35 px-6 py-3">
-          {saved ? (
+          {saved || published ? (
             <button onClick={onClose} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white">{t("teamShare.done")}</button>
           ) : (
             <>
@@ -335,6 +363,11 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
                 {saving && <Loader2 size={14} className="animate-spin" />}
                 {saving ? t("teamShare.saving") : t("teamShare.save")}
               </button>
+              {publishTarget && <button disabled={saving || !preview || !name.trim()} onClick={() => void publishToTeamLibrary()}
+                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40">
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {saving ? t("teamShare.saving") : t(publishTarget.revision === null ? "teamTemplates.publish" : "teamTemplates.replace")}
+              </button>}
             </>
           )}
         </footer>

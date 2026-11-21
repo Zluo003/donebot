@@ -10,4 +10,9 @@ describe("TeamLibraryPanel", () => {
     expect(overlay).toContain("bg-black/55");
     expect(source).not.toMatch(/backdrop-blur|backdrop-filter|backdropFilter/);
   });
+
+  it("mounts the team template client only after explicit capability negotiation", () => {
+    expect(source).toMatch(/state\.config\?\.team\?\.sharedTemplates === true && \(\s*<TeamTemplatesTab/);
+    expect(source).toContain("if (tab === \"team-templates\" && state.config?.team?.sharedTemplates !== true) setTab(\"explore\")");
+  });
 });

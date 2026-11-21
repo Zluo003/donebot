@@ -255,6 +255,7 @@ export function createTeamTemplates(dataDir: string, files: TeamFiles, now: () =
       assertSlug(slug); assertAllowed();
       if (!actor.admin) throw new TeamFilesError(403, "forbidden", "Only an administrator can publish templates.");
       const parsed = parsePackageDocument(document, { trust: "file" });
+      if (scope === "bot" && parsed.package.agents.length !== 1) throw new TeamFilesError(400, "bad_path", "A bot template must contain exactly one bot.");
       if (scope !== "bot" && scope !== "department" || packageSecretFindings(parsed).length) throw new TeamFilesError(400, "bad_path", "Review the template scope and remove private credentials before publishing.");
       const incoming = writeShareFolder(parsed, scope);
       readShareFolder(incoming);

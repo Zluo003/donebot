@@ -19,6 +19,7 @@ import { OrgLibraryTab } from "./TeamLibraryPanelOrg";
 import { MAX_TEAM_BACKUP_BYTES } from "../../shared/team-backup";
 import { takeImportName } from "../../shared/import-name";
 import { readTemplateFolder } from "@/lib/template-folder";
+import { TeamTemplatesTab, type TeamTemplatePublishTarget } from "./TeamTemplatesTab";
 const COMMUNITY_TEAMS_REPOSITORY = "https://github.com/milind-soni/openmausbot-teams";
 
 export { TeamImportDetails };
@@ -30,8 +31,8 @@ export interface TeamImportResult {
   connections?: number;
 }
 
-type ImportSource = "library" | "file" | "github";
-type TeamTab = "org" | "explore" | "import" | "scout" | "share";
+type ImportSource = "library" | "file" | "github" | "team-library";
+type TeamTab = "org" | "explore" | "import" | "scout" | "share" | "team-templates";
 
 interface ScoutResult {
   profile: { name: string; summary: string; stacks: string[] };
@@ -127,6 +128,8 @@ export function TeamLibraryPanel({
   const [roomName, setRoomName] = useState("");
   const [creating, setCreating] = useState(false);
   const [sharing, setSharing] = useState<string | null>(null);
+  const [publishTarget, setPublishTarget] = useState<TeamTemplatePublishTarget | null>(null);
+  const [templateRefreshKey, setTemplateRefreshKey] = useState(0);
   const [nestedDialog, setNestedDialog] = useState(false);
   const [orgListing, setOrgListing] = useState<OrgLibraryListing | null>(null);
   const [orgBusy, setOrgBusy] = useState<string | null>(null);
@@ -173,6 +176,10 @@ export function TeamLibraryPanel({
   useEffect(() => {
     void loadOrgLibrary();
   }, [loadOrgLibrary]);
+
+  useEffect(() => {
+    if (tab === "team-templates" && state.config?.team?.sharedTemplates !== true) setTab("explore");
+  }, [state.config?.team?.sharedTemplates, tab]);
 
   useEffect(() => {
     dialogRef.current?.focus();
@@ -513,7 +520,7 @@ export function TeamLibraryPanel({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {!pending && (
+            {!pending && tab !== "team-templates" && (
               <button
                 onClick={() => void openExternal(catalog?.repositoryUrl ?? COMMUNITY_TEAMS_REPOSITORY)}
                 className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
@@ -584,7 +591,7 @@ export function TeamLibraryPanel({
         ) : (
           <>
             <div className="flex flex-col gap-3 px-6 pb-4 pt-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-              <div className="flex w-fit rounded-xl bg-raised/70 p-1" role="tablist" aria-label={t("templates.source") }>
+              <div className="flex w-fit max-w-full flex-wrap rounded-xl bg-raised/70 p-1" role="tablist" aria-label={t("templates.source") }>
                 {orgListing?.organization && (
                   <button
                     role="tab"
@@ -600,6 +607,23 @@ export function TeamLibraryPanel({
                     )}
                   >
                     {t("orgLibrary.tab", { name: orgListing.organization.name })}
+                  </button>
+                )}
+                {state.config?.team?.sharedTemplates === true && (
+                  <button
+                    role="tab"
+                    aria-selected={tab === "team-templates"}
+                    onClick={() => {
+                      tabChosen.current = true;
+                      setTab("team-templates");
+                      setError("");
+                    }}
+                    className={cn(
+                      "rounded-lg px-4 py-2 text-[14px] transition-colors",
+                      tab === "team-templates" ? "bg-card text-ink shadow-sm" : "text-ink-secondary hover:text-ink",
+                    )}
+                  >
+                    {t("teamTemplates.tab")}
                   </button>
                 )}
                 <button
@@ -686,6 +710,20 @@ export function TeamLibraryPanel({
                   error={orgError}
                   onAdd={(entry) => void addOrgPackage(entry)}
                   onDetails={(entry) => void loadOrgDetails(entry)}
+                />
+              )}
+              {tab === "team-templates" && state.config?.team?.sharedTemplates === true && (
+                <TeamTemplatesTab
+                  teams={shareableTeams}
+                  refreshKey={templateRefreshKey}
+                  onOpen={(document) => {
+                    previewManifest(teamImportPreview(document), "team-library");
+                    setTab("team-templates");
+                  }}
+                  onPublish={(team, target) => {
+                    setPublishTarget(target);
+                    setSharing(team);
+                  }}
                 />
               )}
               {tab === "explore" && (
@@ -1004,7 +1042,12 @@ export function TeamLibraryPanel({
           </>
         )}
       </div>
-      {sharing !== null && <ShareTeamDialog team={sharing} onClose={() => setSharing(null)} />}
+      {sharing !== null && <ShareTeamDialog
+        team={sharing}
+        publishTarget={publishTarget ?? undefined}
+        onPublished={() => setTemplateRefreshKey((key) => key + 1)}
+        onClose={() => { setSharing(null); setPublishTarget(null); }}
+      />}
     </div>,
     document.body,
   );

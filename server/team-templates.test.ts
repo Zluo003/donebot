@@ -10,6 +10,7 @@ import { createTeamFiles, type TeamFiles } from "./host/team-files.ts";
 import { createTeamTemplates } from "./team-templates.ts";
 import { teamTemplateFixture as fixtureDocument } from "./testing/team-template-fixture.ts";
 import { readShareFolder, writeShareFolder } from "../shared/share-folder.ts";
+import { parsePackageDocument } from "../shared/package-format.ts";
 
 const roots: string[] = [];
 afterEach(() => { vi.restoreAllMocks(); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
@@ -59,6 +60,17 @@ it("refuses members, unsafe slugs, invalid documents, and invalid scope before c
   expect(() => library.add("helper", {}, "bot", admin)).toThrow();
   expect(() => library.add("helper", fixtureDocument(), "other" as never, admin)).toThrow();
   expect(readdirSync(join(root, "team-files/templates"))).toEqual([]);
+});
+
+it("requires a bot-scoped template to contain exactly one bot", () => {
+  const { library } = setup();
+  const one = fixtureDocument();
+  const multiple = parsePackageDocument({
+    ...one,
+    package: { ...one.package, agents: [...one.package.agents, { ...one.package.agents[0]!, key: "second", name: "Second" }] },
+  });
+  expect(() => library.add("two-bots", multiple, "bot", admin)).toThrowError(expect.objectContaining({ status: 400 }));
+  expect(library.add("two-bots", multiple, "department", admin).template.scope).toBe("department");
 });
 
 it("counts current and retained templates, reclaims only the replaced previous version, and invalidates usage", () => {

@@ -24,4 +24,17 @@ pnpm exec oxlint --deny-warnings server/team-templates.ts server/team-templates.
 
 2026-11-22：存储、签名 HTTP 路由、真实签名运行时、相邻文件接口及鉴权共 11 文件 / 164 项通过，日志 `/tmp/donebot-team-template-routes-regression.log`；类型与定向 lint 为 `/tmp/donebot-team-template-routes-types.log`、`/tmp/donebot-team-template-routes-lint.log`。合成用户覆盖 Owner/Admin/Member、外部团队和无效签名；成员可读取精确模板字节，只有管理员可发布/删除，提交必须带显式确认和已审核修订号。重复内容不改写 previous；旧修订、身份变化、角色降级、撤权和关闭实例均拒绝，读取不创建或执行 Bot。实际 Go TeamProxy + 一次性 PostgreSQL + 隔离 Node 运行时的撤权/未完成发布测试通过 race，日志 `/tmp/donebot-team-templates-proxy.log`；实际证据由测试输出记录。
 
-签名 HTTP 仍未有正式用户界面、审核后安装流程或 Bot 工作区导入。浏览器、实际 Cloud worker、真实 Linux 恶意进程、断电持久性、完整备份恢复和 Windows 验收仍缺失。团队及模板能力继续默认关闭。
+客户端在“模板”中增加团队模板页，仅当 `/api/config` 协商 `team.sharedTemplates: true` 时显示并请求接口。成员可预览并通过 `mode=add` 安装；管理员可从分享审核结果发布、按当前 revision 更新及经二次确认移除。Bot 类型发布必须恰含一个 Bot；模板来源按 file trust 处理，技能仍关闭、例行任务仍暂停。模板移除不删除成员已经安装的副本。
+
+UI 与协议回归：
+
+```sh
+pnpm exec vitest run src/components/TeamTemplatesTab.test.ts src/components/ShareTeamDialog.team-template.test.ts src/components/TeamLibraryPanel.test.ts src/components/ShareTeamDialog.test.ts server/team-templates.test.ts server/routes/team-templates.test.ts server/donebot-team-templates.e2e.test.ts
+pnpm typecheck
+pnpm exec oxlint --deny-warnings src/components/TeamTemplatesTab.tsx src/components/TeamTemplatesTab.test.ts src/components/TeamLibraryPanel.tsx src/components/TeamLibraryPanel.test.ts src/components/ShareTeamDialog.tsx src/components/ShareTeamDialog.team-template.test.ts server/team-templates.ts server/team-templates.test.ts
+pnpm i18n:check
+```
+
+组件测试检查协商入口、成员只读及预览、管理员发布目标、显式删除确认、revision 绑定，以及发布冲突后不重试。它们不替代实际 Cloud worker 的端到端验证。浏览器、实际 Cloud worker、真实 Linux 恶意进程、断电持久性、完整备份恢复和 Windows 验收仍缺失。团队及模板能力继续默认关闭；Cloud worker 未启用 `DONEBOT_TEAM_TEMPLATES_ENABLED`。
+
+2026-11-22：客户端及服务端模板 UI/API 回归 7 文件 / 36 项通过；`pnpm typecheck`、定向 Oxlint、`pnpm i18n:check`、`pnpm build` 通过。构建仅有既有 CSS `::highlight`、依赖注释和大 chunk 警告。真实 Cloud worker 验收尚未执行。

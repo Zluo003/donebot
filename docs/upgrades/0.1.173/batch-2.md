@@ -48,3 +48,9 @@ worker 和 agent 须显式启用 `CLOUD_TEAMS_ENABLED=1`，并固定网关公钥
 网关迁移 274 固定执行所属协调实例及运行代次。协调器凭据由受信 worker 领取，Cloud agent 加密保存并原子写入容器私有 `/run`，成员代理及任务环境不取得该凭据。独立协调器 HTTP 接口拒绝普通 JWT、安装凭据、跨实例和伪造身份；申请及受理时均重新核验代次和节点启用状态。正文、日志和凭据检测增加团队 token 识别，bot-box 环境继续拒绝协调器文件设置。
 
 真实 HTTP/PostgreSQL/race 日志 `/tmp/donebot-team-coordinator-accepted-http.log`；Cloud 51 项验证 `/tmp/donebot-team-coordinator-accepted-cloud.log`；现有订阅与代理回归 `/tmp/donebot-team-coordinator-pg.log`；客户端脱敏及沙箱规则 3 文件 50 项 `/tmp/donebot-team-coordinator-redaction.log`。尚未打通规范会话到模型派发及计费，真实 Linux 隔离也未验收，团队能力继续关闭。
+
+## 团队计费身份与模型目录（2026-11-21）
+
+网关迁移 275 为各团队绑定独立内部计费 Key，付款账号由有效 Owner 记录导出。普通 Key 接口不能鉴权、读取或修改该凭据，停用后不自动重建。成员和协调器各有独立目录接口，复用既有启用模型及人民币定价，并使用团队目录范围；不返回 Owner 个人余额或凭据。真实 HTTP 撤权与 PostgreSQL 并发、不可变归属验证通过，日志为 `/tmp/donebot-team-models-http.log`、`/tmp/donebot-team-billing-pg.log`、`/tmp/donebot-team-billing-tests.log`；全部 Go 包编译通过。
+
+此项尚未打通供应商派发、实际扣费或运行服务目录消费，团队执行及账单隔离不得宣称完成；能力继续关闭。

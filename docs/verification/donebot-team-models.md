@@ -26,3 +26,15 @@ pnpm lint
 2026-11-21：九文件 283 项通过，日志 `/tmp/donebot-team-lineage-final-tests.log`；新增仅拒绝未执行委派的恢复测试后，相关三文件 130 项通过，日志 `/tmp/donebot-team-lineage-admission.log`。最终服务端类型和 lint 通过，日志 `/tmp/donebot-team-lineage-final-{types,lint}.log`。这些是临时队列、真实磁盘协调器及合成原生网关测试，未证明真实 Linux 团队 HTTP 成功执行。
 
 卡片及桌面选择等独立续跑、辅助模型、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
+
+## 真实 Linux 镜像复测
+
+用带有完整 `org.opencontainers.image.revision` 和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签的本地 Cloud service 镜像执行：
+
+```sh
+node scripts/verify-team-linux.mjs --image LOCAL_IMAGE
+```
+
+脚本只使用精确 image ID，不拉取镜像；容器无外网，资料位于 tmpfs。返回 0 仅代表隔离自检和成员 HTTP 边界通过，尚未执行团队模型任务；返回 2 代表隔离不可用并验证真实聊天拒绝执行，不能当作隔离验收通过；返回 1 代表验证失败。stdout 指向完整日志及 receipt。没有公开网络的正向 egress 验证，不替代最终真实 Linux 全项恶意探测。
+
+2026-11-21 的 arm64 镜像构建及 `userns-refused` 拒绝执行证据见 [批次 8](../upgrades/0.1.173/batch-8.md)。

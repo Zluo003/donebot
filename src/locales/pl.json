@@ -6882,5 +6882,8 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamFiles.intro": "Pliki udostępnione wszystkim w zespole {team}.",
+  "teamFiles.empty.body": "Upuść pliki tutaj lub je prześlij. Każdy członek zespołu może je odczytać.",
+  "teamFiles.previewLoading": "Ładowanie podglądu…"
 }

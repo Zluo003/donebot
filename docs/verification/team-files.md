@@ -1,6 +1,6 @@
 # 团队共享文件接口
 
-固定来源为 OpenMausBot v0.1.173（799ebcd）的文件存储、路由与 wire types。DoneBot 改用网关签名的成员身份及套餐配额；本配方只验收成员文件接口，不表示团队协作或 Bot 文件挂载已完成。
+固定来源为 OpenMausBot v0.1.173（799ebcd）的文件存储、路由与 wire types。DoneBot 改用网关签名的成员身份及套餐配额；本配方验收成员文件接口和隔离文件页，不表示团队协作或 Bot 文件挂载已完成。
 
 ## 启用边界
 
@@ -28,8 +28,24 @@ pnpm exec oxlint --deny-warnings server/host/team-files.ts server/host/team-file
 
 2026-11-21：`/tmp/donebot-team-files-regression-accepted.log` 为 7 文件 / 133 项通过。服务端类型与定向 lint 分别记录在 `/tmp/donebot-team-files-server-types-accepted.log`、`/tmp/donebot-team-files-lint-accepted.log`。真实工作流回执为 `/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/server-1795271129738-5770.log.team-files.json`。
 
+## 隔离文件页
+
+```sh
+node --experimental-strip-types scripts/verify-team-files.ts
+```
+
+启动真实签名团队服务、合成网关和 Vite 文件页，输出独立 URL。仅在测试代理逐请求签名，密钥不进入浏览器。夹具工具栏允许切换合成 Member/Admin、让后续请求使用过期签名、切换主题。停止 launcher 时清理临时 home/data。
+
+使用 Playwright CLI 打开输出 URL：新建 Reports、进入并批量上传合成文本和 PNG，预览和下载，重命名，分别取消及确认删除。在根目录查看 large.txt，确认仅显示超限提示。Member 进入 templates 时上传和新建禁用；Admin 可管理。先预览模板文本，再点击 Revoke access 并用面包屑刷新当前目录，确认列表和预览清空、上传禁用且显示重试。该模拟证明后续鉴权失败的呈现，不代表正在上传时经过真实 Go 代理撤权。
+
+页面独立测试覆盖旧团队的延迟列表/预览、切换时中断上传批次、刷新期间的重复操作、列表失败、模板权限及 Blob 回收。预览流测试覆盖缺失/伪造长度、截断、实际流超限与中断。
+
+2026-11-21：接口及页面 9 文件 / 153 项通过，日志 `/tmp/donebot-team-files-ui-regression.log`；类型、lint、词条分别为 `/tmp/donebot-team-files-ui-types.log`、`/tmp/donebot-team-files-ui-server-types.log`、`/tmp/donebot-team-files-ui-lint.log`、`/tmp/donebot-team-files-locales-check.log`。浏览器回执 `/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/server-1795272797858-10291.log.team-files-ui-accepted.json`，截图 `output/playwright/team-files/`。已查看桌面及 390px 窄屏明暗模式；窄屏 scrollWidth 与 viewport 均为 390。夹具 StoreProvider 的非管理员 instances/live 权限拒绝与主动过期签名的 401 为预期错误，未发现文件页脚本错误。
+
+文件页尚未接入正式菜单或能力协商；不能据此启用 shared_files。
+
 ## 尚待验收
 
 运行时签名只在请求入站检查到期；持续上传的撤权依赖网关现有流监控取消连接。当前 route 测试使用可撤销的合成身份，尚未让上传经过实际 Go 代理，不能把该检查当成完整撤权链路证明。重启残留测试不等于断电恢复演练。
 
-Bot 尚未挂载共享目录，读写授权、真实 Linux 恶意进程/路径竞争、配额的文件系统强制、管理员模板发布事务、团队界面、备份恢复全流程和平台验证继续实施。当前普通文件接口不能替代这些验收，也不能作为开启团队执行能力的依据。
+Bot 尚未挂载共享目录，读写授权、真实 Linux 恶意进程/路径竞争、配额的文件系统强制、管理员模板发布事务、正式团队入口、备份恢复全流程和平台验证继续实施。当前普通文件接口不能替代这些验收，也不能作为开启团队执行能力的依据。

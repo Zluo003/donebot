@@ -10221,5 +10221,8 @@
   "templateRepo.refresh": "查詢狀態",
   "templateRepo.publish": "確認發佈",
   "templateRepo.review": "審閱發佈內容",
-  "templateRepo.queryAfterDisconnect": "回應已中斷。請先查詢此回執，再進行其他操作；不會再次提交發佈。"
+  "templateRepo.queryAfterDisconnect": "回應已中斷。請先查詢此回執，再進行其他操作；不會再次提交發佈。",
+  "teamFiles.intro": "與 {team} 所有成員共用的檔案。",
+  "teamFiles.empty.body": "將檔案拖到這裡或上傳，所有團隊成員都可以查看。",
+  "teamFiles.previewLoading": "正在載入預覽…"
 }

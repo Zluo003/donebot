@@ -6744,5 +6744,8 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamFiles.intro": "File condivisi con tutti in {team}.",
+  "teamFiles.empty.body": "Trascina qui i file o caricali. Tutti i membri del team possono leggerli.",
+  "teamFiles.previewLoading": "Caricamento anteprima…"
 }

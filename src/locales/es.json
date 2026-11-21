@@ -6123,5 +6123,8 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamFiles.intro": "Archivos compartidos con todos en {team}.",
+  "teamFiles.empty.body": "Arrastra archivos aquí o súbelos. Todos los miembros del equipo pueden leerlos.",
+  "teamFiles.previewLoading": "Cargando vista previa…"
 }

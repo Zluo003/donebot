@@ -3540,5 +3540,8 @@
   "server.appSettings.notSet": "nicht gesetzt",
   "approval.applied.appSetting": "{name} changed {title}",
   "activity.tool.team.appSettings": "App settings",
-  "server.rooms.linkedOffline": "{bot} arbeitet auf {place}. Dieses Gerät ist offline; die Anfrage wurde nicht gesendet. Erwähne {bot} erneut, wenn {place} wieder online ist."
+  "server.rooms.linkedOffline": "{bot} arbeitet auf {place}. Dieses Gerät ist offline; die Anfrage wurde nicht gesendet. Erwähne {bot} erneut, wenn {place} wieder online ist.",
+  "teamFiles.intro": "Dateien, die mit allen in {team} geteilt werden.",
+  "teamFiles.empty.body": "Dateien hier ablegen oder hochladen. Alle im Team können sie lesen.",
+  "teamFiles.previewLoading": "Vorschau wird geladen…"
 }

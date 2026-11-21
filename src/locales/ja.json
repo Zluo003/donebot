@@ -7794,5 +7794,8 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamFiles.intro": "{team} の全メンバーと共有するファイル。",
+  "teamFiles.empty.body": "ここにファイルをドロップするか、アップロードしてください。チーム全員が閲覧できます。",
+  "teamFiles.previewLoading": "プレビューを読み込み中…"
 }

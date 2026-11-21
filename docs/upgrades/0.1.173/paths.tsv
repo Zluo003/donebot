@@ -2867,7 +2867,7 @@ M	src/components/ThreadCleanupSettings.test.ts	接入	待核对	待核对
 M	src/components/ThreadCleanupSettings.tsx	接入	待核对	待核对
 M	src/components/ThreadConcurrencySettings.test.ts	接入	待核对	待核对
 M	src/components/ThreadConcurrencySettings.tsx	接入	待核对	待核对
-A	src/components/ToolPageShell.tsx	接入	待核对	待核对
+A	src/components/ToolPageShell.tsx	接入	7	已接入上游页面壳；团队文件窄屏及主题验证通过
 M	src/components/TriggerCard.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/components/TriggersPage.tsx	接入	5	026dd777a 调度可靠性已接入；通用准备门、等待取消及损坏文件恢复已验证，真实桌面/跨空间待验收
 M	src/components/TurnNarrationRun.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
@@ -3061,8 +3061,8 @@ A	src/components/settings/settings-shell.ts	接入	6	待核对
 M	src/components/sidebar-preview.test.ts	接入	待核对	待核对
 M	src/components/sidebar-preview.ts	接入	待核对	待核对
 A	src/components/sidebar-state.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
-A	src/components/team-files/TeamFilesPage.test.ts	自有适配	7	待核对
-A	src/components/team-files/TeamFilesPage.tsx	自有适配	7	待核对
+A	src/components/team-files/TeamFilesPage.test.ts	自有适配	7	已接入原测试并增加隔离与并发；与接口合计153项回归及真实浏览器通过
+A	src/components/team-files/TeamFilesPage.tsx	自有适配	7	已接入隔离文件页；成员权限/有界预览/中断/跨团队旧响应保护；正式入口待协商
 M	src/components/thread-approval.tsx	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/touch-actions.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对
 M	src/components/usage/TraceWaterfall.tsx	接入	待核对	待核对

@@ -6944,5 +6944,8 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamFiles.intro": "Файлы, доступные всем участникам {team}.",
+  "teamFiles.empty.body": "Перетащите файлы сюда или загрузите их. Все участники команды могут их читать.",
+  "teamFiles.previewLoading": "Загрузка предпросмотра…"
 }

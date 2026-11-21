@@ -5623,5 +5623,8 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamFiles.intro": "Tệp được chia sẻ với mọi người trong {team}.",
+  "teamFiles.empty.body": "Thả tệp vào đây hoặc tải lên. Mọi thành viên trong nhóm đều có thể đọc.",
+  "teamFiles.previewLoading": "Đang tải bản xem trước…"
 }

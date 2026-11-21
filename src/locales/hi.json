@@ -3203,5 +3203,8 @@
   "server.appSettings.changed": "Changed {label}",
   "server.appSettings.notSet": "not set",
   "approval.applied.appSetting": "{name} changed {title}",
-  "activity.tool.team.appSettings": "App settings"
+  "activity.tool.team.appSettings": "App settings",
+  "teamFiles.intro": "{team} के सभी सदस्यों के साथ साझा की गई फ़ाइलें।",
+  "teamFiles.empty.body": "यहाँ फ़ाइलें छोड़ें या अपलोड करें। टीम के सभी सदस्य इन्हें पढ़ सकते हैं।",
+  "teamFiles.previewLoading": "प्रीव्यू लोड हो रहा है…"
 }

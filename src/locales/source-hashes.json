@@ -3543,7 +3543,10 @@
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
       "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
-      "server.rooms.linkedOffline": "09d655048ace9ba595b70875bd9ced57a1a1d766674285a88de54abc1daaa726"
+      "server.rooms.linkedOffline": "09d655048ace9ba595b70875bd9ced57a1a1d766674285a88de54abc1daaa726",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "es": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -9670,7 +9673,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "fr": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -13025,7 +13031,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "hi": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -16232,7 +16241,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "ja": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -24030,7 +24042,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -34344,7 +34359,43 @@
       "settings.vault.bitwarden.password": "f4c2ee7d031e215c194db822a9f9fdf6cde500330d58ec3bda09ab7330cca4c9",
       "settings.vault.bitwarden.note": "de354e48f4544eba3d26a90c9993c3db06bab7097af7ffe2d617171235235408",
       "settings.vault.bitwarden.error": "dfb662fef386e7c8486cb9bb20268bd342c3423f53f6832cff0ae38564032f80",
-      "settings.logins.source.bitwarden": "5da08592a5626919c301701aea2b6fe53a851f3838966be51f4284827d4499a7"
+      "settings.logins.source.bitwarden": "5da08592a5626919c301701aea2b6fe53a851f3838966be51f4284827d4499a7",
+      "teamFiles.title": "6a967c1647acba4b8a652f36f750619f5fa968b3c12e3e8a4e5bc061ea4fae63",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.upload": "865e89de78d94c747184d6a7e6f5244b453d8062343c07e014ae698cfb0260e8",
+      "teamFiles.newFolder": "cf28f49ec597a6ede5ae0fc5e121b6f0321d0ddfa645ff39cd44febac0b2ac75",
+      "teamFiles.folderName": "14d34edf50ef6c8738db97eb3fc56d0d5c8521b4555404b3ad456cedbb0c815d",
+      "teamFiles.create": "4759498ac2a719c619e2c8cf8ee60af2d2407425e95d308eb208425b2a6d427a",
+      "teamFiles.download": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "teamFiles.rename": "3064d79a295cefe4b384b8fe5cb29fd6b06d7eb1ad94b8895f4148039d06b330",
+      "teamFiles.newName": "04eea2a4ae80ebbe510d656f245a347c49328c4b79e642708d9028e27e84e1bb",
+      "teamFiles.save": "1509f561f2416598629b886ad7d3c05a7e221e4e0675c84bbff4ee6d9e03913d",
+      "teamFiles.delete": "e2d0a54968ead24efc0dffa6ac78fc606dceec34a0f586177a74a54cc2272cf8",
+      "teamFiles.deleteConfirm": "f066d07e2c299d0ad3a77138a3638f061d524998ab60621bd3e78e4dec263079",
+      "teamFiles.actions": "f608d3348f5f91d57ab2cce10e8532510658d5773ef01d01cad83396e652c1b3",
+      "teamFiles.open": "f687d18152a5b541e172a5468106160deb5dd30fdee78ecb4596cdc835a4c013",
+      "teamFiles.closePreview": "7d8ab368210c5ae8d2cec7bb577afe1e7cf9489c88f031e0f9de7555c9f20b66",
+      "teamFiles.noPreview": "00604c7d5208c3793c5ba92dbdcb444ba04014d96e2bd302d472cab2ee8a42f5",
+      "teamFiles.previewTooLarge": "fe681cd65f1dfa2b3da57c940a8ae05d79128c03ea6819a7f21a0d17cc32e97c",
+      "teamFiles.empty.title": "49abaf804ab38c1da030e3396f6f8aa27442a44af3c10055065b817996be33ec",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.drop": "e97cc3997e1db6ccd4400f33f63f6643db14f134b509259111d60300935fdb04",
+      "teamFiles.used": "5a8e357a4f18230b49dc41bcf861bb834920821bb4ed8c7ac5e4d0887d47aff8",
+      "teamFiles.loadFailed": "58570063f4a1eba60c2bce3401a5c63b16122944d7ccdf10b7afdaae169609a0",
+      "teamFiles.uploading": "fea603abe2c784d5c89882aea69c62cdef7c702130ac9c1a884884cd0d42499b",
+      "teamFiles.uploaded": "565535408c6d830a7022f71cbeccd95f89a1e1651d1d0e57425d0561cc12ebe5",
+      "teamFiles.made": "316d211c8d2ef5fb56abf4f95817c50b03c1e3398617f37368b02aaddf438119",
+      "teamFiles.changedWith": "2e2fdf6e446f566341cbfa24da5f1e0289e05aa93a5f836c36e5f4726211216c",
+      "teamFiles.changedBy": "d21ce888ee96f654a3df93a0395bcb4d631e94765808ed9c703359b0aab35487",
+      "teamFiles.someone": "2a59d59e3809f827ce709d3815e3950eef4a6a93af5557a93a7fdfba71460843",
+      "teamFiles.error.tooLarge": "a56fe01b458f72b943f119d5644fb36ef30cc7895efbb9837de7140bf445fe72",
+      "teamFiles.error.full": "bd006dc2150762c987651b1dcc3e9fe984f6cf914ed165aeeb9fb54a55e42363",
+      "teamFiles.error.exists": "a455805a8d0945fb7808fc93834cd30018928c1fb556e4de08b7b39bc380ef27",
+      "teamFiles.error.forbidden": "dc418a10291722bf847304aaf674cdc1615a0e6220cae27e322ce6b4547036e5",
+      "teamFiles.error.notFound": "94dc31e46a9f6aadcc1ff1ca71dc3a1bd87dfcb4fd371997d7a797de1b9667a5",
+      "teamFiles.error.badName": "b750786a0a3f9c715e0761efa4e2ea022ff0a073e732b57f0f8a6bde6484de70",
+      "teamFiles.error.failed": "d010a8621f3358d1491856e8ce9da938f4e64d596f8fbdd240ee36b3972485c0",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "zh": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -42323,7 +42374,42 @@
       "settings.vault.bitwarden.password": "f4c2ee7d031e215c194db822a9f9fdf6cde500330d58ec3bda09ab7330cca4c9",
       "settings.vault.bitwarden.note": "de354e48f4544eba3d26a90c9993c3db06bab7097af7ffe2d617171235235408",
       "settings.vault.bitwarden.error": "dfb662fef386e7c8486cb9bb20268bd342c3423f53f6832cff0ae38564032f80",
-      "settings.logins.source.bitwarden": "5da08592a5626919c301701aea2b6fe53a851f3838966be51f4284827d4499a7"
+      "settings.logins.source.bitwarden": "5da08592a5626919c301701aea2b6fe53a851f3838966be51f4284827d4499a7",
+      "templates.chooseTemplateFolder": "ad9b26489e1eff35cacfc3726a8c0f7454f7cae2d81d0f427aaff9b88ec16ef5",
+      "templates.folderTooLarge": "90f46395e31ab254b78d304732fc6d1ba483f645570d9d0ab71afaba6d29dcf9",
+      "templates.folderInvalid": "9c1d531aa7469d33b27a924b971c1d6858f06cc678bdd32c2761825cf47c95df",
+      "templates.useConnectedGithub": "01cb648bf1eefe071a248501a3fd3fe4985be0d1c14c468086f8c7f93b290b8c",
+      "templates.githubAccount": "d686f873a56689703a346d35332890e6fd3f1c40d96328e3ac3d5a7bf3308f16",
+      "templates.chooseGithubAccount": "99fc077587d411ba04c1f262964ccf95888e89b5195fa9588611b07379602abc",
+      "templates.connectGithubFirst": "96d6125636ab4b4ada56d9acc7517a722f03f6004e3fba212fa3496792680ce1",
+      "templates.githubTemplateHint": "760741e01d50d4ae6b268a0f336927eb67384a8edb60d43d0675e0386abd7f22",
+      "templateRepo.title": "0e6d60d6f9d9b7f7098845dc39cc9bc3d6555f48d2b013d30dffd86aa1193d45",
+      "templateRepo.intro": "3d10900d29d2843c6008f58cabac3aab5a57d2e16becdbaff57c1c594bd808ca",
+      "templateRepo.repository": "13d6ff07b8a5d792ec87d5ec83bff2730ee77fa8f4fcd89ca5f1d688f64b4c73",
+      "templateRepo.folder": "158f5a01ef8cfb1e6d91f8c321dd3a63f5e457f9650eecd662857701762bd31d",
+      "templateRepo.direct": "4db978cc910da478fba913631cfbf0f9f7e08459a0fc5aadd67ddfeff6abd008",
+      "templateRepo.destination": "293d404a500f5f9a149916d810ff4f4231bd5d6ecd25eb0f55a867e2095eca48",
+      "templateRepo.mode": "a138746524b6042c38b3d7d312bc6751016d1281a4dde31de809e1c61856615e",
+      "templateRepo.commitMode": "5083ba367bd7344569ab230d5da1795605f36e8278fbeb30796c1cd9f922fc3d",
+      "templateRepo.prMode": "93255e72982a7296ec1f69a76694441af0c5098ba6301cd413593700b327cb9b",
+      "templateRepo.status": "920e413c7d411b61ef3e8c63b1cb6ad058d5f95f8b481dbafe60248387d8c355",
+      "templateRepo.ready": "2a2057fa299e8b48fe636b551d6ffa559e6eedd00d12946fed9946a511ac63d9",
+      "templateRepo.publishing": "4c423909ce2647b52551ce87cd3008b23bd4674b8a26ccfdbef8d60606067873",
+      "templateRepo.published": "2ef42ec21d9300dd21ae3c7ca3711806cce3003fa4edafd22ee744fe86599799",
+      "templateRepo.uncertain": "4318edd912807217ef34c46b486ae8b9ff0dfe18da17da59b28c31781315e00c",
+      "templateRepo.refused": "ff9811e501da53c30177d0a5e11a8674c10a1f5b659b804fa6636262c6f9eaa0",
+      "templateRepo.contents": "544755f31801cee7c8f12665dfcc6d676e290c170e518e3d0ddaf3c2761c45a2",
+      "templateRepo.files": "09102defdedf0cb01d7569880352332e4466806fb897ecb44620b5a50890a9ef",
+      "templateRepo.receipt": "75aa7c1bacb09d394211364ce40df7865d3713917658bedb0fd32c1dd167695a",
+      "templateRepo.openResult": "03f69885814b5b7aa5e4758e46733da443a237e2ec63488bddd230f501ff166a",
+      "templateRepo.history": "17c02b6ae76c8136a16ac20ddd127837f96409c4bbadabbb5d9b4d4d9f458c4b",
+      "templateRepo.refresh": "db4da210855b98208c1125397d80c0749bc348d1084a1ad3ec38017800c6a526",
+      "templateRepo.publish": "c3fb144da476e4647918f26d5779ce942b235d51a13692cce6882774444bbafc",
+      "templateRepo.review": "03b9d5240f274b22906d124e538a5fb40bca7135b423deaadf58e143d93ee38e",
+      "templateRepo.queryAfterDisconnect": "163bf52ee5e3bc8b27174ab299c14e33b5d5ce0e89f91612b1fa5436258805a0",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -52516,7 +52602,42 @@
       "settings.vault.bitwarden.password": "f4c2ee7d031e215c194db822a9f9fdf6cde500330d58ec3bda09ab7330cca4c9",
       "settings.vault.bitwarden.note": "de354e48f4544eba3d26a90c9993c3db06bab7097af7ffe2d617171235235408",
       "settings.vault.bitwarden.error": "dfb662fef386e7c8486cb9bb20268bd342c3423f53f6832cff0ae38564032f80",
-      "settings.logins.source.bitwarden": "5da08592a5626919c301701aea2b6fe53a851f3838966be51f4284827d4499a7"
+      "settings.logins.source.bitwarden": "5da08592a5626919c301701aea2b6fe53a851f3838966be51f4284827d4499a7",
+      "templates.chooseTemplateFolder": "ad9b26489e1eff35cacfc3726a8c0f7454f7cae2d81d0f427aaff9b88ec16ef5",
+      "templates.folderTooLarge": "90f46395e31ab254b78d304732fc6d1ba483f645570d9d0ab71afaba6d29dcf9",
+      "templates.folderInvalid": "9c1d531aa7469d33b27a924b971c1d6858f06cc678bdd32c2761825cf47c95df",
+      "templates.useConnectedGithub": "01cb648bf1eefe071a248501a3fd3fe4985be0d1c14c468086f8c7f93b290b8c",
+      "templates.githubAccount": "d686f873a56689703a346d35332890e6fd3f1c40d96328e3ac3d5a7bf3308f16",
+      "templates.chooseGithubAccount": "99fc077587d411ba04c1f262964ccf95888e89b5195fa9588611b07379602abc",
+      "templates.connectGithubFirst": "96d6125636ab4b4ada56d9acc7517a722f03f6004e3fba212fa3496792680ce1",
+      "templates.githubTemplateHint": "760741e01d50d4ae6b268a0f336927eb67384a8edb60d43d0675e0386abd7f22",
+      "templateRepo.title": "0e6d60d6f9d9b7f7098845dc39cc9bc3d6555f48d2b013d30dffd86aa1193d45",
+      "templateRepo.intro": "3d10900d29d2843c6008f58cabac3aab5a57d2e16becdbaff57c1c594bd808ca",
+      "templateRepo.repository": "13d6ff07b8a5d792ec87d5ec83bff2730ee77fa8f4fcd89ca5f1d688f64b4c73",
+      "templateRepo.folder": "158f5a01ef8cfb1e6d91f8c321dd3a63f5e457f9650eecd662857701762bd31d",
+      "templateRepo.direct": "4db978cc910da478fba913631cfbf0f9f7e08459a0fc5aadd67ddfeff6abd008",
+      "templateRepo.destination": "293d404a500f5f9a149916d810ff4f4231bd5d6ecd25eb0f55a867e2095eca48",
+      "templateRepo.mode": "a138746524b6042c38b3d7d312bc6751016d1281a4dde31de809e1c61856615e",
+      "templateRepo.commitMode": "5083ba367bd7344569ab230d5da1795605f36e8278fbeb30796c1cd9f922fc3d",
+      "templateRepo.prMode": "93255e72982a7296ec1f69a76694441af0c5098ba6301cd413593700b327cb9b",
+      "templateRepo.status": "920e413c7d411b61ef3e8c63b1cb6ad058d5f95f8b481dbafe60248387d8c355",
+      "templateRepo.ready": "2a2057fa299e8b48fe636b551d6ffa559e6eedd00d12946fed9946a511ac63d9",
+      "templateRepo.publishing": "4c423909ce2647b52551ce87cd3008b23bd4674b8a26ccfdbef8d60606067873",
+      "templateRepo.published": "2ef42ec21d9300dd21ae3c7ca3711806cce3003fa4edafd22ee744fe86599799",
+      "templateRepo.uncertain": "4318edd912807217ef34c46b486ae8b9ff0dfe18da17da59b28c31781315e00c",
+      "templateRepo.refused": "ff9811e501da53c30177d0a5e11a8674c10a1f5b659b804fa6636262c6f9eaa0",
+      "templateRepo.contents": "544755f31801cee7c8f12665dfcc6d676e290c170e518e3d0ddaf3c2761c45a2",
+      "templateRepo.files": "09102defdedf0cb01d7569880352332e4466806fb897ecb44620b5a50890a9ef",
+      "templateRepo.receipt": "75aa7c1bacb09d394211364ce40df7865d3713917658bedb0fd32c1dd167695a",
+      "templateRepo.openResult": "03f69885814b5b7aa5e4758e46733da443a237e2ec63488bddd230f501ff166a",
+      "templateRepo.history": "17c02b6ae76c8136a16ac20ddd127837f96409c4bbadabbb5d9b4d4d9f458c4b",
+      "templateRepo.refresh": "db4da210855b98208c1125397d80c0749bc348d1084a1ad3ec38017800c6a526",
+      "templateRepo.publish": "c3fb144da476e4647918f26d5779ce942b235d51a13692cce6882774444bbafc",
+      "templateRepo.review": "03b9d5240f274b22906d124e538a5fb40bca7135b423deaadf58e143d93ee38e",
+      "templateRepo.queryAfterDisconnect": "163bf52ee5e3bc8b27174ab299c14e33b5d5ce0e89f91612b1fa5436258805a0",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "uk": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",
@@ -56161,7 +56282,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "vi": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -61788,7 +61912,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "tr": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -67415,7 +67542,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "pl": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -74301,7 +74431,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "ru": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -81249,7 +81382,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "it": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -87997,7 +88133,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -95464,7 +95603,10 @@
       "server.appSettings.changed": "261b0fdbf6316bcb5772939b327cda681d7d208e0fc1047734ee07703055f7fd",
       "server.appSettings.notSet": "1aef939917215ce780284dd9047f170482753bbe40a0998b3decb2f02c2606ac",
       "approval.applied.appSetting": "739d70382485a43a7b203ad4d1102db1f38af3114feeac5859ebebe6e66f97bc",
-      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810"
+      "activity.tool.team.appSettings": "d43fb8a961ff2d1f037995587ed8883ac4b733ecaf1b0b74201123ada13df810",
+      "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
+      "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
     }
   }
 }

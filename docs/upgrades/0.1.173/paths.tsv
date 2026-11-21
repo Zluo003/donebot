@@ -2056,7 +2056,7 @@ A	server/share-github.test.ts	接入	6	844b91ecb 公共链接、路径、编码�
 A	server/share-github.ts	接入	6	844b91ecb 公共 GitHub 文件夹读取已接入；定长流/字节上限/无重定向
 A	server/share-publish.ts	接入	待核对	待核对
 A	server/share-skill-files.test.ts	接入	6	待核对
-A	server/share-team-templates.test.ts	自有适配	7	待核对
+A	server/share-team-templates.test.ts	自有适配	7	存储子集适配到 team-templates.test；真实进程发布/移除/回滚中断已验收；HTTP/UI 待接入
 A	server/share-zip.ts	接入	待核对	待核对
 A	server/share.e2e.test.ts	接入	待核对	待核对
 A	server/share.test.ts	接入	待核对	待核对
@@ -2121,7 +2121,7 @@ D	server/team-share.e2e.test.ts	接入	待核对	待核对
 A	server/team-slack.test.ts	接入	待核对	待核对
 A	server/team-slack.ts	接入	待核对	待核对
 M	server/team-small-fixes.e2e.test.ts	接入	待核对	待核对
-A	server/team-templates.ts	自有适配	7	待核对
+A	server/team-templates.ts	自有适配	7	已接入带配额及中断恢复的存储模块；签名 HTTP 与完整工作流待接入
 M	server/team-welcome.e2e.test.ts	接入	待核对	待核对
 A	server/team-welcome.test.ts	接入	待核对	待核对
 M	server/team-welcome.ts	接入	待核对	待核对

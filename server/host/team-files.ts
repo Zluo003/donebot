@@ -55,6 +55,13 @@ export interface TeamFileEntry {
 
 export interface TeamFilesActor { person: string; admin: boolean }
 
+export interface TeamTemplateMutationGuard {
+  root: string;
+  assertRoom(bytes: number, remove?: string): void;
+  unavailable(): void;
+  recovered(): void;
+}
+
 export class TeamFilesError extends Error {
   readonly status: number;
   readonly code: string;
@@ -102,6 +109,7 @@ export function compareSnapshots(before: TeamFilesSnapshot, after: TeamFilesSnap
 }
 
 const inside = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
+const templatePath = (path: string) => inside(path.toLowerCase(), TEAM_FILES_TEMPLATES);
 
 export interface TeamFilesOptions {
   dataDir: string;
@@ -121,6 +129,8 @@ export function createTeamFiles(options: TeamFilesOptions) {
   let usage: { bytes: number; at: number } | null = null;
   let activity: ActivityFile | null = null;
   let stagingReady = false;
+  let templatesBusy = false;
+  let templatesUnavailable = false;
 
   const stagingFolder = () => {
     const base = realpathSync(options.dataDir);
@@ -145,12 +155,17 @@ export function createTeamFiles(options: TeamFilesOptions) {
   };
 
   const available = (path: string) => {
+    if (templatePath(path) || path === "") {
+      if (templatesUnavailable) throw new TeamFilesError(503, "unavailable", "The template library needs recovery before files can change.");
+      if (templatesBusy) throw new TeamFilesError(409, "exists", "The template library is being updated.");
+    }
     if ([...uploads.keys()].some(upload => inside(path, upload) || inside(upload, path))) throw new TeamFilesError(409, "exists", "An upload is already using that path.");
   };
 
   /** The full path of `rel`, refusing a link anywhere on the way (a bot with edit could plant one) and a non-folder parent. */
   const resolve = (rel: string, want: "file" | "folder" | "any" | "absent" | "maybe"): { full: string; stat: Stats | null } => {
     if (teamFilePath(rel) !== rel) throw new TeamFilesError(400, "bad_path", "That isn't a path in team files.");
+    if (templatePath(rel) && templatesUnavailable && !templatesBusy) throw new TeamFilesError(503, "unavailable", "The template library needs recovery before files can be read.");
     ensure();
     const parts = rel ? rel.split("/") : [];
     let full = root;
@@ -265,7 +280,7 @@ export function createTeamFiles(options: TeamFilesOptions) {
   };
 
   /** The template library is the admins': members see it, only an admin changes anything in it. */
-  const librarys = (rel: string) => inside(rel.toLowerCase(), TEAM_FILES_TEMPLATES);
+  const librarys = templatePath;
   const mayAdd = (folder: string, actor: TeamFilesActor) => {
     if (!actor.admin && librarys(folder)) throw new TeamFilesError(403, "forbidden", "The team's templates are the admins' to change.");
   };
@@ -293,6 +308,30 @@ export function createTeamFiles(options: TeamFilesOptions) {
     cap,
     uploadMax,
     used,
+
+    templateMutation(actor: TeamFilesActor, change: (guard: TeamTemplateMutationGuard) => void): void {
+      if (!actor.admin) throw new TeamFilesError(403, "forbidden", "Only an administrator can publish templates.");
+      if (templatesBusy || [...uploads.keys()].some(templatePath)) throw new TeamFilesError(409, "exists", "Wait for the template upload to finish.");
+      templatesBusy = true;
+      try {
+        const directory = resolve(TEAM_FILES_TEMPLATES, "maybe");
+        if (directory.stat && !directory.stat.isDirectory()) throw new TeamFilesError(400, "not_folder", "The template library must be a folder.");
+        if (!directory.stat) mkdirSync(directory.full, { mode: 0o700 });
+        settledParent(directory.full);
+        change({
+          root: directory.full,
+          assertRoom(bytes, remove) {
+            if (!Number.isSafeInteger(bytes) || bytes < 0 || remove !== undefined && !/^templates\/[a-z0-9][a-z0-9-]{0,47}\.previous$/.test(remove)) throw new TeamFilesError(400, "bad_path", "Invalid template quota request.");
+            const current = walk()!;
+            const reclaimed = remove ? [...current.files].reduce((sum, [path, stat]) => sum + (inside(path, remove) ? stat.size : 0), 0) : 0;
+            const reserved = [...uploads.values()].reduce((sum, count) => sum + count, 0);
+            if (current.bytes - reclaimed + bytes + reserved > cap) throw new TeamFilesError(507, "full", "Team files are full. Remove files to make room.");
+          },
+          unavailable() { templatesUnavailable = true; },
+          recovered() { templatesUnavailable = false; },
+        });
+      } finally { templatesBusy = false; changedSize(); }
+    },
     /** Full: a bot's box has the folder read-only, and the page refuses uploads, until someone removes files. */
     full: () => used() >= cap,
 

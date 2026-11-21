@@ -49,6 +49,8 @@ export function excludedWorkspaceAuthPath(path: string): boolean {
   if (/^people-connections(?:\/|$)/.test(path)) return true;
   // Execution provenance is installation authority; restoring a backup cannot authorize or replay its paid requests.
   if (/^donebot-team-execution(?:\/|$)/.test(path)) return true;
+  // Publication reviews bind an exact external write to this installation and its connected account.
+  if (/^template-publications(?:\/|$)/.test(path)) return true;
   return /^(?:(?:providers|caddy|chrome-profile|\.agent-browser)(?:\/|$)|workspace-credentials\.json$|external-runtimes\.json$|browser-engine-key$)/.test(path) ||
     /^(?:config\.json|webhooks\.json|workspace-credentials\.json|external-runtimes\.json|browser-engine-key|sessions\.json|tunnel-account\.json)\.\d+(?:\.[0-9a-f-]+)?\.tmp$/.test(path) ||
     /^(?:vm-home|vm-homes\/[^/]+)\/\.browser-profiles(?:\/|$)/.test(path);

@@ -135,4 +135,10 @@ fixture 更新欢迎版本和界面标签，图表选择器限定到 Data 面板
 
 接入固定上游 `844b91ecb` 的文件夹契约、公共 GitHub 读取和私有仓库只读部分，适配当前 package v2 与现有模板预览/安装流程。未引入新 share host 或恢复原版商业服务。导入只读取清单指定的脚本、头像与文本，严格 UTF-8 解码和流字节上限；技能关闭、例程暂停。私有读取显式开启和选择账号，完整 inventory、连接身份、规则、会话及撤权均复核；团队/共享连接代理尚未完成，当前明确拒绝。
 
-2026-11-21：`/tmp/donebot-template-folders-regression-final.log` 15 文件 / 182 项通过，包括真实服务、broker Worker 和假 GitHub 的读取、预览、安装与撤权。原脚本 UI 回归及新 Chromium 文件夹/账号 UI 均通过；截图已人工检查，服务和浏览器 fixture 已清理。客户端/服务端类型、定向 lint、16 个语言目录校验通过。初次测试修正了当前模板不携带工具权限的断言、目录路径校验、无模型回合时不存在 dump 的断言；UI 驱动改用原 select change，不将未通过的原生键盘提交计为验收。完整范围及命令见 `docs/verification/template-folders.md`。仓库发布、正式入口和团队共享库仍待接入，本批没有标记完成。
+2026-11-21：`/tmp/donebot-template-folders-regression-final.log` 15 文件 / 182 项通过，包括真实服务、broker Worker 和假 GitHub 的读取、预览、安装与撤权。原脚本 UI 回归及新 Chromium 文件夹/账号 UI 均通过；截图已人工检查，服务和浏览器 fixture 已清理。客户端/服务端类型、定向 lint、16 个语言目录校验通过。初次测试修正了当前模板不携带工具权限的断言、目录路径校验、无模型回合时不存在 dump 的断言；UI 驱动改用原 select change，不将未通过的原生键盘提交计为验收。完整范围及命令见 `docs/verification/template-folders.md`。仓库发布记录见下文，正式入口和团队共享库仍待接入，本批没有标记完成。
+
+## 审核后发布模板仓库
+
+接入固定上游 `844b91ecb` 的 GitHub blob/tree/commit/ref/PR 发布流程，沿用现有 package v2 导出及逐次连接授权。完整快照、文件摘要、显式账号和目标目录先审核，默认 PR；直接提交需明确选择，引用不强推。回执先于外部写入持久化；重复确认、重启和响应丢失只返回原回执，不重放写入。回执排除备份/恢复，未决记录保留，团队共享连接仍拒绝。
+
+2026-11-21：16 文件 / 204 项回归通过；真实隔离服务、broker Worker 及合成 GitHub 验证完整导出到发布、响应丢失、撤权、篡改和并发。Chromium 完成确认、断线查询、焦点恢复和浅/深窄屏检查；相邻两项模板 UI 通过。类型、定向 lint 和语言目录通过，命令与证据见 `docs/verification/template-folders.md`。真实供应商、正式模板入口、共享库和平台验收仍未完成；团队能力继续关闭。

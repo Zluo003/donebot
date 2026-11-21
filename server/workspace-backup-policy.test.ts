@@ -80,6 +80,11 @@ describe("workspace backup data boundary", () => {
     for (const path of ["donebot-team-execution.md", "workspaces/bot/donebot-team-execution/notes.md"]) expect(excludedWorkspaceAuthPath(path)).toBe(false);
   });
 
+  it("keeps external publication reviews on their original installation", () => {
+    for (const path of ["template-publications", "template-publications/123.json"]) expect(excludedWorkspaceAuthPath(path)).toBe(true);
+    for (const path of ["template-publications.md", "workspaces/bot/template-publications/notes.md"]) expect(excludedWorkspaceAuthPath(path)).toBe(false);
+  });
+
   it("keeps content-addressed attachment identities installation-local", () => {
     for (const path of ["attachment-names.key", "attachment-names.key.123.05a7b3e0-1234.tmp"]) expect(excludedWorkspaceAuthPath(path)).toBe(true);
     for (const path of ["attachment-names.key.md", "workspaces/bot/attachment-names.key"]) expect(excludedWorkspaceAuthPath(path)).toBe(false);

@@ -1,8 +1,11 @@
 // Composio's GitHub content API stays server-side; only manifest-listed template files are read.
 // Live provider response shapes have not been qualified; unknown shapes fail closed.
 
+import { randomBytes } from "node:crypto";
+
 import { decodeBase64 } from "../shared/package-format.ts";
-import { MANIFEST_NAMES, namedFolderFiles, readShareFolder, SHARE_FOLDER_MAX_BYTES, SHARE_FOLDER_MAX_FILES, type ShareFolder, type ShareFolderFiles } from "../shared/share-folder.ts";
+import { MANIFEST_NAMES, namedFolderFiles, readShareFolder, safeFolderPath, isShareFolderPath, SHARE_FOLDER_MAX_BYTES, SHARE_FOLDER_MAX_FILES, type ShareFolder, type ShareFolderFiles } from "../shared/share-folder.ts";
+import type { TemplateRepoPublish } from "../shared/template-publication.ts";
 import { toolData } from "./connected-reads.ts";
 import { parseMcpResponse } from "./connector-tools-list.ts";
 import { GithubTemplateError } from "./share-github.ts";
@@ -24,7 +27,7 @@ export type GithubRelay = (payload: unknown, transportSessionId: string | undefi
 
 /** A GitHub connection a request may use: the relay to its account, or why there is none. */
 export type GithubConnection =
-  | { ok: true; relay: GithubRelay; account?: string }
+  | { ok: true; relay: GithubRelay; account?: string; binding?: string }
   | { ok: false; reason: "not_connected" | "refused" | "unavailable"; message: string };
 
 export const CONNECT_GITHUB = "Connect GitHub in Apps first.";
@@ -183,4 +186,80 @@ export async function readRepoFolder(connection: Extract<GithubConnection, { ok:
     return readShareFolder(files);
   }
   throw new GithubTemplateError("No bot.md or team.md was found in that folder.", 404);
+}
+
+const SHA = /^[a-f0-9]{40,64}$/i;
+const branchName = (name: string) => /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(name) && name.split("/").every(part => part && !part.startsWith(".") && !part.endsWith(".lock") && !part.endsWith(".") && !part.includes(".."));
+const shaOf = (data: unknown) => {
+  const sha = text(data, "sha");
+  if (!sha || !SHA.test(sha)) throw new GithubTemplateError("GitHub returned an invalid object id.", 502);
+  return sha;
+};
+
+/** Security: a returned PR link must identify a pull request in the reviewed repository. */
+function pullRequestUrl(value: unknown, owner: string, repo: string): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const prefix = `/${owner}/${repo}/pull/`.toLowerCase();
+    return url.protocol === "https:" && url.hostname === "github.com" && !url.port && !url.username && !url.password &&
+      !url.search && !url.hash && url.pathname.toLowerCase().startsWith(prefix) && /^\d+$/.test(url.pathname.slice(prefix.length)) ? url.href : null;
+  } catch { return null; }
+}
+
+/** Commits exactly the reviewed folder in one tree, preserving other repository files. */
+export async function publishToRepo(connection: Extract<GithubConnection, { ok: true }>, input: {
+  owner: string; repo: string; folder: string; slug: string; name: string; files: ShareFolderFiles; direct: boolean;
+}, beforeWrite: () => void): Promise<TemplateRepoPublish> {
+  if (!repoName(`${input.owner}/${input.repo}`) || repoFolder(input.folder) !== input.folder || !SEGMENT.test(input.slug)) {
+    throw new GithubTemplateError("Choose a repository and a plain template folder.");
+  }
+  const entries = Object.entries(input.files);
+  if (!entries.length || entries.length > SHARE_FOLDER_MAX_FILES || entries.some(([path]) => safeFolderPath(path) !== path || !isShareFolderPath(path)) ||
+    entries.reduce((total, [, value]) => total + Buffer.byteLength(value), 0) > SHARE_FOLDER_MAX_BYTES) {
+    throw new GithubTemplateError("The reviewed template contains invalid files.");
+  }
+  readShareFolder(input.files);
+  const session = githubSession(connection);
+  const { owner, repo } = input;
+  const { branch: base, push } = await defaultBranch(session, owner, repo);
+  if (push === false) throw new GithubTemplateError(`Your GitHub connection can't write to ${owner}/${repo}.`, 403);
+  if (!branchName(base)) throw new GithubTemplateError("The repository's default branch cannot be used for template publication.", 502);
+  const head = await session.call(GITHUB_TOOLS.branch, { owner, repo, branch: base });
+  const headCommit = record(field(head, "commit"));
+  const headSha = headCommit?.sha;
+  const baseTree = record(record(headCommit?.commit)?.tree)?.sha;
+  if (typeof headSha !== "string" || !SHA.test(headSha) || typeof baseTree !== "string" || !SHA.test(baseTree)) {
+    throw new GithubTemplateError("GitHub's answer about the branch had no valid commit.", 502);
+  }
+  const dir = [input.folder, input.slug].filter(Boolean).join("/");
+  const tree: Array<{ path: string; mode: "100644"; type: "blob"; sha: string }> = [];
+  const write = async (slug: string, args: Record<string, unknown>) => {
+    beforeWrite();
+    return session.call(slug, { owner, repo, ...args });
+  };
+  for (const [path, value] of entries) {
+    const sha = shaOf(await write(GITHUB_TOOLS.blob, { content: Buffer.from(value).toString("base64"), encoding: "base64" }));
+    tree.push({ path: `${dir}/${path}`, mode: "100644", type: "blob", sha });
+  }
+  const madeTree = shaOf(await write(GITHUB_TOOLS.tree, { base_tree: baseTree, tree }));
+  const message = `Add the ${input.name} template from DoneBot`;
+  const commit = shaOf(await write(GITHUB_TOOLS.commit, { message, tree: madeTree, parents: [headSha] }));
+  const link = (branch: string) => `https://github.com/${owner}/${repo}/tree/${encodeURIComponent(branch)}/${dir}`;
+  const refMatches = (answer: unknown, ref: string) => field(answer, "ref") === `refs/heads/${ref}` && record(field(answer, "object"))?.sha === commit;
+  if (input.direct) {
+    const moved = await write(GITHUB_TOOLS.updateRef, { ref: `heads/${base}`, sha: commit, force: false });
+    if (!refMatches(moved, base)) throw new GithubTemplateError("The branch update could not be confirmed. Check GitHub before publishing again.", 502);
+    return { kind: "commit", url: link(base), link: link(base), branch: base };
+  }
+  const branch = `donebot-${input.slug}-${randomBytes(6).toString("hex")}`;
+  const made = await write(GITHUB_TOOLS.createRef, { ref: `refs/heads/${branch}`, sha: commit });
+  if (!refMatches(made, branch)) throw new GithubTemplateError("The new branch could not be confirmed. Check GitHub before publishing again.", 502);
+  const pull = await write(GITHUB_TOOLS.pullRequest, {
+    title: message, head: branch, base,
+    body: "A reviewed template from DoneBot: instructions, skills and declared files, and pictures. Chats, keys and connected accounts are excluded. Starter notes are included only when selected by the exporter.",
+  });
+  const url = pullRequestUrl(field(pull, "html_url"), owner, repo);
+  if (!url) throw new GithubTemplateError("The pull request could not be confirmed. Check GitHub before publishing again.", 502);
+  return { kind: "pull_request", url, link: link(branch), branch };
 }

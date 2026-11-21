@@ -10,7 +10,8 @@ const servers: Server[] = [];
 afterEach(async () => { await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }))); });
 async function serve(auth: RequestAuth, live: () => boolean = () => true, accounts: TemplateRouteDeps["github"]["accounts"] = async () => []) {
   const connect = vi.fn(async () => { throw new Error("must not connect"); });
-  const routes = [createTemplateRoutes({ accessLive: live, github: { accounts, connect } })];
+  const publications = { list: vi.fn(), get: vi.fn(), discard: vi.fn(), prepare: vi.fn(), publish: vi.fn() };
+  const routes = [createTemplateRoutes({ accessLive: live, github: { accounts, connect }, publications })];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url!, "http://localhost");
     if (!await dispatchRoutes(routes, { req, res, url, path: url.pathname, method: req.method!, auth, json, readBody })) json(res, 404, {});
@@ -18,16 +19,21 @@ async function serve(auth: RequestAuth, live: () => boolean = () => true, accoun
   servers.push(server);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { connect, call: (path: string, body?: unknown) => fetch(origin + path, body === undefined ? {} : { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } }) };
+  return { connect, publications, call: (path: string, body?: unknown) => fetch(origin + path, body === undefined ? {} : { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } }) };
 }
 
 it.each(["member", "service"])("refuses %s template access before touching a connected account", async kind => {
   const auth = kind === "service" ? { kind: "loopback", scopes: ["client"], trust: "service" } : { kind: "session", scopes: ["client"], via: "cookie", session: {} };
   const accounts = vi.fn(async () => [{ id: "PRIVATE_ACCOUNT" }]);
-  const { call, connect } = await serve(auth as RequestAuth, () => true, accounts);
+  const { call, connect, publications } = await serve(auth as RequestAuth, () => true, accounts);
   expect((await call("/api/templates/github/accounts")).status).toBe(403);
   expect((await call("/api/templates/github", { url: "https://github.com/fixture/private", private: true })).status).toBe(403);
   expect((await call("/api/templates/folder", { files: {} })).status).toBe(403);
+  expect((await call("/api/templates/publications")).status).toBe(403);
+  expect((await call("/api/templates/publications", {})).status).toBe(403);
+  expect((await call("/api/templates/publications/11111111-1111-4111-8111-111111111111/publish", { confirm: true })).status).toBe(403);
+  expect(publications.prepare).not.toHaveBeenCalled();
+  expect(publications.publish).not.toHaveBeenCalled();
   expect(accounts).not.toHaveBeenCalled();
   expect(connect).not.toHaveBeenCalled();
 });

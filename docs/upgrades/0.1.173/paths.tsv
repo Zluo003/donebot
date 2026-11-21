@@ -1474,7 +1474,7 @@ M	server/host/secret-cards.test.ts	接入	待核对	待核对
 M	server/host/secret-cards.ts	接入	待核对	待核对
 A	server/host/setting-nudges.test.ts	接入	待核对	待核对
 A	server/host/setting-nudges.ts	接入	待核对	待核对
-A	server/host/share-github-access.ts	自有适配	6	自有适配：个人工作区已接入多账号读取；共享/团队连接保持拒绝，受限代理待接入
+A	server/host/share-github-access.ts	自有适配	6	自有适配：个人工作区多账号读取与发布逐次校验；共享/团队连接保持拒绝，受限代理待接入
 A	server/host/share-notice.test.ts	接入	待核对	待核对
 A	server/host/share-notice.ts	接入	待核对	待核对
 A	server/host/share.ts	接入	待核对	待核对
@@ -2051,7 +2051,7 @@ M	server/setup-mode.test.ts	接入	待核对	待核对
 M	server/setup-mode.ts	接入	待核对	待核对
 M	server/setup-suggestions.test.ts	接入	待核对	待核对
 M	server/setup-suggestions.ts	接入	待核对	待核对
-A	server/share-github-repo.ts	接入	6	844b91ecb 只读部分已接入；账号显式固定与撤权检查；仓库发布待接入
+A	server/share-github-repo.ts	接入	6	844b91ecb 读取与审核发布已接入；账号固定、持久回执、撤权及不确定写入不重放；真实供应商待验收
 A	server/share-github.test.ts	接入	6	844b91ecb 公共链接、路径、编码、图片与目录索引回归通过
 A	server/share-github.ts	接入	6	844b91ecb 公共 GitHub 文件夹读取已接入；定长流/字节上限/无重定向
 A	server/share-publish.ts	接入	待核对	待核对

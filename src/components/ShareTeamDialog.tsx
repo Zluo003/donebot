@@ -22,6 +22,8 @@ import {
 } from "@/lib/team-share";
 import { api, useStore } from "@/state/store";
 import type { NewBotDefaults } from "../../shared/new-bot-defaults";
+import type { PackageDocument } from "../../shared/package-format";
+import { TemplateRepoDialog } from "./TemplateRepoDialog";
 
 export function ShareTeamContents({ preview, includeMemory, localSkips }: {
   preview: ShareResponse;
@@ -139,6 +141,7 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
   const setError = (message: string) => setView((current) => ({ ...current, error: message }));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<ShareResponse | null>(null);
+  const [githubDocument, setGithubDocument] = useState<PackageDocument | null>(null);
   const request = useRef(0);
 
   useEffect(() => {
@@ -216,6 +219,15 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
       setSaving(false);
     }
   };
+  const openGithub = async () => {
+    if (saving) return;
+    setSaving(true); setError("");
+    try {
+      const result = await api<ShareResponse>("/api/teams/export", { method: "POST", body: JSON.stringify(shareRequestBody(choices(true))) });
+      setGithubDocument(result.document);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setSaving(false); }
+  };
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -232,7 +244,7 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
   };
   const field = "mt-1 w-full rounded-lg border border-hairline/50 bg-inset px-3 py-2 text-[14px] text-ink disabled:opacity-60";
 
-  return createPortal(
+  return <>{createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !saving) onClose();
     }}>
@@ -241,6 +253,7 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
         onKeyDown={(event) => {
           if (event.key === "Escape" && !saving) { event.stopPropagation(); onClose(); }
           if (event.key === "Tab") {
+            if (githubDocument) return;
             const controls = dialogRef.current?.querySelectorAll<HTMLElement>("input:enabled, textarea:enabled, button:enabled");
             if (!controls?.length) return;
             const first = controls[0]!, last = controls[controls.length - 1]!;
@@ -316,6 +329,7 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
           ) : (
             <>
               <button disabled={saving} onClick={onClose} className="rounded-lg px-3 py-2 text-[13px] text-ink-secondary hover:bg-raised">{t("common.cancel")}</button>
+              <button disabled={saving || !preview || !name.trim()} onClick={() => void openGithub()} className="rounded-lg border border-hairline px-3 py-2 text-[13px] disabled:opacity-40">{t("templateRepo.title")}</button>
               <button disabled={saving || !preview || !name.trim()} onClick={() => void save()}
                 className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40">
                 {saving && <Loader2 size={14} className="animate-spin" />}
@@ -327,5 +341,5 @@ export function ShareTeamDialog({ team, onClose }: { team: string; onClose: () =
       </div>
     </div>,
     document.body,
-  );
+  )}{githubDocument && <TemplateRepoDialog document={githubDocument} returnFocus={dialogRef} onClose={() => setGithubDocument(null)} />}</>;
 }

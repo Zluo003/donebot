@@ -79,6 +79,7 @@ import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./donebot/team-runtime.ts";
 import { createShareGithubAccess } from "./host/share-github-access.ts";
 import { createTemplateRoutes } from "./routes/templates.ts";
+import { createTemplatePublications } from "./template-publications.ts";
 import { bindTeamTurn } from "./donebot/team-requests.ts";
 import { effectiveCloudBackend } from "../shared/cloud-backend.ts";
 import { createExternalContext } from "./host/external-context.ts";
@@ -12502,7 +12503,7 @@ const taskRoutes = createTaskRoutes({
   stagedSkillCleanupsForThread,
   rejectDeletedThreadSkillStages,
 }); ROUTES.push(taskRoutes); const leaveTeam = CLOUD_TEAM ? createTeamMemberLeft({ dataDir: DATA_DIR, store, openedBy: (person) => threadStarters.threadsOf(person, 50_000), privateTo: teamHost.privateTo, revokeSessions: (email) => sessions.revokeMember(email), busy: threadBusy, stop: (botId, threadId) => interruptDirectThread(botId, threadId, "The person left the team"), deleteTasks: taskRoutes.deleteTasks, stopBot: (botId) => memberOwnBot.stopWork(botId, "The person left the team"), deleteBot: memberOwnBot.remove, threadsReferencing, deleteAttachment: (name) => deleteAttachment(join(ATTACHMENTS_DIR, name)), eraseBrowsers: eraseAudienceBrowsers, forgetConnections: (person) => { connectionHealth.forgetPerson(person); personRooms.reads?.forgetPerson(person); return teamConnections.forgetPerson(person); }, ...teamRoutines.leaving, forgetOnBots: (email) => forgetMember(store, email, (bot, access) => writeAccess({ store, publicGroupState, broadcast, audienceChanged }, bot, access)).length, ownerOf: (botId) => { const bot = store.bot(botId); return bot ? botOwner(bot) : null; }, record: (row) => appendAdminAction(DATA_DIR, { ...row, actor: { kind: "session", sessionId: "", label: "DoneBot Cloud" } }) }) : null;
-ROUTES.push(createTemplateRoutes({ github: createShareGithubAccess({
+ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA_DIR), github: createShareGithubAccess({
   cfg: () => cfg, composio,
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));

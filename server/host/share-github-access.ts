@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type * as Composio from "../composio.ts";
 import type { AppConfig } from "../config.ts";
 import { GithubTemplateError } from "../share-github.ts";
@@ -41,7 +42,7 @@ export function createShareGithubAccess(deps: ShareGithubAccessDeps) {
       }
     };
     return {
-      ok: true, account: selected.id,
+      ok: true, account: selected.id, binding: createHash("sha256").update(identity).digest("hex"),
       relay: async (payload, session, signal) => {
         signal.throwIfAborted();
         assertCurrent();

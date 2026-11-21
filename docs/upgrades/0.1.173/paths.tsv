@@ -1373,8 +1373,8 @@ M	server/host/check-plan.ts	接入	待核对	待核对
 A	server/host/checkpoint-seeds.test.ts	接入	待核对	待核对
 A	server/host/checkpoint-seeds.ts	接入	待核对	待核对
 A	server/host/chief-incident-spend.test.ts	接入	待核对	待核对
-M	server/host/chief-notices-retry.test.ts	接入	待核对	待核对
-M	server/host/chief-notices.ts	接入	待核对	待核对
+M	server/host/chief-notices-retry.test.ts	自有适配	1/5	部分接入；个人恢复沿用，团队受理不确定禁止故障重提；246项及隔离卡片流程，见donebot-team-models
+M	server/host/chief-notices.ts	自有适配	1/5	部分接入；团队故障仅通知成员，可信事故恢复待接入；见donebot-team-models
 M	server/host/cloud-computer-power.test.ts	接入	待核对	待核对
 M	server/host/cloud-computer-power.ts	接入	待核对	待核对
 A	server/host/cloud-computer-reset-asks.test.ts	接入	待核对	待核对

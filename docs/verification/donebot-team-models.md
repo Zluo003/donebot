@@ -37,7 +37,7 @@ pnpm lint
 
 2026-11-21：`/tmp/donebot-team-check-back-units.log` 四文件 51 项通过，包含真实磁盘调度器和 loopback 合成网关，验证私聊、重启、八路 tick、后续排期、成员撤权、来源缺失、任务改写、运行代次变化和响应丢失。`/tmp/donebot-team-check-back-workflow.log` 两文件 3 项真实隔离服务流程通过，验证个人 Ask 工具调用、到点自动续跑、取消及上游 Team fixture 的私聊隔离；该 Team fixture 不等于 DoneBot 签名团队模型成功执行。服务端类型与定向 lint 通过，日志 `/tmp/donebot-team-check-back-{types,lint}.log`。
 
-其他卡片续跑、辅助模型、周期及事件自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
+其它辅助模型、周期及事件自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
 
 ## 团队结算回执与结束状态
 
@@ -73,3 +73,13 @@ node scripts/verify-team-linux.mjs --image LOCAL_IMAGE
 团队单聊目标固定目标编号和原始来源，每个已受理步骤独立导出操作；忙碌拒绝与同一步重启保留编号。成员、权限版本、运行代次、Bot、会话及私聊受众不可替换。团队单聊和群聊均停用目标循环的外层失败重试，供应商结果不确定时不能生成新步骤再次调用；个人目标保留原版失败重试。
 
 2026-11-21：`/tmp/donebot-team-goal-workflow-final.log` 四文件 57 项通过。真实目标循环、原生驱动及 loopback 网关验证步骤 1/1/2，受理两次；第二次响应丢失后终止，不发起第三步，重启只查询同一执行。`/tmp/donebot-team-goal-personal-workflows.log` 三文件 24 项真实隔离服务流程通过。服务端类型与定向 lint 通过，日志 `/tmp/donebot-team-goal-{types,lint}-final.log`。本项不等于真实 Linux 团队成功执行或其它自动化/续跑链已完成。
+
+## 卡片续跑与故障恢复
+
+问题、凭据和连接卡沿用协调器持久任务；回答后导出独立步骤，崩溃重放使用原步骤。普通原始消息编号不能单独授权控制续跑；必须具有协调器、明确派发事件、目标步骤或定时跟进来源。手动压缩仍使用经过认证的独立控制动作。
+
+DoneBot 团队暂时只向成员报告故障，不通过 Chief 事故处理启动额外模型调用、自动重试或 `retry_thread`。缺失来源和不确定请求不能靠最新用户消息恢复授权。个人运行保留上游的恢复行为；延迟重试在执行前再次检查恢复权限。团队事故的可信来源和状态核对后恢复仍待接入，此处不等于完整故障恢复验收通过。
+
+2026-11-21：`/tmp/donebot-team-cards-final-units.log` 八文件 246 项通过。真实 SQLite Runtime 和 loopback 合成网关验证共享及私聊卡替换、重启待答、另一成员后来发言、八路重复回答、续跑响应丢失和再次重启；供应商计数保持两次，原成员版本与私聊标记不变。Chief 回归覆盖普通崩溃、EAGAIN、内存中止、手动重试拒绝和延迟执行前撤权。
+
+`/tmp/donebot-team-cards-workflow.log` 三文件 8 项真实隔离服务卡片流程通过；`/tmp/donebot-team-cards-adjacent-workflow.log` 单聊目标 8 项、`/tmp/donebot-team-cards-compaction-workflow.log` 压缩 11 项通过。服务端类型与定向 lint 通过，日志 `/tmp/donebot-team-cards-{types,lint}-final.log`。合成网关和个人隔离服务不替代真实 Linux 团队成功执行。

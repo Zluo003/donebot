@@ -12,7 +12,7 @@ import { openRuntimeStore } from "../runtime/store.ts";
 import type { Assignment, RunResult, TurnRunner } from "../runtime/types.ts";
 import { drainSteeredMessages, queueSteeredMessage, restoreSteeredMessages, type SteerStore } from "../steer-queue.ts";
 import type { BotRecord, Message } from "../store.ts";
-import { TeamRequestStore, type TeamRequestBinding } from "./team-requests.ts";
+import { bindTeamTurn, TeamRequestStore, type TeamRequestBinding } from "./team-requests.ts";
 import type { DoneBotTeamRuntime } from "./team-runtime.ts";
 
 const cleanups: Array<() => void> = [];
@@ -122,6 +122,27 @@ it("continues the exact dispatched operation once per event without changing its
   }
   fx.requests.attachRun("continued-turn", continued.id);
   expect(fx.requests.continueRun({ ...input, runId: "continued-turn" }).id).not.toBe(continued.id);
+});
+
+it("requires a trusted continuation step instead of reusing the original message as a card wake", () => {
+  const fx = fixture(), root = fx.bind();
+  fx.requests.attachRun("original-run", root.id);
+  const input = { botId: root.botId, threadId: root.threadId, sourceId: root.sourceId, audience: "team" as const, generation: 1 };
+  expect(bindTeamTurn(fx.requests, input)).toEqual(root);
+  expect(() => bindTeamTurn(fx.requests, { ...input, cardContinuation: true })).toThrow("独立步骤");
+  expect(() => bindTeamTurn(fx.requests, { ...input, cardContinuation: true, operation: "card:unverified" })).toThrow("独立步骤");
+  const continued = bindTeamTurn(fx.requests, { ...input, cardContinuation: true, continuation: { runId: "original-run", operation: "computer-selection:browser" } });
+  expect(continued.id).not.toBe(root.id);
+  const work = { id: "original-run", botId: root.botId, threadId: root.threadId, executions: 2, restarts: 0 };
+  const answered = bindTeamTurn(fx.requests, { ...input, cardContinuation: true, work });
+  expect(answered).toMatchObject({ actor: fx.actor, parentId: root.id, operation: "step:2" });
+  expect(bindTeamTurn(new TeamRequestStore(fx.directory, fx.runtime), { ...input, cardContinuation: true, work: { ...work, executions: 3, restarts: 1 } })).toEqual(answered);
+  for (const changed of [{ botId: "other" }, { threadId: "other" }]) {
+    expect(() => bindTeamTurn(fx.requests, { ...input, cardContinuation: true, work: { ...work, ...changed } })).toThrow();
+  }
+  const goal = bindTeamTurn(fx.requests, { ...input, cardContinuation: true, goal: { runId: "goal", step: 1 } });
+  expect(new Set([root.id, answered.id, continued.id, goal.id]).size).toBe(4);
+  expect(goal.actor).toEqual(fx.actor);
 });
 
 it("keeps goal retries stable across restart and gives each accepted step its own original-member operation", () => {

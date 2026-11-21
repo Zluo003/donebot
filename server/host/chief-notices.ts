@@ -33,6 +33,8 @@ export interface ChiefNoticeDeps {
   /** Starts this thread's request again where it stopped: a continuation of the request the harness recorded, never a line
    * of the person's. Absent: a run stopped for memory with no Chief to retry it is only reported. */
   continueRequest?(botId: string, threadId: string, text: string): Promise<unknown>;
+  /** Why recovery cannot dispatch more model work, including a Chief's incident turn or retry. */
+  recoveryRefusal?(botId: string, threadId: string): string | null;
   selfHosted?(): boolean;
   /** Runs a retry after a run stopped for memory, MEMORY_RETRY_MS later by default, so the machine settles first. */
   later?(run: () => void, ms: number): void;
@@ -75,6 +77,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
   /** A run stopped for memory that no Chief retries starts once more by itself; the person hears only if that one fails too,
    * or can't start. Never a run whose thread someone wrote in since, or that is running or queued again. */
   function retryForRoom(bot: BotRecord, threadId: string, report: (retry?: IncidentRetry) => void, text = MEMORY_RETRY_TEXT): boolean {
+    if (deps.recoveryRefusal?.(bot.id, threadId)) return false;
     const continueRequest = deps.continueRequest;
     if (!continueRequest) return false;
     const asked = store.activePath(threadId).findLast((line) => line.role === "user")?.id ?? "";
@@ -86,6 +89,8 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
       if (!store.bot(bot.id) || !store.taskByThread(bot.id, threadId)) return;
       if (store.activePath(threadId).some((line) => line.role === "user" && line.at > failedAt)) return;
       if (deps.threadBusy(bot.id, threadId) || deps.threadQueued?.(bot.id, threadId)) return;
+      const refused = deps.recoveryRefusal?.(bot.id, threadId);
+      if (refused) { report({ notRetried: refused }); return; }
       continueRequest(bot.id, threadId, text)
         .catch((error) => report({ notRetried: `its retry could not start (${error instanceof Error ? error.message : String(error)})` }));
     }, MEMORY_RETRY_MS);
@@ -94,6 +99,8 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
 
   /** Why a teammate's stopped thread cannot be retried now, in words a Chief can act on, or null. */
   function retryRefusal(botId: string, threadId: string): string | null {
+    const recovery = deps.recoveryRefusal?.(botId, threadId);
+    if (recovery) return recovery;
     const blocked = deps.threadBusy(botId, threadId) ? (deps.threadSettling?.(threadId) ? "settling" : "running")
       : deps.threadQueued?.(botId, threadId) ? "queued" : null;
     if (blocked) return RETRY_BLOCKED[blocked];
@@ -120,6 +127,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
 
   /** A notice about this thread may go to `chief`: its asks are the Chief's person's, never another person's private chat. */
   function reachesChief(chief: BotRecord, bot: BotRecord, threadId: string): boolean {
+    if (deps.recoveryRefusal?.(bot.id, threadId)) return false;
     const routing = deps.routing;
     if (deps.confined?.(threadId)) return false;
     return routing ? routing.askedPerson(bot.id, threadId) === routing.personOf(chief) : deps.privateThread?.(threadId) !== true;

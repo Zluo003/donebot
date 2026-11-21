@@ -77,6 +77,7 @@ import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./donebot/team-runtime.ts";
+import { bindTeamTurn } from "./donebot/team-requests.ts";
 import { effectiveCloudBackend } from "../shared/cloud-backend.ts";
 import { createExternalContext } from "./host/external-context.ts";
 import { createHandoffAttachments, withHandoffAttachments } from "./host/handoff-attachments.ts";
@@ -884,18 +885,13 @@ function messageSender(auth: RequestAuth): ResolvedSender | undefined {
   return actor && donebotHost.team ? donebotHost.team.requests.sender(sender, actor) : sender;
 }
 
-function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string; continuation?: { runId: string; operation: string }; checkBack?: Readonly<CheckBackRecord>; goal?: { runId: string; step: number } }) {
+function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string; cardContinuation?: boolean; continuation?: { runId: string; operation: string }; checkBack?: Readonly<CheckBackRecord>; goal?: { runId: string; step: number } }) {
   const team = donebotHost.team;
   if (!team) return undefined;
   const generation = team.coordinator().generation, audience = teamHost.audienceOf(input.threadId);
-  if (input.checkBack) return team.requests.checkBack({ record: input.checkBack, audience, generation });
-  if (input.continuation) return team.requests.continueRun({ ...input.continuation, botId: input.botId, threadId: input.threadId, audience, generation });
-  if (input.goal && !input.workId) return team.requests.goalStep({ ...input.goal, sourceId: input.sourceId ?? "", botId: input.botId, threadId: input.threadId, audience, generation });
   const node = input.workId ? coordinator.node(input.workId) : undefined;
   if (input.workId && (!node || node.botId !== input.botId || node.threadId !== input.threadId)) throw new Error("团队任务的原始执行记录不可用。");
-  const binding = node ? team.requests.coordinated({ ...node, audience, generation })
-    : team.requests.bind({ sourceId: input.sourceId ?? "", sourceIds: input.sourceIds, botId: input.botId, threadId: input.threadId, audience, generation });
-  return input.operation ? team.requests.derive(binding.id, input.operation) : binding;
+  return bindTeamTurn(team.requests, { ...input, work: node, audience, generation });
 }
 
 /** On a Team Cloud, whose conversation this is: the member's own, or the routine run's writer. */
@@ -7057,6 +7053,7 @@ function runtimeWorkPending(threadId: string): boolean {
 
 const { reportIncident, incidentRefused, retryThread } = createChiefNotices({
   store, notify, threadBusy, botAtThreadCapacity, startTurn, quietThread: (_botId, threadId) => proactive.fence.confines(threadId) || botApiThread(threadId), privateThread: (threadId) => teamHost.ownTurn(threadId), confined: cloudGuestDriven, threadLanguage,
+  recoveryRefusal: () => donebotHost.team ? "团队任务须先核对原模型请求的状态，不能通过故障恢复重新提交可能已计费的调用。" : null,
   assignerOf: (threadId) => coordinator.assignerOf(threadId),
   threadSettling: (threadId) => settlingTurns.has(threadId), threadQueued: (botId, threadId) => queuedThreadPosition(botId, threadId) !== null,
   groupTurnActive: (botId) => Boolean(activeGroupTurnForBot(botId)),
@@ -7774,7 +7771,7 @@ async function beginTurn(
   const agentsMounted = instance.adapter.capabilities.agentsMcp === true;
   if (opts?.compactOnly && donebotHost.team) donebotHost.team.requests.captureAction(threadId, userMessage.id, opts.sender);
   const teamExecution = teamTurnBinding({ sourceId: opts?.cardContinuation && !opts.compactOnly ? opts.requestMessageId : userMessage.id, sourceIds: opts?.excludeMessageIds,
-    botId: bot.id, threadId, workId: opts?.coordination?.id, continuation: opts?.teamContinuation, checkBack: opts?.teamCheckBack,
+    botId: bot.id, threadId, workId: opts?.coordination?.id, cardContinuation: opts?.cardContinuation && !opts.compactOnly, continuation: opts?.teamContinuation, checkBack: opts?.teamCheckBack,
     ...(opts?.goalRunId ? { goal: { runId: opts.goalRunId, step: opts.goalStep ?? 0 } } : {}) });
 
   const dispatchClaimId = randomUUID();

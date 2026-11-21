@@ -25,6 +25,27 @@ export type TeamRequestBinding = z.infer<typeof bindingSchema>;
 /** A reference to harness-owned provenance, never a credential or client-selected billing identity. */
 export interface TeamModelRequestContext { bindingId: string; botId: string; threadId: string; ordinal: number }
 
+export interface TeamTurnBindingInput {
+  botId: string; threadId: string; audience: Audience; generation: number;
+  sourceId?: string; sourceIds?: string[]; operation?: string; cardContinuation?: boolean;
+  work?: { id: string; botId: string; threadId: string; executions: number; restarts: number };
+  continuation?: { runId: string; operation: string };
+  checkBack?: Readonly<CheckBackRecord>;
+  goal?: { runId: string; step: number };
+}
+
+export function bindTeamTurn(requests: TeamRequestStore, input: TeamTurnBindingInput): TeamRequestBinding {
+  const { botId, threadId, audience, generation } = input;
+  if (input.work && (input.work.botId !== botId || input.work.threadId !== threadId)) invalid();
+  if (input.checkBack) return requests.checkBack({ record: input.checkBack, audience, generation });
+  if (input.continuation) return requests.continueRun({ ...input.continuation, botId, threadId, audience, generation });
+  if (input.goal && !input.work) return requests.goalStep({ ...input.goal, sourceId: input.sourceId ?? "", botId, threadId, audience, generation });
+  if (input.cardContinuation && !input.work) throw new Error("团队续跑缺少原任务和独立步骤，不能重新提交原模型请求。");
+  const binding = input.work ? requests.coordinated({ ...input.work, audience, generation })
+    : requests.bind({ sourceId: input.sourceId ?? "", sourceIds: input.sourceIds, botId, threadId, audience, generation });
+  return input.operation ? requests.derive(binding.id, input.operation) : binding;
+}
+
 export function privateJson(path: string): unknown {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {

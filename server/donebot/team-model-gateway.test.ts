@@ -6,6 +6,9 @@ import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import type { WireMessage as Message } from "../../shared/wire.ts";
 import type { RuntimeEvent } from "../contracts.ts";
+import { Runtime } from "../runtime/runtime.ts";
+import { openRuntimeStore } from "../runtime/store.ts";
+import type { RunResult, TurnRunner } from "../runtime/types.ts";
 import { GROUP_GOAL_CONTROL_CLOSE, GROUP_GOAL_CONTROL_OPEN, type GoalRunEnd } from "../group-goal-run.ts";
 import { createGoalTurns } from "../host/goal-turns.ts";
 import { createOneOnOneGoals } from "../host/one-on-one-goals.ts";
@@ -16,7 +19,7 @@ import type { CheckBackLine } from "../../shared/check-back.ts";
 import { personKey } from "../person-key.ts";
 import { DoneBotTeamModelGateway, TeamModelRequestHeld } from "./team-model-gateway.ts";
 import { teamRuntimeActor, teamRuntimeConfiguration, teamRuntimeSession } from "./team-runtime.ts";
-import { TeamRequestStore } from "./team-requests.ts";
+import { bindTeamTurn, TeamRequestStore } from "./team-requests.ts";
 import { createDoneBotLlmDriver } from "./llm-driver.ts";
 import { doneBotProtocol, doneBotTextModels } from "./catalog.ts";
 
@@ -367,6 +370,80 @@ it("separates a computer-selection continuation from its first reply and never r
   await expect(restarted.request("/v1/chat/completions", fx.init, { ...fx.context, bindingId: next.id })).rejects.toBeInstanceOf(TeamModelRequestHeld);
   expect(fx.count()).toBe(2);
   expect(fx.records.size).toBe(2);
+});
+
+it.each(["team", "private"] as const)("resumes a %s card for its original member once and holds the same paid step after a crash", async visibility => {
+  const fx = await fixture();
+  const audience = visibility === "team" ? "team" : `member:${fx.person}` as const;
+  const privateMessage = { ...fx.message, id: "private-card-source" };
+  if (visibility === "private") fx.gateway.requests.captureMessage(fx.binding.threadId, privateMessage);
+  const rootBinding = visibility === "team" ? fx.binding : fx.gateway.requests.bind({ sourceId: privateMessage.id, botId: fx.binding.botId,
+    threadId: fx.binding.threadId, audience, generation: 1 });
+  const observed: Array<{ id: string; error?: unknown }> = [];
+  const held: Array<(value: RunResult) => void> = [];
+  const boot = () => {
+    const gateway = fx.create(), store = openRuntimeStore(join(fx.directory, "runtime.db"));
+    const runner: TurnRunner = {
+      canStart: () => true, validate: () => undefined, park() {}, report() {}, changed() {},
+      names: () => ({ requester: "Original member", assignee: "Fixture" }),
+      run: async (node, input) => {
+        const binding = bindTeamTurn(gateway.requests, { botId: node.assignee.botId, threadId: node.assignee.destination.threadId,
+          audience, generation: 1, cardContinuation: true, work: { id: node.id, botId: node.assignee.botId,
+            threadId: node.assignee.destination.threadId, executions: node.executions, restarts: node.restarts } });
+        let error: unknown;
+        try {
+          const response = await gateway.request("/v1/chat/completions", { ...fx.init, body: JSON.stringify({ model: "deepseek-flash",
+            messages: [{ role: "user", content: `Continue after the card: ${input.answer}` }] }) }, { ...fx.context, bindingId: binding.id });
+          await response.text();
+        } catch (caught) { error = caught; }
+        observed.push({ id: binding.id, error });
+        return await new Promise<RunResult>(resolve => { held.push(resolve); });
+      },
+    };
+    const runtime = new Runtime(store, runner);
+    runtime.open();
+    let closed = false;
+    const close = async () => { if (!closed) { closed = true; runtime.close(); store.close(); } };
+    cleanups.push(close);
+    return { gateway, runtime, store, close };
+  };
+  const first = boot();
+  const node = first.runtime.begin({ id: "card-root", origin: { kind: "person", source: "chat", onBehalfOf: fx.person },
+    requester: { kind: "person", threadId: fx.binding.threadId }, assignee: { botId: fx.binding.botId,
+      destination: { kind: "standing_thread", threadId: fx.binding.threadId } }, brief: "Read mail", level: "ask" });
+  first.gateway.requests.attachRun(node.id, rootBinding.id);
+  await (await first.gateway.request("/v1/chat/completions", fx.init, { ...fx.context, bindingId: rootBinding.id })).text();
+  first.runtime.end(node.id, { ok: true, text: "Waiting for connection", needsInput: { question: "Connect mail", cards: ["old-card"] } });
+  first.runtime.followCard(node.id, "old-card", "current-card");
+  await first.close();
+  const second = boot();
+  const other = second.gateway.requests.sender({ id: "other-member", name: "Answering admin" }, { userId: "4", memberVersion: 9, person: "other-member" });
+  second.gateway.requests.captureMessage(fx.binding.threadId, { ...fx.message, id: "later-message", sender: other });
+  expect(second.store.get(node.id)).toMatchObject({ status: "needs_input", cards: ["current-card"] });
+  const answer = (card: string) => {
+    const owner = second.store.all().find(value => value.status === "needs_input" && value.cards?.includes(card));
+    return owner ? second.runtime.answer(owner.id, "Mail connected") : false;
+  };
+  expect(answer("old-card")).toBe(false);
+  expect(Array.from({ length: 8 }, () => answer("current-card")).filter(Boolean)).toHaveLength(1);
+  fx.modes({ modelDrop: true });
+  second.runtime.tick();
+  await expect.poll(() => observed.length).toBe(1);
+  expect(observed[0]!.id).not.toBe(rootBinding.id);
+  expect(observed[0]!.error).toBeDefined();
+  expect(fx.count()).toBe(2);
+  await second.close();
+  const third = boot();
+  third.runtime.tick();
+  await expect.poll(() => observed.length).toBe(2);
+  expect(observed[1]).toMatchObject({ id: observed[0]!.id, error: expect.any(TeamModelRequestHeld) });
+  expect(fx.count()).toBe(2);
+  expect(fx.records.size).toBe(2);
+  expect(third.runtime.answer(node.id, "Repeated receipt")).toBe(false);
+  for (const record of fx.records.values()) expect(record.body).toMatchObject({ actor_id: fx.actor.userId,
+    member_version: fx.actor.memberVersion, private: visibility === "private" });
+  held.at(-1)!({ kind: "failed", outcome: "provider_error", text: "Reconcile the original execution" });
+  await expect.poll(() => third.store.get(node.id)?.status).toBe("failed");
 });
 
 it("wakes private check-backs after restart for their original member and lets that exact turn schedule the next", async () => {

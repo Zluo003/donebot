@@ -70,6 +70,37 @@ const CRASH = "claude exited 3 before result: fake-claude: simulated crash befor
 const DENIED = "One or more tool operations failed or were denied. See the tool results; the final response is not an execution receipt.";
 const RETRIED = "DoneBot already retried this run once by itself; the failure above is how that retry ended.";
 
+describe("model work that must reconcile its original execution", () => {
+  const reason = "Query the original team execution before any new model request.";
+
+  it.each([CRASH, "spawn failed: EAGAIN", "Ran out of room, so I closed the browser to keep everything else running."])("only notifies the person after %s", async detail => {
+    const notify = vi.fn(), continueRequest = vi.fn(), later = vi.fn(), schedule = vi.fn();
+    const f = fixture({ recoveryRefusal: () => reason, notify, continueRequest, later, schedule, selfHosted: () => true });
+    f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail });
+    expect(notify).toHaveBeenCalledOnce();
+    expect(f.startTurn).not.toHaveBeenCalled();
+    expect(continueRequest).not.toHaveBeenCalled();
+    expect(later).not.toHaveBeenCalled();
+    expect(schedule).not.toHaveBeenCalled();
+    await expect(f.notices.retryThread({ chief: f.chief as never, bot: f.ada as never, threadId: "ada-job", unattended: true })).rejects.toThrow(reason);
+    expect(f.startTurn).not.toHaveBeenCalled();
+    expect(f.notices.retryRefusal("ada", "ada-job")).toBe(reason);
+  });
+
+  it("rechecks recovery permission before a delayed memory restart", () => {
+    let refusal: string | null = null;
+    const waiting: Array<() => void> = [], notify = vi.fn(), continueRequest = vi.fn();
+    const f = fixture({ recoveryRefusal: () => refusal, notify, continueRequest, later: run => { waiting.push(run); }, selfHosted: () => true });
+    f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: "spawn failed: EAGAIN" });
+    expect(waiting).toHaveLength(1);
+    refusal = reason;
+    waiting.shift()!();
+    expect(continueRequest).not.toHaveBeenCalled();
+    expect(f.startTurn).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledOnce();
+  });
+});
+
 describe("DoneBot's one automatic retry of a teammate's failed thread", () => {
   it("runs the thread once more before its Chief hears, then tells the Chief how that retry ended, and never retries the retry", () => {
     const f = fixture();

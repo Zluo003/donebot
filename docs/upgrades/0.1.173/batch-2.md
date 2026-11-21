@@ -54,3 +54,9 @@ worker 和 agent 须显式启用 `CLOUD_TEAMS_ENABLED=1`，并固定网关公钥
 网关迁移 275 为各团队绑定独立内部计费 Key，付款账号由有效 Owner 记录导出。普通 Key 接口不能鉴权、读取或修改该凭据，停用后不自动重建。成员和协调器各有独立目录接口，复用既有启用模型及人民币定价，并使用团队目录范围；不返回 Owner 个人余额或凭据。真实 HTTP 撤权与 PostgreSQL 并发、不可变归属验证通过，日志为 `/tmp/donebot-team-models-http.log`、`/tmp/donebot-team-billing-pg.log`、`/tmp/donebot-team-billing-tests.log`；全部 Go 包编译通过。
 
 此项尚未打通供应商派发、实际扣费或运行服务目录消费，团队执行及账单隔离不得宣称完成；能力继续关闭。
+
+## 原生模型请求受理基础（2026-11-21）
+
+网关迁移 276 固定执行到内部计费 Key 的绑定。短期令牌只用于经过协调器批准的原生 LLM 请求，在路由改写前核验完整方法、URI 和正文；标准余额、白名单和思考参数检查后事务受理。执行 ID 固定回执及计费幂等 ID，已受理或不确定请求返回原记录，重试不再次派发。个人 Account 汇总排除团队消费，协调器只查询该团队执行的用量。申请须带原始成员及设备授权版本。
+
+真实 HTTP/一次性 PostgreSQL/race、真实 Key 鉴权及扣费仓库验证通过：八路重放仅一次模拟供应商调用，Owner 扣费一次，成员余额不变，重启及撤权不重派。日志 `/tmp/donebot-team-model-current-grants.log`、`/tmp/donebot-team-model-finance.log`、`/tmp/donebot-team-model-boundaries.log`；全部 Go 包编译通过。模拟处理器并未覆盖生产供应商全链，运行服务真实会话接入、媒体、终态和 Linux 隔离仍未完成。额外执行开关默认关闭，identity 以外能力仍不声明。

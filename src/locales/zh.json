@@ -7975,5 +7975,13 @@
   "settings.vault.bitwarden.address": "服务器地址",
   "settings.vault.bitwarden.password": "主密码",
   "settings.vault.bitwarden.note": "加密保存在当前运行的电脑上，不会再次显示。登录信息会出现在上方列表中；修改请在 Bitwarden 中进行。",
-  "settings.vault.bitwarden.error": "无法连接 Bitwarden，请重试。"
+  "settings.vault.bitwarden.error": "无法连接 Bitwarden，请重试。",
+  "templates.chooseTemplateFolder": "选择模板文件夹",
+  "templates.folderTooLarge": "模板文件夹的文件过多或总大小超过 5 MB。",
+  "templates.folderInvalid": "模板文件夹包含冲突的文件名。",
+  "templates.useConnectedGithub": "使用已连接的 GitHub 账号（私有仓库）",
+  "templates.githubAccount": "GitHub 账号",
+  "templates.chooseGithubAccount": "选择 GitHub 账号",
+  "templates.connectGithubFirst": "请先在应用中连接 GitHub，再重新开启此选项刷新账号。",
+  "templates.githubTemplateHint": "粘贴 HTTPS GitHub 仓库、文件夹或模板链接。私有仓库请在下方选择已连接的账号。"
 }

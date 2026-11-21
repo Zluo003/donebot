@@ -10189,5 +10189,13 @@
   "settings.vault.bitwarden.address": "伺服器位址",
   "settings.vault.bitwarden.password": "主密碼",
   "settings.vault.bitwarden.note": "加密儲存在目前執行的電腦上，不會再次顯示。登入資訊會出現在上方清單中；修改請在 Bitwarden 中進行。",
-  "settings.vault.bitwarden.error": "無法連線 Bitwarden，請重試。"
+  "settings.vault.bitwarden.error": "無法連線 Bitwarden，請重試。",
+  "templates.chooseTemplateFolder": "選擇範本資料夾",
+  "templates.folderTooLarge": "範本資料夾的檔案過多或總大小超過 5 MB。",
+  "templates.folderInvalid": "範本資料夾包含衝突的檔案名稱。",
+  "templates.useConnectedGithub": "使用已連線的 GitHub 帳號（私人儲存庫）",
+  "templates.githubAccount": "GitHub 帳號",
+  "templates.chooseGithubAccount": "選擇 GitHub 帳號",
+  "templates.connectGithubFirst": "請先在應用程式中連線 GitHub，再重新開啟此選項重新整理帳號。",
+  "templates.githubTemplateHint": "貼上 HTTPS GitHub 儲存庫、資料夾或範本連結。私人儲存庫請在下方選擇已連線的帳號。"
 }

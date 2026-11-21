@@ -59,7 +59,9 @@ function body(req: IncomingMessage): Promise<Buffer> {
   });
 }
 
-export async function startBrokerFake(): Promise<BrokerFake> {
+export async function startBrokerFake(options: {
+  mcpAnswer?(user: string, params: Record<string, unknown>): unknown | Promise<unknown>;
+} = {}): Promise<BrokerFake> {
   const mod = await import(/* @vite-ignore */ HARNESS) as HarnessModule;
   const harness = mod.brokerHarness();
   const realFetch = globalThis.fetch;
@@ -91,6 +93,8 @@ export async function startBrokerFake(): Promise<BrokerFake> {
       const slugs = Array.isArray(rpc.params?.arguments?.tools) ? rpc.params.arguments.tools.map((item) => String(item?.tool_slug ?? "")) : [];
       mcpCalls.push({ user, method: rpc.method ?? "", ...(rpc.params?.name ? { tool: rpc.params.name } : {}), ...(slugs.length ? { slugs } : {}) });
       const reply = (result: unknown) => Response.json({ jsonrpc: "2.0", id: rpc.id ?? null, result }, { headers: { "mcp-session-id": `mcp-${user}` } });
+      const custom = rpc.method === "tools/call" && options.mcpAnswer ? await options.mcpAnswer(user, rpc.params ?? {}) : undefined;
+      if (custom !== undefined) return reply(custom);
       const calendar = rpc.method === "tools/call" ? calendarAnswer(user, rpc.params) : undefined;
       if (calendar) return reply(calendar);
       if (rpc.method === "tools/call") return reply({ content: [{ type: "text", text: JSON.stringify({ tool: rpc.params?.name, user, accounts: activeAccounts(user).map((account) => account.id) }) }] });

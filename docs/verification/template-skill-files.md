@@ -13,4 +13,4 @@ HTTP 工作流通过 `launchVerificationServer` 和 `runControlOmb` 验证：危
 
 每技能最多 30 个附带文件，每文件 128 KiB、合计 512 KiB，只接受 UTF-8 文本。隐藏文件、生成目录、凭据文件、二进制、大小写/Unicode/文件夹前缀冲突拒绝进入安装包。导出只读取原清单和摘要验证通过的文件；代码参加危险指令扫描，但不使用会改写代码的普通文本脱敏。应用内置技能和引擎原生/项目技能不打包。
 
-此切片接入既有 JSON/Markdown 文件模板通道；原模板菜单仍按 DoneBot 配置关闭。原组织带签章安装通道不能携带脚本，明确拒绝而非遗漏；未接入 enterprise、私有 GitHub 或新文件夹模板系统。真实 Windows、物理手机和 Cloud 团队共享库仍待后续批次验收。
+此切片接入既有 JSON/Markdown 文件模板通道；原模板菜单仍按 DoneBot 配置关闭。原组织带签章安装通道不能携带脚本，明确拒绝而非遗漏；未接入 enterprise；后续文件夹及私有 GitHub 读取见 [文件夹与私有 GitHub 模板](template-folders.md)。真实 Windows、物理手机和 Cloud 团队共享库仍待后续批次验收。

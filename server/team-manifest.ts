@@ -142,7 +142,8 @@ interface ExportableTeam {
 
 export function parseTeamManifest(value: TeamManifestV2): TeamManifestV2;
 export function parseTeamManifest(value: TeamManifestInput): ParsedTeamManifest;
-export function parseTeamManifest(value: TeamManifestInput): ParsedTeamManifest {
+export function parseTeamManifest(value: unknown): ParsedTeamManifest;
+export function parseTeamManifest(value: unknown): ParsedTeamManifest {
   const parsed = manifestSchema.safeParse(value);
   if (!parsed.success) {
     const formatIssue = parsed.error.issues.find((issue) => issue.path[0] === "format");

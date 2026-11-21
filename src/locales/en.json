@@ -10493,5 +10493,13 @@
   "settings.vault.bitwarden.password": "Master password",
   "settings.vault.bitwarden.note": "Kept encrypted on the computer this runs on and never shown again. Bitwarden's logins appear in the list above, filled the same way, and are changed in Bitwarden.",
   "settings.vault.bitwarden.error": "Bitwarden could not be connected. Try again.",
-  "settings.logins.source.bitwarden": "From Bitwarden"
+  "settings.logins.source.bitwarden": "From Bitwarden",
+  "templates.chooseTemplateFolder": "Choose template folder",
+  "templates.folderTooLarge": "This template folder has too many files or is larger than 5 MB.",
+  "templates.folderInvalid": "This template folder contains conflicting file names.",
+  "templates.useConnectedGithub": "Use a connected GitHub account (private repositories)",
+  "templates.githubAccount": "GitHub account",
+  "templates.chooseGithubAccount": "Choose a GitHub account",
+  "templates.connectGithubFirst": "Connect GitHub in Apps, then reopen this option to refresh accounts.",
+  "templates.githubTemplateHint": "Paste an HTTPS GitHub repository, folder or template link. For private repositories, choose a connected account below."
 }

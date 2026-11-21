@@ -18,6 +18,7 @@ import { ShareTeamDialog } from "./ShareTeamDialog";
 import { OrgLibraryTab } from "./TeamLibraryPanelOrg";
 import { MAX_TEAM_BACKUP_BYTES } from "../../shared/team-backup";
 import { takeImportName } from "../../shared/import-name";
+import { readTemplateFolder } from "@/lib/template-folder";
 const COMMUNITY_TEAMS_REPOSITORY = "https://github.com/milind-soni/openmausbot-teams";
 
 export { TeamImportDetails };
@@ -98,6 +99,7 @@ export function TeamLibraryPanel({
   const { state, dispatch } = useStore();
   const dialogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<TeamTab>("explore");
   const [catalog, setCatalog] = useState<TeamCatalog | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -107,6 +109,10 @@ export function TeamLibraryPanel({
   const [source, setSource] = useState<ImportSource>("file");
   const [githubUrl, setGithubUrl] = useState("");
   const [githubLoading, setGithubLoading] = useState(false);
+  const [privateGithub, setPrivateGithub] = useState(false);
+  const [githubAccounts, setGithubAccounts] = useState<Array<{ id: string; alias?: string }>>([]);
+  const [githubAccount, setGithubAccount] = useState("");
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [search, setSearch] = useState("");
@@ -228,6 +234,27 @@ export function TeamLibraryPanel({
     previewManifest(teamImportPreview(manifest), "file");
   };
 
+  const readFolder = async (picked: readonly File[]) => {
+    const entries = await readTemplateFolder(picked);
+    const manifest = await api("/api/templates/folder", { method: "POST", body: JSON.stringify({ files: entries }) });
+    previewManifest(teamImportPreview(manifest), "file");
+  };
+
+  const choosePrivateGithub = async (enabled: boolean) => {
+    setPrivateGithub(enabled);
+    setGithubAccounts([]);
+    setGithubAccount("");
+    setError("");
+    if (!enabled) return;
+    setAccountsLoading(true);
+    try {
+      const result = await api("/api/templates/github/accounts") as { accounts: Array<{ id: string; alias?: string }> };
+      setGithubAccounts(result.accounts);
+      if (result.accounts.length === 1) setGithubAccount(result.accounts[0]!.id);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setAccountsLoading(false); }
+  };
+
   const loadLibraryTeam = async (entry: TeamCatalogEntry) => {
     setBusySlug(entry.slug);
     setError("");
@@ -249,9 +276,9 @@ export function TeamLibraryPanel({
     setGithubLoading(true);
     setError("");
     try {
-      const manifest = await api("/api/team-library/github", {
+      const manifest = await api("/api/templates/github", {
         method: "POST",
-        body: JSON.stringify({ url: requestedUrl.trim() }),
+        body: JSON.stringify({ url: requestedUrl.trim(), ...(privateGithub ? { private: true, account: githubAccount } : {}) }),
       });
       previewManifest(teamImportPreview(manifest), "github");
     } catch (cause) {
@@ -730,6 +757,14 @@ export function TeamLibraryPanel({
                       void readFile(file).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
                     }}
                   />
+                  <input ref={folderInputRef} type="file" multiple {...{ webkitdirectory: "" }} className="hidden" onChange={event => {
+                    const picked = Array.from(event.currentTarget.files ?? []);
+                    event.currentTarget.value = "";
+                    if (picked?.length) void readFolder(picked).catch(cause => setError(cause instanceof Error ? cause.message : String(cause)));
+                  }} />
+                  <button onClick={() => folderInputRef.current?.click()} className="mb-4 flex items-center gap-2 rounded-full bg-raised px-4 py-2.5 text-[13px] text-ink hover:bg-raised-hover">
+                    <FolderOpen size={16} />{t("templates.chooseTemplateFolder")}
+                  </button>
                   <div className="mb-3 text-[12px] font-medium text-ink-secondary">{t("templates.bringYourOwn")}</div>
                   <div className="grid gap-5 md:grid-cols-2">
                     <button
@@ -759,7 +794,7 @@ export function TeamLibraryPanel({
                     <div className="flex min-h-56 flex-col justify-center rounded-2xl bg-raised/25 px-6">
                       <Github size={25} className="text-ink-secondary" />
                       <h3 className="mt-3 text-[14px] font-medium text-ink">{t("templates.loadGithub")}</h3>
-                      <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("templates.githubHint")}</p>
+                      <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("templates.githubTemplateHint")}</p>
                       <div className="mt-4 flex gap-2">
                         <input
                           value={githubUrl}
@@ -771,13 +806,25 @@ export function TeamLibraryPanel({
                         />
                         <button
                           onClick={() => void loadGithubTeam()}
-                          disabled={!githubUrl.trim() || githubLoading}
+                          disabled={!githubUrl.trim() || githubLoading || accountsLoading || (privateGithub && !githubAccount)}
                           className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-[13px] font-medium text-white hover:bg-accent/90 disabled:opacity-40"
                         >
                           {githubLoading && <Loader2 size={13} className="animate-spin" />}
                           {t("templates.load")}
                         </button>
                       </div>
+                      <label className="mt-3 flex items-center gap-2 text-[13px] text-ink-secondary">
+                        <input type="checkbox" checked={privateGithub} disabled={accountsLoading || githubLoading} onChange={event => void choosePrivateGithub(event.target.checked)} />
+                        {t("templates.useConnectedGithub")}
+                      </label>
+                      {privateGithub && <label className="mt-3 block text-[13px] text-ink-secondary">
+                        {t("templates.githubAccount")}
+                        <select aria-label={t("templates.githubAccount")} value={githubAccount} disabled={accountsLoading || githubLoading} onChange={event => setGithubAccount(event.target.value)} className="mt-1 block w-full rounded-lg border border-border bg-card p-2 text-ink">
+                          <option value="">{accountsLoading ? t("templates.loadingShort") : t("templates.chooseGithubAccount")}</option>
+                          {githubAccounts.map(account => <option key={account.id} value={account.id}>{account.alias || account.id}</option>)}
+                        </select>
+                        {!accountsLoading && githubAccounts.length === 0 && <span className="mt-2 block">{t("templates.connectGithubFirst")}</span>}
+                      </label>}
                     </div>
                   </div>
                   {error && <div role="alert" className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</div>}

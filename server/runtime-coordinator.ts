@@ -384,6 +384,14 @@ export class RuntimeCoordinator implements Coordinator {
     if (this.store.get(id)?.status === "needs_input") this.runtime.cancel(id, reason, "stopped");
   }
 
+  rejectUnstarted(id: string, reason: string): boolean {
+    this.ready();
+    const node = this.store.get(id);
+    if (!node?.parentId || node.status !== "queued" || node.executions !== 0) return false;
+    this.runtime.cancel(id, reason, "failed");
+    return true;
+  }
+
   parkedFor(botId: string): HandoffView[] {
     this.ready();
     return this.live().filter(n => n.status === "needs_input" && n.assignee.botId === botId).map(n => this.project(n));

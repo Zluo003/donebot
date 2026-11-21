@@ -3,6 +3,7 @@
 import { newId } from "./contracts.ts";
 import { chatFollowups, saveChatFollowup, settleChatFollowups } from "./message-db.ts";
 import { drainCoalesceHead } from "./admission.ts";
+import { captureQueueProvenance, queueProvenanceKey } from "./queue-provenance.ts";
 import { spokenLineFields } from "./live-call-record.ts";
 import { workOriginSchema, type WorkOrigin } from "./peer-provenance.ts";
 import type { BotQueuedMessages, ResolvedSender, SteerQueueReason } from "../shared/wire.ts";
@@ -135,6 +136,7 @@ export function queueSteeredMessage(
     ...(options.rowId ? { rowId: options.rowId } : {}),
     ...(options.mentions?.length ? { mentions: options.mentions } : {}),
   };
+  captureQueueProvenance(threadId, id, options.sender);
   saveChatFollowup({ id, kind: "bot", ownerId: botId, threadId, payload: item });
   // `first`: ahead of everything queued but the person's own messages sent before it; with `aheadOfOthers` (the person
   // whose request runs, where several people write), ahead of everyone else's too.
@@ -201,7 +203,7 @@ export function drainSteeredMessages(
     if (bot.busy || isBlocked?.(entry.botId, threadId, entry.items[0])) continue;
     // isBlocked can re-enter this drain; if a nested drain took this entry, it is stale.
     if (queues.get(threadId) !== entry) continue;
-    const group = drainCoalesceHead(entry.items, coalesceIdentity, (item) => item.queuedAt);
+    const group = drainCoalesceHead(entry.items, item => JSON.stringify([coalesceIdentity(item), queueProvenanceKey(threadId, item.messageId)]), (item) => item.queuedAt);
     const ids = group.map((item) => item.messageId);
     settleChatFollowups(ids, "dispatching");
     const rest = entry.items.slice(group.length);

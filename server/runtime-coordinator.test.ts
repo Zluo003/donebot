@@ -84,6 +84,31 @@ const inRoom = (botId: string, groupId = "g1", threadId = "room-1"): RoomAddress
 const userOrigin = { kind: "user" as const, request: "Ship the CSV export" };
 const hold: Script = (node) => node.botId === "builder" ? "hold" : undefined;
 
+it("refuses only an unstarted handoff and preserves that refusal across recovery", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "coordinator-refuse-"));
+  const before = world(() => "hold", {}, dataDir);
+  let after: World | undefined;
+  try {
+    const rejected = send(before, chief, "root", undefined, builder, "work that could not save its authority").node;
+    const retained = send(before, chief, "root", undefined, tester, "unrelated work").node;
+    expect(before.coordinator.rejectUnstarted("missing", "unavailable")).toBe(false);
+    expect(before.coordinator.rejectUnstarted("root", "unavailable")).toBe(false);
+    expect(before.coordinator.rejectUnstarted(rejected.id, "authority could not be saved")).toBe(true);
+    expect(before.coordinator.rejectUnstarted(rejected.id, "second refusal")).toBe(false);
+    expect(before.coordinator.node(rejected.id)).toMatchObject({ status: "failed", executions: 0 });
+    expect(before.coordinator.node(retained.id)?.status).toBe("queued");
+    before.coordinator.close();
+    after = world(() => "hold", {}, dataDir);
+    after.coordinator.tick(); await flush();
+    expect(after.host.runs.map(run => run.node.id)).toEqual([retained.id]);
+    expect(after.coordinator.node(rejected.id)).toMatchObject({ status: "failed", executions: 0 });
+    expect(after.coordinator.rejectUnstarted(retained.id, "too late")).toBe(false);
+    expect(after.coordinator.node(retained.id)?.status).toBe("running");
+  } finally {
+    after?.coordinator.close(); before.coordinator.close(); removeTempDir(dataDir);
+  }
+});
+
 /** Like the host, begin each turn's root before it can hand work on, once per generation. */
 const begun = (w: World, source: RoomAddress, generation: string, sourceText = "Ship the CSV export", over: Partial<BeginTurnRequest> = {}) => {
   if (w.coordinator.has(generation)) return;

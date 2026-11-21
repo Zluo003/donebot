@@ -496,7 +496,7 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
       // Hold the queue atomically: the room's settle drains it or this request steers its head, never both.
       const held = holdChannelQueue(current.id, targetThreadId, m[2]);
       if (!held) return json(res, 404, { error: "no such queued message" });
-      const headGroup = headChannelGroup(held.items);
+      const headGroup = headChannelGroup(held.items, held.threadId);
       const [head] = headGroup;
       const waitsItsTurn = owners.joinRefusal(auth, targetThreadId, headGroup.map((item) => item.sender));
       if (waitsItsTurn) {

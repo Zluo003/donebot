@@ -14,7 +14,9 @@ const sourceSchema = z.object({ threadId: id, sourceId: id, actor: actorSchema }
 const bindingSchema = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/), teamId: z.uuid(), instanceId: z.uuid(), generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   sourceId: id, botId: id, threadId: id, audience: z.string().refine(value => parseAudience(value) !== null), actor: actorSchema,
+  parentId: z.string().regex(/^[a-f0-9]{64}$/).optional(), rootId: z.string().regex(/^[a-f0-9]{64}$/).optional(), operation: id.optional(),
 }).strict();
+const runSchema = z.object({ runId: id, bindingId: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 
 export type TeamRequestActor = z.infer<typeof actorSchema>;
 export type TeamRequestBinding = z.infer<typeof bindingSchema>;
@@ -66,6 +68,13 @@ export class TeamRequestStore {
     if (actor && sender?.id !== actor.person) invalid();
     if (actor) this.saveSource(threadId, queueId, actor);
   }
+  queueIdentity(threadId: string, queueId: string): string {
+    try {
+      const source = sourceSchema.parse(privateJson(this.sourcePath(threadId, queueId)));
+      if (source.threadId === threadId && source.sourceId === queueId) return JSON.stringify(source.actor);
+    } catch {}
+    return `unbound:${queueId}`;
+  }
   captureMessage(threadId: string, message: Message): void {
     if (message.role !== "user" || message.kind !== "text") return;
     if (message.queueId) {
@@ -92,7 +101,10 @@ export class TeamRequestStore {
     const bindingId = hash(JSON.stringify([this.runtime.team.id, input.botId, input.threadId, input.sourceId]));
     const binding = bindingSchema.parse({ id: bindingId, teamId: this.runtime.team.id, instanceId: this.runtime.instanceId,
       generation: input.generation, sourceId: input.sourceId, botId: input.botId, threadId: input.threadId, audience: input.audience, actor });
-    const path = join(this.folder, `binding-${bindingId}.json`);
+    return this.saveBinding(binding);
+  }
+  private saveBinding(binding: TeamRequestBinding): TeamRequestBinding {
+    const path = join(this.folder, `binding-${binding.id}.json`);
     try {
       const stored = bindingSchema.parse(privateJson(path));
       if (JSON.stringify(stored) !== JSON.stringify(binding)) invalid();
@@ -102,6 +114,57 @@ export class TeamRequestStore {
       writeFileAtomic(path, JSON.stringify(binding), { mode: 0o600 });
       return binding;
     }
+  }
+  attachRun(runId: string, bindingId: string): void {
+    this.binding(bindingId);
+    const run = runSchema.parse({ runId, bindingId }), path = join(this.folder, `run-${hash(runId)}.json`);
+    try {
+      const old = runSchema.parse(privateJson(path));
+      if (old.runId !== runId || old.bindingId !== bindingId) invalid();
+    } catch (error) {
+      if (!missing(error)) throw error;
+      writeFileAtomic(path, JSON.stringify(run), { mode: 0o600 });
+    }
+  }
+  forRun(runId: string): TeamRequestBinding {
+    id.parse(runId);
+    const run = runSchema.parse(privateJson(join(this.folder, `run-${hash(runId)}.json`)));
+    if (run.runId !== runId) invalid();
+    return this.binding(run.bindingId);
+  }
+  derive(bindingId: string, operation: string, target?: { botId: string; threadId: string; audience: Audience }): TeamRequestBinding {
+    const parent = this.binding(bindingId);
+    id.parse(operation);
+    const destination = target ?? { botId: parent.botId, threadId: parent.threadId, audience: parent.audience as Audience };
+    this.assertAudience(parent, destination.audience);
+    const binding = bindingSchema.parse({ ...parent, ...destination, parentId: parent.id, rootId: parent.rootId ?? parent.id, operation,
+      id: hash(JSON.stringify([this.runtime.team.id, "derived", parent.id, operation, destination.botId, destination.threadId, destination.audience])) });
+    return this.saveBinding(binding);
+  }
+  private assertAudience(parent: TeamRequestBinding, audience: Audience): void {
+    const privateTo = audienceMember(audience);
+    if (privateTo !== null && privateTo !== parent.actor.person || parent.audience !== "team" && parent.audience !== audience &&
+        (privateTo !== parent.actor.person || audienceMember(parent.audience as Audience) !== null)) invalid();
+  }
+  checkHandOn(runId: string, audience: Audience): void { this.assertAudience(this.forRun(runId), audience); }
+  handOn(runId: string, work: { id: string; botId: string; threadId: string }, audience: Audience, duplicate = false): void {
+    const parent = this.forRun(runId);
+    this.assertAudience(parent, audience);
+    if (duplicate) {
+      const existing = this.forRun(work.id);
+      if (existing.rootId !== (parent.rootId ?? parent.id) || existing.botId !== work.botId || existing.threadId !== work.threadId ||
+          existing.audience !== audience || existing.generation !== parent.generation || JSON.stringify(existing.actor) !== JSON.stringify(parent.actor)) invalid();
+      return;
+    }
+    const binding = this.derive(parent.id, `work:${work.id}`, { botId: work.botId, threadId: work.threadId, audience });
+    this.attachRun(work.id, binding.id);
+  }
+  coordinated(input: { id: string; botId: string; threadId: string; audience: Audience; generation: number; executions: number; restarts: number }): TeamRequestBinding {
+    const binding = this.forRun(input.id);
+    if (binding.botId !== input.botId || binding.threadId !== input.threadId || binding.audience !== input.audience || binding.generation !== input.generation ||
+        !Number.isSafeInteger(input.executions) || !Number.isSafeInteger(input.restarts) || input.restarts < 0 || input.executions <= input.restarts) invalid();
+    const step = input.executions - input.restarts;
+    return step === 1 ? binding : this.derive(binding.id, `step:${step}`);
   }
   binding(bindingId: string): TeamRequestBinding {
     if (!/^[a-f0-9]{64}$/.test(bindingId)) invalid();

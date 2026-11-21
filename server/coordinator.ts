@@ -208,6 +208,8 @@ export interface Coordinator {
   followCard(threadId: string, from: string, to: string): void;
   /** Nothing can answer what this parked work waits on any more: it ends, and whoever waits on it hears why. */
   releaseParked(id: string, reason: string): void;
+  /** Refuse exactly one newly queued handoff; an existing or started execution is left untouched. */
+  rejectUnstarted(id: string, reason: string): boolean;
   prune(before: number): number;
   sharedRequest(node: HandoffView): { id: string; botIds: string[] };
   cancelRoom(groupId: string, threadId?: string, reason?: string, status?: "failed" | "cancelled"): void;

@@ -167,6 +167,29 @@ it("fails closed for disabled execution, unbound background work, unsafe paths a
   expect(fx.records.size).toBe(0);
 });
 
+it("holds a delegated model request after restart and gives a genuine continuation its own immutable member request", async () => {
+  const fx = await fixture();
+  fx.gateway.requests.attachRun("root", fx.binding.id);
+  const work = { id: "delegated-run", botId: "builder", threadId: "builder-thread" };
+  fx.gateway.requests.handOn("root", work, "team");
+  const child = fx.gateway.requests.coordinated({ ...work, audience: "team", generation: 1, executions: 1, restarts: 0 });
+  const context = { bindingId: child.id, botId: work.botId, threadId: work.threadId, ordinal: 0 };
+  fx.modes({ modelDrop: true });
+  await expect(fx.gateway.request("/v1/chat/completions", fx.init, context)).rejects.toThrow();
+  expect(fx.count()).toBe(1);
+  const restarted = fx.create();
+  const rerun = restarted.requests.coordinated({ ...work, audience: "team", generation: 1, executions: 2, restarts: 1 });
+  expect(rerun).toEqual(child);
+  await expect(restarted.request("/v1/chat/completions", fx.init, { ...context, bindingId: rerun.id })).rejects.toBeInstanceOf(TeamModelRequestHeld);
+  expect(fx.count()).toBe(1);
+  const continuation = restarted.requests.coordinated({ ...work, audience: "team", generation: 1, executions: 3, restarts: 1 });
+  expect(continuation.id).not.toBe(child.id);
+  await (await restarted.request("/v1/chat/completions", fx.init, { ...context, bindingId: continuation.id })).body?.cancel();
+  expect(fx.count()).toBe(2);
+  expect(fx.records.size).toBe(2);
+  for (const record of fx.records.values()) expect(record.body).toMatchObject({ actor_id: fx.actor.userId, member_version: fx.actor.memberVersion, bot_id: work.botId, thread_id: work.threadId });
+});
+
 it("persists queued actors without refreshing versions and refuses forged sessions, senders or private audiences", async () => {
   const fx = await fixture();
   expect(teamRuntimeActor(fx.runtime, { ...fx.session })).toBeNull();

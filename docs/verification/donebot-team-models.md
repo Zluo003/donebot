@@ -5,6 +5,7 @@
 ```sh
 pnpm exec vitest run server/donebot/team-model-gateway.test.ts server/donebot/team-runtime.test.ts server/donebot/llm-driver.test.ts server/donebot/llm-protocol.test.ts server/donebot/gateway.test.ts server/workspace-backup-policy.test.ts
 pnpm exec vitest run server/workspace-backup.test.ts
+pnpm exec vitest run server/donebot/team-requests.test.ts server/donebot/team-model-gateway.test.ts server/channel-queue.test.ts server/steer-queue.test.ts server/drain-coalescing-golden.test.ts server/chat-followups.test.ts server/queue-dispatch-failure.test.ts server/runtime-coordinator.test.ts server/runtime/runtime.test.ts
 node --experimental-strip-types scripts/verify-donebot-teams.ts
 pnpm exec tsc --noEmit -p tsconfig.server.json
 pnpm lint
@@ -18,4 +19,10 @@ pnpm lint
 
 2026-11-21：六文件 149 项通过，日志 `/tmp/donebot-team-runtime-model-final.log`。备份完整测试原有 51 项通过、一项平台跳过，新增备份恢复断言修正后单独通过，日志 `/tmp/donebot-team-backup-authority.log`。服务端类型和 lint 通过；隔离 HTTP 流程日志 `/tmp/donebot-team-model-workflow.log`。
 
-群聊、委派、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
+群聊及委派的身份传递已接入：群聊保留原始用户消息，逐轮回复和目标步骤导出子操作；委派保留原成员、版本及受众，不能从私聊扩大到共享会话。协调器任务绑定不可改写，重复委派沿用原绑定。持久化身份失败时仅拒绝新入队且未执行的委派，不取消其他任务。
+
+直接和群聊队列在写入队列前保存私有成员来源，合并时同时核对成员及权限版本；恢复后仍按原顺序分别处理。真实临时 SQLite Runtime 跨两次崩溃验证 `executions - restarts`：崩溃重跑保留同一操作，回答问题、正常继续和子任务结果唤醒分别取得新操作。响应丢失后重跑只查原执行，模拟供应商计数不增加。
+
+2026-11-21：九文件 283 项通过，日志 `/tmp/donebot-team-lineage-final-tests.log`；新增仅拒绝未执行委派的恢复测试后，相关三文件 130 项通过，日志 `/tmp/donebot-team-lineage-admission.log`。最终服务端类型和 lint 通过，日志 `/tmp/donebot-team-lineage-final-{types,lint}.log`。这些是临时队列、真实磁盘协调器及合成原生网关测试，未证明真实 Linux 团队 HTTP 成功执行。
+
+卡片及桌面选择等独立续跑、辅助模型、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。

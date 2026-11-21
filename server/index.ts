@@ -269,9 +269,10 @@ import {
   queuedSteerSnapshot,
   queuedSteeredMessage,
   queuedThreadPosition,
-  queueSteeredMessage as upstreamQueueSteeredMessage,
+  queueSteeredMessage,
   restoreSteeredMessages,
 } from "./steer-queue.ts"; import { createDoneNotice } from "./done-notice.ts";
+import { useQueueProvenance } from "./queue-provenance.ts";
 import {
   drainChannelMessages,
   restoreChannelMessages,
@@ -816,6 +817,10 @@ let companionMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefine
 const FALLBACK_PUBLIC_URL = process.env.DONEBOT_PUBLIC_URL?.trim().replace(/\/+$/, "") || null; const tailnetShare = createTailnetShare({ port: PORT, handle: (req, res) => handleRequest(req, res), attach: (listener, handle) => upgrades.attach(listener, handle), log: (line) => console.log(line) });
 const cfg = loadConfig();
 const donebotHost = createDoneBotRuntimeHost(DATA_DIR, () => cfg, import.meta.url, DONEBOT_TEAM_RUNTIME); const donebotDesktop = createDoneBotDesktopHost(donebotHost.gateway);
+if (donebotHost.team) {
+  const requests = donebotHost.team.requests;
+  useQueueProvenance({ capture: (threadId, queueId, sender) => requests.captureQueue(threadId, queueId, sender), identity: (threadId, queueId) => requests.queueIdentity(threadId, queueId) });
+}
 const { gateway: donebot, enabled: DONEBOT_GATEWAY } = donebotHost;
 const hostedModels = DONEBOT_GATEWAY ? donebotHost.policy : hostedModelPolicy(DATA_DIR);
 const providerConfigs = () => hostedModels ? hostedModels.configs() : instanceConfigs(cfg);
@@ -874,10 +879,15 @@ function messageSender(auth: RequestAuth): ResolvedSender | undefined {
   return actor && donebotHost.team ? donebotHost.team.requests.sender(sender, actor) : sender;
 }
 
-function queueSteeredMessage(...args: Parameters<typeof upstreamQueueSteeredMessage>): ReturnType<typeof upstreamQueueSteeredMessage> {
-  const queued = upstreamQueueSteeredMessage(...args);
-  donebotHost.team?.requests.captureQueue(args[1], queued.id, args[3]?.sender);
-  return queued;
+function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string }) {
+  const team = donebotHost.team;
+  if (!team) return undefined;
+  const generation = team.coordinator().generation, audience = teamHost.audienceOf(input.threadId);
+  const node = input.workId ? coordinator.node(input.workId) : undefined;
+  if (input.workId && (!node || node.botId !== input.botId || node.threadId !== input.threadId)) throw new Error("团队任务的原始执行记录不可用。");
+  const binding = node ? team.requests.coordinated({ ...node, audience, generation })
+    : team.requests.bind({ sourceId: input.sourceId ?? "", sourceIds: input.sourceIds, botId: input.botId, threadId: input.threadId, audience, generation });
+  return input.operation ? team.requests.derive(binding.id, input.operation) : binding;
 }
 
 /** On a Team Cloud, whose conversation this is: the member's own, or the routine run's writer. */
@@ -3593,6 +3603,7 @@ type GroupTurnOperation = {
   line?: RoomRoundLine;
   /** The person's room line this run answers (its member turns, mentions included, act for whoever wrote it), or the handed-on work it does. */
   requestMessageId?: string; handedFor?: HandedRun;
+  teamSourceId?: string;
   goalRun?: LiveGoalRun;
 };
 
@@ -7740,10 +7751,11 @@ async function beginTurn(
   }
 
   const agentsMounted = instance.adapter.capabilities.agentsMcp === true;
-  const teamExecution = donebotHost.team ? donebotHost.team.requests.bind({ sourceId: (opts?.cardContinuation ? opts.requestMessageId : userMessage.id) ?? "", sourceIds: opts?.excludeMessageIds,
-    botId: bot.id, threadId, audience: teamHost.audienceOf(threadId), generation: donebotHost.team.coordinator().generation }) : undefined;
+  const teamExecution = teamTurnBinding({ sourceId: opts?.cardContinuation ? opts.requestMessageId : userMessage.id, sourceIds: opts?.excludeMessageIds,
+    botId: bot.id, threadId, workId: opts?.coordination?.id });
 
   const dispatchClaimId = randomUUID();
+  if (teamExecution) donebotHost.team!.requests.attachRun(dispatchClaimId, teamExecution.id);
   if (guestConfined) guestDrivenTurns.set(threadId, dispatchClaimId);
   if (guestConfined && personLine) outsideLineage.personLineConfined(threadId);
   const resourceOwner: TurnOwner = { threadId, generation: dispatchClaimId };
@@ -9645,6 +9657,7 @@ type GroupTurnOrchestration = {
   onTurnStarted?: (turnId: string) => void;
   coordination?: { id: string; settle: (outcome: HostTurnResult) => void };
   goalRunId?: string;
+  teamOperation?: string;
 };
 
 function teammateReportContext(requestId: string, readerBotId?: string): string {
@@ -9780,7 +9793,19 @@ async function runClaimedGroupMemberTurn(
     onDispatchError?.(message);
     return true;
   }
+  let teamExecution: ReturnType<typeof teamTurnBinding>;
+  try {
+    teamExecution = teamTurnBinding({ botId: bot.id, threadId, sourceId: operation?.teamSourceId ?? operation?.requestMessageId, sourceIds: operation?.queuedQueueIds,
+      workId: orchestration?.coordination?.id, operation: orchestration?.teamOperation ?? (!orchestration?.coordination ? `room:${hop}:${cardContinuation ? "summary" : "reply"}` : undefined) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "团队请求身份不可用。";
+    store.appendMessage(threadId, { role: "bot", kind: "activity", from: { botId: bot.id, name: bot.name, color: bot.color }, tool: failedTurnTool(message) });
+    if (orchestration) { orchestration.result.outcome = "dispatch_failed"; orchestration.result.stopReason = message; }
+    onDispatchError?.(message);
+    return false;
+  }
   const internalGeneration = beginInternalCapabilityGeneration(threadId);
+  if (teamExecution) donebotHost.team!.requests.attachRun(internalGeneration, teamExecution.id);
   if (orchestration?.roomHandoffId) gmailDrafts.forRoomTurn(internalGeneration, orchestration.roomHandoffId);
   if (operation) roomTurnStarted(internalGeneration, operation);
   if (roomGuestConfined) guestDrivenTurns.set(threadId, internalGeneration);
@@ -10407,6 +10432,7 @@ async function runClaimedGroupMemberTurn(
         ...roomSession.send,
         threadId,
         botId: readyBot.id,
+        ...(teamExecution ? { teamExecution: { bindingId: teamExecution.id } } : {}),
         text: roomSession.text,
         ...(roomRecalled ? { recalled: roomRecalled } : {}),
         images: turnImages,
@@ -10740,6 +10766,7 @@ async function runGroupGoalStep(args: {
           followMentions: false,
           result,
           goalRunId: run.runId,
+          teamOperation: `goal:${run.turnCount}`,
           onClaimed: () => {
             if (claimed) return;
             claimed = true;
@@ -10754,6 +10781,7 @@ async function runGroupGoalStep(args: {
             if (coordinatorTurn && !coordinatorTurn.turnId) coordinatorTurn.turnId = turnId;
           },
         },
+        args.operation,
       );
       // Busy here is a lost claim race, so retry in-step; a parked member is deliberately not retried.
       if (result.outcome === "busy") continue;
@@ -10969,6 +10997,7 @@ function startGroupTurn(
     threadId,
     goalCoordinator || autoRoute ? [] : responders.map((responder) => responder.id),
   );
+  if (donebotHost.team) operation.teamSourceId = message.id;
   // Only a person's own chat line; cloudHomeLendingRefusal still proves it is the owner's.
   if (!goalCoordinator && message.role === "user" && !message.via && (!options.trigger || options.trigger.kind === "user" || options.trigger.kind === "owner")) {
     operation.requestMessageId = message.id;
@@ -14024,10 +14053,17 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
             }
             const routed = lane ? { botId: target.botId, threadId: lane.threadId } : target;
             outsideLineage.carry(address.threadId, routed.threadId);
+            donebotHost.team?.requests.checkHandOn(internalCapability.generation, teamHost.audienceOf(routed.threadId));
             const { node, duplicate } = coordinator.enqueue(address, generation, internalCapability.roomHandoffId, routed, call.message, {
               mode, reply, thread: lane || fresh || steersOwn ? "new" : "standing", rework: call.rework, ...(lane ? {} : { requestBatchKey }), ...(fanOut ? { fanOut } : {}), ...(call.ownThread || steersOwn ? { ownThread: true } : {}),
               ...(call.doneWhen ? { doneWhen: call.doneWhen } : {}),
             });
+            try {
+              donebotHost.team?.requests.handOn(internalCapability.generation, node, teamHost.audienceOf(node.threadId), duplicate);
+            } catch (error) {
+              if (!duplicate) coordinator.rejectUnstarted(node.id, "团队委派的身份记录无法保存，任务未执行。");
+              throw error;
+            }
             usageTrace.link(node.id, node.parentId, { threadId: internalCapability.threadId, turnId: liveTurnByThread.get(internalCapability.threadId) ?? "" }); if (!duplicate) { actingPeople.handOn(internalCapability, node, lends); if (!lends && !room && !lane) handedInUnproven(routed.threadId); }
             if (!duplicate && call.files?.length) handoffFiles.sent(node.id, { botId: internalSender.id, name: internalSender.name }, call.files);
             if (duplicate && createdThread) store.deleteTask(target.botId, createdThread);

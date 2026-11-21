@@ -743,7 +743,9 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
   };
 
   const newBot = async (instanceId: string, name: string) => {
-    return (await api("POST", "/api/bots", { name, modelSelection: { instanceId, model: "fake-model" } })).body.bot;
+    const created = await api("POST", "/api/bots", { name, modelSelection: { instanceId, model: "fake-model" } });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    return created.body.bot;
   };
 
   beforeAll(async () => {
@@ -848,6 +850,8 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
       HOME: home,
       USERPROFILE: home,
       DONEBOT_PORT: String(port),
+      NODE_ENV: "test",
+      DONEBOT_UPSTREAM_FIXTURE: "1",
     };
     if (process.env.PATH) env.PATH = process.env.PATH;
     // Without SystemRoot, winsock fails to initialize in the child.

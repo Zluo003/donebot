@@ -6,6 +6,7 @@ import { chatFollowups, saveChatFollowup, settleChatFollowups } from "./message-
 import { drainCoalesceHead, DRAIN_COALESCE_MAX_ITEMS } from "./admission.ts";
 import type { ResolvedSender } from "../shared/wire.ts";
 import type { UsageTrigger } from "./usage-ledger.ts";
+import { captureQueueProvenance, queueProvenanceKey } from "./queue-provenance.ts";
 
 export interface ChannelQueueItem {
   id: string;
@@ -82,6 +83,7 @@ export function queueChannelMessage(
     ...(options.mentions?.length ? { mentions: options.mentions } : {}),
     queuedAt: Date.now(),
   };
+  captureQueueProvenance(threadId, item.id, options.sender);
   saveChatFollowup({ id: item.id, kind: "channel", ownerId: groupId, threadId, payload: item });
   entry.items.push(item);
   queues.set(threadId, entry);
@@ -162,7 +164,7 @@ export function resolveHeldReplyTarget<T>(
 
 /** A restart must not replay the steered words as a fresh follow-up. */
 export function settleHeldChannelQueueHead(held: HeldChannelQueue): void {
-  const head = headChannelGroup(held.items);
+  const head = headChannelGroup(held.items, held.threadId);
   const rest = held.items.slice(head.length);
   settleChatFollowups(head.map((item) => item.id), null);
   if (rest.length === 0) return;
@@ -185,7 +187,7 @@ export function drainChannelMessages(
       queues.delete(threadId);
       continue;
     }
-    const group = headChannelGroup(entry.items);
+    const group = headChannelGroup(entry.items, threadId);
     const ids = group.map((item) => item.id);
     settleChatFollowups(ids, "dispatching");
     entry.items.splice(0, group.length);
@@ -200,8 +202,8 @@ export function drainChannelMessages(
   }
 }
 
-export function headChannelGroup(items: readonly ChannelQueueItem[]): ChannelQueueItem[] {
-  return drainCoalesceHead(items, coalesceIdentity, (item) => item.queuedAt, DRAIN_COALESCE_MAX_ITEMS);
+export function headChannelGroup(items: readonly ChannelQueueItem[], threadId?: string): ChannelQueueItem[] {
+  return drainCoalesceHead(items, item => JSON.stringify([coalesceIdentity(item), queueProvenanceKey(threadId, item.id)]), (item) => item.queuedAt, DRAIN_COALESCE_MAX_ITEMS);
 }
 
 function coalesceIdentity(item: ChannelQueueItem): string {

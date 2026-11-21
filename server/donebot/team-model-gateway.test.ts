@@ -270,3 +270,19 @@ it("sends native text helpers with distinct member operations and holds an uncer
   expect(fx.records.size).toBe(3);
   for (const record of fx.records.values()) expect(record.body).toMatchObject({ actor_id: "3", member_version: 2, bot_id: fx.binding.botId, thread_id: fx.binding.threadId });
 });
+
+it("separates a computer-selection continuation from its first reply and never replays its uncertain response", async () => {
+  const fx = await fixture();
+  fx.gateway.requests.attachRun("selecting-turn", fx.binding.id);
+  await (await fx.gateway.request("/v1/chat/completions", fx.init, fx.context)).body?.cancel();
+  const input = { runId: "selecting-turn", botId: fx.binding.botId, threadId: fx.binding.threadId, audience: fx.binding.audience as "team", generation: 1, operation: "computer-selection:browser" };
+  const next = fx.gateway.requests.continueRun(input);
+  fx.modes({ modelDrop: true });
+  await expect(fx.gateway.request("/v1/chat/completions", fx.init, { ...fx.context, bindingId: next.id })).rejects.toThrow();
+  expect(fx.count()).toBe(2);
+  const restarted = fx.create();
+  expect(restarted.requests.continueRun(input)).toEqual(next);
+  await expect(restarted.request("/v1/chat/completions", fx.init, { ...fx.context, bindingId: next.id })).rejects.toBeInstanceOf(TeamModelRequestHeld);
+  expect(fx.count()).toBe(2);
+  expect(fx.records.size).toBe(2);
+});

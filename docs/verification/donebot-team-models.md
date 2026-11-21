@@ -29,7 +29,9 @@ pnpm lint
 
 2026-11-21：相关六文件 114 项通过，日志 `/tmp/donebot-team-helper-final-units.log`；真实原生驱动连接 loopback 合成网关，验证原成员版本、正文摘要及响应丢失后供应商计数不增加。个人隔离服务的完整压缩流程 11 项通过，日志 `/tmp/donebot-team-helper-compaction-workflow.log`，包含停止、重启、分支和附件保留。服务端类型及定向 lint 通过，日志 `/tmp/donebot-team-helper-final-{types,lint}.log`。这不等于真实团队 HTTP 成功执行，Linux 隔离阻塞仍存在。
 
-卡片及桌面选择等独立续跑、其他辅助模型、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
+桌面选择续跑从实际先前派发编号导出独立操作，严格匹配 Bot、会话、受众和运行代次。合成网关验证主回复与续跑分别受理，续跑响应丢失后查询不重提。三文件 135 项通过，日志 `/tmp/donebot-team-continuation-units.log`；个人隔离服务桌面选择 6 项通过、41 项按名称未运行，日志 `/tmp/donebot-team-continuation-workflow-final.log`，包含停止、失败、关闭、手动选择和新消息压过旧续跑。该上游夹具最初误入真实网关模式，已限定 `NODE_ENV=test` 和 `DONEBOT_UPSTREAM_FIXTURE=1`，未改变产品网关限制。类型及定向 lint 通过，日志 `/tmp/donebot-team-continuation-{types,lint}.log`。未证明真实 Linux 团队成功执行。
+
+其他卡片续跑、辅助模型、自动化、媒体、终态及生产供应商用量链、跨成员本机和真实 Linux 恶意隔离尚未完成；不得由这些测试推断可上线。
 
 ## 真实 Linux 镜像复测
 

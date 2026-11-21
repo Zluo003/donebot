@@ -107,6 +107,22 @@ it("records an authenticated control action under its actual member without inhe
   expect(() => fx.requests.captureAction("source-thread", "compact-action", fx.requests.sender({ id: fx.actor.person, name: "Original" }, fx.actor))).toThrow();
 });
 
+it("continues the exact dispatched operation once per event without changing its member or audience", () => {
+  const fx = fixture(), root = fx.bind("private", "member:member-three");
+  fx.requests.attachRun("native-turn", root.id);
+  const input = { runId: "native-turn", botId: root.botId, threadId: root.threadId, audience: root.audience as Audience, generation: 1, operation: "computer-selection:browser" };
+  const continued = fx.requests.continueRun(input);
+  expect(continued).toMatchObject({ actor: fx.actor, audience: root.audience, parentId: root.id, operation: "continue:computer-selection:browser" });
+  expect(continued.id).not.toBe(root.id);
+  const restarted = new TeamRequestStore(fx.directory, fx.runtime);
+  expect(restarted.continueRun(input)).toEqual(continued);
+  for (const altered of [{ ...input, runId: "unknown" }, { ...input, botId: "other" }, { ...input, threadId: "other" }, { ...input, generation: 2 }, { ...input, audience: "team" as const }]) {
+    expect(() => restarted.continueRun(altered)).toThrow();
+  }
+  fx.requests.attachRun("continued-turn", continued.id);
+  expect(fx.requests.continueRun({ ...input, runId: "continued-turn" }).id).not.toBe(continued.id);
+});
+
 it.each(["direct", "room"] as const)("captures %s queued members before persistence and keeps permission versions separate after restart", async kind => {
   const fx = fixture();
   let requests = fx.requests;

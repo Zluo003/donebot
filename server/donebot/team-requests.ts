@@ -171,6 +171,11 @@ export class TeamRequestStore {
     const step = input.executions - input.restarts;
     return step === 1 ? binding : this.derive(binding.id, `step:${step}`);
   }
+  continueRun(input: { runId: string; botId: string; threadId: string; audience: Audience; generation: number; operation: string }): TeamRequestBinding {
+    const parent = this.forRun(input.runId);
+    if (parent.botId !== input.botId || parent.threadId !== input.threadId || parent.audience !== input.audience || parent.generation !== input.generation) invalid();
+    return this.derive(parent.id, `continue:${input.operation}`);
+  }
   helper(input: { runId: string; botId: string; threadId: string; operation: string }): TeamModelRequestContext {
     const parent = this.forRun(input.runId);
     if (parent.botId !== input.botId || parent.threadId !== input.threadId) invalid();

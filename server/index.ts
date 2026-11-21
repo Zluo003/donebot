@@ -879,10 +879,11 @@ function messageSender(auth: RequestAuth): ResolvedSender | undefined {
   return actor && donebotHost.team ? donebotHost.team.requests.sender(sender, actor) : sender;
 }
 
-function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string }) {
+function teamTurnBinding(input: { botId: string; threadId: string; sourceId?: string; sourceIds?: string[]; workId?: string; operation?: string; continuation?: { runId: string; operation: string } }) {
   const team = donebotHost.team;
   if (!team) return undefined;
   const generation = team.coordinator().generation, audience = teamHost.audienceOf(input.threadId);
+  if (input.continuation) return team.requests.continueRun({ ...input.continuation, botId: input.botId, threadId: input.threadId, audience, generation });
   const node = input.workId ? coordinator.node(input.workId) : undefined;
   if (input.workId && (!node || node.botId !== input.botId || node.threadId !== input.threadId)) throw new Error("团队任务的原始执行记录不可用。");
   const binding = node ? team.requests.coordinated({ ...node, audience, generation })
@@ -6239,7 +6240,8 @@ function continueComputerSelection(threadId: string, generation: string | undefi
     if (selection.source && store.activePath(threadId).findLast(message => message.role === "user" && message.kind === "text")?.id !== selection.source.id) return;
     store.patchTask(bot.id, threadId, { surface, surfaceSource: "auto" });
     const text = `The computer selection is now ${surfaceLabel(surface)}. Continue the ${selection.handoff ? "handed-off" : "user's original"} request using the tools mounted for this turn; verify the result before claiming success.\n\n${selection.text}`;
-    if (selection.handoff) directCoordinationSettlers.delete(generation!); /* the continuing turn owns the hand-off's result */ void startTurn(bot.id, text, selection.handoff ? { ...selection.handoff.opts, threadId, computerSelectionContinuation: true } : { threadId, userMessage: selection.source, computerSelectionContinuation: true, dataContext: selection.dataContext }).catch(error => {
+    const teamContinuation = { runId: selection.generation, operation: `computer-selection:${surface}` };
+    if (selection.handoff) directCoordinationSettlers.delete(generation!); /* the continuing turn owns the hand-off's result */ void startTurn(bot.id, text, selection.handoff ? { ...selection.handoff.opts, threadId, computerSelectionContinuation: true, teamContinuation } : { threadId, userMessage: selection.source, computerSelectionContinuation: true, dataContext: selection.dataContext, teamContinuation }).catch(error => {
       const why = `Could not continue on ${surfaceLabel(surface)}: ${error instanceof Error ? error.message : String(error)}`; selection.handoff?.opts?.coordination?.settle({ ok: false, text: why });
       if (store.taskByThread(bot.id, threadId)) store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: why, ok: false } }); });
   });
@@ -7583,6 +7585,8 @@ async function beginTurn(
     requestMessageId?: string;
     origin?: WorkOrigin;
     computerSelectionContinuation?: boolean;
+    /** Harness-owned event in a previously verified run; never accepted from public requests. */
+    teamContinuation?: { runId: string; operation: string };
     replyTo?: ReplyTarget;
     sendId?: string;
     via?: "call"; callId?: string;
@@ -7760,7 +7764,7 @@ async function beginTurn(
   const agentsMounted = instance.adapter.capabilities.agentsMcp === true;
   if (opts?.compactOnly && donebotHost.team) donebotHost.team.requests.captureAction(threadId, userMessage.id, opts.sender);
   const teamExecution = teamTurnBinding({ sourceId: opts?.cardContinuation && !opts.compactOnly ? opts.requestMessageId : userMessage.id, sourceIds: opts?.excludeMessageIds,
-    botId: bot.id, threadId, workId: opts?.coordination?.id });
+    botId: bot.id, threadId, workId: opts?.coordination?.id, continuation: opts?.teamContinuation });
 
   const dispatchClaimId = randomUUID();
   if (teamExecution) donebotHost.team!.requests.attachRun(dispatchClaimId, teamExecution.id);

@@ -34,3 +34,17 @@ worker 和 agent 须显式启用 `CLOUD_TEAMS_ENABLED=1`，并固定网关公钥
 - `/tmp/donebot-team-isolation-workflow.log`：两个临时 home/data 的真实 DoneBot 服务通过身份、角色和接口验证；本机不具备 Linux 隔离时，实际发送请求返回 503，未启动 fake engine。该项证明拒绝执行，不证明 Linux 隔离已经通过。
 
 此时仍只协商 `identity`，不开放 `cloud_access`。团队网关执行凭据、付款归属、客户端工作空间切换、跨设备执行和真实 Linux 恶意探测尚未完成，不得开启团队正式入口。当前本机 Docker daemon 未启动；真实镜像验证仍属后续验收。
+
+## 团队设备与执行授权基础（2026-11-21）
+
+网关迁移 273 固定任务付款人、发起和执行成员、设备、授权版本、会话受众及请求哈希；五分钟令牌只存哈希。设备仅持有人启用，授权管理员可以撤销。心跳通过真实安装凭据识别设备，个人余额为零仍可报告；改名保留在线状态，禁用后重新启用不能恢复旧授权。八路并发受理仅一次，uncertain 和完成状态不能再次派发。仅有可信服务方法，没有向客户端开放任意发行授权的接口。
+
+一次性 PostgreSQL、真实 HTTP 与 race 验证见 `/tmp/donebot-team-execution-final.log`；既有 Cloud 数据库流程应用新迁移后通过，见 `/tmp/donebot-team-execution-cloud-migration.log`。全部 Go 包编译通过，见 `/tmp/donebot-team-execution-compile-all.log`。网关接口、身份来源、回滚和未完成边界见相邻项目 `docs/donebot/team-execution.md`。
+
+这些是授权和账单归属的基础记录，尚未接入供应商调用及实际扣费，不宣称团队执行完成。客户端节点和工作空间切换、可信协调器、模型请求适配与真正 Linux 隔离继续实施，能力保持关闭。
+
+## 协调器身份与运行代次（2026-11-21）
+
+网关迁移 274 固定执行所属协调实例及运行代次。协调器凭据由受信 worker 领取，Cloud agent 加密保存并原子写入容器私有 `/run`，成员代理及任务环境不取得该凭据。独立协调器 HTTP 接口拒绝普通 JWT、安装凭据、跨实例和伪造身份；申请及受理时均重新核验代次和节点启用状态。正文、日志和凭据检测增加团队 token 识别，bot-box 环境继续拒绝协调器文件设置。
+
+真实 HTTP/PostgreSQL/race 日志 `/tmp/donebot-team-coordinator-accepted-http.log`；Cloud 51 项验证 `/tmp/donebot-team-coordinator-accepted-cloud.log`；现有订阅与代理回归 `/tmp/donebot-team-coordinator-pg.log`；客户端脱敏及沙箱规则 3 文件 50 项 `/tmp/donebot-team-coordinator-redaction.log`。尚未打通规范会话到模型派发及计费，真实 Linux 隔离也未验收，团队能力继续关闭。

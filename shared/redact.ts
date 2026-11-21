@@ -14,6 +14,7 @@ export const mask = (value: string) => (REDACTION_MARKER.test(value) ? value : `
 // credentials match.
 
 const KEY_PREFIXES: RegExp[] = [
+  /\bdbt[ce]_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g,
   /\bom[dg]_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g, // desktop device and model-only credentials
   /\bsk-(?:ant-|proj-|live-|test-)?[A-Za-z0-9_-]{16,}/g, // anthropic / openai
   /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/g, // stripe secret and restricted keys

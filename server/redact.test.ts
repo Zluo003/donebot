@@ -137,6 +137,8 @@ describe("redactSecretsInText", () => {
     // Assembled at runtime, so no token-shaped literal sits in the source for GitHub's push protection to flag.
     const alpha = "abcdefghijklmnopqrstuvwxyz0123456789";
     const cases: Array<[string, RegExp]> = [
+      [`team coordinator ${"dbtc_"}${"a".repeat(43)}`, /dbtc_/],
+      [`team execution ${"dbte_"}${"b".repeat(43)}`, /dbte_/],
       [`set ANTHROPIC_API_KEY=sk-ant-api03-${alpha}`, /sk-ant/],
       [`OpenAI: sk-proj-${alpha}ABCD`, /sk-proj/],
       [`gh token ${"gh" + "p_"}${alpha}`, /ghp_/],

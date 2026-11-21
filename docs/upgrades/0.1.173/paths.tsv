@@ -837,7 +837,7 @@ A	server/cloud-team-check-backs.e2e.test.ts	自有适配	5	已接入并通过隔
 M	server/cloud-team-connections.e2e.test.ts	自有适配	2	待核对
 A	server/cloud-team-conversation-share.e2e.test.ts	自有适配	2	待核对
 M	server/cloud-team-engine-homes.e2e.test.ts	自有适配	2	待核对
-A	server/cloud-team-files.e2e.test.ts	自有适配	7	改为 DoneBot 签名团队服务 fixture；工作流通过；代理/Linux 待验收
+A	server/cloud-team-files.e2e.test.ts	自有适配	7	改为 DoneBot 签名团队服务 fixture；工作流及实际 Go 代理上传撤权通过；worker/Linux 待验收
 M	server/cloud-team-gateway-mcp.e2e.test.ts	自有适配	2	待核对
 M	server/cloud-team-inbox.e2e.test.ts	自有适配	5	收件箱置顶/完成/已读/上下文与定位已核对并验证，其他差异待核对
 A	server/cloud-team-included-hosting.e2e.test.ts	自有适配	2	待核对
@@ -1931,7 +1931,7 @@ M	server/routes/status.ts	接入	待核对	待核对
 M	server/routes/table.ts	接入	待核对	待核对
 M	server/routes/tasks.ts	接入	待核对	待核对
 M	server/routes/team-connections.test.ts	接入	待核对	待核对
-A	server/routes/team-files.ts	自有适配	7	已接入签名成员接口；流中断/撤权/权限通过；真实代理待验收
+A	server/routes/team-files.ts	自有适配	7	已接入签名成员接口；流中断/撤权/权限及实际 Go 代理上传撤权通过；worker/Linux 待验收
 A	server/routes/team-slack.ts	接入	待核对	待核对
 M	server/routes/teams.ts	接入	待核对	待核对
 A	server/routes/threads-one-bot.test.ts	接入	4	流式/长历史子集已接入；其余目标差异继续核对

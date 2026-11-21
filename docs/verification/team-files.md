@@ -44,8 +44,21 @@ node --experimental-strip-types scripts/verify-team-files.ts
 
 文件页尚未接入正式菜单或能力协商；不能据此启用 shared_files。
 
+## 实际 Go 代理上传撤权
+
+```sh
+cd /Users/zluo/Dev/donebot-api/backend
+CLOUD_BILLING_PG_FIXTURE=1 CLOUD_BILLING_TEAM_FILES_FIXTURE=1 go test -race -tags=integration ./internal/cloudbilling -run '^TestPostgresTeam(FileProxyCancelsRevokedUploads|ProxySignsActualMemberAndFencesRevocation|NodeConfigurationAndCapabilityRevocation)$' -count=1 -v
+```
+
+Go 测试自建 PostgreSQL，应用团队迁移并创建合成角色及实例，通过真实 TeamProxy 转发到本项目隔离运行服务。worker 仅用转发夹具，不代表真实 Cloud worker 验收。客户端 fixture 从 stdin 取得合成团队公钥与额度，不读取用户 home。
+
+验证伪造 Owner 标头被替换、真实成员文件归属、单文件上限与模板拒绝。两条上传分别新建及覆盖已有文件，在临时流出现后移除成员；代理现有三秒轮询触发取消，七秒验收窗口内清空临时流，未生成新文件、原文件字节保留，后续请求拒绝。验证没有延长或绕过授权窗口，不宣称撤权与存储提交跨服务原子化。
+
+2026-11-21：实际链路与邻接 SSE 撤权、运行配置回归通过 race 检查，日志 `/tmp/donebot-team-files-proxy-regression.log`。本项目 fixture `scripts/testing/team-files-proxy-fixture.ts` 随进程退出清理临时数据，运行日志留在测试输出记录的位置。
+
 ## 尚待验收
 
-运行时签名只在请求入站检查到期；持续上传的撤权依赖网关现有流监控取消连接。当前 route 测试使用可撤销的合成身份，尚未让上传经过实际 Go 代理，不能把该检查当成完整撤权链路证明。重启残留测试不等于断电恢复演练。
+运行时签名只在请求入站检查到期；持续上传的撤权依赖网关现有流监控取消连接。route 测试使用可撤销的合成身份；实际 Go 代理到隔离运行服务的上传中断另见上一节，真实 Cloud worker 和容器链路仍未验收。重启残留测试不等于断电恢复演练。
 
 Bot 尚未挂载共享目录，读写授权、真实 Linux 恶意进程/路径竞争、配额的文件系统强制、管理员模板发布事务、正式团队入口、备份恢复全流程和平台验证继续实施。当前普通文件接口不能替代这些验收，也不能作为开启团队执行能力的依据。

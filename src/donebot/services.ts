@@ -33,10 +33,10 @@ export function isDoneBotCloudBrowser(): boolean {
   try { return sessionStorage.getItem("donebot.cloud-browser") === "1"; } catch { return false; }
 }
 
-export function doneBotPurchaseVisible({ enabled, cloudHome, remote, ownerOrAdmin }: {
-  enabled?: boolean; cloudHome?: boolean; remote?: boolean; ownerOrAdmin: boolean | null;
+export function doneBotPurchaseVisible({ enabled, cloudHome, team, remote, ownerOrAdmin }: {
+  enabled?: boolean; cloudHome?: boolean; team?: boolean; remote?: boolean; ownerOrAdmin: boolean | null;
 }): boolean {
-  return enabled === true && cloudHome !== true && remote !== true && !isDoneBotCloudBrowser() && ownerOrAdmin !== false;
+  return enabled === true && cloudHome !== true && team !== true && remote !== true && !isDoneBotCloudBrowser() && ownerOrAdmin !== false;
 }
 
 export const UPSTREAM_SERVICES = {

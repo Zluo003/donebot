@@ -22,19 +22,19 @@ export function DoneBotAccountGate({ children }: { children: ReactNode }) {
   const { capabilities } = useDesktopCapabilities();
   const enabled = state.config?.donebot?.enabled === true;
   if (!state.config) return <main className="flex h-full items-center justify-center bg-app text-ink-secondary"><Loader2 size={20} className="animate-spin" aria-label="正在加载 DoneBot" /></main>;
-  if (!enabled) return children;
-  if (state.config?.donebot?.authenticated) return children;
+  if (!enabled || state.config?.team || state.config?.donebot?.authenticated) return children;
   return <div className="flex h-full flex-col bg-app"><WindowFrameBar /><main className="min-h-0 flex-1 overflow-auto"><DoneBotSignIn /></main><WindowCaptionButtons visible={capabilities.windowChrome === "win-caption" && Boolean(window.ogb?.windowControls)} /></div>;
 }
 
 export function DoneBotAccountSettings() {
   const { state, dispatch } = useStore();
+  const team = state.config?.team;
   const [balance, setBalance] = useState<number | null>(null);
   const [concurrency, setConcurrency] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const epoch = useRef(0);
-  const email = state.config?.donebot?.user?.email;
+  const email = state.config?.donebot?.user?.email || state.config?.profile?.email;
   const refresh = async () => {
     const generation = ++epoch.current;
     setBusy(true); setError(""); setBalance(null); setConcurrency(null);
@@ -47,7 +47,16 @@ export function DoneBotAccountSettings() {
     } catch (error) { if (generation === epoch.current) setError(errorText(error)); }
     finally { if (generation === epoch.current) setBusy(false); }
   };
-  useEffect(() => { void refresh(); return () => { epoch.current++; }; }, [email, state.config?.donebot?.user?.id]);
+  useEffect(() => { if (team) return; void refresh(); return () => { epoch.current++; }; }, [team, email, state.config?.donebot?.user?.id]);
+  if (team) {
+    return <div data-donebot-account className="flex flex-col gap-4">
+      <Card title="DoneBot 团队空间" subtitle="当前工作空间由团队统一提供模型服务。">
+        <p className="text-[14px] text-ink">当前团队：{team.name}</p>
+        {email && <p className="mt-2 text-[13px] text-ink-secondary">当前成员：{email}</p>}
+        <p className="mt-3 text-[13px] text-ink-secondary">团队模型费用由团队 Owner 统一结算；个人账号、余额充值、Cloud 订阅及团队成员管理请切回本机或个人空间操作。</p>
+      </Card>
+    </div>;
+  }
   const logout = async () => {
     ++epoch.current; setBusy(true); setError("");
     try {

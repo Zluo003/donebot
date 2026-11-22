@@ -847,7 +847,7 @@ bindThreadLogCapProvider(() => threadLogCapOrDefault(threadEventLogMaxBytes(cfg)
 bindDecisionRetention(() => decisionRetentionDays(cfg.decisions?.retentionDays));
 bindSafetyFloor(() => cfg);
 const { decider, extractor } = DONEBOT_GATEWAY ? donebotHost.helpers() : { decider: createDecider({ config: () => cfg, dataDir: DATA_DIR }), extractor: createExtractor({ config: () => cfg, timeZone: () => proactive.brief.timeZone() }) };
-const roomDeciderReady = () => DONEBOT_GATEWAY ? donebot.authenticated() && cfg.decider?.enabled !== false && cfg.decider?.provider !== "off" && cfg.decider?.jobs?.roomRouting !== false : deciderReady(cfg, "roomRouting");
+const roomDeciderReady = () => DONEBOT_GATEWAY ? donebotHost.authenticated() && cfg.decider?.enabled !== false && cfg.decider?.provider !== "off" && cfg.decider?.jobs?.roomRouting !== false : deciderReady(cfg, "roomRouting");
 const customDomainVerifier = createCustomDomainVerifier({ environmentId: ENVIRONMENT_ID });
 const emailSignIn = createEmailSignIn({
   allow: signInAllowList,
@@ -1479,12 +1479,9 @@ function resyncOpenCodeProviderKeys(): void {
   }
 }
 const firstEngineRead = holdUntilFirstEngineRead();
-if (DONEBOT_GATEWAY) donebot.onChange(() => {
+if (DONEBOT_GATEWAY) donebotHost.onChange(() => {
   registry.forgetSnapshots();
-  void registry.refreshModels("donebot").then(() => {
-    bus.attach(registry.instances());
-    return refreshUnsetModelSelections();
-  }).then(() => broadcast({ kind: "config", ...configStatus() })).catch(() => {});
+  void registry.refreshModels("donebot").then(() => { bus.attach(registry.instances()); return refreshUnsetModelSelections(); }).then(() => broadcast({ kind: "config", ...configStatus() })).catch(() => {});
 });
 await registry.load(providerConfigs(), decorateHostedProvider);
 const bundledSkills = loadBundledSkills();
@@ -11929,8 +11926,8 @@ function configStatus() {
     vps: { configured: Boolean(vpsSshAlias(cfg)), sshAlias: vpsSshAlias(cfg) ?? "" },
     opencodeGo: { ...keyStatus(cfg.opencodeGo?.apiKey), providerKeys: Object.keys(openCodeProviderKeys(cfg)) },
     tts: tts.describeVoice(cfg),
-    ...(DONEBOT_GATEWAY ? { donebot: donebot.state() } : {}),
-    decider: DONEBOT_GATEWAY ? { ...describeDecider(cfg), configured: donebot.authenticated() } : describeDecider(cfg), helpers: DONEBOT_GATEWAY ? { own: { jev: false, workersAi: false, openrouter: false }, extraction: { ready: donebot.authenticated() } } : describeHelpers(cfg),
+    ...(DONEBOT_GATEWAY ? { donebot: donebotHost.state() } : {}),
+    decider: DONEBOT_GATEWAY ? { ...describeDecider(cfg), configured: donebotHost.authenticated() } : describeDecider(cfg), helpers: DONEBOT_GATEWAY ? { own: { jev: false, workersAi: false, openrouter: false }, extraction: { ready: donebotHost.authenticated() } } : describeHelpers(cfg),
     imageGen: avatarImageStatus(cfg), savedKeys: nestedKeyStatus(cfg),
     live: liveSettingsFor(cfg),
     profile: CLOUD_TEAM ? NOBODY_PROFILE : { name: cfg.profile?.name ?? "", email: cfg.profile?.email ?? "", aboutMe: cfg.profile?.aboutMe ?? "", ...(cfg.profile?.avatarUrl ? { avatarUrl: cfg.profile.avatarUrl } : {}) },
@@ -11988,10 +11985,10 @@ function configStatus() {
 function configForAccess(status: ReturnType<typeof configStatus>, admin: boolean, session?: SessionRecord | null) {
   const profile: MemberProfile = CLOUD_TEAM ? (session ? teamHost.memberProfile(session) : NOBODY_PROFILE) : status.profile;
   const onboarding = CLOUD_TEAM ? teamOnboarding(status.onboarding, session, teamWelcome) : status.onboarding;
-  if (admin) return CLOUD_TEAM ? { ...status, profile, onboarding } : status;
+  const donebotOverride = DONEBOT_GATEWAY && DONEBOT_TEAM_RUNTIME ? { donebot: donebotHost.state(session) } : {};
+  if (admin) return CLOUD_TEAM ? { ...status, ...donebotOverride, profile, onboarding } : status;
   // Client sessions get configured-or-not only: no SSH alias, email, browser partition id or sign-in list.
-  return {
-    ...withoutKeyHints(status),
+  return { ...withoutKeyHints(status), ...donebotOverride,
     edition: { edition: status.edition.edition, features: status.edition.features },
     signIn: { admins: [], members: [] }, live: liveSettingsForClient(status.live), everyBotRules: undefined,
     vps: { configured: status.vps.configured, sshAlias: "" },
@@ -15715,7 +15712,7 @@ server.listen(PORT, listenHost(server), async () => {
   companyRuntimeReady(); cloudHealth?.speed.ready(); void tailnetShare.start(process.env);
   console.log(`donebot server on http://127.0.0.1:${PORT}`);
   await donebotHost.restore();
-  if (donebotHost.enabled) donebotMobile.start();
+  if (donebotHost.enabled && !donebotHost.team) donebotMobile.start();
   personWaits.boot(); browserSweep.start(); startCloudTeamPolicy({ cloudHome: CLOUD_HOME, dataDir: DATA_DIR, managed: managedPolicy, sessions }); startCloudTeamRoster({ cloudHome: CLOUD_HOME, sessions }); moveFreeze.hold(() => appTriggers.start(), () => void appTriggers.stop()); startCloudHomeConnectedApps({ cloudHome: CLOUD_HOME !== null, dataDir: DATA_DIR, cloudGrant: CLOUD_ENV.DONEBOT_CLOUD_CONNECTED_APPS_GRANT, ownKey: () => composio.connectionMode(cfg) === "self-hosted", apply: (access) => { composio.setManagedBrokerAccess(access); broadcast({ kind: "config", ...configStatus() }); } });
   void afterFirstEngineRead().then(() => { if (builtInBrowserEnabled(cfg)) chromeLauncher.start(); });
   followupsReady = true; engineUpdates.start();

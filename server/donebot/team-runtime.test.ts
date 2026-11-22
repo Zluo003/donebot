@@ -1,7 +1,11 @@
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, it } from "vitest";
 import { teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./team-runtime.ts";
+import { createDoneBotRuntimeHost } from "./runtime-host.ts";
 import { resolveRequestAuth } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
 
@@ -40,4 +44,29 @@ it("defaults off, fails closed for incomplete host configuration, and grants she
   for (const path of ["/api/bots", "/api/events", "/api/auth/pairing", "/api/attachments/file", "/api/config"]) expect(teamRuntimePublicPath("GET", path)).toBe(false);
   expect(teamRuntimePublicPath("GET", "/api/health")).toBe(true);
   expect(teamRuntimePublicPath("POST", "/api/internal/tools/call")).toBe(true);
+});
+it("reports authenticated team member account state without personal gateway credentials", () => {
+  const dir = mkdtempSync(join(tmpdir(), "donebot-team-host-"));
+  const previousCoord = process.env.DONEBOT_TEAM_COORDINATOR_FILE;
+  const previousOrigin = process.env.DONEBOT_FIXTURE_ORIGIN;
+  process.env.DONEBOT_TEAM_COORDINATOR_FILE = join(dir, "team-coordinator.json");
+  process.env.DONEBOT_FIXTURE_ORIGIN = "http://127.0.0.1:18999";
+  try {
+    const host = createDoneBotRuntimeHost(dir, () => ({}) as never, import.meta.url, runtime);
+    const session = teamRuntimeSession(runtime, request({}, "GET", "/api/config"), now)!;
+    expect(host.state()).toEqual({ enabled: true, authenticated: true, persistent: true, modelCount: 0 });
+    expect(host.state(session)).toEqual({
+      enabled: true,
+      authenticated: true,
+      persistent: true,
+      modelCount: 0,
+      user: { id: "3", email: "member@example.invalid" },
+    });
+  } finally {
+    if (previousCoord === undefined) delete process.env.DONEBOT_TEAM_COORDINATOR_FILE;
+    else process.env.DONEBOT_TEAM_COORDINATOR_FILE = previousCoord;
+    if (previousOrigin === undefined) delete process.env.DONEBOT_FIXTURE_ORIGIN;
+    else process.env.DONEBOT_FIXTURE_ORIGIN = previousOrigin;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

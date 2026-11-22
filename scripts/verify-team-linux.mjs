@@ -77,6 +77,13 @@ async function containerCheck() {
     assert.equal((await fetch(origin + "/api/bots")).status, 401);
     assert.equal((await call("GET", "/api/bots", undefined, { team_id: randomUUID() })).status, 401);
     assert.equal((await call("GET", "/api/donebot/account")).status, 403);
+    const configRes = await call("GET", "/api/config");
+    assert.equal(configRes.status, 200, await configRes.clone().text());
+    const config = await configRes.json();
+    assert.equal(config.team?.id, teamId);
+    assert.equal(config.donebot?.enabled, true);
+    assert.equal(config.donebot?.authenticated, true);
+    assert.equal(config.donebot?.user?.email, "member@example.invalid");
     const response = await call("GET", "/api/bots");
     assert.equal(response.status, 200, await response.clone().text());
     const bots = await response.json();

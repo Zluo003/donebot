@@ -3,15 +3,17 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const fixture = vi.hoisted(() => ({ api: vi.fn() }));
+const fixture = vi.hoisted(() => ({ api: vi.fn(), config: {} as Record<string, unknown> }));
 vi.mock("@/state/api", () => ({ api: fixture.api }));
-vi.mock("@/state/store", () => ({ useStore: () => ({ state: { config: { donebot: { enabled: true, persistent: true, user: { id: "fixture-user", email: "fixture@example.invalid" } } } } }) }));
+vi.mock("@/state/store", () => ({ useStore: () => ({ state: { config: fixture.config } }) }));
+vi.mock("@/components/DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({ capabilities: { windowChrome: "native" } }) }));
 vi.mock("./CloudAccess", () => ({ DoneBotCloudAccess: () => "Fixture Cloud access" }));
 vi.mock("./MediaSettings", () => ({ DoneBotMediaSettingsPanel: () => "Fixture media preferences" }));
-const { DoneBotAccountSettings } = await import("./Account");
+const { DoneBotAccountGate, DoneBotAccountSettings } = await import("./Account");
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  fixture.config = { donebot: { enabled: true, authenticated: true, persistent: true, user: { id: "fixture-user", email: "fixture@example.invalid" } } };
   fixture.api.mockReset().mockImplementation(async path => path === "/api/donebot/workspaces"
     ? { protocol: "donebot.teams.v1", account_id: "fixture-user", capabilities: [], workspaces: [] }
     : { balance_cents: 1234, concurrency: 30 });
@@ -34,4 +36,19 @@ it("retains account error feedback after the model list is removed", async () =>
   await act(async () => root.render(createElement(DoneBotAccountSettings)));
   expect(host.querySelector('[role="alert"]')?.textContent).toContain("账号同步失败");
   expect(host.textContent).not.toContain("可用模型");
+});
+it("admits team workspaces through the account gate and avoids personal account APIs in team settings", async () => {
+  fixture.config = {
+    team: { id: "team-1", name: "Studio Team" },
+    donebot: { enabled: true, authenticated: false, persistent: false },
+    profile: { email: "owner@example.invalid" },
+  };
+  await act(async () => root.render(createElement(DoneBotAccountGate, null, createElement("p", null, "Team workspace ready"))));
+  expect(host.textContent).toContain("Team workspace ready");
+  expect(host.querySelector("[data-donebot-sign-in]")).toBeNull();
+
+  await act(async () => root.render(createElement(DoneBotAccountSettings)));
+  expect(host.textContent).toContain("Studio Team");
+  expect(host.textContent).toContain("owner@example.invalid");
+  expect(fixture.api).not.toHaveBeenCalled();
 });

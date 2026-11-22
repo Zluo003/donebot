@@ -204,7 +204,7 @@ function SettingsDialog() {
   const advanced = useAdvancedMode();
   const remoteActive = window.ogb?.remoteClient?.active === true;
   const ownerOrAdmin = useOwnerOrAdmin();
-  const purchaseAvailable = doneBotPurchaseVisible({ enabled: state.config?.donebot?.enabled, cloudHome: state.config?.cloudHome, remote: remoteActive, ownerOrAdmin });
+  const purchaseAvailable = doneBotPurchaseVisible({ enabled: state.config?.donebot?.enabled, cloudHome: state.config?.cloudHome, team: Boolean(state.config?.team), remote: remoteActive, ownerOrAdmin });
   const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) || (state.appSettingsSection === "purchase" && !purchaseAvailable) || (state.appSettingsSection === "modelPricing" && state.config?.donebot?.enabled !== true) ? "general" : state.appSettingsSection;
   const section: AppSettingsSection =
     advanced && requested === "remote" && window.ogb?.environments

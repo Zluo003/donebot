@@ -1,6 +1,8 @@
 import { join } from "node:path";
+import type { DoneBotAccountState } from "../../shared/donebot.ts";
 import type { AppConfig } from "../config.ts";
 import type { InstanceConfigMap, ModelSelection, ProviderInstance } from "../contracts.ts";
+import type { SessionRecord } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import { doneBotProtocol, doneBotTextModels } from "./catalog.ts";
 import { DoneBotGateway } from "./gateway.ts";
@@ -67,18 +69,57 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     reconcile(_store: Store) {},
   };
   if (enabled && !team) bindDoneBotVoice(createDoneBotVoice({ gateway, resolveModel: () => gateway.models()?.models.find(model => model.id === config().tts?.model && model.interfaces.includes("openai.audio.speech")) ?? gateway.models()?.models.find(model => model.interfaces.includes("openai.audio.speech")) }));
+  const teamListeners = new Set<() => void>();
+  const notifyTeamChange = () => { for (const listener of teamListeners) listener(); };
+  let catalogRetry: ReturnType<typeof setTimeout> | null = null;
+  const refreshTeamCatalog = async () => {
+    if (!team) throw new Error("Team runtime is not active.");
+    const next = await team.refreshCatalog();
+    if (catalogRetry) { clearTimeout(catalogRetry); catalogRetry = null; }
+    notifyTeamChange();
+    return next;
+  };
+  const scheduleTeamCatalogRetry = (attempt = 0) => {
+    if (!team || attempt >= 4 || catalogRetry) return;
+    const delayMs = [5_000, 15_000, 30_000, 60_000][attempt] ?? 60_000;
+    catalogRetry = setTimeout(() => {
+      catalogRetry = null;
+      void refreshTeamCatalog().catch(() => {
+        console.warn("DoneBot team model catalog could not be restored.");
+        scheduleTeamCatalogRetry(attempt + 1);
+      });
+    }, delayMs);
+    catalogRetry.unref();
+  };
+  const state = (session?: SessionRecord | null): DoneBotAccountState => {
+    if (!team || !teamRuntime) return gateway.state();
+    const actor = session ? teamRuntimeActor(teamRuntime, session) : null;
+    const email = actor && typeof session?.email === "string" ? session.email : "";
+    return {
+      enabled: true,
+      authenticated: true,
+      persistent: true,
+      modelCount: doneBotTextModels(team.models()).options.length,
+      ...(actor ? { user: { id: actor.userId, email } } : {}),
+    };
+  };
   const teamRoute: RouteHandler = async ({ path, method, auth, res, json }) => {
     if (!path.startsWith("/api/donebot/")) return PASS;
     res.setHeader("Cache-Control", "no-store");
     if (!team || !teamRuntime || auth.kind !== "session" || !teamRuntimeActor(teamRuntime, auth.session)) return json(res, 403, { error: "A verified team member is required." });
     if (path === "/api/donebot/catalog" && method === "GET") {
-      try { return json(res, 200, await team.refreshCatalog()); }
+      try { return json(res, 200, await refreshTeamCatalog()); }
       catch { return json(res, 503, { error: "团队模型目录暂不可用。" }); }
     }
     return json(res, 403, { error: "个人账号与账单只能在个人工作空间管理。" });
   };
   return {
-    enabled, gateway, driver, policy, team,
+    enabled, gateway, driver, policy, team, authenticated, state,
+    onChange(listener: () => void) {
+      const unsubGateway = gateway.onChange(listener);
+      teamListeners.add(listener);
+      return () => { unsubGateway(); teamListeners.delete(listener); };
+    },
     fetchArtifact: fixtureOrigin ? (url: string, signal: AbortSignal) => {
       const parsed = new URL(url);
       return parsed.origin === fixtureOrigin && ["/fixture-audio.mp3", "/fixture-image.png"].includes(parsed.pathname) && !parsed.search && !parsed.hash
@@ -88,7 +129,12 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     helpers: () => createDoneBotHelpers(gateway, config, dataDir),
     async restore() {
       if (!enabled) return;
-      if (team) await team.refreshCatalog().catch(() => console.warn("DoneBot team model catalog could not be restored."));
+      if (team) {
+        await refreshTeamCatalog().catch(() => {
+          console.warn("DoneBot team model catalog could not be restored.");
+          scheduleTeamCatalogRetry(0);
+        });
+      }
       else await gateway.restore().catch(() => console.warn("DoneBot secure session could not be restored."));
     },
   };

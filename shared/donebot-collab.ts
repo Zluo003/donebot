@@ -37,6 +37,13 @@ export interface DoneBotCollabChatBot {
   bot_name: string;
   bot_color: string;
   bot_avatar_url?: string;
+  bot_mascot_body?: string;
+  bot_mascot_face_color?: string;
+  bot_mascot_expression?: string;
+  bot_avatar_crop?: string;
+  bot_avatar_zoom?: number;
+  bot_avatar_focus_x?: number;
+  bot_avatar_focus_y?: number;
   bot_title?: string;
   allow_all_members: boolean;
   allowed_user_ids: number[];
@@ -58,6 +65,13 @@ export interface DoneBotChatMessage {
   sender_bot_name?: string;
   sender_bot_color?: string;
   sender_bot_avatar_url?: string;
+  sender_bot_mascot_body?: string;
+  sender_bot_mascot_face_color?: string;
+  sender_bot_mascot_expression?: string;
+  sender_bot_avatar_crop?: string;
+  sender_bot_avatar_zoom?: number;
+  sender_bot_avatar_focus_x?: number;
+  sender_bot_avatar_focus_y?: number;
   kind: "text" | "file";
   body: string;
   file_id?: string;

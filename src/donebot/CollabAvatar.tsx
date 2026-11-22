@@ -3,10 +3,18 @@ import { AlertCircle, Camera, Check, Loader2, Trash2, X } from "lucide-react";
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
 import { MausAvatar } from "@/components/Avatar";
-import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
+import { MAUS_COLORS, normalizeState, type MausColor } from "@/lib/mascot";
 import { cn } from "@/lib/cn";
 import { botBodySchema, type BotBodyId } from "../../shared/bot-body";
-import type { MascotFaceColor } from "../../shared/bot-avatar";
+import {
+  avatarCropRadius,
+  botAvatarCropSchema,
+  clampAvatarFocus,
+  clampAvatarZoom,
+  type BotAvatarCrop,
+  type MascotFaceColor,
+} from "../../shared/bot-avatar";
+import type { DoneBotChatMessage, DoneBotCollabChatBot } from "../../shared/donebot-collab";
 import { newBotBody } from "./avatars";
 import {
   cleanError,
@@ -14,6 +22,7 @@ import {
   COLLAB_INPUT,
   displayPersonName,
   initialGlyph,
+  type LocalBotSummary,
 } from "./collab-types";
 import "./collab.css";
 
@@ -145,20 +154,100 @@ export function CollabTeamBadge({
   );
 }
 
+export interface CollabBotBadgeAppearance {
+  name: string;
+  color?: string | null;
+  avatarUrl?: string | null;
+  avatarCrop?: string | null;
+  avatarZoom?: number | null;
+  avatarFocusX?: number | null;
+  avatarFocusY?: number | null;
+  bodyId?: string | null;
+  faceColor?: string | null;
+  expression?: string | null;
+}
+
+export function resolveCollabBotBadgeFromChatBot(
+  bot: DoneBotCollabChatBot,
+  localMatch?: LocalBotSummary,
+): CollabBotBadgeAppearance {
+  if (localMatch) {
+    return {
+      name: localMatch.name || bot.bot_name,
+      color: localMatch.color || bot.bot_color,
+      avatarUrl: localMatch.avatar_crop === "mascot" ? "" : (localMatch.avatar_url || ""),
+      avatarCrop: localMatch.avatar_crop,
+      avatarZoom: localMatch.avatar_zoom,
+      avatarFocusX: localMatch.avatar_focus_x,
+      avatarFocusY: localMatch.avatar_focus_y,
+      bodyId: localMatch.mascot_body,
+      faceColor: localMatch.mascot_face_color,
+      expression: localMatch.mascot_expression,
+    };
+  }
+  return {
+    name: bot.bot_name,
+    color: bot.bot_color,
+    avatarUrl: bot.bot_avatar_crop === "mascot" ? "" : bot.bot_avatar_url,
+    avatarCrop: bot.bot_avatar_crop,
+    avatarZoom: bot.bot_avatar_zoom,
+    avatarFocusX: bot.bot_avatar_focus_x,
+    avatarFocusY: bot.bot_avatar_focus_y,
+    bodyId: bot.bot_mascot_body,
+    faceColor: bot.bot_mascot_face_color,
+    expression: bot.bot_mascot_expression,
+  };
+}
+
+export function resolveCollabBotBadgeFromMessage(
+  msg: DoneBotChatMessage,
+  chatBot?: DoneBotCollabChatBot,
+  localMatch?: LocalBotSummary,
+): CollabBotBadgeAppearance {
+  if (localMatch) {
+    return {
+      name: localMatch.name || msg.sender_bot_name || "机器人",
+      color: localMatch.color || msg.sender_bot_color || chatBot?.bot_color,
+      avatarUrl: localMatch.avatar_crop === "mascot" ? "" : (localMatch.avatar_url || ""),
+      avatarCrop: localMatch.avatar_crop,
+      avatarZoom: localMatch.avatar_zoom,
+      avatarFocusX: localMatch.avatar_focus_x,
+      avatarFocusY: localMatch.avatar_focus_y,
+      bodyId: localMatch.mascot_body,
+      faceColor: localMatch.mascot_face_color,
+      expression: localMatch.mascot_expression,
+    };
+  }
+  const crop = chatBot?.bot_avatar_crop || msg.sender_bot_avatar_crop;
+  const rawAvatarUrl = chatBot ? (chatBot.bot_avatar_crop === "mascot" ? "" : (chatBot.bot_avatar_url || "")) : (msg.sender_bot_avatar_crop === "mascot" ? "" : (msg.sender_bot_avatar_url || ""));
+  return {
+    name: chatBot?.bot_name || msg.sender_bot_name || "机器人",
+    color: chatBot?.bot_color || msg.sender_bot_color,
+    avatarUrl: rawAvatarUrl,
+    avatarCrop: crop,
+    avatarZoom: chatBot?.bot_avatar_zoom ?? msg.sender_bot_avatar_zoom,
+    avatarFocusX: chatBot?.bot_avatar_focus_x ?? msg.sender_bot_avatar_focus_x,
+    avatarFocusY: chatBot?.bot_avatar_focus_y ?? msg.sender_bot_avatar_focus_y,
+    bodyId: chatBot?.bot_mascot_body || msg.sender_bot_mascot_body,
+    faceColor: chatBot?.bot_mascot_face_color || msg.sender_bot_mascot_face_color,
+    expression: chatBot?.bot_mascot_expression || msg.sender_bot_mascot_expression,
+  };
+}
+
 export function CollabBotBadge({
   name,
   color,
   avatarUrl,
+  avatarCrop,
+  avatarZoom,
+  avatarFocusX,
+  avatarFocusY,
   bodyId,
   faceColor,
+  expression,
   size = 30,
   className,
-}: {
-  name: string;
-  color?: string | null;
-  avatarUrl?: string | null;
-  bodyId?: string | null;
-  faceColor?: string | null;
+}: CollabBotBadgeAppearance & {
   size?: number;
   className?: string;
 }) {
@@ -166,25 +255,43 @@ export function CollabBotBadge({
   const src = avatarUrl?.trim() || "";
   useEffect(() => { setImgFailed(false); }, [src]);
 
+  const parsedCrop = botAvatarCropSchema.safeParse(avatarCrop).data;
+  const resolvedCrop: BotAvatarCrop = parsedCrop ?? (src ? "circle" : "mascot");
   const rawColor = (color ?? "").trim().toLowerCase();
   const resolvedColor: MausColor = rawColor && rawColor in MAUS_COLORS ? (rawColor as MausColor) : "blue";
   const resolvedFace: MascotFaceColor | null = faceColor === "white" || faceColor === "black" ? faceColor : null;
   const resolvedBody: BotBodyId = newBotBody(botBodySchema.safeParse(bodyId).data);
+  const resolvedState = normalizeState(expression ?? undefined);
 
-  if (src && !imgFailed) {
+  if (resolvedCrop !== "mascot" && src && !imgFailed) {
+    const radius = avatarCropRadius(resolvedCrop);
+    const zoom = clampAvatarZoom(avatarZoom ?? 1);
+    const focusX = clampAvatarFocus(avatarFocusX ?? 0.5);
+    const focusY = clampAvatarFocus(avatarFocusY ?? 0.5);
+    const origin = `${focusX * 100}% ${focusY * 100}%`;
     return (
       <span
         className={cn(
-          "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-raised ring-1 ring-inset ring-ink/12",
+          "relative inline-flex shrink-0 select-none items-center justify-center overflow-hidden bg-raised ring-1 ring-inset ring-ink/12",
           className,
         )}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, borderRadius: radius }}
         title={name}
       >
         <img
           src={src}
           alt={name}
-          className="size-full object-cover"
+          width={size}
+          height={size}
+          draggable={false}
+          className="block size-full max-w-none object-cover"
+          style={{
+            width: size,
+            height: size,
+            objectPosition: origin,
+            transform: zoom === 1 ? undefined : `scale(${zoom})`,
+            transformOrigin: origin,
+          }}
           loading="lazy"
           onError={() => setImgFailed(true)}
         />
@@ -202,6 +309,7 @@ export function CollabBotBadge({
         color={resolvedColor}
         bodyId={resolvedBody}
         faceColor={resolvedFace}
+        state={resolvedState ?? "idle"}
         size={size}
         label={name}
         animated={false}
@@ -209,6 +317,53 @@ export function CollabBotBadge({
       />
     </span>
   );
+}
+
+/** Preserves the original aspect ratio so the bot's own crop/zoom/focus apply identically in group chats. */
+export async function compressLocalBotAvatarUrl(url: string): Promise<string> {
+  const src = url.trim();
+  if (!src) return "";
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("image load failed"));
+      el.src = src;
+    });
+    const natW = img.naturalWidth || img.width;
+    const natH = img.naturalHeight || img.height;
+    if (!natW || !natH) return "";
+    const scale = Math.min(1, 256 / Math.max(natW, natH));
+    const w = Math.max(1, Math.round(natW * scale));
+    const h = Math.max(1, Math.round(natH * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, w, h);
+    const pixels = ctx.getImageData(0, 0, w, h).data;
+    let transparent = false;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] !== 255) {
+        transparent = true;
+        break;
+      }
+    }
+    if (transparent) {
+      const png = canvas.toDataURL("image/png");
+      if (png.length <= 700_000) return png;
+    }
+    for (const quality of [0.88, 0.78, 0.66]) {
+      const jpg = canvas.toDataURL("image/jpeg", quality);
+      if (jpg.length <= 240_000) return jpg;
+    }
+    return canvas.toDataURL("image/jpeg", 0.54);
+  } catch {
+    return "";
+  }
 }
 
 export async function compressAvatarFile(file: File): Promise<string> {

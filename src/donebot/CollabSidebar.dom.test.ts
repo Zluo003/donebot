@@ -41,7 +41,12 @@ const {
 const { CollabSidebarList, CollabSidebarSwitch } = await import("./CollabSidebar");
 const { CollabWorkspacePage } = await import("./CollabWorkspacePage");
 const { CollabSyncHost, CollabToastHost } = await import("./CollabNotifications");
-const { CollabBotBadge, CollabProfileDialog } = await import("./CollabAvatar");
+const {
+  CollabBotBadge,
+  CollabProfileDialog,
+  resolveCollabBotBadgeFromChatBot,
+  resolveCollabBotBadgeFromMessage,
+} = await import("./CollabAvatar");
 const { MASCOT_BODIES } = await import("../../shared/mascot-bodies");
 
 const teamId = "11111111-1111-4111-8111-111111111111";
@@ -738,5 +743,66 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
       root!.render(createElement(CollabBotBadge, { name: "多宝", color: "blue", bodyId: "star", size: 30 }));
     });
     expect(container.querySelector("clipPath path")?.getAttribute("d")).toBe(clipPathD(MASCOT_BODIES.star.clip));
+
+    // Custom photo respects crop radius, zoom, and focus point identically to BotAvatar.
+    await act(async () => {
+      root!.render(createElement(CollabBotBadge, {
+        name: "设计师",
+        color: "pink",
+        avatarUrl: "data:image/png;base64,iVBORw0KGgo=",
+        avatarCrop: "rounded",
+        avatarZoom: 1.8,
+        avatarFocusX: 0.2,
+        avatarFocusY: 0.8,
+        size: 32,
+      }));
+    });
+    const frame = container.querySelector<HTMLSpanElement>("span")!;
+    const img = container.querySelector<HTMLImageElement>("img")!;
+    expect(frame.style.borderRadius).toBe("22%");
+    expect(img.style.objectPosition).toBe("20% 80%");
+    expect(img.style.transform).toBe("scale(1.8)");
+
+    // Switching back to mascot crop renders mascot even if an old avatarUrl is present.
+    const resolvedMascot = resolveCollabBotBadgeFromChatBot({
+      id: chatBot1Id,
+      scope_type: "group",
+      target_id: groupId,
+      owner_user_id: 202,
+      owner_email: "bob@example.invalid",
+      installation_id: installId,
+      local_bot_id: "remote-bot",
+      bot_name: "星星",
+      bot_color: "purple",
+      bot_avatar_url: "data:image/png;base64,STALE",
+      bot_mascot_body: "star",
+      bot_avatar_crop: "mascot",
+      allow_all_members: true,
+      allowed_user_ids: [],
+      can_invoke: true,
+      created_at: "2026-11-23T00:00:00Z",
+    });
+    expect(resolvedMascot.avatarUrl).toBe("");
+    expect(resolvedMascot.bodyId).toBe("star");
+
+    // Cross-device message falls back to synced server appearance fields.
+    const resolvedMsg = resolveCollabBotBadgeFromMessage({
+      id: 99,
+      scope_type: "group",
+      target_id: groupId,
+      sender_id: 202,
+      sender_kind: "bot",
+      sender_email: "bob@example.invalid",
+      sender_bot_id: chatBot1Id,
+      sender_bot_name: "星星",
+      sender_bot_color: "purple",
+      sender_bot_mascot_body: "hexagon",
+      sender_bot_avatar_crop: "mascot",
+      kind: "text",
+      body: "hi",
+      created_at: "2026-11-23T00:00:00Z",
+    });
+    expect(resolvedMsg.bodyId).toBe("hexagon");
+    expect(resolvedMsg.color).toBe("purple");
   });
 });

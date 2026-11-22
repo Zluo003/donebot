@@ -1,10 +1,9 @@
 import type { ServerResponse } from "node:http";
 import { z } from "zod";
-import { botAvatarProfile } from "../../shared/bot-avatar.ts";
 import { EXTERNAL_CODING_AGENT_GROUP_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
-import { readAttachment } from "../attachments.ts";
 import { PASS } from "../routes/table.ts";
-import type { BotRecord, Store } from "../store.ts";
+import type { Store } from "../store.ts";
+import { buildCollabChatBotAppearance, INLINE_BOT_AVATAR_DATA_URL } from "./collab-bot-avatar.ts";
 import {
   collabAddChatBot,
   collabAddGroupMembers,
@@ -21,7 +20,7 @@ import {
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-const INLINE_AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/;
+const INLINE_AVATAR_DATA_URL = INLINE_BOT_AVATAR_DATA_URL;
 
 const avatarOnlySchema = z.object({
   avatar_url: z.string().max(750_000),
@@ -40,6 +39,7 @@ const addChatBotSchema = z.object({
   bot_id: z.string().trim().min(1).max(128),
   allow_all_members: z.boolean().default(false),
   allowed_user_ids: z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).max(200).default([]),
+  avatar_data_url: z.string().max(750_000).optional(),
 }).strict();
 const updateChatBotGrantsSchema = z.object({
   allow_all_members: z.boolean(),
@@ -48,25 +48,6 @@ const updateChatBotGrantsSchema = z.object({
 
 function validGroupOrTeamTarget(scopeType: string, targetId: string): boolean {
   return (scopeType === "team" || scopeType === "group") && uuidV4.safeParse(targetId).success;
-}
-
-const ALLOWED_INLINE_AVATAR_MIMES = new Set(["image/png", "image/jpeg", "image/webp"]);
-
-function inlineBotAvatarDataUrl(bot: BotRecord): string {
-  const profile = botAvatarProfile(bot);
-  if (!profile.avatarUrl || profile.avatarCrop === "mascot") return "";
-  const match = profile.avatarUrl.match(/^\/api\/attachments\/([A-Za-z0-9-]+\.(?:png|jpg|webp))$/);
-  if (!match?.[1]) return "";
-  try {
-    const file = readAttachment(match[1]);
-    if (!file || file.bytes.length === 0 || file.bytes.length > 500_000) return "";
-    const mime = file.mime === "image/jpg" ? "image/jpeg" : file.mime;
-    if (!ALLOWED_INLINE_AVATAR_MIMES.has(mime)) return "";
-    const dataUrl = `data:${mime};base64,${file.bytes.toString("base64")}`;
-    return dataUrl.length <= 720_000 ? dataUrl : "";
-  } catch {
-    return "";
-  }
 }
 
 export async function handleCollabGroupReadOrDelete(opts: {
@@ -189,13 +170,10 @@ export async function handleCollabGroupWrite(opts: {
       throw new DoneBotGatewayError(403, "coding_agent_group_forbidden", EXTERNAL_CODING_AGENT_GROUP_REFUSAL);
     }
     const identity = await gateway.collabIdentity();
+    const appearance = buildCollabChatBotAppearance(bot, parsed.data.avatar_data_url);
     const added = await collabAddChatBot(gateway.collabCtx(), scopeType, targetId, {
       installation_id: identity.installation_id,
-      local_bot_id: bot.id,
-      bot_name: bot.name.slice(0, 120),
-      bot_color: bot.color || "blue",
-      bot_avatar_url: inlineBotAvatarDataUrl(bot),
-      bot_title: (bot.title ?? "").slice(0, 200),
+      ...appearance,
       allow_all_members: parsed.data.allow_all_members,
       allowed_user_ids: parsed.data.allowed_user_ids,
     });

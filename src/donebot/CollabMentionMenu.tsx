@@ -6,7 +6,7 @@ import {
   personSecondaryLabel,
   type LocalBotSummary,
 } from "./collab-types";
-import { CollabAvatar, CollabBotBadge } from "./CollabAvatar";
+import { CollabAvatar, CollabBotBadge, resolveCollabBotBadgeFromChatBot } from "./CollabAvatar";
 
 export interface MentionableMember {
   user_id: number;
@@ -113,12 +113,14 @@ export function CollabMentionMenu({
   items,
   activeKey,
   myUserId,
+  myInstallId,
   localBotById,
   onSelect,
 }: {
   items: readonly CollabMentionItem[];
   activeKey: string | null;
   myUserId: number;
+  myInstallId?: string;
   localBotById: ReadonlyMap<string, LocalBotSummary>;
   onSelect: (item: CollabMentionItem) => void;
 }) {
@@ -146,7 +148,11 @@ export function CollabMentionMenu({
                 const ownerName = bot.owner_user_id === myUserId
                   ? "我"
                   : displayPersonName({ remark: bot.owner_remark, nickname: bot.owner_nickname, email: bot.owner_email });
-                const localMatch = bot.owner_user_id === myUserId ? localBotById.get(bot.local_bot_id) : undefined;
+                const localMatch = bot.owner_user_id === myUserId
+                  && (!myInstallId || bot.installation_id === myInstallId)
+                  ? localBotById.get(bot.local_bot_id)
+                  : undefined;
+                const badge = resolveCollabBotBadgeFromChatBot(bot, localMatch);
                 return (
                   <li key={item.key} role="option" aria-selected={active} aria-disabled={item.disabled}>
                     <button
@@ -163,14 +169,7 @@ export function CollabMentionMenu({
                         item.disabled && "cursor-not-allowed opacity-55",
                       )}
                     >
-                      <CollabBotBadge
-                        name={bot.bot_name}
-                        color={bot.bot_color || localMatch?.color}
-                        avatarUrl={bot.bot_avatar_url || localMatch?.avatar_url}
-                        bodyId={localMatch?.mascot_body}
-                        faceColor={localMatch?.mascot_face_color}
-                        size={28}
-                      />
+                      <CollabBotBadge {...badge} size={28} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] font-medium text-ink">@{bot.bot_name}</div>
                         <div className="truncate text-[11px] text-ink-tertiary">

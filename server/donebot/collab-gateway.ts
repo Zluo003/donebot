@@ -172,6 +172,9 @@ export function collabRemoveChatBot(ctx: CollabGatewayTransport, scopeType: stri
 export function collabClaimBotInvocation(ctx: CollabGatewayTransport, installationId: string) {
   return collabJsonCall(ctx, "user", "/api/v1/donebot/collab/chat-bots/claim", "POST", { installation_id: installationId }, 15_000);
 }
+export function collabSyncChatBots(ctx: CollabGatewayTransport, installationId: string, bots: Record<string, unknown>[]) {
+  return collabJsonCall(ctx, "user", "/api/v1/donebot/collab/chat-bots/sync", "POST", { installation_id: installationId, bots }, 15_000);
+}
 export function collabReplyBotInvocation(ctx: CollabGatewayTransport, invocationId: string, payload: { body?: string; error?: string }) {
   return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/chat-bots/invocations/${invocationId}/reply`, "POST", payload, 15_000);
 }

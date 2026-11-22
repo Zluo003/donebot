@@ -48,7 +48,7 @@ import {
   TEAM_ROLES,
   type CollabOverview,
 } from "./collab-types";
-import { CollabAvatar, CollabBotBadge, CollabTeamBadge } from "./CollabAvatar";
+import { CollabAvatar, CollabBotBadge, CollabTeamBadge, resolveCollabBotBadgeFromMessage } from "./CollabAvatar";
 import {
   buildCollabMentionItems,
   CollabMentionMenu,
@@ -618,14 +618,15 @@ export function CollabChatView({
               const fileSrc = msg.file_id ? `/api/donebot/collab/chats/files/${encodeURIComponent(msg.file_id)}?inline=1` : "";
 
               const botMeta = isBot && msg.sender_bot_id ? chatBotById.get(msg.sender_bot_id) : undefined;
-              const localBotMeta = botMeta && botMeta.owner_user_id === myUserId ? localBotById.get(botMeta.local_bot_id) : undefined;
-              const avatarNode = isBot ? (
+              const localBotMeta = botMeta
+                && botMeta.owner_user_id === myUserId
+                && botMeta.installation_id === overview.identity.installation_id
+                ? localBotById.get(botMeta.local_bot_id)
+                : undefined;
+              const botBadge = isBot ? resolveCollabBotBadgeFromMessage(msg, botMeta, localBotMeta) : null;
+              const avatarNode = botBadge ? (
                 <CollabBotBadge
-                  name={msg.sender_bot_name || "机器人"}
-                  color={msg.sender_bot_color || botMeta?.bot_color || localBotMeta?.color}
-                  avatarUrl={msg.sender_bot_avatar_url || botMeta?.bot_avatar_url || localBotMeta?.avatar_url}
-                  bodyId={localBotMeta?.mascot_body}
-                  faceColor={localBotMeta?.mascot_face_color}
+                  {...botBadge}
                   size={30}
                   className="mb-0.5"
                 />
@@ -783,6 +784,7 @@ export function CollabChatView({
               items={mentionItems}
               activeKey={selectableMentionItems[mentionIdx]?.key ?? null}
               myUserId={myUserId}
+              myInstallId={overview.identity.installation_id}
               localBotById={localBotById}
               onSelect={insertMentionItem}
             />

@@ -17,7 +17,12 @@ import {
   displayPersonName,
   type CollabOverview,
 } from "./collab-types";
-import { CollabAvatar, CollabBotBadge } from "./CollabAvatar";
+import {
+  CollabAvatar,
+  CollabBotBadge,
+  compressLocalBotAvatarUrl,
+  resolveCollabBotBadgeFromChatBot,
+} from "./CollabAvatar";
 
 export interface ChatBotMemberCandidate {
   user_id: number;
@@ -194,12 +199,17 @@ export function CollabChatBotsPanel({
     setError("");
     setNotice("");
     try {
+      const pickedBot = localBotById.get(selectedBotId);
+      const avatarDataUrl = pickedBot?.avatar_url && pickedBot.avatar_crop !== "mascot"
+        ? await compressLocalBotAvatarUrl(pickedBot.avatar_url)
+        : "";
       await api(`/api/donebot/collab/chats/${scopeType}/${encodeURIComponent(targetId)}/bots`, {
         method: "POST",
         body: JSON.stringify({
           bot_id: selectedBotId,
           allow_all_members: addMode === "all",
           allowed_user_ids: addMode === "selected" ? addAllowedIds : [],
+          ...(avatarDataUrl ? { avatar_data_url: avatarDataUrl } : {}),
         }),
       });
       setAdding(false);
@@ -325,8 +335,13 @@ export function CollabChatBotsPanel({
                             name={bot.name}
                             color={bot.color}
                             avatarUrl={bot.avatar_url}
+                            avatarCrop={bot.avatar_crop}
+                            avatarZoom={bot.avatar_zoom}
+                            avatarFocusX={bot.avatar_focus_x}
+                            avatarFocusY={bot.avatar_focus_y}
                             bodyId={bot.mascot_body}
                             faceColor={bot.mascot_face_color}
+                            expression={bot.mascot_expression}
                             size={26}
                           />
                           <div className="min-w-0 flex-1">
@@ -387,19 +402,15 @@ export function CollabChatBotsPanel({
               ? "我"
               : displayPersonName({ remark: bot.owner_remark, nickname: bot.owner_nickname, email: bot.owner_email });
             const editing = editingBotId === bot.id;
-            const localMatch = isOwner ? localBotById.get(bot.local_bot_id) : undefined;
+            const localMatch = isOwner && bot.installation_id === myInstallId
+              ? localBotById.get(bot.local_bot_id)
+              : undefined;
+            const badge = resolveCollabBotBadgeFromChatBot(bot, localMatch);
 
             return (
               <div key={bot.id} data-collab-chat-bot-row={bot.id} className="flex flex-col gap-2 px-3.5 py-2.5">
                 <div className="flex items-center gap-2.5">
-                  <CollabBotBadge
-                    name={bot.bot_name}
-                    color={bot.bot_color || localMatch?.color}
-                    avatarUrl={bot.bot_avatar_url || localMatch?.avatar_url}
-                    bodyId={localMatch?.mascot_body}
-                    faceColor={localMatch?.mascot_face_color}
-                    size={32}
-                  />
+                  <CollabBotBadge {...badge} size={32} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-[13.5px] font-medium text-ink">{bot.bot_name}</span>

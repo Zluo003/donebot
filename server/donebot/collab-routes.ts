@@ -6,9 +6,9 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
-import { botAvatarProfile, botAvatarUrlFromStoredPath } from "../../shared/bot-avatar.ts";
+import { botAvatarProfile, botAvatarUrlFromStoredPath, clampAvatarFocus, clampAvatarZoom } from "../../shared/bot-avatar.ts";
 import { EXTERNAL_CODING_AGENT_SHARE_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
-import { DONEBOT_COLLAB_MAX_FILE_BYTES } from "../../shared/donebot-collab.ts";
+import { DONEBOT_COLLAB_MAX_FILE_BYTES, type DoneBotCollabChatBot } from "../../shared/donebot-collab.ts";
 import { saveImage } from "../attachments.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
@@ -18,8 +18,9 @@ import { importPackageDocument, PackageImportError, type PackageImportDeps } fro
 import type { ModelSelection } from "../contracts.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { boundedResponseText } from "./bounded-response.ts";
+import { buildCollabChatBotAppearance, chatBotNeedsSync, type CollabChatBotAppearance } from "./collab-bot-avatar.ts";
 import { createCollabChatBotWorker, type CollabBotTurnOptions } from "./collab-chat-bots.ts";
-import { collabListChatBots, collabListGroups } from "./collab-gateway.ts";
+import { collabListChatBots, collabListGroups, collabSyncChatBots } from "./collab-gateway.ts";
 import { handleCollabGroupReadOrDelete, handleCollabGroupWrite } from "./collab-group-routes.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
@@ -508,6 +509,39 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           }),
         ]);
         if (ctx) botWorker.setActive(hasOwnedChatBots);
+        const visibleLocalById = new Map<string, BotRecord>();
+        for (const bot of deps.store.bots) {
+          if (!bot.hidden && !isExternalCodingAgentBot(bot)) visibleLocalById.set(bot.id, bot);
+        }
+        if (ctx && hasOwnedChatBots) {
+          const appearances = new Map<string, CollabChatBotAppearance>();
+          const dirty = new Map<string, CollabChatBotAppearance>();
+          for (const list of Object.values(chatBots)) {
+            if (!Array.isArray(list)) continue;
+            for (let i = 0; i < list.length; i += 1) {
+              const entry = list[i] as DoneBotCollabChatBot;
+              if (entry.owner_user_id !== myId || entry.installation_id !== identity.installation_id) continue;
+              const localBot = visibleLocalById.get(entry.local_bot_id);
+              if (!localBot) continue;
+              let appearance = appearances.get(localBot.id);
+              if (!appearance) {
+                appearance = buildCollabChatBotAppearance(localBot);
+                appearances.set(localBot.id, appearance);
+              }
+              if (chatBotNeedsSync(entry, appearance)) {
+                dirty.set(localBot.id, appearance);
+                list[i] = { ...entry, ...appearance };
+              }
+            }
+          }
+          if (dirty.size > 0) {
+            await collabSyncChatBots(
+              ctx,
+              identity.installation_id,
+              [...dirty.values()].slice(0, 50) as unknown as Record<string, unknown>[],
+            ).catch(() => {});
+          }
+        }
         const localBots = deps.store.bots
           .filter(bot => !bot.hidden && !isExternalCodingAgentBot(bot))
           .map(bot => {
@@ -522,8 +556,12 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
               color: bot.color,
               avatar_url: avatar.avatarCrop !== "mascot" ? avatar.avatarUrl : undefined,
               avatar_crop: avatar.avatarCrop,
+              avatar_zoom: clampAvatarZoom(bot.avatarZoom ?? 1),
+              avatar_focus_x: clampAvatarFocus(bot.avatarFocusX ?? 0.5),
+              avatar_focus_y: clampAvatarFocus(bot.avatarFocusY ?? 0.5),
               mascot_body: bot.mascotBody ?? undefined,
               mascot_face_color: bot.mascotFaceColor ?? undefined,
+              mascot_expression: bot.mascotExpression ?? undefined,
               has_soul: Boolean(bot.soul && bot.soul.trim()),
               skill_count: skillCount,
             };

@@ -17,7 +17,9 @@ import {
   collabListChatBots,
   collabListGroups,
   collabReplyBotInvocation,
+  collabSyncChatBots,
 } from "./collab-gateway.ts";
+import { appearanceSignature, buildCollabChatBotAppearance } from "./collab-bot-avatar.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 export interface CollabBotTurnOutcome {
@@ -250,6 +252,7 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
   let polling = false;
   let timer: ReturnType<typeof setInterval> | null = null;
   const runningInvocations = new Set<string>();
+  const syncedAppearanceSigs = new Map<string, string>();
   const threadByChat = new Map<string, string>();
 
   async function runViaLocalTurn(inv: DoneBotClaimedBotInvocation, display: string, full: string): Promise<string> {
@@ -324,7 +327,7 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
 
   async function processInvocation(
     inv: DoneBotClaimedBotInvocation,
-    identity: { account_id: string; email: string },
+    identity: { account_id: string; email: string; installation_id: string },
   ): Promise<void> {
     if (runningInvocations.has(inv.id)) return;
     runningInvocations.add(inv.id);
@@ -342,6 +345,16 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
           body: EXTERNAL_CODING_AGENT_GROUP_REFUSAL,
         });
         return;
+      }
+      const appearance = buildCollabChatBotAppearance(bot);
+      const sig = appearanceSignature(appearance);
+      if (syncedAppearanceSigs.get(bot.id) !== sig) {
+        try {
+          await collabSyncChatBots(ctx, identity.installation_id, [appearance as unknown as Record<string, unknown>]);
+          syncedAppearanceSigs.set(bot.id, sig);
+        } catch {
+          // Best-effort appearance sync; never block bot reply.
+        }
       }
 
       const chatContext = await loadChatContext(deps, inv, identity);

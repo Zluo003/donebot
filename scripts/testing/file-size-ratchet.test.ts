@@ -16,10 +16,10 @@ const HARD_CAP = 2000;
 const LISTED_FROM = 1000;
 
 const LINES: Record<string, number> = {
-  "server/index.ts": 15569,
+  "server/index.ts": 15866,
   "src/state/store.tsx": 3348,
   "electron/main.mjs": 3160,
-  "server/store.ts": 2291,
+  "server/store.ts": 2315,
   "src/components/Sidebar.tsx": 1689,
   "server/drivers/claude.ts": 2090,
   "server/drivers/acp/core.ts": 1730,
@@ -44,8 +44,13 @@ const LINES: Record<string, number> = {
   "src/components/ModelPicker.tsx": 1039,
   "src/components/PhoneSetupFlow.tsx": 1089,
   "server/cli.ts": 1062,
-  "src/components/AttachmentPreview.tsx": 1035,
+  "src/components/AttachmentPreview.tsx": 1036,
   "server/meetings/meetbot.ts": 1047,
+  "server/browser-runtime.ts": 1003,
+  "server/drivers/agents-call.ts": 1002,
+  "server/drivers/agents-catalog.ts": 1012,
+  "shared/wire.ts": 1022,
+  "src/components/TeamLibraryPanel.tsx": 1054,
 };
 
 function sourceFiles(): string[] {

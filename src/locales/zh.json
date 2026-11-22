@@ -1474,7 +1474,7 @@
   "cloudSetup.ready.runFailed": "刚才没能启动。它仍会按计划运行。",
   "cloudSetup.ready.later": "等待计划时间",
   "cloudSetup.myCloud": "我的云服务器",
-  "native.donebotCloud.name": "我的云服务器",
+  "native.donebotCloud.name": "DoneBot Cloud",
   "native.menu.addCloud": "添加云服务器",
   "native.menu.openDoneBotCloud": "开通云服务",
   "native.switcher.addCloudSub": "让你的机器人全天候运行",

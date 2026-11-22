@@ -118,7 +118,7 @@ test("native workspace choices use saved IDs and connect opens settings without 
 test("DoneBot Cloud's switcher uses the app language, hides addresses and purchase after connection, and keeps server actions hidden", () => {
   const origin = "https://11861a47-7240-4f99-bf19-bd01d411596f.cloud.donebot.cn";
   const base = { onSwitch() {}, onConnect() {}, onForget() {}, onAddCloud() {} };
-  for (const [language, label, add] of [["en", "DoneBot Cloud", "Add a Cloud…"], ["zh", "我的云服务器", "添加云服务器"], ["zh-tw", "我的雲伺服器", "新增雲伺服器"]]) {
+  for (const [language, label, add] of [["en", "DoneBot Cloud", "Add a Cloud…"], ["zh", "DoneBot Cloud", "添加云服务器"], ["zh-tw", "DoneBot Cloud", "新增雲伺服器"]]) {
     const text = createNativeText({ saved: language });
     const empty = env.workspaceMenuTemplate({ environments: [], activeId: "local" }, { ...base, text });
     assert.equal(empty.find(item => item.id === "workspace-add-cloud").label, add);

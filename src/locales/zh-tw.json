@@ -1556,7 +1556,7 @@
   "cloudSetup.ready.runFailed": "現在無法啟動，但仍會依排程執行。",
   "cloudSetup.ready.later": "等待排程",
   "cloudSetup.myCloud": "我的雲伺服器",
-  "native.donebotCloud.name": "我的雲伺服器",
+  "native.donebotCloud.name": "DoneBot Cloud",
   "cloudSetup.alwaysOn": "隨時在線",
   "cloudSetup.sleepsWhenIdle": "閒置時休眠",
   "cloudWelcome.title": "歡迎使用 {name}",

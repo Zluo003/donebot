@@ -21,7 +21,7 @@ export const levelWithin = (level: ApprovalMode, limit: ApprovalMode): boolean =
  * confirms). */
 export function supportsApprovalMode(driverKind: string | undefined, mode: ApprovalMode): boolean {
   if (mode === "custom") return driverKind === "codex";
-  if (mode === "edits") return ["claudeAgent", "grokAgent", "antigravityAgent", "qwenAgent", "geminiAgent"].includes(driverKind ?? "");
+  if (mode === "edits") return ["claudeAgent", "grokAgent", "antigravityAgent", "qwenAgent", "geminiAgent", "zcodeAgent"].includes(driverKind ?? "");
   return true;
 }
 

@@ -5,6 +5,7 @@ import { api, useStore, type Bot } from "@/state/store";
 import { BotPickerList } from "./BotPickerList";
 import { t } from "@/lib/i18n";
 import { imeComposing } from "@/lib/send-key";
+import { isExternalCodingAgentBot } from "../../shared/coding-agents";
 
 export function TeamDialog({ section, rename = false, onClose, onRenamed }: {
   section?: string;
@@ -29,7 +30,7 @@ export function TeamDialog({ section, rename = false, onClose, onRenamed }: {
   }, []);
   const moving = section !== undefined && !rename;
   const title = rename ? t("team.rename") : managing ? t(initialMembers.current.size ? "team.manageBots" : "team.addBots") : moving ? t("team.moveTo", { name: section || t("teamSettings.general") }) : t("team.create");
-  const candidates = state.bots.filter((bot) => !bot.hidden && (managing || !moving || (bot.section?.trim() ?? "") !== section));
+  const candidates = state.bots.filter((bot) => !bot.hidden && !isExternalCodingAgentBot(bot) && (managing || !moving || (bot.section?.trim() ?? "") !== section));
   const addBotIds = [...picked].filter(id => !initialMembers.current.has(id));
   const removeBotIds = [...initialMembers.current].filter(id => !picked.has(id));
   const unchanged = managing ? !addBotIds.length && !removeBotIds.length : moving && !picked.size;

@@ -77,7 +77,7 @@ import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { DONEBOT_TEAM_LENDING, teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession, teamRuntimeSessionLive, teamSharedComputersEnabled } from "./donebot/team-runtime.ts";
-import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts";
+import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts"; import { createDoneBotCodingAgentRoutes, externalCodingAgentMemberRefusal, externalCodingAgentSwitchRefusal } from "./donebot/coding-agents.ts";
 import { createTeamFilesRoutes } from "./routes/team-files.ts";
 import { createTeamTemplateRoutes } from "./routes/team-templates.ts";
 import { createShareGithubAccess } from "./host/share-github-access.ts";
@@ -866,7 +866,7 @@ function customDomainStatus() {
     serverIpv4: DESKTOP_MANAGED ? null : customDomainIpv4(),
   };
 }
-const registry = new ProviderRegistry(DONEBOT_GATEWAY ? [donebotHost.driver] : BUILT_IN_DRIVERS, { statusFile: join(DATA_DIR, "providers", "engine-status.json") });
+const registry = new ProviderRegistry(DONEBOT_GATEWAY ? donebotHost.drivers : BUILT_IN_DRIVERS, { statusFile: join(DATA_DIR, "providers", "engine-status.json") });
 const supportsApprovalMode = createApprovalModeSupport(registry);
 registerEnginesBinDir(); const engineUpdates = engineUpdatesFor({ drivers: BUILT_IN_DRIVERS, turnRunning: () => store.bots.some((bot) => botHasActiveTurn(bot.id)) || store.groups.some(groupIsWorking) || Boolean(routines?.hasActiveRuns()), configuredClis: () => Object.values(providerConfigs()).flatMap((entry) => { const cli = (entry.config as { cli?: unknown } | undefined)?.cli; return typeof cli === "string" && cli ? [cli] : []; }), updated: () => { registry.forgetSnapshots(); broadcast({ kind: "config", ...configStatus() }); } });
 
@@ -1594,7 +1594,7 @@ function computerPlaceRefusal(kind: ComputerKind): { message: string; code: "clo
   return managed ? { message: managed, code: "managed_policy" } : undefined;
 }
 function policyModelRefusal(instance: { instanceId: string; driverKind: string }): string | undefined {
-  if (DONEBOT_GATEWAY && instance.driverKind !== "donebot") return "Models are provided through your DoneBot account.";
+  if (DONEBOT_GATEWAY && !donebotHost.allowsDriver(instance.driverKind)) return "Models are provided through your DoneBot account.";
   const engine = BUILT_IN_DRIVERS.find(driver => driver.driverKind === instance.driverKind)?.metadata.displayName;
   return managedPolicy.modelRefusal({ driverKind: instance.driverKind, displayName: engine }, managedDesktop.owns(instance.instanceId));
 }
@@ -2674,7 +2674,7 @@ function checkedModelSelection(
     instanceId: value.instanceId.trim(),
     model: value.model.trim(),
   };
-  if (hostedModels && !hostedModels.allows(selection)) return { ok: false, status: 400, error: hostedModels.error() };
+  if (hostedModels && !hostedModels.allows(selection)) return { ok: false, status: 400, error: hostedModels.error() }; const codingSwitchError = DONEBOT_GATEWAY ? externalCodingAgentSwitchRefusal(current?.selection, selection) : undefined; if (codingSwitchError) return { ok: false, status: 403, error: codingSwitchError };
   if (value.effort !== undefined) {
     if (!isEffortLevel(value.effort)) {
       return { ok: false, status: 400, error: `effort "${String(value.effort)}" is not recognized` };
@@ -2858,7 +2858,7 @@ function checkedMemberIds(value: unknown): { ok: true; memberIds: string[] } | {
     return { ok: false, error: `unknown channel member: ${String(value[invalidIndex])}` };
   }
   const memberIds = [...new Set(value as string[])].filter((id) => store.bot(id));
-  if (!memberIds.length) return { ok: false, error: "a channel needs at least one bot" };
+  if (!memberIds.length) return { ok: false, error: "a channel needs at least one bot" }; const codingMemberError = externalCodingAgentMemberRefusal(memberIds, (id) => store.bot(id)); if (codingMemberError) return { ok: false, error: codingMemberError };
   if (memberIds.every((id) => store.bot(id)?.hidden)) {
     return {
       ok: false,
@@ -12673,7 +12673,7 @@ const handoffAttachments = createHandoffAttachments({
   sentPaths: id => handoffFiles.sentWith(id).attachments?.map(file => file.path) ?? [],
   openGenerated: (threadId, messageId, path) => donebotMediaHost.generatedFile(threadId, messageId, path),
 });
-ROUTES.unshift(donebotMobile.route, donebotDesktop.route, ...donebotHost.routes, ...(DONEBOT_GATEWAY ? [doneBotModelRoutes, donebotMediaHost.artifactRoute] : []));
+ROUTES.unshift(donebotMobile.route, donebotDesktop.route, ...donebotHost.routes, ...(DONEBOT_GATEWAY ? [createDoneBotCodingAgentRoutes({ enabled: donebotHost.localCodingAgentsEnabled, store, registry, providerAuthSessions, providerConfigs, engineLaunches, reloadProviders, publicBot, broadcast, configStatus }), doneBotModelRoutes, donebotMediaHost.artifactRoute] : []));
 const internalToolRoutes = createInternalToolRoutes({ donebotMedia: DONEBOT_GATEWAY ? donebotMediaHost.internalRoute : undefined, engineLimits: { instances: () => registry.instances(), configs: () => instanceConfigs(cfg), status: (instanceId) => registry.knownSnapshot(instanceId), load: (accounts) => loadPlanUsage({ accounts }), audienceOf: (threadId) => teamHost.audienceOf(threadId), guestDriven: cloudGuestDriven, dataDir: DATA_DIR }, helpers: { decider, extractor }, notifications: { bot: (id) => store.bot(id), team: sharedMembership, broadcast }, xResearch: { credential: () => researchCredential(cfg.treg?.key), botEnabled: (botId) => store.bot(botId)?.xResearch !== false, cloudHome: CLOUD_HOME !== null, researchOff: () => researchAvailability.refused() } }); const waitRoutes = createWaitRoutes({ waits: botWaits, cloudHome: Boolean(CLOUD_HOME), sleeps: Boolean(CLOUD_HOME) && CLOUD_TEAM === null }); ROUTES.push(createXConnectorRoutes({ credential: () => researchCredential(cfg.treg?.key), included: () => xCredential(), unavailable: () => xResearchStatus().unavailable === true }));
 
 // Live calls: the client holds the WebRTC audio; the key never leaves the harness, which creates the session.

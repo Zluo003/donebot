@@ -46,6 +46,7 @@ import { refusalBody, userError, userErrorFields } from "../user-errors.ts";
 import type { ServerErrorBody } from "../../shared/server-text.ts";
 import { cloudDesktopSocket } from "../cloud-desktop.ts";
 import type { Postiz } from "../postiz/service.ts";
+import { isExternalCodingAgentInstance } from "../../shared/coding-agents.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BusyFlag {
@@ -164,6 +165,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         if (patch.newBotDefaults.profile.modelSelection) {
           const checked = checkedModelSelection(patch.newBotDefaults.profile.modelSelection);
           if (!checked.ok) return json(res, checked.status, refusalBody(checked));
+          if (hostedModels && isExternalCodingAgentInstance(checked.selection.instanceId)) {
+            return json(res, 400, { error: "新建机器人的默认模型需选择 DoneBot 统一网关模型。" });
+          }
           patch.newBotDefaults.profile.modelSelection = checked.selection;
         }
         for (const skill of patch.newBotDefaults.skills) {
@@ -174,6 +178,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       if (hostedModels && patch.defaultModelSelection) {
         const checked = checkedModelSelection(patch.defaultModelSelection);
         if (!checked.ok) return json(res, checked.status, refusalBody(checked));
+        if (isExternalCodingAgentInstance(checked.selection.instanceId)) {
+          return json(res, 400, { error: "默认模型需选择 DoneBot 统一网关模型。" });
+        }
       }
       if (patch.automaticRecovery?.enabled) {
         const checked = checkedModelSelection(patch.automaticRecovery.backup, undefined, true);

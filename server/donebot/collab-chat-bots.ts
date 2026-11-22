@@ -1,4 +1,5 @@
 import { redactSecretsInText } from "../../shared/redact.ts";
+import { EXTERNAL_CODING_AGENT_GROUP_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import type {
   DoneBotClaimedBotInvocation,
   DoneBotCollabChatBot,
@@ -333,6 +334,12 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
       if (!bot || bot.hidden) {
         await collabReplyBotInvocation(ctx, inv.id, {
           body: `抱歉，本机未找到机器人「${inv.bot_name}」，可能已被移除或停用。`,
+        });
+        return;
+      }
+      if (isExternalCodingAgentBot(bot)) {
+        await collabReplyBotInvocation(ctx, inv.id, {
+          body: EXTERNAL_CODING_AGENT_GROUP_REFUSAL,
         });
         return;
       }

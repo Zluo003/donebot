@@ -32,6 +32,7 @@ const ENGINES: Readonly<Record<string, EngineRow>> = {
   qwenAgent: { resume: true },
   hermesAgent: { resume: true },
   deepseekAgent: { resume: true },
+  zcodeAgent: { resume: true },
   clineAgent: { resume: true },
   copilotAgent: { resume: true },
   commandCodeAgent: { resume: true },

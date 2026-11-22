@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 import { botAvatarProfile, botAvatarUrlFromStoredPath } from "../../shared/bot-avatar.ts";
+import { EXTERNAL_CODING_AGENT_SHARE_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import { DONEBOT_COLLAB_MAX_FILE_BYTES } from "../../shared/donebot-collab.ts";
 import { saveImage } from "../attachments.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
@@ -508,7 +509,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         ]);
         if (ctx) botWorker.setActive(hasOwnedChatBots);
         const localBots = deps.store.bots
-          .filter(bot => !bot.hidden)
+          .filter(bot => !bot.hidden && !isExternalCodingAgentBot(bot))
           .map(bot => {
             const collected = deps.collectTeamSkills([bot], "all");
             const skillCount = collected.ok ? (collected.skillsByBot.get(bot.id)?.length ?? 0) : 0;
@@ -739,6 +740,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "请选择要共享的 Bot 和授权对象。");
         const bot = deps.store.bot(parsed.data.bot_id);
         if (!bot || bot.hidden) throw new DoneBotGatewayError(404, "bot_not_found", "未找到该 Bot。");
+        if (isExternalCodingAgentBot(bot)) throw new DoneBotGatewayError(403, "coding_agent_share_forbidden", EXTERNAL_CODING_AGENT_SHARE_REFUSAL);
         const identity = await gateway.collabIdentity();
         const payload = buildBotSharePayload(deps, bot, identity.email);
         return json(res, 200, await gateway.collabSaveBot({
@@ -756,6 +758,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         if (parsed.data.bot_id) {
           const bot = deps.store.bot(parsed.data.bot_id);
           if (bot && !bot.hidden) {
+            if (isExternalCodingAgentBot(bot)) throw new DoneBotGatewayError(403, "coding_agent_share_forbidden", EXTERNAL_CODING_AGENT_SHARE_REFUSAL);
             const identity = await gateway.collabIdentity();
             Object.assign(payload, buildBotSharePayload(deps, bot, identity.email));
           }

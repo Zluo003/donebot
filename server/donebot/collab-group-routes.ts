@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { z } from "zod";
 import { botAvatarProfile } from "../../shared/bot-avatar.ts";
+import { EXTERNAL_CODING_AGENT_GROUP_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import { readAttachment } from "../attachments.ts";
 import { PASS } from "../routes/table.ts";
 import type { BotRecord, Store } from "../store.ts";
@@ -184,6 +185,9 @@ export async function handleCollabGroupWrite(opts: {
     if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "请选择要添加到群聊的本机 Bot。");
     const bot = store.bot(parsed.data.bot_id);
     if (!bot || bot.hidden) throw new DoneBotGatewayError(404, "bot_not_found", "未找到该本机 Bot。");
+    if (isExternalCodingAgentBot(bot)) {
+      throw new DoneBotGatewayError(403, "coding_agent_group_forbidden", EXTERNAL_CODING_AGENT_GROUP_REFUSAL);
+    }
     const identity = await gateway.collabIdentity();
     const added = await collabAddChatBot(gateway.collabCtx(), scopeType, targetId, {
       installation_id: identity.installation_id,

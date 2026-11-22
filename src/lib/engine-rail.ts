@@ -1,11 +1,18 @@
 import type { InstanceInfo } from "@/state/store";
+import { isExternalCodingAgentInstance } from "../../shared/coding-agents";
 
 export { engineDisplayName } from "@/lib/engine-name";
 
 export function configuredModelInstances(instances: readonly InstanceInfo[], selectedInstanceId?: string): InstanceInfo[] {
-  return instances.filter((instance) =>
-    instance.instanceId === selectedInstanceId
-      || (instance.snapshot.state === "available" && (instance.models.options.length > 0 || instance.snapshot.chatgptPlan === true)));
+  if (isExternalCodingAgentInstance(selectedInstanceId)) {
+    return instances.filter((instance) => instance.instanceId === selectedInstanceId);
+  }
+  const hasDoneBot = instances.some((instance) => instance.instanceId === "donebot");
+  return instances.filter((instance) => {
+    if (hasDoneBot && isExternalCodingAgentInstance(instance.instanceId)) return false;
+    return instance.instanceId === selectedInstanceId
+      || (instance.snapshot.state === "available" && (instance.models.options.length > 0 || instance.snapshot.chatgptPlan === true));
+  });
 }
 
 export function isCustomOnly(instance: { access?: InstanceInfo["access"] } | undefined): boolean {

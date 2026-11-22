@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { Plus, Users, X } from "lucide-react";
+import { Plus, Terminal, Users, X } from "lucide-react";
 import { openBot, useStore, type Bot } from "@/state/store";
 import { rankByName } from "@/lib/palette-rank";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -40,6 +40,7 @@ export function SidebarNewChatPanel({
   anchor,
   onClose,
   onNewBot,
+  onAddCodingAgent,
   onNewGroup,
   style,
   showThreads: layoutShowThreads,
@@ -48,6 +49,7 @@ export function SidebarNewChatPanel({
   onClose: () => void;
   /** Absent for someone who can't make a bot here. */
   onNewBot?: () => void;
+  onAddCodingAgent?: () => void;
   onNewGroup: () => void;
   style?: CSSProperties;
   showThreads?: boolean;
@@ -56,7 +58,7 @@ export function SidebarNewChatPanel({
   const modeShowThreads = useShowThreads();
   const showThreads = layoutShowThreads ?? modeShowThreads;
   const [query, setQuery] = useState("");
-  const [cursor, setCursor] = useState(onNewBot ? 2 : 1);
+  const [cursor, setCursor] = useState((onNewBot ? 1 : 0) + (onAddCodingAgent ? 1 : 0) + 1);
   const [place, setPlace] = useState(() => newChatPanelPlacement(null, typeof window === "undefined" ? 0 : window.innerWidth));
   const [maxHeight, setMaxHeight] = useState(() => newChatPanelMaxHeight(typeof window === "undefined" ? 0 : window.innerHeight));
   const rootRef = useRef<HTMLDivElement>(null);
@@ -88,6 +90,7 @@ export function SidebarNewChatPanel({
   const bots = rankByName(state.bots.filter((bot) => !bot.hidden), query);
   const actions = [
     ...(onNewBot ? [{ key: "bot", icon: <Plus size={16} />, label: t("sidebar.newChat.createBot"), run: onNewBot }] : []),
+    ...(onAddCodingAgent ? [{ key: "coding-agent", icon: <Terminal size={16} />, label: "接入外部编程 Agent", run: onAddCodingAgent }] : []),
     { key: "group", icon: <Users size={16} />, label: t("sidebar.newChat.createGroup"), run: onNewGroup },
   ];
   const count = actions.length + bots.length;

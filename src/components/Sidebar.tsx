@@ -1,10 +1,10 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
 import { DONEBOT_TEMPLATES_ENABLED } from "@/donebot/services";
 import { isCollabEligible, useCollabStore } from "@/donebot/collab-store";
-import { CollabSidebarList, CollabSidebarSwitch } from "@/donebot/CollabSidebar";
+import { CollabSidebarList, CollabSidebarSwitch } from "@/donebot/CollabSidebar"; import { CodingAgentsDialog } from "@/donebot/CodingAgentsDialog";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, LayoutTemplate, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, Plus, Search, SquarePen, TextQuote, Trash2, Users, X } from "lucide-react";
+import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, LayoutTemplate, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, Plus, Search, SquarePen, Terminal, TextQuote, Trash2, Users, X } from "lucide-react";
 import { sidebarState } from "./sidebar-state";
 import { sameFields, useStoreDispatch, useStoreSelector } from "@/state/store-select";
 import { useStoreRef } from "@/state/store-ref";
@@ -942,6 +942,8 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const inboxSupport = useInboxSupport();
   const [newRoom, setNewRoom] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [codingAgentsOpen, setCodingAgentsOpen] = useState(false);
+  const canAddCodingAgent = !remoteClient && state.config?.donebot?.enabled === true && state.config?.cloudHome !== true && !state.config?.team;
   const [newFolderBotId, setNewFolderBotId] = useState<string | null>(null);
   const [newTaskFolderBotId, setNewTaskFolderBotId] = useState<string | null>(null);
   const newTaskFolderBot = state.bots.find((bot) => bot.id === newTaskFolderBotId);
@@ -1158,6 +1160,9 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
             <BotIcon size={16} className="text-ink-secondary" />
             <span className="flex-1">{advanced ? t("sidebar.newBot") : t("sidebar.newBotSimple")}</span>
             {advanced && <ShortcutHint id="new-bot" />}
+          </button>}
+          {canAddCodingAgent && <button onClick={() => { setPlusOpen(false); setCodingAgentsOpen(true); }} role="menuitem" className={plusItem}>
+            <Terminal size={16} className="text-ink-secondary" />接入外部编程 Agent
           </button>}
           <button
             onClick={() => {
@@ -1493,7 +1498,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
       {rail ? <SimpleRailFooter
         owner={cloudOwner}
         archived={archivedEntry}
-      /> : phone ? <SidebarPhoneBar query={query} onQuery={setQuery} /> : <SidebarFooter density={density} simple={simpleDesk} advancedLayout={advanced} owner={cloudOwner} archived={archivedEntry} toolsCollapsed={sectionCollapsed(TOOLS_SECTION_ID)} onToggleTools={layoutInteractive ? () => toggleSection(TOOLS_SECTION_ID) : undefined} />}
+      /> : phone ? <SidebarPhoneBar query={query} onQuery={setQuery} /> : <SidebarFooter density={density} simple={simpleDesk} advancedLayout={advanced} owner={cloudOwner} archived={archivedEntry} toolsCollapsed={sectionCollapsed(TOOLS_SECTION_ID)} onToggleTools={layoutInteractive ? () => toggleSection(TOOLS_SECTION_ID) : undefined} onOpenCodingAgents={canAddCodingAgent ? () => setCodingAgentsOpen(true) : undefined} />}
       </GlassBar>
       </GlassScrollFrame>
 
@@ -1605,10 +1610,12 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           style={windowNoDragStyle}
           onClose={() => setNewChatOpen(false)}
           onNewBot={teamSettingsAllowed === false ? undefined : () => { setNewChatOpen(false); dispatch({ type: "newBot" }); }}
+          onAddCodingAgent={canAddCodingAgent ? () => { setNewChatOpen(false); setCodingAgentsOpen(true); } : undefined}
           onNewGroup={() => { setNewChatOpen(false); setNewRoom(true); }}
         />,
         document.body,
       )}
+      {canAddCodingAgent && <CodingAgentsDialog open={codingAgentsOpen} onClose={() => setCodingAgentsOpen(false)} />}
       {!remoteClient && archivedBotsOpen && (
         <ArchivedBotsPanel
           bots={archivedBots}

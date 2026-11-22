@@ -1,10 +1,16 @@
 import { join } from "node:path";
+import {
+  isExternalCodingAgentDriver,
+  isExternalCodingAgentInstance,
+} from "../../shared/coding-agents.ts";
 import type { DoneBotAccountState } from "../../shared/donebot.ts";
+import { cloudHomeConfigured } from "../cloud-home.ts";
 import type { AppConfig } from "../config.ts";
 import type { InstanceConfigMap, ModelSelection, ProviderInstance } from "../contracts.ts";
 import type { SessionRecord } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import { doneBotProtocol, doneBotTextModels } from "./catalog.ts";
+import { buildExternalCodingAgentConfigs, externalCodingAgentDrivers } from "./coding-agents.ts";
 import { DoneBotGateway } from "./gateway.ts";
 import { createDoneBotCredentialStore, type DoneBotPrivatePort } from "./credential-store.ts";
 import { cloudCredentialStore } from "./cloud-credential.ts";
@@ -59,11 +65,22 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     protocol: id => doneBotProtocol(id, catalog()), authenticated, requiresExecutionContext: Boolean(team),
     toolUse: id => model(id)?.capabilities?.tool_calling === true,
   });
-  const allows = (selection: ModelSelection) => selection.instanceId === "donebot" && doneBotTextModels(catalog()).options.some(model => model.id === selection.model);
-  const select = (previous?: ModelSelection): ModelSelection => previous && allows(previous) ? { ...previous } : { instanceId: "donebot", model: doneBotTextModels(catalog()).default };
+  const localCodingAgentsEnabled = enabled && !team && !cloudCredential && !cloudHomeConfigured();
+  const drivers = localCodingAgentsEnabled ? [driver, ...externalCodingAgentDrivers()] : [driver];
+  const allowsDriver = (driverKind: string) =>
+    driverKind === "donebot" || (localCodingAgentsEnabled && isExternalCodingAgentDriver(driverKind));
+  const allowsDoneBot = (selection: ModelSelection) =>
+    selection.instanceId === "donebot" && doneBotTextModels(catalog()).options.some(model => model.id === selection.model);
+  const allows = (selection: ModelSelection) =>
+    allowsDoneBot(selection) || (localCodingAgentsEnabled && isExternalCodingAgentInstance(selection.instanceId) && selection.model.trim().length > 0);
+  const select = (previous?: ModelSelection): ModelSelection =>
+    previous && allowsDoneBot(previous) ? { ...previous } : { instanceId: "donebot", model: doneBotTextModels(catalog()).default };
   const policy = {
     allows, select, error: () => authenticated() ? "Choose an available DoneBot model." : team ? "团队模型执行尚未启用或目录不可用。" : "Sign in to DoneBot to use models.",
-    configs: (): InstanceConfigMap => ({ donebot: { driver: "donebot", displayName: "DoneBot", config: {} } }),
+    configs: (): InstanceConfigMap => ({
+      donebot: { driver: "donebot", displayName: "DoneBot", config: {} },
+      ...(localCodingAgentsEnabled ? buildExternalCodingAgentConfigs() : {}),
+    }),
     decorate: (instance: ProviderInstance) => instance,
     resetTask: (previous: ModelSelection, next: ModelSelection) => previous.instanceId !== next.instanceId || previous.model !== next.model
       ? { resumeCursors: {}, lastInstanceId: undefined, rewound: true, lastContextModel: undefined, appliedCompactionId: undefined } : {},
@@ -115,7 +132,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     return json(res, 403, { error: "个人账号与账单只能在个人工作空间管理。" });
   };
   return {
-    enabled, gateway, driver, policy, team, authenticated, state,
+    enabled, localCodingAgentsEnabled, gateway, driver, drivers, allowsDriver, policy, team, authenticated, state,
     onChange(listener: () => void) {
       const unsubGateway = gateway.onChange(listener);
       teamListeners.add(listener);

@@ -27,6 +27,7 @@ import { ModelgoDriver } from "./modelgo.ts";
 import { MetaDriver } from "./meta.ts";
 import { MuseCodeDriver } from "./muse-code.ts";
 import { MinimaxDriver } from "./minimax.ts";
+import { ZCodeDriver } from "./zcode.ts";
 
 export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
   GrokDriver,
@@ -57,4 +58,5 @@ export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
   MetaDriver,
   MuseCodeDriver,
   DeepSeekAgentDriver,
+  ZCodeDriver,
 ];

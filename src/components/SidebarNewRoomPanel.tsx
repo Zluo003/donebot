@@ -6,6 +6,7 @@ import { imeComposing } from "@/lib/send-key";
 import { linkedBotToFarOption, useLinkedBots } from "@/lib/linked-bots";
 import { BotPickerList } from "./BotPickerList";
 import { RoomFarMembers } from "./RoomFarMembers";
+import { isExternalCodingAgentBot } from "../../shared/coding-agents";
 
 /** Sidebar → New channel: name it, optionally file it under a context, pick its bots. */
 export function NewRoomPanel({ onClose }: { onClose: () => void }) {
@@ -13,7 +14,7 @@ export function NewRoomPanel({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [section, setSection] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const bots = state.bots.filter((b) => !b.hidden);
+  const bots = state.bots.filter((b) => !b.hidden && !isExternalCodingAgentBot(b));
   const linkedBots = useLinkedBots();
   const farChoices = useMemo(() => linkedBots.map(linkedBotToFarOption), [linkedBots]);
   const toggle = (id: string) =>

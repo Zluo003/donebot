@@ -18,6 +18,8 @@ import { useFestivalDress, wornBody } from "@/lib/festival-dress";
 import { t } from "@/lib/i18n";
 import { CarvedAvatar } from "./CarvedAvatar";
 import { steelBodyImage } from "@/lib/steel-body";
+import { codingAgentByInstanceId } from "../../shared/coding-agents";
+import { CodingAgentAvatar } from "@/donebot/CodingAgentAvatar";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
@@ -230,6 +232,7 @@ export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
     avatarFocusY?: number;
     mascotBody?: BotBodyId | null;
     mascotFaceColor?: MascotFaceColor | null;
+    modelSelection?: { instanceId?: string | null } | null;
   };
 };
 
@@ -262,6 +265,10 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
   });
 
   if (outcome !== "flatImage") {
+    const codingAgent = codingAgentByInstanceId(bot.modelSelection?.instanceId);
+    if (codingAgent) {
+      return <CodingAgentAvatar agentId={codingAgent.id} size={size} label={label ?? bot.name} />;
+    }
     return (
       <MausAvatar
         bodyId={wornBody(bot.mascotBody, bot.color, festival)}

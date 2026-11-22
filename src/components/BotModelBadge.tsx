@@ -2,6 +2,7 @@ import type { Bot, InstanceInfo } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { engineDisplayName } from "@/lib/engine-name";
+import { isExternalCodingAgentInstance } from "../../shared/coding-agents";
 import { InstanceProviderMark } from "./ProviderIcons";
 
 export function botModel(bot: Pick<Bot, "modelSelection">, instances: InstanceInfo[]): { instance: InstanceInfo; label: string } | null {
@@ -27,6 +28,7 @@ export function BotModelBadge({ bot, instances, avatarSize }: {
   instances: InstanceInfo[];
   avatarSize: number;
 }) {
+  if (isExternalCodingAgentInstance(bot.modelSelection.instanceId)) return null;
   const model = botModel(bot, instances);
   if (!model) return null;
   const size = Math.max(14, Math.round(avatarSize * 0.4));

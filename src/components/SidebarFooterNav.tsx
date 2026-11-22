@@ -1,4 +1,4 @@
-import { AppWindow, FolderOpen, Globe, Puzzle, UsersRound, Zap } from "lucide-react";
+import { AppWindow, FolderOpen, Globe, Puzzle, Terminal, UsersRound, Zap } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
 import { useAppTriggers } from "@/lib/app-triggers";
@@ -122,12 +122,14 @@ export function SidebarFooterNav({
   collapsed = false,
   onToggleCollapsed,
   advancedLayout,
+  onOpenCodingAgents,
 }: {
   density: SidebarDensity;
   rail?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   advancedLayout?: boolean;
+  onOpenCodingAgents?: () => void;
 }) {
   const { state, dispatch } = useStore();
   const interfaceAdvanced = useAdvancedMode();
@@ -197,6 +199,15 @@ export function SidebarFooterNav({
       )}
       {filesRow}
       {teamFilesRow}
+      {onOpenCodingAgents && (
+        <NavRow
+          id="coding-agents"
+          label="编程 Agent"
+          iconsOnly={iconsOnly || toolbar}
+          icon={(active) => <Terminal size={iconSize} className={tone(active)} />}
+          onClick={onOpenCodingAgents}
+        />
+      )}
       {advanced && webPanels.map((panel) => (
         <NavRow
           key={panel.id}

@@ -6,6 +6,7 @@ import { useBotEditor } from "./BotEditorContext";
 import { ProposalStatus } from "./ProposalStatus";
 import { ThreadModelsLine } from "../ThreadModelsLine";
 import { t } from "@/lib/i18n";
+import { isExternalCodingAgentInstance } from "../../../shared/coding-agents";
 import { Select } from "../Select";
 
 export function ModelSection({ bot }: { bot: Bot }) {
@@ -87,8 +88,12 @@ export function FallbackChain({ bot, onChange }: { bot: Bot; onChange: (fallback
   };
   const freeModel = (instance: InstanceInfo) => [...(defaultOffered(instance) ? [instance.models.default] : []), ...offeredBy(instance).map((model) => model.id)]
     .find((model) => model.trim() && !taken(instance.instanceId, model));
-  const available = state.instances.filter((instance) =>
-    instance.snapshot.state === "available" && Boolean(instance.models.default.trim()) && freeModel(instance) !== undefined);
+  const isExternalCoding = isExternalCodingAgentInstance(bot.modelSelection.instanceId);
+  const available = state.instances.filter((instance) => {
+    if (isExternalCoding) return instance.instanceId === bot.modelSelection.instanceId && instance.snapshot.state === "available" && Boolean(instance.models.default.trim()) && freeModel(instance) !== undefined;
+    if (isExternalCodingAgentInstance(instance.instanceId)) return false;
+    return instance.snapshot.state === "available" && Boolean(instance.models.default.trim()) && freeModel(instance) !== undefined;
+  });
   const nameOf = (instanceId: string) => state.instances.find((instance) => instance.instanceId === instanceId)?.displayName ?? instanceId;
   const modelsOf = (entry: NonNullable<Bot["fallback"]>[number], index: number) => {
     const offered = offeredBy(state.instances.find((candidate) => candidate.instanceId === entry.instanceId))

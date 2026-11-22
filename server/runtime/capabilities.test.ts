@@ -25,6 +25,7 @@ const EXPECTED: Record<string, EngineCapabilities> = {
   qwenAgent: { resume: true, nativeReviewer: true, full: true, edits: true, subagents: false },
   hermesAgent: bare,
   deepseekAgent: bare,
+  zcodeAgent: { resume: true, nativeReviewer: false, full: true, edits: true, subagents: false },
   clineAgent: { resume: true, nativeReviewer: false, full: true, edits: false, subagents: false },
   copilotAgent: bare,
   commandCodeAgent: bare,

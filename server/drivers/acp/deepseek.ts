@@ -83,7 +83,16 @@ function storedCredentialPresent(path: string): boolean {
   if (!doc || typeof doc !== "object") return false;
   const root = doc as Record<string, unknown>;
   const refs = root.refs && typeof root.refs === "object" ? root.refs as Record<string, unknown> : {};
-  return nonEmpty(refs.DEEPSEEK_API_KEY) || nonEmpty(root.DEEPSEEK_API_KEY);
+  if (nonEmpty(refs.DEEPSEEK_API_KEY) || nonEmpty(root.DEEPSEEK_API_KEY)) return true;
+  const records = root.records && typeof root.records === "object" ? root.records as Record<string, unknown> : {};
+  const account = records["deepseek-account-platform/default"];
+  if (account && typeof account === "object") {
+    const payload = (account as Record<string, unknown>).payload;
+    if (payload && typeof payload === "object" && nonEmpty((payload as Record<string, unknown>).token)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 const DOTENV_LINE = /^[ \t]*(?:export[ \t]+)?DEEPSEEK_API_KEY[ \t]*=(.*)$/;

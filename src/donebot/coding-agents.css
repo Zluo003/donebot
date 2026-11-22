@@ -1,0 +1,27 @@
+dialog.donebot-coding-agents-dialog {
+  margin: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-ink);
+  max-width: min(680px, calc(100vw - 24px));
+  max-height: min(86vh, 760px);
+  width: 100%;
+  overflow: visible;
+}
+
+dialog.donebot-coding-agents-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+dialog.donebot-coding-agents-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.donebot-coding-agents-dialog::backdrop {
+  background: rgb(0 0 0 / 0.54);
+  backdrop-filter: blur(3px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}

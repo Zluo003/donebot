@@ -6,6 +6,7 @@ import { RoomFarMembers, farMembersOf } from "./RoomFarMembers";
 import { mergeFarMembers, useLinkedBots } from "@/lib/linked-bots";
 import { nextMemberIds } from "@/lib/room-members";
 import { t } from "@/lib/i18n";
+import { isExternalCodingAgentBot } from "../../shared/coding-agents";
 
 export function ManageMembersPanel({
   group,
@@ -24,7 +25,7 @@ export function ManageMembersPanel({
 
   // Archived bots stay listed while still members, or a room could keep a member you cannot remove.
   const bots = useMemo(
-    () => state.bots.filter((b) => !b.hidden || group.memberIds.includes(b.id)),
+    () => state.bots.filter((b) => (!b.hidden && !isExternalCodingAgentBot(b)) || group.memberIds.includes(b.id)),
     [state.bots, group.memberIds],
   );
   const linkedBots = useLinkedBots();

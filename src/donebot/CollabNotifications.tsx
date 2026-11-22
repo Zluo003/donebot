@@ -15,6 +15,7 @@ import {
 } from "./collab-store";
 import { COLLAB_BUTTON } from "./collab-types";
 import { CollabAvatar } from "./CollabAvatar";
+import { CollabDialogsHost } from "./CollabDialogs";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -218,6 +219,7 @@ export function CollabToastHost() {
           );
         })}
       </div>
+      <CollabDialogsHost />
     </>
   );
 }

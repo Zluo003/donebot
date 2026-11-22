@@ -609,6 +609,23 @@ export class DoneBotGateway {
   }
   collabBotPackage(id: string) { return this.collabRequest(`collab/bots/${id}/package`, "GET", undefined, 30_000); }
   collabDeleteBot(id: string) { return this.collabRequest(`collab/bots/${id}`, "DELETE"); }
+  collabChatSummaries() { return this.collabRequest("collab/chats/summary", "GET"); }
+  collabChatMessages(scopeType: string, targetId: string, query: string) {
+    return this.collabRequest(`collab/chats/${scopeType}/${targetId}/messages${query ? `?${query}` : ""}`, "GET");
+  }
+  collabChatFiles(scopeType: string, targetId: string) { return this.collabRequest(`collab/chats/${scopeType}/${targetId}/files`, "GET"); }
+  collabSendChatMessage(scopeType: string, targetId: string, body: string) {
+    return this.collabRequest(`collab/chats/${scopeType}/${targetId}/messages`, "POST", { body });
+  }
+  collabMarkChatRead(scopeType: string, targetId: string, lastReadId?: number) {
+    return this.collabRequest(`collab/chats/${scopeType}/${targetId}/read`, "POST", lastReadId ? { last_read_id: lastReadId } : {});
+  }
+  collabSendChatFile(scopeType: string, targetId: string, query: string, body: ReadableStream<Uint8Array> | Buffer, headers: Record<string, string>, signal?: AbortSignal): Promise<Response> {
+    return collabStreamCall(this.collabCtx(), "auto", () => `/api/v1/donebot/collab/chats/${scopeType}/${targetId}/files${query ? `?${query}` : ""}`, { method: "POST", body, headers, signal });
+  }
+  collabDownloadChatFile(fileId: string, inline: boolean, signal?: AbortSignal): Promise<Response> {
+    return collabStreamCall(this.collabCtx(), "auto", () => `/api/v1/donebot/collab/chats/files/${fileId}${inline ? "?inline=1" : ""}`, { method: "GET", signal });
+  }
 
   private async teamRequest(path: string, method: string, accountId?: string, body?: unknown, key?: string): Promise<unknown> {
     const epoch = this.epoch, session = await this.validSession();

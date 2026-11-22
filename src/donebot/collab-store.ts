@@ -2,18 +2,23 @@ import { useSyncExternalStore } from "react";
 import { api } from "@/state/api";
 import type { Action, AppState } from "@/state/store";
 import { notificationSoundsEnabled } from "@/lib/notification-preferences";
-import { cleanError, type CollabOverview } from "./collab-types";
+import type { CollabChatScopeType, DoneBotChatMessage, DoneBotChatSummary } from "../../shared/donebot-collab";
+import { cleanError, displayPersonName, type CollabOverview } from "./collab-types";
 import { isDoneBotCloudBrowser } from "./services";
 
 export type CollabSidebarTab = "bots" | "collab";
 
 export type CollabSelection =
-  | { kind: "inbox" }
-  | { kind: "folders" }
-  | { kind: "bots" }
-  | { kind: "contacts"; focus?: "add-friend" | "create-team" | "accept-team" }
   | { kind: "friend"; userId: number }
-  | { kind: "team"; teamId: string };
+  | { kind: "team"; teamId: string }
+  | null;
+
+export type CollabDialogTarget =
+  | null
+  | { kind: "add-friend" }
+  | { kind: "add-team"; mode?: "create" | "join" }
+  | { kind: "requests" }
+  | { kind: "invite-team"; teamId: string };
 
 export interface CollabToastItem {
   id: string;
@@ -32,6 +37,8 @@ export interface CollabStoreState {
   sidebarTab: CollabSidebarTab;
   selection: CollabSelection;
   selectionTouched: boolean;
+  rightPanelOpen: boolean;
+  activeDialog: CollabDialogTarget;
   overview: CollabOverview | null;
   loaded: boolean;
   refreshing: boolean;
@@ -46,11 +53,22 @@ export const COLLAB_DESKTOP_NOTIFY_THREAD_ID = "collab-inbox";
 
 const NOTIFIED_STORAGE_PREFIX = "donebot.collab.notified.";
 
+function defaultSelectionFor(overview: CollabOverview | null): CollabSelection {
+  if (!overview) return null;
+  const firstFriend = overview.friends.friends[0];
+  if (firstFriend) return { kind: "friend", userId: firstFriend.user_id };
+  const firstTeam = overview.teams[0];
+  if (firstTeam) return { kind: "team", teamId: firstTeam.id };
+  return null;
+}
+
 function initialState(): CollabStoreState {
   return {
     sidebarTab: "bots",
-    selection: { kind: "folders" },
+    selection: null,
     selectionTouched: false,
+    rightPanelOpen: true,
+    activeDialog: null,
     overview: null,
     loaded: false,
     refreshing: false,
@@ -91,6 +109,23 @@ export function isCollabEligible(config?: AppState["config"] | null): boolean {
 export function collabPendingCount(overview: CollabOverview | null): number {
   if (!overview) return 0;
   return overview.friends.incoming_requests.length + overview.incoming_team_invitations.length;
+}
+
+export function collabUnreadChatCount(overview: CollabOverview | null): number {
+  if (!overview?.chat_summaries) return 0;
+  return overview.chat_summaries.reduce((sum, item) => sum + Math.max(0, item.unread_count || 0), 0);
+}
+
+export function collabTotalBadgeCount(overview: CollabOverview | null): number {
+  return collabPendingCount(overview) + collabUnreadChatCount(overview);
+}
+
+export function findChatSummary(
+  overview: CollabOverview | null,
+  scopeType: CollabChatScopeType,
+  targetId: string,
+): DoneBotChatSummary | undefined {
+  return overview?.chat_summaries?.find(item => item.scope_type === scopeType && item.target_id === targetId);
 }
 
 function loadNotified(accountId: string): Set<string> {
@@ -137,11 +172,10 @@ function announceText(text: string) {
 
 function fireDesktopNotification(item: CollabToastItem) {
   if (typeof window === "undefined") return;
-  const focusedOnCollabInbox = typeof document !== "undefined"
+  const viewingRequests = typeof document !== "undefined"
     && document.hasFocus()
-    && uiActiveView === "collab"
-    && (state.selection.kind === "inbox" || state.selection.kind === "contacts");
-  if (focusedOnCollabInbox) return;
+    && state.activeDialog?.kind === "requests";
+  if (viewingRequests) return;
 
   const silent = !notificationSoundsEnabled();
   const desktop = window.ogb?.desktopNotifications;
@@ -166,7 +200,7 @@ function fireDesktopNotification(item: CollabToastItem) {
     });
     note.onclick = () => {
       window.focus();
-      setState({ sidebarTab: "collab", selection: { kind: "inbox" }, selectionTouched: true });
+      setState({ sidebarTab: "collab", activeDialog: { kind: "requests" } });
     };
   } catch { /* ignore unsupported Notification constructor */ }
 }
@@ -208,7 +242,6 @@ function reconcileNotifications(overview: CollabOverview) {
   const incoming = incomingItemsFrom(overview);
   const liveIds = new Set(incoming.map(item => item.id));
 
-  // Drop toasts that are no longer pending (accepted, declined, or revoked elsewhere).
   const retained = state.toasts.filter(toast => liveIds.has(toast.id));
   const newlyArrived: CollabToastItem[] = [];
   for (const item of incoming) {
@@ -220,8 +253,8 @@ function reconcileNotifications(overview: CollabOverview) {
     persistNotified(accountId, seen);
   }
 
-  const viewingInbox = uiActiveView === "collab" && (state.selection.kind === "inbox" || state.selection.kind === "contacts");
-  const nextToasts = viewingInbox
+  const viewingRequests = state.activeDialog?.kind === "requests";
+  const nextToasts = viewingRequests
     ? retained
     : [...retained, ...newlyArrived.filter(item => !retained.some(t => t.id === item.id))].slice(-4);
 
@@ -233,7 +266,7 @@ function reconcileNotifications(overview: CollabOverview) {
 
   if (newlyArrived.length > 0) {
     const latest = newlyArrived[newlyArrived.length - 1]!;
-    if (!viewingInbox) {
+    if (!viewingRequests) {
       announceText(`${latest.title}：${latest.body}，有可用操作`);
     }
     for (const item of newlyArrived) {
@@ -263,35 +296,100 @@ export function syncCollabAccount(accountKey: string | null) {
 export function setCollabSidebarTab(tab: CollabSidebarTab) {
   if (state.sidebarTab === tab) return;
   const patch: Partial<CollabStoreState> = { sidebarTab: tab };
-  if (tab === "collab" && !state.selectionTouched && collabPendingCount(state.overview) > 0) {
-    patch.selection = { kind: "inbox" };
+  if (tab === "collab" && !state.selection && state.overview) {
+    patch.selection = defaultSelectionFor(state.overview);
   }
   setState(patch);
 }
 
 export function setCollabSelection(selection: CollabSelection) {
-  const clearToasts = selection.kind === "inbox";
+  setState({ selection, selectionTouched: true });
+}
+
+export function setCollabRightPanelOpen(open: boolean) {
+  if (state.rightPanelOpen !== open) setState({ rightPanelOpen: open });
+}
+
+export function toggleCollabRightPanel() {
+  setState({ rightPanelOpen: !state.rightPanelOpen });
+}
+
+export function openCollabDialog(dialog: CollabDialogTarget) {
   setState({
-    selection,
-    selectionTouched: true,
-    ...(clearToasts && state.toasts.length > 0 ? { toasts: [] } : {}),
+    activeDialog: dialog,
+    ...(dialog?.kind === "requests" && state.toasts.length > 0 ? { toasts: [] } : {}),
   });
 }
 
 export function openCollabDestination(
   dispatch: (action: Action) => void,
-  selection?: CollabSelection,
+  destination?: CollabSelection | { kind: "inbox" },
 ) {
-  const target: CollabSelection = selection
-    ?? (collabPendingCount(state.overview) > 0 ? { kind: "inbox" } : state.selectionTouched ? state.selection : { kind: "folders" });
+  if (destination && destination.kind === "inbox") {
+    setState({
+      sidebarTab: "collab",
+      selection: state.selection ?? defaultSelectionFor(state.overview),
+      activeDialog: { kind: "requests" },
+      ...(state.toasts.length > 0 ? { toasts: [] } : {}),
+    });
+    dispatch({ type: "showCollab" });
+    void refreshCollabOverview({ silent: true });
+    return;
+  }
+  const target: CollabSelection = destination !== undefined
+    ? destination
+    : (state.selection ?? defaultSelectionFor(state.overview));
   setState({
     sidebarTab: "collab",
     selection: target,
-    selectionTouched: true,
-    ...(target.kind === "inbox" && state.toasts.length > 0 ? { toasts: [] } : {}),
+    selectionTouched: destination !== undefined || state.selectionTouched,
   });
   dispatch({ type: "showCollab" });
   void refreshCollabOverview({ silent: true });
+}
+
+export function clearChatSummaryUnread(scopeType: CollabChatScopeType, targetId: string) {
+  const overview = state.overview;
+  if (!overview?.chat_summaries) return;
+  let changed = false;
+  const next = overview.chat_summaries.map(item => {
+    if (item.scope_type === scopeType && item.target_id === targetId && item.unread_count > 0) {
+      changed = true;
+      return { ...item, unread_count: 0 };
+    }
+    return item;
+  });
+  if (changed) {
+    setState({ overview: { ...overview, chat_summaries: next } });
+  }
+}
+
+export function upsertChatSummaryFromMessage(msg: DoneBotChatMessage, unreadDelta = 0) {
+  const overview = state.overview;
+  if (!overview) return;
+  const list = [...(overview.chat_summaries ?? [])];
+  const senderName = displayPersonName({
+    remark: msg.sender_remark,
+    nickname: msg.sender_nickname,
+    email: msg.sender_email,
+  });
+  const idx = list.findIndex(item => item.scope_type === msg.scope_type && item.target_id === msg.target_id);
+  const prevUnread = idx >= 0 ? list[idx]!.unread_count : 0;
+  const updated: DoneBotChatSummary = {
+    scope_type: msg.scope_type,
+    target_id: msg.target_id,
+    last_message_id: msg.id,
+    last_kind: msg.kind,
+    last_body: msg.body,
+    last_file_name: msg.file_name,
+    last_sender_id: msg.sender_id,
+    last_sender_name: senderName,
+    last_created_at: msg.created_at,
+    unread_count: unreadDelta < 0 ? 0 : prevUnread + unreadDelta,
+  };
+  if (idx >= 0) list[idx] = updated;
+  else list.unshift(updated);
+  setState({ overview: { ...overview, chat_summaries: list } });
 }
 
 export function dismissCollabToast(id: string) {
@@ -318,13 +416,26 @@ export async function refreshCollabOverview(opts: { silent?: boolean } = {}): Pr
         refreshing: false,
         error: "",
       };
-      // Keep selection valid if a friend or team was removed.
-      if (state.selection.kind === "friend" && !next.friends.friends.some(f => f.user_id === (state.selection as { kind: "friend"; userId: number }).userId)) {
-        patch.selection = { kind: "contacts" };
-      } else if (state.selection.kind === "team" && !next.teams.some(t => t.id === (state.selection as { kind: "team"; teamId: string }).teamId)) {
-        patch.selection = { kind: "contacts" };
-      } else if (!state.selectionTouched && collabPendingCount(next) > 0) {
-        patch.selection = { kind: "inbox" };
+      // Keep selection valid; auto-pick first friend/team if none selected yet.
+      if (state.selection?.kind === "friend" && !next.friends.friends.some(f => f.user_id === (state.selection as { kind: "friend"; userId: number }).userId)) {
+        patch.selection = defaultSelectionFor(next);
+      } else if (state.selection?.kind === "team" && !next.teams.some(t => t.id === (state.selection as { kind: "team"; teamId: string }).teamId)) {
+        patch.selection = defaultSelectionFor(next);
+      } else if (!state.selection) {
+        patch.selection = defaultSelectionFor(next);
+      }
+      // If currently viewing an active chat, keep its unread count at 0 until poll catches up.
+      if (uiActiveView === "collab" && state.selection && next.chat_summaries) {
+        const activeScope = state.selection.kind;
+        const activeTarget = state.selection.kind === "friend" ? String(state.selection.userId) : state.selection.teamId;
+        patch.overview = {
+          ...next,
+          chat_summaries: next.chat_summaries.map(item =>
+            item.scope_type === activeScope && item.target_id === activeTarget
+              ? { ...item, unread_count: 0 }
+              : item,
+          ),
+        };
       }
       setState(patch);
       reconcileNotifications(next);

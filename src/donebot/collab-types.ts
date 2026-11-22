@@ -1,5 +1,6 @@
 import type {
   CollabAccess,
+  DoneBotChatSummary,
   DoneBotCollabActivity,
   DoneBotCollabBotsSnapshot,
   DoneBotCollabFoldersSnapshot,
@@ -36,6 +37,7 @@ export interface CollabOverview {
   team_capabilities: string[];
   team_members: Record<string, DoneBotTeamMember[]>;
   incoming_team_invitations: DoneBotIncomingTeamInvitation[];
+  chat_summaries?: DoneBotChatSummary[];
   local_bots: LocalBotSummary[];
 }
 
@@ -102,6 +104,23 @@ export function formatFileSize(bytes?: number | null): string {
   if (bytes < 1024) return `${Math.round(bytes)} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 2 : 1)} MB`;
+}
+
+export function formatChatTime(iso?: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+  if (sameDay) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return sameYear
+    ? `${date.getMonth() + 1}/${date.getDate()}`
+    : `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 export function cleanError(error: unknown, fallback = "操作未完成，请稍后重试。"): string {

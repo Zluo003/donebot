@@ -1,7 +1,40 @@
 export type CollabAccess = "read" | "write";
 export type CollabSubjectType = "user" | "team";
+export type CollabChatScopeType = "friend" | "team";
 
 export const DONEBOT_COLLAB_MAX_FILE_BYTES = 100 * 1024 * 1024;
+
+export interface DoneBotChatMessage {
+  id: number;
+  scope_type: CollabChatScopeType;
+  target_id: string;
+  sender_id: number;
+  sender_email: string;
+  sender_nickname?: string;
+  sender_avatar_url?: string;
+  sender_remark?: string;
+  kind: "text" | "file";
+  body: string;
+  file_id?: string;
+  file_name?: string;
+  file_mime?: string;
+  file_size?: number;
+  file_sha256?: string;
+  created_at: string;
+}
+
+export interface DoneBotChatSummary {
+  scope_type: CollabChatScopeType;
+  target_id: string;
+  last_message_id: number;
+  last_kind?: "text" | "file";
+  last_body?: string;
+  last_file_name?: string;
+  last_sender_id?: number;
+  last_sender_name?: string;
+  last_created_at?: string;
+  unread_count: number;
+}
 
 export interface DoneBotFriend {
   user_id: number;

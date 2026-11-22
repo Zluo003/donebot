@@ -56,7 +56,13 @@ function parseDirectoryEntries(rawText: string): RemoteDirEntry[] {
     const parsed = JSON.parse(rawText) as { entries?: Array<{ name?: string; type?: string; size?: number }> };
     if (Array.isArray(parsed?.entries)) {
       return parsed.entries
-        .filter(item => typeof item?.name === "string" && item.type !== "blocked-link" && item.type !== "protected")
+        .filter(item =>
+          typeof item?.name === "string"
+          && item.name.length > 0
+          && !item.name.startsWith(".")
+          && item.type !== "blocked-link"
+          && item.type !== "protected",
+        )
         .map(item => ({
           name: item.name!,
           kind: (item.type === "directory" ? "dir" : "file") as "dir" | "file",
@@ -70,10 +76,14 @@ function parseDirectoryEntries(rawText: string): RemoteDirEntry[] {
     const trimmed = line.trim();
     if (!trimmed) continue;
     if (trimmed.endsWith("/")) {
-      entries.push({ name: trimmed.slice(0, -1), kind: "dir" });
+      const name = trimmed.slice(0, -1);
+      if (name && !name.startsWith(".")) entries.push({ name, kind: "dir" });
     } else {
       const match = /^(.+?)\s+\((\d+)\s*B\)$/.exec(trimmed);
-      entries.push(match ? { name: match[1]!, kind: "file", size: Number(match[2]) } : { name: trimmed, kind: "file" });
+      const name = match ? match[1]! : trimmed;
+      if (name && !name.startsWith(".")) {
+        entries.push(match ? { name, kind: "file", size: Number(match[2]) } : { name, kind: "file" });
+      }
     }
   }
   return entries.sort((a, b) => (a.kind !== b.kind ? (a.kind === "dir" ? -1 : 1) : a.name.localeCompare(b.name)));
@@ -129,7 +139,7 @@ async function uploadWithProgress(url: string, file: File, onProgress: (pct: num
   });
 }
 
-export function CollabFolderBrowser({ folder }: { folder: DoneBotSharedFolder }) {
+export function CollabFolderBrowser({ folder, compact = false }: { folder: DoneBotSharedFolder; compact?: boolean }) {
   const [browsePath, setBrowsePath] = useState("");
   const [entries, setEntries] = useState<RemoteDirEntry[]>([]);
   const [rawText, setRawText] = useState("");
@@ -401,7 +411,12 @@ export function CollabFolderBrowser({ folder }: { folder: DoneBotSharedFolder })
             <span className="truncate font-medium text-ink">正在上传「{uploading.name}」…</span>
             <span className="shrink-0 tabular-nums text-ink-secondary">{uploading.percent}%</span>
           </div>
-          <progress className="donebot-upload-progress" max={100} value={uploading.percent} />
+          <progress
+            aria-label={`上传进度 ${uploading.name}`}
+            className="donebot-upload-progress"
+            max={100}
+            value={uploading.percent}
+          />
         </div>
       )}
 
@@ -465,7 +480,7 @@ export function CollabFolderBrowser({ folder }: { folder: DoneBotSharedFolder })
           )}
         </div>
       ) : entries.length > 0 ? (
-        <ul className="max-h-72 divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/80 ring-1 ring-inset ring-ink/[0.07]">
+        <ul className={cn("divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/80 ring-1 ring-inset ring-ink/[0.07]", compact ? "max-h-[55vh]" : "max-h-72")}>
           {entries.map(entry => {
             const fullPath = browsePath ? `${browsePath}/${entry.name}` : entry.name;
             const ext = extOf(entry.name);
@@ -525,9 +540,9 @@ export function CollabFolderBrowser({ folder }: { folder: DoneBotSharedFolder })
         </div>
       )}
 
-      <div className="flex items-center justify-between text-[11px] text-ink-tertiary">
-        <span>单个文件支持最大 100 MB 实时流式传输，网关不留存任何文件副本。</span>
-        {canWrite && <span>支持拖拽上传</span>}
+      <div className="flex items-center justify-between gap-2 text-[11px] text-ink-tertiary">
+        <span>支持最大 100 MB 流式传输 · 不显示隐藏文件</span>
+        {canWrite && <span className="shrink-0">支持拖拽</span>}
       </div>
     </div>
   );

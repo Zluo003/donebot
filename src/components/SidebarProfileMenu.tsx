@@ -17,6 +17,7 @@ import {
   Laptop,
   LifeBuoy,
   Loader2,
+  Pencil,
   RefreshCw,
   Settings as SettingsIcon,
   Smartphone,
@@ -54,7 +55,9 @@ import type { CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
 import { FEEDBACK_URL, HELP_CENTER_URL, appVersion, openExternalLink } from "@/lib/app-links";
 import { useOtherServerName } from "@/lib/other-server";
-import { profileForSession, readSessionState, type SessionState } from "@/lib/session";
+import { isOwnerOrAdmin, profileForSession, readSessionState, type SessionState } from "@/lib/session";
+import { isCollabEligible, refreshCollabOverview, useCollabStore } from "@/donebot/collab-store";
+import { CollabProfileDialog } from "@/donebot/CollabAvatar";
 import {
   cloudPhoneDestination,
   connectPhoneEntry,
@@ -467,6 +470,7 @@ export function profileMenuItems({
   simple,
   onUsage,
   onPurchase,
+  onEditProfile,
   onSettings,
   onShortcuts,
   onAbout,
@@ -487,6 +491,7 @@ export function profileMenuItems({
   simple?: { tools: SidebarMenuItem[]; places: SidebarMenuItem[] };
   onUsage: () => void;
   onPurchase?: () => void;
+  onEditProfile?: () => void;
   onSettings: () => void;
   onShortcuts: () => void;
   onAbout: () => void;
@@ -516,13 +521,14 @@ export function profileMenuItems({
     onSelect: onUsage,
   } : null;
   const purchaseItem: SidebarMenuItem | null = onPurchase ? { key: "purchase", label: t("settings.section.purchase"), icon: <Coins size={18} />, onSelect: onPurchase } : null;
+  const editProfileItem: SidebarMenuItem | null = onEditProfile ? { key: "edit-profile", label: "编辑头像与昵称", icon: <Pencil size={18} />, onSelect: onEditProfile } : null;
   const visiblePhone = UPSTREAM_SETTINGS.profilePhone ? phone : [];
   const support: SidebarMenuItem | null = UPSTREAM_SETTINGS.profileSupport ? { key: "support", label: t("sidebar.menu.support"), icon: <LifeBuoy size={18} />, submenu: help, onSelect: () => {} } : null;
   const settings: SidebarMenuItem = { key: "settings", label: t("sidebar.menu.settings"), icon: <SettingsIcon size={18} />, onSelect: onSettings };
   const accountItem: SidebarMenuItem | null = account ? { key: "account", label: account, icon: <CircleUserRound size={18} />, onSelect: onAccount } : null;
   const present = (...items: Array<SidebarMenuItem | null | false>) => items.filter((item): item is SidebarMenuItem => Boolean(item));
   if (!simple) {
-    const rest = [...present(usageItem, purchaseItem), ...visiblePhone, ...present(support), settings, ...present(update), ...(accountItem ? [{ ...accountItem, separatorBefore: true }] : []), ...accounts.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item))];
+    const rest = [...present(editProfileItem, usageItem, purchaseItem), ...visiblePhone, ...present(support), settings, ...present(update), ...(accountItem ? [{ ...accountItem, separatorBefore: true }] : []), ...accounts.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item))];
     return [...move, ...rest.map((item, index) => (move.length && index === 0 ? { ...item, separatorBefore: true } : item))];
   }
   const raised: SidebarMenuItem | null = update && updateTop ? {
@@ -536,7 +542,7 @@ export function profileMenuItems({
     move,
     present(raised),
     simple.tools,
-    [...present(usageItem, purchaseItem), settings, ...present(!support && !raised && update)],
+    [...present(editProfileItem, usageItem, purchaseItem), settings, ...present(!support && !raised && update)],
     [...visiblePhone, ...present(support && { ...support, submenu: raised ? help : [...help, ...present(update)] })],
     [...simple.places, ...present(accountItem)],
     accounts,
@@ -565,9 +571,11 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   iconOnly?: boolean; rail?: boolean; circle?: boolean; simple?: SimpleAccount;
 } = {}) {
   const { state, dispatch } = useStore();
+  const collab = useCollabStore();
   const ownerOrAdmin = useOwnerOrAdmin();
   const simple = account !== undefined;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const cloudUsage = cloudUsageSummary(useCloudPlanSnapshot(simple ? usageBridge(state.config?.cloudHome === true) : undefined));
   const engineUsage = usePlanUsageSummary(simple && menuOpen && cloudUsage === null && window.ogb?.remoteClient?.active !== true);
   const phone = useSidebarPhoneStatus();
@@ -590,7 +598,18 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
     return () => { active = false; };
   }, []);
 
-  const profile = profileForSession(state.config?.profile, session);
+  const collabProfileEnabled = isCollabEligible(state.config) && state.config?.donebot?.authenticated === true && isOwnerOrAdmin(session);
+  const baseProfile = profileForSession(state.config?.profile, session);
+  const collabIdentity = collabProfileEnabled ? collab.overview?.identity : undefined;
+  const syncedName = collabIdentity?.nickname?.trim();
+  const syncedAvatar = collabIdentity ? (collabIdentity.avatar_url?.trim() || undefined) : undefined;
+  const profile = baseProfile || collabIdentity
+    ? {
+      ...baseProfile,
+      name: syncedName || baseProfile?.name?.trim() || baseProfile?.name,
+      avatarUrl: collabIdentity ? (syncedAvatar ?? baseProfile?.avatarUrl?.trim() ?? undefined) : baseProfile?.avatarUrl,
+    }
+    : undefined;
   const name = profileLabel(profile);
   const connectTo = (destination: PhoneDestination) => selectPhoneDestination(destination, { bridge: cloudPhone.bridge, dispatch });
   const remote = window.ogb?.remoteClient?.active === true;
@@ -630,6 +649,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
       places: placeMenuItems(account.place, { owner: account.owner, name: state.config?.team?.name, besideRail, onCloudSettings: openCloudAccount }),
     } } : {}),
     onUsage: () => dispatch({ type: "toggleAppSettings", open: true, section: "usage" }),
+    ...(collabProfileEnabled ? { onEditProfile: () => setEditProfileOpen(true) } : {}),
     ...(doneBotPurchaseVisible({ enabled: state.config?.donebot?.enabled, cloudHome: state.config?.cloudHome, remote, ownerOrAdmin })
       ? { onPurchase: () => dispatch({ type: "toggleAppSettings", open: true, section: "purchase" }) } : {}),
     onSettings: () => dispatch({ type: "toggleAppSettings" }),
@@ -715,6 +735,16 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         )}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      {collabProfileEnabled && (
+        <CollabProfileDialog
+          open={editProfileOpen}
+          onClose={() => setEditProfileOpen(false)}
+          email={collab.overview?.identity.email || state.config?.donebot?.user?.email || profile?.email || ""}
+          initialNickname={collab.overview?.identity.nickname || profile?.name || ""}
+          initialAvatarUrl={collab.overview?.identity.avatar_url || profile?.avatarUrl || ""}
+          onSaved={() => void refreshCollabOverview({ silent: true })}
+        />
+      )}
       {accounts.sheet && <AccountsSheet adding={accounts.sheet.email} note={accounts.sheet.note} onClose={accounts.closeSheet} />}
       {phoneAppOpen && <PhoneAppDialog
         open

@@ -116,7 +116,8 @@ async function enrichListFilesWithSizes(folder, relPath, result) {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.entries)) return result;
     const target = await sharedPath(folder, relPath);
-    const entries = await Promise.all(parsed.entries.map(async entry => {
+    const visible = parsed.entries.filter(entry => typeof entry?.name === "string" && !entry.name.startsWith("."));
+    const entries = await Promise.all(visible.map(async entry => {
       if (entry?.type !== "file" || typeof entry.name !== "string") return entry;
       try {
         const st = await fsp.lstat(path.join(target, entry.name));

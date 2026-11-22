@@ -169,13 +169,17 @@ describe("DoneBot collab routes and bot tools", () => {
     expect(gateway.collabRelayPoll).toHaveBeenCalledTimes(1);
   });
 
-  it("updates user profile + local sync, sets friend remark, and rejects oversized (>100MB) file uploads", async () => {
+  it("updates user profile + local sync (returning local_avatar_url), sets friend remark, proxies chat APIs, and rejects oversized (>100MB) file uploads", async () => {
     const syncLocalProfile = vi.fn();
     const gateway = {
       collabIdentity: vi.fn().mockResolvedValue({ account_id: "101", installation_id: "11111111-1111-4111-8111-111111111111", device_name: "Alice Mac", email: "alice@example.invalid" }),
       collabUpdateProfile: vi.fn().mockResolvedValue({ username: "阿泽", avatar_url: "" }),
       collabSetFriendRemark: vi.fn().mockResolvedValue({ user_id: 202, remark: "产品老王" }),
       collabUploadFile: vi.fn().mockResolvedValue(Response.json({ code: 0, data: { result: { written: true, bytes: 10 } } })),
+      collabChatMessages: vi.fn().mockResolvedValue([{ id: 1, scope_type: "friend", target_id: "202", sender_id: 101, sender_email: "alice@example.invalid", kind: "text", body: "你好", created_at: "2026-11-22T00:00:00Z" }]),
+      collabSendChatMessage: vi.fn().mockResolvedValue({ id: 2, scope_type: "friend", target_id: "202", sender_id: 101, sender_email: "alice@example.invalid", kind: "text", body: "收到", created_at: "2026-11-22T00:01:00Z" }),
+      collabSendChatFile: vi.fn().mockResolvedValue(Response.json({ code: 0, data: { id: 3, kind: "file", file_name: "a.txt" } })),
+      collabMarkChatRead: vi.fn().mockResolvedValue({ last_read_id: 2 }),
     } as unknown as DoneBotGateway;
 
     const handler = createDoneBotCollabRoutes({
@@ -201,6 +205,7 @@ describe("DoneBot collab routes and bot tools", () => {
       readBody: async () => ({ nickname: "阿泽", avatar_url: "" }),
     });
     expect(profileOut.status).toBe(200);
+    expect(profileOut.body).toEqual(expect.objectContaining({ nickname: "阿泽", local_avatar_url: "" }));
     expect(gateway.collabUpdateProfile).toHaveBeenCalledWith({ username: "阿泽", avatar_url: "" });
     expect(syncLocalProfile).toHaveBeenCalledWith({ name: "阿泽", avatarUrl: "", email: "alice@example.invalid" });
 
@@ -217,6 +222,51 @@ describe("DoneBot collab routes and bot tools", () => {
     });
     expect(remarkOut.status).toBe(200);
     expect(gateway.collabSetFriendRemark).toHaveBeenCalledWith(202, "产品老王");
+
+    const listChatOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: listChatOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/chats/friend/202/messages?limit=20"),
+      path: "/api/donebot/collab/chats/friend/202/messages",
+      method: "GET",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: listChatOut.json,
+      readBody,
+    });
+    expect(listChatOut.status).toBe(200);
+    expect(gateway.collabChatMessages).toHaveBeenCalledWith("friend", "202", "limit=20");
+
+    const sendChatOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: sendChatOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/chats/friend/202/messages"),
+      path: "/api/donebot/collab/chats/friend/202/messages",
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: sendChatOut.json,
+      readBody: async () => ({ body: "收到" }),
+    });
+    expect(sendChatOut.status).toBe(200);
+    expect(gateway.collabSendChatMessage).toHaveBeenCalledWith("friend", "202", "收到");
+
+    const tooBigChatOut = fakeRes();
+    const tooBigChatReq = Object.assign(Readable.from([]), {
+      headers: { "content-length": String(101 * 1024 * 1024), "content-type": "application/octet-stream" },
+    }) as unknown as IncomingMessage;
+    await handler({
+      req: tooBigChatReq,
+      res: tooBigChatOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/chats/friend/202/files?name=huge.zip"),
+      path: "/api/donebot/collab/chats/friend/202/files",
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: tooBigChatOut.json,
+      readBody,
+    });
+    expect(tooBigChatOut.status).toBe(413);
+    expect(gateway.collabSendChatFile).not.toHaveBeenCalled();
 
     const tooBigOut = fakeRes();
     const tooBigReq = Object.assign(Readable.from([]), {

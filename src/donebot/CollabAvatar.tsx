@@ -255,12 +255,17 @@ export function CollabProfileDialog({
     try {
       const payload: { nickname: string; avatar_url?: string } = { nickname: nickname.trim() };
       if (avatarTouched) payload.avatar_url = avatarUrl;
-      const updated = await api<{ nickname?: string; avatar_url?: string }>("/api/donebot/collab/profile", {
+      const updated = await api<{ nickname?: string; avatar_url?: string; local_avatar_url?: string }>("/api/donebot/collab/profile", {
         method: "PUT",
         body: JSON.stringify(payload),
       });
       const nextNickname = updated?.nickname ?? nickname.trim();
       const nextAvatar = updated?.avatar_url ?? avatarUrl;
+      const nextLocalAvatar = updated?.local_avatar_url !== undefined
+        ? updated.local_avatar_url
+        : avatarTouched
+          ? nextAvatar
+          : state.config?.profile?.avatarUrl;
       if (state.config) {
         dispatch({
           type: "configStatus",
@@ -270,6 +275,7 @@ export function CollabProfileDialog({
               ...state.config.profile,
               name: nextNickname,
               email: email || state.config.profile?.email || "",
+              ...(nextLocalAvatar ? { avatarUrl: nextLocalAvatar } : { avatarUrl: undefined }),
             },
           },
         });

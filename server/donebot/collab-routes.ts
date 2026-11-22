@@ -82,6 +82,18 @@ const profileUpdateSchema = z.object({
 const friendRemarkSchema = z.object({
   remark: z.string().max(64),
 }).strict();
+const chatMessageSchema = z.object({
+  body: z.string().trim().min(1).max(8000),
+}).strict();
+const chatReadSchema = z.object({
+  last_read_id: z.number().int().min(0).optional(),
+}).strict();
+
+function validChatTarget(scopeType: string, targetId: string): boolean {
+  if (scopeType === "friend") return /^[1-9]\d{0,18}$/.test(targetId);
+  if (scopeType === "team") return uuidV4.safeParse(targetId).success;
+  return false;
+}
 
 const INLINE_AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/;
 
@@ -223,6 +235,69 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
       }
 
       // --- Streaming file transfer routes (never call readBody) ---
+      const chatFileDownload = reqPath.match(/^\/api\/donebot\/collab\/chats\/files\/([0-9a-f-]{36})$/);
+      if (chatFileDownload && method === "GET") {
+        const inline = url.searchParams.get("inline") === "1";
+        const abort = new AbortController();
+        const onClose = () => abort.abort();
+        res.once("close", onClose);
+        try {
+          const upstream = await gateway.collabDownloadChatFile(chatFileDownload[1]!, inline, abort.signal);
+          await pipeUpstreamStream(upstream, res, json, "下载聊天文件失败。", [
+            "Content-Type", "Content-Disposition", "Content-Length", "X-File-Sha256",
+          ]);
+        } finally {
+          res.off("close", onClose);
+        }
+        return;
+      }
+
+      const chatFileUpload = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/files$/);
+      if (chatFileUpload && method === "POST") {
+        const [, scopeType, targetId] = chatFileUpload;
+        if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
+          return json(res, 400, { error: "无效的聊天对象。" });
+        }
+        const rawLen = req.headers["content-length"];
+        const parsedLen = typeof rawLen === "string" && /^\d+$/.test(rawLen) ? Number(rawLen) : -1;
+        if (parsedLen > DONEBOT_COLLAB_MAX_FILE_BYTES) {
+          return json(res, 413, { error: "发送的文件不能超过 100 MB。" });
+        }
+        const params = new URLSearchParams();
+        const fileName = (url.searchParams.get("name") ?? "").trim();
+        if (fileName) params.set("name", fileName.slice(0, 240));
+        const caption = (url.searchParams.get("body") ?? "").trim();
+        if (caption) params.set("body", caption.slice(0, 2000));
+        const headers: Record<string, string> = {
+          "content-type": typeof req.headers["content-type"] === "string" && req.headers["content-type"].trim()
+            ? req.headers["content-type"].trim()
+            : "application/octet-stream",
+        };
+        if (parsedLen >= 0) headers["content-length"] = String(parsedLen);
+        const abort = new AbortController();
+        const onClose = () => abort.abort();
+        req.once("aborted", onClose);
+        try {
+          const upstream = await gateway.collabSendChatFile(
+            scopeType,
+            targetId,
+            params.toString(),
+            boundedRequestWebStream(req, DONEBOT_COLLAB_MAX_FILE_BYTES),
+            headers,
+            abort.signal,
+          );
+          if (!upstream.ok) {
+            return json(res, upstream.status >= 400 ? upstream.status : 502, {
+              error: await readUpstreamError(upstream, "发送聊天文件失败。"),
+            });
+          }
+          const payload = await upstream.json() as { code?: number; data?: unknown };
+          return json(res, 200, payload?.code === 0 && "data" in payload ? payload.data : payload);
+        } finally {
+          req.off("aborted", onClose);
+        }
+      }
+
       const folderFile = reqPath.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})\/file$/);
       if (folderFile && method === "GET") {
         const relPath = cleanRelativeFilePath(url.searchParams.get("path"));
@@ -348,7 +423,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
       }
 
       if (method === "GET" && reqPath === "/api/donebot/collab/overview") {
-        const [identity, profile, friends, folders, bots, workspaces, incomingInvitations] = await Promise.all([
+        const [identity, profile, friends, folders, bots, workspaces, incomingInvitations, chatSummaries] = await Promise.all([
           gateway.collabIdentity(),
           gateway.collabUserProfile?.().catch(() => null) ?? Promise.resolve(null),
           gateway.collabFriends(),
@@ -356,6 +431,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           gateway.collabBots(),
           gateway.workspaceSnapshot().catch(() => ({ account_id: "", protocol: "donebot.teams.v1", capabilities: [], workspaces: [] })),
           gateway.collabIncomingTeamInvitations().catch(() => []),
+          gateway.collabChatSummaries?.().catch(() => []) ?? Promise.resolve([]),
         ]);
         const nickname = typeof profile?.username === "string" ? profile.username.trim() : "";
         const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
@@ -364,7 +440,9 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           const needName = !local?.name?.trim() && Boolean(nickname);
           const needAvatar = !local?.avatarUrl?.trim() && Boolean(avatarUrl);
           if (needName || needAvatar) {
-            const localAvatar = needAvatar ? storeLocalAvatarFromDataUrl(avatarUrl) : undefined;
+            const localAvatar = needAvatar
+              ? (/^https?:\/\//i.test(avatarUrl) ? avatarUrl : storeLocalAvatarFromDataUrl(avatarUrl))
+              : undefined;
             if (needName || localAvatar) {
               try {
                 deps.syncLocalProfile({
@@ -413,8 +491,32 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           team_capabilities: workspaces?.capabilities ?? [],
           team_members: teamMembers,
           incoming_team_invitations: incomingInvitations,
+          chat_summaries: Array.isArray(chatSummaries) ? chatSummaries : [],
           local_bots: localBots,
         });
+      }
+
+      const chatMessagesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/messages$/);
+      if (method === "GET" && chatMessagesGet) {
+        const [, scopeType, targetId] = chatMessagesGet;
+        if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
+          return json(res, 400, { error: "无效的聊天对象。" });
+        }
+        const params = new URLSearchParams();
+        for (const key of ["after_id", "before_id", "limit"]) {
+          const val = url.searchParams.get(key);
+          if (val && /^\d+$/.test(val)) params.set(key, val);
+        }
+        return json(res, 200, await gateway.collabChatMessages(scopeType, targetId, params.toString()));
+      }
+
+      const chatFilesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/files$/);
+      if (method === "GET" && chatFilesGet) {
+        const [, scopeType, targetId] = chatFilesGet;
+        if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
+          return json(res, 400, { error: "无效的聊天对象。" });
+        }
+        return json(res, 200, await gateway.collabChatFiles(scopeType, targetId));
       }
 
       const teamInvList = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/invitations$/);
@@ -456,8 +558,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         const identity = await gateway.collabIdentity();
         const nextNickname = typeof updated?.username === "string" ? updated.username.trim() : (parsed.data.nickname ?? "");
         const nextAvatar = typeof updated?.avatar_url === "string" ? updated.avatar_url.trim() : (parsed.data.avatar_url ?? "");
+        const localAvatar = parsed.data.avatar_url !== undefined ? storeLocalAvatarFromDataUrl(parsed.data.avatar_url) : undefined;
         if (deps.syncLocalProfile) {
-          const localAvatar = parsed.data.avatar_url !== undefined ? storeLocalAvatarFromDataUrl(parsed.data.avatar_url) : undefined;
           try {
             deps.syncLocalProfile({
               ...(parsed.data.nickname !== undefined ? { name: nextNickname } : {}),
@@ -470,7 +572,30 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           email: identity.email,
           nickname: nextNickname,
           avatar_url: nextAvatar,
+          ...(localAvatar !== undefined ? { local_avatar_url: localAvatar } : {}),
         });
+      }
+
+      const chatSendPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/messages$/);
+      if (method === "POST" && chatSendPost) {
+        const [, scopeType, targetId] = chatSendPost;
+        if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
+          return json(res, 400, { error: "无效的聊天对象。" });
+        }
+        const parsed = chatMessageSchema.safeParse(body);
+        if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "消息内容不能为空且不超过 8000 字。");
+        return json(res, 200, await gateway.collabSendChatMessage(scopeType, targetId, parsed.data.body));
+      }
+
+      const chatReadPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/read$/);
+      if (method === "POST" && chatReadPost) {
+        const [, scopeType, targetId] = chatReadPost;
+        if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
+          return json(res, 400, { error: "无效的聊天对象。" });
+        }
+        const parsed = chatReadSchema.safeParse(body ?? {});
+        if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的已读标记。");
+        return json(res, 200, await gateway.collabMarkChatRead(scopeType, targetId, parsed.data.last_read_id));
       }
 
       const friendRemark = reqPath.match(/^\/api\/donebot\/collab\/friends\/([1-9]\d{0,18})\/remark$/);

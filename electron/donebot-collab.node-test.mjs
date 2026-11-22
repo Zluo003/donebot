@@ -116,6 +116,9 @@ test("streaming collab handles >2MB download/upload (Chinese filenames), reports
   fs.mkdirSync(sharedDir, { recursive: true });
   const bigReadBytes = Buffer.alloc(3 * 1024 * 1024, 0x5a);
   fs.writeFileSync(path.join(sharedDir, "产品方案.bin"), bigReadBytes);
+  fs.writeFileSync(path.join(sharedDir, ".DS_Store"), "hidden-file");
+  fs.mkdirSync(path.join(sharedDir, ".hidden-dir"), { recursive: true });
+  fs.writeFileSync(path.join(sharedDir, ".hidden-dir", "secret.txt"), "hidden");
 
   const bigWriteBytes = Buffer.alloc(4 * 1024 * 1024, 0x6b);
   const folderId = randomUUID();
@@ -195,6 +198,7 @@ test("streaming collab handles >2MB download/upload (Chinese filenames), reports
     assert.ok(listRes);
     const listParsed = JSON.parse(listRes.result.content[0].text);
     assert.equal(listParsed.entries.find(e => e.name === "产品方案.bin")?.size, bigReadBytes.length);
+    assert.equal(listParsed.entries.some(e => e.name.startsWith(".")), false);
 
     const writeRes = results.find(r => r.result?.content?.[0]?.text?.includes('"written":true'));
     assert.ok(writeRes);

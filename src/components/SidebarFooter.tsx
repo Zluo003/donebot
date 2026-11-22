@@ -48,7 +48,7 @@ function SimpleSidebarFooter({ owner, archived }: { owner: string | null; archiv
   );
 }
 
-export function SidebarFooter({ density, simple = false, advancedLayout, owner = null, archived, toolsCollapsed, onToggleTools, onOpenCodingAgents }: {
+export function SidebarFooter({ density, simple = false, advancedLayout, owner = null, archived, toolsCollapsed, onToggleTools }: {
   density: SidebarDensity;
   simple?: boolean;
   advancedLayout?: boolean;
@@ -56,13 +56,12 @@ export function SidebarFooter({ density, simple = false, advancedLayout, owner =
   archived?: ArchivedBots;
   toolsCollapsed: boolean;
   onToggleTools?: () => void;
-  onOpenCodingAgents?: () => void;
 }) {
   const { dispatch } = useStore();
   if (simple) return <SimpleSidebarFooter owner={owner} archived={archived} />;
   return (
     <div className={cn("pb-3 pt-2", density === "icons" ? "flex flex-col items-center gap-1 px-2" : "px-3")}>
-      <SidebarFooterNav density={density} advancedLayout={advancedLayout} collapsed={toolsCollapsed} onToggleCollapsed={onToggleTools} onOpenCodingAgents={onOpenCodingAgents} />
+      <SidebarFooterNav density={density} advancedLayout={advancedLayout} collapsed={toolsCollapsed} onToggleCollapsed={onToggleTools} />
       {density === "icons" ? (
         <>
           <SidebarPhoneButton density={density} onOpen={() => dispatch(phoneSettingsAction())} />

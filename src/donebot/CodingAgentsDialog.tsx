@@ -418,7 +418,8 @@ export function CodingAgentsDialog({
               {agents.map((agent) => {
                 const busy = busyAgentId === agent.id;
                 const ready = agent.installed && agent.authenticated;
-                const expanded = expandedAddId === agent.id;
+                const alreadyAdded = agent.bots.length > 0;
+                const expanded = !alreadyAdded && expandedAddId === agent.id;
                 return (
                   <li
                     key={agent.id}
@@ -473,7 +474,7 @@ export function CodingAgentsDialog({
                           </div>
                         )}
 
-                        {agent.bots.length > 0 && (
+                        {agent.bots.length > 1 && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             {agent.bots.map((bot) => (
                               <button
@@ -511,6 +512,15 @@ export function CodingAgentsDialog({
                             {busy ? <Loader2 size={13} className="animate-spin" /> : <LogIn size={13} />}
                             立即登录
                           </button>
+                        ) : alreadyAdded ? (
+                          <button
+                            type="button"
+                            onClick={() => openExistingBot(agent.bots[0]!.id)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline/50 bg-raised/80 px-3 text-[12.5px] font-medium text-ink hover:bg-raised"
+                          >
+                            <MessageSquare size={13} className="text-accent" aria-hidden="true" />
+                            进入对话
+                          </button>
                         ) : ready ? (
                           <button
                             type="button"
@@ -534,7 +544,13 @@ export function CodingAgentsDialog({
                         )}
 
                         <div className="flex items-center gap-1">
-                          {ready && (
+                          {alreadyAdded && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11.5px] text-ink-tertiary">
+                              <CheckCircle2 size={11} className="text-success" aria-hidden="true" />
+                              已添加
+                            </span>
+                          )}
+                          {ready && !alreadyAdded && (
                             <button
                               type="button"
                               disabled={busy}
@@ -543,7 +559,7 @@ export function CodingAgentsDialog({
                                   setExpandedAddId(null);
                                 } else {
                                   setExpandedAddId(agent.id);
-                                  setCustomName(agent.bots.length === 0 ? agent.name : `${agent.name} ${agent.bots.length + 1}`);
+                                  setCustomName(agent.name);
                                   setCustomCwd("");
                                 }
                               }}

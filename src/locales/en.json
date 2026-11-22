@@ -10481,6 +10481,8 @@
   "server.rooms.linkedNoAnswer": "{bot} finished on {place} without an answer for this room.",
   "server.rooms.linkedFailed": "{bot} could not answer from {place}.",
   "room.members.far.place": "on {place}",
+  "room.members.far.section": "Other places",
+  "room.members.far.offline": "Offline",
   "room.members.far.off": "Link is off",
   "room.members.far.missing": "No longer available",
   "server.rooms.linkedOffline": "{bot} lives on {place}, which is offline. This request was not sent. Mention {bot} again when {place} is online.",

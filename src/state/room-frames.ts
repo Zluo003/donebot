@@ -45,6 +45,7 @@ export function patchedGroups(groups: Group[], group: GroupPatch): Group[] {
     description: Object.hasOwn(patch, "description") ? (patch.description ?? undefined) : g.description,
     tasks: patch.tasks ? mergeTaskStamps(g.tasks, patch.tasks) : g.tasks,
     turnTimeoutMinutes: Object.hasOwn(patch, "turnTimeoutMinutes") ? (patch.turnTimeoutMinutes ?? undefined) : g.turnTimeoutMinutes,
+    farMembers: Object.hasOwn(patch, "farMembers") ? patch.farMembers : (Array.isArray(patch.memberIds) ? undefined : g.farMembers),
     messages: patch.messages ?? g.messages,
     hasMore: patch.messages ? Boolean(patch.hasMore) : g.hasMore,
   } : g));

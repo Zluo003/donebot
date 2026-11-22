@@ -11,6 +11,7 @@ import { speaker } from "@/lib/tts";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import { pushToTalkKeys, usePushToTalk } from "@/lib/push-to-talk";
 import { useStore, type Bot, type Group, type Message } from "@/state/store";
+import { isRemoteBotId } from "@/lib/linked-bots";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { BotAvatar } from "./Avatar";
@@ -32,6 +33,7 @@ export function GroupCallButton({ group, members, placement, fill, ink }: { grou
   const { capabilities, ready } = useDesktopCapabilities();
   if (group.dm) return null;
   if (ready && !capabilities.dictation.available) return null;
+  const localMembers = members.filter((member) => !isRemoteBotId(member.id));
   return (
     <CallTargetButton
       placement={placement}
@@ -39,8 +41,8 @@ export function GroupCallButton({ group, members, placement, fill, ink }: { grou
       ink={ink}
       targetId={group.id}
       targetName={group.name}
-      voices={members.map((member) => member.voice)}
-      setupBotId={members.find((member) => !member.voice)?.id ?? members[0]?.id}
+      voices={localMembers.map((member) => member.voice)}
+      setupBotId={localMembers.find((member) => !member.voice)?.id ?? localMembers[0]?.id}
       requireExplicitVoices
       onStart={() => track("group_call_started", { memberCount: members.length })}
     />

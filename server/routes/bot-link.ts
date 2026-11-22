@@ -89,7 +89,7 @@ export function createBotLinkRoutes(deps: BotLinkRouteDeps): RouteHandler {
 
     if (path === BOTS_PATH) {
       req.resume();
-      if (!deps.local(auth)) return json(res, 403, { error: "Only the app on this computer lists its other places' bots." });
+      if (!deps.local(auth) && !deps.owner(auth)) return json(res, 403, { error: "Only the app on this computer or this place's owner lists its other places' bots." });
       if (method !== "GET") return json(res, 405, { error: "method not allowed" });
       
       return json(res, 200, { bots: link.linked().map(({ id, peer, place, kind, online, bot }) => ({ id, home: { id: place.id, key: peer, kind, name: place.name, online }, botId: bot.id, name: bot.name,

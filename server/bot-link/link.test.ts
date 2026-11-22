@@ -1083,12 +1083,12 @@ describe("the link between a computer and its Cloud", () => {
     const room = computer.room("Launch", ["local-writer", onCloud("cloud-analyst")]);
     const far = () => computer.rooms.far(room as never);
     computer.rooms.sync();
-    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "ok" }]);
+    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "ok", color: "blue" }]);
 
     const analyst = cloud.bots.splice(cloud.bots.findIndex((bot) => bot.id === "cloud-analyst"), 1)[0]!;
     cloud.link.botsChanged();
     await until(() => !computer.link.linked().some((one) => one.id === onCloud("cloud-analyst")), "the computer hears the bot is gone");
-    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "missing" }]);
+    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "missing", color: "blue" }]);
     expect(room.memberIds).toEqual(["local-writer", onCloud("cloud-analyst")]);
     computer.say(room.id, "@Analyst are you there?");
     expect(computer.said(room.id).at(-1)).toBe("(server.rooms.linkedMissing Analyst [My Cloud])");
@@ -1099,14 +1099,14 @@ describe("the link between a computer and its Cloud", () => {
 
     await computer.fetch("PUT", STATE_PATH, { on: false });
     expect(room.memberIds).toEqual(["local-writer", onCloud("cloud-analyst")]);
-    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "off" }]);
+    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "off", color: "blue" }]);
     computer.say(room.id, "@Analyst are you there?");
     expect(computer.said(room.id).at(-1)).toBe("(server.rooms.linkedGone Analyst [My Cloud])");
     expect(computer.coordinator.active().some((node) => node.botId === onCloud("cloud-analyst"))).toBe(false);
     
     await computer.restart();
     expect(existsSync(join(computer.dir, "bot-link.json"))).toBe(false);
-    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "off" }]);
+    expect(far()).toEqual([{ id: onCloud("cloud-analyst"), name: "Analyst", place: "My Cloud", state: "off", color: "blue" }]);
 
     await pair(computer, cloud, cloudOrigin);
     expect(far()[0]).toMatchObject({ state: "ok" });

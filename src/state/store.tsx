@@ -2712,10 +2712,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break;
         }
         case "patchGroup":
-          api(`/api/groups/${action.groupId}`, {
+          api<{ group?: Partial<Group> & { id: string } }>(`/api/groups/${action.groupId}`, {
             method: "PATCH",
             body: JSON.stringify(action.patch),
-          }).catch(showSavedState({ groupId: action.groupId }));
+          }).then((res) => { if (res?.group) rawDispatch({ type: "groupPatched", group: res.group }); }, showSavedState({ groupId: action.groupId }));
           break;
         case "deleteGroup":
           api(`/api/groups/${action.groupId}`, { method: "DELETE" }).catch(showError);

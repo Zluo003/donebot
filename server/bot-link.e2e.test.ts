@@ -70,7 +70,10 @@ it("a bot on the computer and a bot on the person's own server hand each other w
     const refused = JSON.stringify(await direct.json());
     expect(direct.status, refused).toBeGreaterThanOrEqual(400);
     expect(refused).toContain("lives on My server");
-    await home.api("GET", "/api/bot-link/bots", undefined, { token: owner, status: 403 });
+    await home.api("GET", "/api/bot-link/bots", undefined, { token: paired.token, status: 403 });
+    const homeRows = (await home.api("GET", "/api/bot-link/bots", undefined, { token: owner })).bots as any[];
+    const homeWriterStandIn = homeRows.find((row) => row.name === "Writer");
+    expect(homeWriterStandIn).toMatchObject({ botId: writer.id, home: { name: "Sam's Mac", kind: "computer", online: true } });
 
     expect(JSON.stringify(await computer.api("GET", `/api/bots/${standIn.id}`))).not.toContain("\"home\"");
     const source = [join(import.meta.dirname, "index.ts"), ...readdirSync(join(import.meta.dirname, "routes")).filter((name) => name.endsWith(".ts") && !name.includes(".test.")).map((name) => join(import.meta.dirname, "routes", name))]
@@ -180,7 +183,30 @@ it("a bot on the computer and a bot on the person's own server hand each other w
     expect(read).toContain("how many orders this week?");
     
     expect(JSON.parse(readFileSync(join(computer.dataDir, "groups.json"), "utf8")).find((group: any) => group.id === launch.id).memberIds).toEqual([writer.id, standIn.id]);
+    expect(launch.farMembers).toMatchObject([{ id: standIn.id, name: "Atlas", place: "My server", state: "ok", color: expect.any(String) }]);
 
+    // Cloud/server side can also add the linked computer bot directly into a Cloud room and @mention it.
+    const cloudRoom = (await home.api("POST", "/api/groups", { name: "Cloud Desk", memberIds: [atlas.id, homeWriterStandIn.id], setup: { bulletin: "", defaultResponder: { kind: "member", botId: atlas.id } } }, { status: 201, token: owner })).group;
+    const cloudRoomTaskId = cloudRoom.activeTaskId ?? cloudRoom.threadId;
+    expect(cloudRoom.memberIds).toEqual([atlas.id, homeWriterStandIn.id]);
+    expect(cloudRoom.farMembers).toMatchObject([{ id: homeWriterStandIn.id, name: "Writer", place: "Sam's Mac", state: "ok" }]);
+    computer.plan(writer.id, { reply: "Writer from Mac: 7 drafts ready. @Atlas please review." });
+    home.plan(atlas.id, { reply: "Atlas reviewed all 7 drafts." });
+    await home.api("POST", `/api/groups/${cloudRoom.id}/messages`, { text: "@Writer how many drafts are ready?", threadId: cloudRoomTaskId }, { token: owner, status: 202 });
+    await expect.poll(async () => (await home.messages(cloudRoomTaskId)).some((message) => message.kind === "text" && message.from?.botId === homeWriterStandIn.id && message.text === "Writer from Mac: 7 drafts ready. @Atlas please review."), { timeout: 40_000 }).toBe(true);
+    await expect.poll(async () => (await home.messages(cloudRoomTaskId)).some((message) => message.kind === "text" && message.from?.botId === atlas.id && message.text === "Atlas reviewed all 7 drafts."), { timeout: 40_000 }).toBe(true);
+
+    // A local Chief of Staff can create a room directly including a linked Cloud bot via create_room.
+    const chief = (await computer.api("GET", "/api/bots?messages=0")).bots.find((bot: any) => bot.chiefOfStaff);
+    expect(chief).toBeTruthy();
+    computer.plan(chief.id, { steps: [{ tool: "create_room", arguments: { name: "Bridge Room", member_bot_ids: [standIn.id] } }], reply: "Created Bridge Room with Atlas." });
+    await computer.cli("send", "--bot", chief.id, "--task", chief.threadId, "--text", "Create a Bridge Room with Atlas.");
+    expect((await computer.cli("wait", "--bot", chief.id, "--task", chief.threadId, "--timeout", "30")).status).toBe("settled");
+    const bridgeRoom = (await computer.api("GET", "/api/bots?messages=0")).groups.find((g: any) => g.name === "Bridge Room");
+    expect(bridgeRoom?.memberIds).toEqual([chief.id, standIn.id]);
+    expect(bridgeRoom?.farMembers).toMatchObject([{ id: standIn.id, name: "Atlas", place: "My server", state: "ok" }]);
+
+    const turnsBeforeOff = atlasTurns();
     expect(await computer.api("PUT", "/api/bot-link", { on: false })).toEqual({ on: false });
     await expect.poll(() => existsSync(join(home.dataDir, "bot-link.json")), { timeout: 10_000 }).toBe(false);
     expect((await computer.api("GET", "/api/bot-link/bots")).bots).toEqual([]);
@@ -190,15 +216,16 @@ it("a bot on the computer and a bot on the person's own server hand each other w
     
     const resaved = (await computer.api("PATCH", `/api/groups/${launch.id}`, { memberIds: [writer.id, standIn.id, "link-0000abcd-nobody"] })).group;
     expect(resaved.memberIds).toEqual([writer.id, standIn.id]);
-    expect(resaved.farMembers).toEqual([{ id: standIn.id, name: "Atlas", place: "My server", state: "off" }]);
+    expect(resaved.farMembers).toMatchObject([{ id: standIn.id, name: "Atlas", place: "My server", state: "off", color: expect.any(String) }]);
     await computer.cli("send-channel", "--channel", launch.id, "--text", "@Atlas are you there?");
     await expect.poll(async () => (await computer.messages(launch.activeTaskId)).some((message) => message.kind === "activity" && /The link to My server is off now/u.test(message.tool?.name ?? "")), { timeout: 20_000 }).toBe(true);
-    expect(atlasTurns()).toBe(turnsBefore + 1);
+    expect(atlasTurns()).toBe(turnsBeforeOff);
     
     const without = (await computer.api("PATCH", `/api/groups/${launch.id}`, { memberIds: [writer.id] })).group;
     expect(without.memberIds).toEqual([writer.id]);
     expect(without.farMembers).toBeUndefined();
     expect(savedMembers()).toEqual([writer.id]);
+    await computer.api("PATCH", `/api/groups/${bridgeRoom.id}`, { memberIds: [chief.id] });
     await computer.api("GET", `/api/bots/${standIn.id}`, undefined, { status: 404 });
     expect(existsSync(join(computer.dataDir, "bot-link-rooms.json"))).toBe(false);
     await home.api("POST", "/api/bot-link/sync", { ack: 0, frames: [], wait: 0 }, { token: paired.token, status: 401 });

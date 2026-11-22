@@ -3,7 +3,9 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { nextMemberIds } from "@/lib/room-members";
+import { nextMemberIds, resolveGroupMembers } from "@/lib/room-members";
+import { mergeFarMembers, type LinkedBot } from "@/lib/linked-bots";
+import type { Bot } from "@/state/store";
 import { RoomFarMembers, farMembersOf } from "./RoomFarMembers";
 
 let container: HTMLDivElement, root: Root;
@@ -43,4 +45,30 @@ it("each member from another place is listed with where it lives and why it cann
   expect(rows()[2]!.getAttribute("aria-checked")).toBe("false");
   
   expect(nextMemberIds(group.memberIds, picked, ["writer"])).toEqual(["writer", far[0].id, far[1].id]);
+});
+
+it("merges linked bots so new remote bots can be added to rooms and resolved for display", async () => {
+  const linked: LinkedBot[] = [
+    { id: far[0].id, home: { id: "cloud-1", key: "0000abcd", kind: "cloud", name: "DoneBot Cloud", online: true }, botId: "atlas", name: "Atlas", color: "teal", title: "Cloud Analyst" },
+    { id: "link-0000abcd-spark", home: { id: "cloud-1", key: "0000abcd", kind: "cloud", name: "DoneBot Cloud", online: false }, botId: "spark", name: "Spark", color: "coral" },
+  ];
+  const merged = mergeFarMembers([far[0], far[2]], linked);
+  expect(merged.map((m) => [m.id, m.place, m.state, m.color])).toEqual([
+    [far[0].id, "DoneBot Cloud", "ok", "teal"],
+    [far[2].id, "My Cloud", "missing", undefined],
+    ["link-0000abcd-spark", "DoneBot Cloud", "offline", "coral"],
+  ]);
+
+  const picked = new Set(["writer", "link-0000abcd-spark"]);
+  expect(nextMemberIds(["writer"], picked, ["writer", ...merged.map((m) => m.id)])).toEqual(["writer", "link-0000abcd-spark"]);
+
+  const localWriter = { id: "writer", threadId: "t1", name: "Writer", title: "", description: "", notifications: false, color: "green", unread: false, modelSelection: { instanceId: "claude", model: "sonnet" }, messages: [] } as Bot;
+  const resolved = resolveGroupMembers(
+    { memberIds: ["writer", far[0].id], farMembers: [{ id: far[0].id, name: "Atlas", place: "DoneBot Cloud", state: "ok", color: "teal", title: "Cloud Analyst" }] },
+    [localWriter],
+  );
+  expect(resolved.map((b) => [b.id, b.name, b.color, b.title])).toEqual([
+    ["writer", "Writer", "green", ""],
+    [far[0].id, "Atlas", "teal", "Cloud Analyst · on DoneBot Cloud"],
+  ]);
 });

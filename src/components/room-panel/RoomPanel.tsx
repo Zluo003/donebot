@@ -5,6 +5,7 @@ import { ChevronRight, FileText, Folder, MessagesSquare, Users, X } from "lucide
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { closeRoomPanel } from "@/lib/room-panel";
+import { resolveGroupMembers } from "@/lib/room-members";
 import { responderShortLabel } from "@/lib/room-responder";
 import type { LocaleKey } from "@/locales";
 import { useStore, type Bot, type Group } from "@/state/store";
@@ -123,8 +124,8 @@ export function RoomPanel({ group, overlay = false }: { group: Group; overlay?: 
   const membersRowRef = useRef<HTMLButtonElement>(null);
   const leftPage = useRef<RoomPage | null>(null);
   const members = useMemo(
-    () => group.memberIds.map((id) => state.bots.find((bot) => bot.id === id)).filter((bot): bot is Bot => Boolean(bot)),
-    [group.memberIds, state.bots],
+    () => resolveGroupMembers(group, state.bots),
+    [group, state.bots],
   );
   const folder = roomWorkingFolder(group);
   const closeMembers = useCallback(() => setMembersOpen(false), []);

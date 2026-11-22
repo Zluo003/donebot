@@ -9,16 +9,18 @@ export function BotPickerList({
   picked,
   onToggle,
   emptyHint,
+  scrollable = true,
 }: {
   bots: Bot[];
   picked: Set<string>;
   onToggle: (id: string) => void;
-  emptyHint: string;
+  emptyHint?: string;
+  scrollable?: boolean;
 }) {
   const team = useTeamPeople();
   return (
-    <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-      {bots.length === 0 && <div className="px-2 py-4 text-center text-[13px] text-ink-secondary">{emptyHint}</div>}
+    <div className={cn("flex flex-col gap-0.5", scrollable && "max-h-64 overflow-y-auto")}>
+      {bots.length === 0 && emptyHint && <div className="px-2 py-4 text-center text-[13px] text-ink-secondary">{emptyHint}</div>}
       {bots.map((b) => (
         <button
           key={b.id}

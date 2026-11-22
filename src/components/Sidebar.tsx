@@ -23,6 +23,7 @@ import { searchMatchesThreads, useSearchDisclosure } from "@/lib/search-disclosu
 import { useHeldMenuMotion, useMenuMotion } from "./MenuMotion";
 import { lastNonReceipt } from "@/lib/receipts";
 import { botPreview, groupPreview } from "./sidebar-preview";
+import { resolveGroupMembers } from "@/lib/room-members";
 import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import type { LocaleKey } from "@/locales";
@@ -171,9 +172,7 @@ export const GroupListItem = memo(function GroupListItem({
   const simpleRow = !advanced && density === "comfortable";
   const railTile = !advanced && density === "icons";
   const roomBusy = Boolean(group.busyBotId) || Boolean(group.working);
-  const members = group.memberIds
-    .map((id) => bots.find((b) => b.id === id))
-    .filter((b): b is Bot => Boolean(b));
+  const members = resolveGroupMembers(group, bots);
   const last = group.messages.at(-1);
   return (
     <>

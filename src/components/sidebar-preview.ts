@@ -78,7 +78,7 @@ export function automationRunPreview(run: Pick<RoutineRunCardData, "routineName"
 }
 
 export function groupPreview(group: Group, bots: Bot[], instances: InstanceInfo[], advanced: boolean): string {
-  const working = roomWorkingPreview(group, (botId) => bots.find((b) => b.id === botId)?.name);
+  const working = roomWorkingPreview(group, (botId) => bots.find((b) => b.id === botId)?.name ?? group.farMembers?.find((m) => m.id === botId)?.name);
   if (working) return working;
   if (group.working) return t("sidebar.preview.teamWorking");
   const newest = lastPreviewable(group.messages);

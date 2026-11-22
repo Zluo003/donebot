@@ -3,6 +3,7 @@ import { track } from "@/lib/analytics";
 import { useStore, type Group } from "@/state/store";
 import { BotPickerList } from "./BotPickerList";
 import { RoomFarMembers, farMembersOf } from "./RoomFarMembers";
+import { mergeFarMembers, useLinkedBots } from "@/lib/linked-bots";
 import { nextMemberIds } from "@/lib/room-members";
 import { t } from "@/lib/i18n";
 
@@ -26,6 +27,8 @@ export function ManageMembersPanel({
     () => state.bots.filter((b) => !b.hidden || group.memberIds.includes(b.id)),
     [state.bots, group.memberIds],
   );
+  const linkedBots = useLinkedBots();
+  const farChoices = useMemo(() => mergeFarMembers(farMembersOf(group), linkedBots), [group, linkedBots]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -72,7 +75,7 @@ export function ManageMembersPanel({
   const memberIds = nextMemberIds(
     group.memberIds,
     picked,
-    bots.map((b) => b.id),
+    [...bots.map((b) => b.id), ...farChoices.map((member) => member.id)],
   );
   const changed = memberIds.length !== group.memberIds.length || memberIds.some((id, i) => id !== group.memberIds[i]);
 
@@ -110,8 +113,22 @@ export function ManageMembersPanel({
       >
         <div className="mb-1 text-[15px] font-semibold text-ink">{t("room.members.title")}</div>
         <div className="mb-3 truncate text-[13px] text-ink-secondary">{group.name}</div>
-        <BotPickerList bots={bots} picked={picked} onToggle={toggle} emptyHint={t("room.members.emptyHint")} />
-        <RoomFarMembers members={farMembersOf(group)} picked={picked} onToggle={toggle} />
+        <div className="max-h-64 overflow-y-auto">
+          <BotPickerList
+            bots={bots}
+            picked={picked}
+            onToggle={toggle}
+            emptyHint={farChoices.length ? undefined : t("room.members.emptyHint")}
+            scrollable={false}
+          />
+          <RoomFarMembers
+            members={farChoices}
+            picked={picked}
+            onToggle={toggle}
+            heading={t("room.members.far.section")}
+            showAvatar
+          />
+        </div>
         {!memberIds.length && <div className="mt-2 text-[12px] text-ink-secondary">{t("room.members.needOne")}</div>}
         {saveError && (
           <div role="alert" className="mt-2 text-[12px] text-danger">

@@ -859,7 +859,7 @@ export interface WireGroup {
   /** Computed from the usage ledger, not stored in groups.json. */
   usage?: GroupThreadUsage | null;
   /** Members executing in another linked personal workspace. */
-  farMembers?: Array<{ id: string; name: string; place: string; state: "ok" | "off" | "missing" }>; /** Transient: the department's Chief of Staff, when this room is without it. Null clears an earlier value. */ chiefAbsent?: { botId: string; name: string } | null;
+  farMembers?: Array<{ id: string; name: string; place: string; state: "ok" | "off" | "missing"; color?: string; title?: string; mascotBody?: string; mascotFaceColor?: string }>; /** Transient: the department's Chief of Staff, when this room is without it. Null clears an earlier value. */ chiefAbsent?: { botId: string; name: string } | null;
   /** transient: each member's context in the active thread, from its last
    * turn there, and whether its next turn there was asked to start
    * compacted. */

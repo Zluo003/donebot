@@ -7963,6 +7963,8 @@
   "server.rooms.linkedNoAnswer": "{bot} 在 {place} 上完成了，但没有给这个群组聊天的回复。",
   "server.rooms.linkedFailed": "{bot} 无法从 {place} 回复。",
   "room.members.far.place": "位于 {place}",
+  "room.members.far.section": "其他位置",
+  "room.members.far.offline": "离线",
   "room.members.far.off": "连接已关闭",
   "room.members.far.missing": "已不可用",
   "server.rooms.linkedOffline": "{bot} 在 {place} 上运行，该设备当前离线，本次请求未发送。请在 {place} 上线后重新提及 {bot}。",

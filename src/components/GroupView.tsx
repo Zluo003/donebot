@@ -63,6 +63,7 @@ import { GroupCallOverlay } from "./GroupCallView";
 import { ApprovalCard } from "./ApprovalCard";
 import { isQuestionCard, QuestionCard } from "./QuestionCard";
 import { ManageMembersPanel } from "./ManageMembersPanel";
+import { resolveGroupMembers } from "@/lib/room-members";
 import { groupActivityRuns, isStatusActivity, roomTurnFolds } from "@/lib/activity-runs";
 import { TurnNarrationRun } from "./TurnNarrationRun";
 import { ActivityRun } from "./ActivityRun";
@@ -712,8 +713,8 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
   useChatFindShortcut(inForkPanel, Boolean(state.forkPanel), setFindOpen);
 
   const members = useMemo(
-    () => group.memberIds.map((id) => state.bots.find((b) => b.id === id)).filter((b): b is Bot => Boolean(b)),
-    [group.memberIds, state.bots],
+    () => resolveGroupMembers(group, state.bots),
+    [group, state.bots],
   );
   const speaker = members.find((b) => b.id === group.busyBotId);
   const threadWorking = roomThreadWorking(group, group.threadId);

@@ -1,4 +1,4 @@
-import { directMessageSent, roomMessageSent } from "@/lib/product-events";
+import { directMessageSent, roomMessageSent } from "@/lib/product-events"; import { isRemoteBotId } from "@/lib/linked-bots";
 import { TeamAudienceLabel } from "./TeamSideSwitch";
 import { useComposerDictation } from "@/lib/use-composer-dictation";
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
@@ -278,13 +278,13 @@ export function Composer({
 
   const botSupportsImages = (candidate?: Bot) =>
     Boolean(
-      candidate &&
-        state.instances.find((i) => i.instanceId === candidate.modelSelection.instanceId)?.capabilities?.images,
+      candidate && (isRemoteBotId(candidate.id) ||
+        state.instances.find((i) => i.instanceId === candidate.modelSelection.instanceId)?.capabilities?.images),
     );
   const imageTargetsSupport = (message: string, mode: "chat" | "goal") => {
     if (!group) return botSupportsImages(bot);
     if (mode === "goal") {
-      return botSupportsImages(goalCoordinatorForComposer(message, members ?? [], group, picks.ids(message)) ?? undefined);
+      return botSupportsImages(goalCoordinatorForComposer(message, (members ?? []).filter((member) => !isRemoteBotId(member.id)), group, picks.ids(message)) ?? undefined);
     }
     const route = roomRouteForComposer(message, members ?? [], group, picks.ids(message));
     return route.ambiguous || (route.responders.length > 0 && route.responders.every(botSupportsImages));

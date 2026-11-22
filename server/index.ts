@@ -14576,8 +14576,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           return json(res, 400, { error: "room request must be a JSON object" });
         }
         // A Chief gathers only bots it can reach; which department a room is filed in is the person's choice.
-        const allowedIds = new Set([chief.id, ...reachablePeers(store.bots, chief).map((bot) => bot.id)]);
-        const allowedRoster = (ids: string[]) => ids.includes(chief.id) && ids.every((id) => allowedIds.has(id));
+        const allowedIds = new Set([chief.id, ...reachablePeers(store.bots, chief).map((bot) => bot.id), ...(botLink.link.on() ? botLink.link.linked().map((one) => one.id) : [])]);
+        const allowedRoster = (ids: string[], keepFar = false) => ids.includes(chief.id) && ids.every((id) => allowedIds.has(id) || (keepFar && id.startsWith("link-")));
         if (body.section !== undefined && (typeof body.section !== "string" || sectionKey(body.section) !== sectionKey(chief.section))) {
           return json(res, 403, { error: "rooms stay in your own department; ask the person to move them" });
         }
@@ -14613,7 +14613,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         }).strict().safeParse(body);
         if (!parsed.success) return json(res, 400, { error: "provide roomId and a supported room action; section moves are user-only" });
         const room = store.group(parsed.data.roomId);
-        if (!room || room.dm || sectionKey(room.section) !== sectionKey(chief.section) || !allowedRoster(room.memberIds)) {
+        if (!room || room.dm || sectionKey(room.section) !== sectionKey(chief.section) || !allowedRoster(room.memberIds, true)) {
           return json(res, 403, { error: "you can only manage rooms you belong to in your own department, whose members you can all reach; no bot needs adding to get work, since coordinate_bots reaches bots outside the room directly" });
         }
         const { action, memberIds, name, bulletin } = parsed.data;
@@ -14634,12 +14634,12 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           if (bulletin === undefined) return json(res, 400, { error: "set_bulletin requires bulletin text; use an empty string to clear it" });
           patch.bulletin = redactSecretsInText(bulletin);
         } else {
-          if (!memberIds || memberIds.some((id) => !allowedIds.has(id))) {
+          if (!memberIds || memberIds.some((id) => !allowedIds.has(id) && !(action !== "add_members" && room.memberIds.includes(id) && id.startsWith("link-")))) {
             return json(res, 403, { error: "memberIds must name only yourself or active bots you can reach (list_bots)" });
           }
           const next = action === "add_members" ? [...new Set([...room.memberIds, ...memberIds])]
             : action === "remove_members" ? room.memberIds.filter((id) => !memberIds.includes(id)) : memberIds;
-          if (!allowedRoster(next)) return json(res, 403, { error: "keep yourself in the room; only the user can remove its managing Chief" });
+          if (!allowedRoster(next, true)) return json(res, 403, { error: "keep yourself in the room; only the user can remove its managing Chief" });
           patch.memberIds = next;
         }
         const updated = updateChannel(room.id, patch);

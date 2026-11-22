@@ -281,9 +281,15 @@ export function createLinkedRooms(deps: LinkedRoomsDeps) {
       });
     },
 
-    far(group: Pick<GroupRecord, "memberIds" | "dm">): Array<{ id: string; name: string; place: string; state: "ok" | FarGone }> {
+    far(group: Pick<GroupRecord, "memberIds" | "dm">): Array<{ id: string; name: string; place: string; state: "ok" | FarGone; color?: string; title?: string; mascotBody?: string; mascotFaceColor?: string }> {
       if (group.dm) return [];
-      return group.memberIds.filter(isLinkedId).map((id) => { const bot = store.bot(id); return { id, name: nameOf(id), place: placeOf(id), state: bot?.home ? bot.home.gone ?? "ok" as const : "off" as const }; });
+      return group.memberIds.filter(isLinkedId).map((id) => {
+        const bot = store.bot(id), known = kept.members[id];
+        const color = bot?.color ?? known?.color, title = bot?.title ?? known?.title;
+        const mascotBody = bot?.mascotBody ?? known?.mascotBody, mascotFaceColor = bot?.mascotFaceColor ?? known?.mascotFaceColor;
+        return { id, name: nameOf(id), place: placeOf(id), state: bot?.home ? bot.home.gone ?? "ok" as const : "off" as const,
+          ...(color ? { color } : {}), ...(title ? { title } : {}), ...(mascotBody ? { mascotBody } : {}), ...(mascotFaceColor ? { mascotFaceColor } : {}) };
+      });
     },
 
     expired(peer: string, placeName: string): void {

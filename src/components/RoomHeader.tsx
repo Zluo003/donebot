@@ -64,12 +64,15 @@ export function DefaultResponderSelect({ group, members }: { group: Group; membe
 function memberMauses(group: Group, members: Bot[], placeOf: (entry: RoomQueueEntry) => string | undefined) {
   const contextWarnings = roomContextWarnings(group, members);
   const speakersElsewhere = new Set(roomSpeakerIds(group).filter((id) => id !== group.busyBotId));
+  const farById = group.farMembers?.length ? new Map(group.farMembers.map((member) => [member.id, member])) : null;
   return members.map((b) => {
     const busy = group.busyBotId === b.id;
     const queueTitle = busy ? undefined : roomMemberQueueTitle(group, members, b, placeOf);
     const contextWarning = contextWarnings.find((warning) => warning.bot.id === b.id);
     const busyElsewhere = !busy && speakersElsewhere.has(b.id);
     const held = !group.dm && Boolean(group.holds?.[b.id]);
+    const far = farById?.get(b.id);
+    const farNote = far ? [far.place ? t("room.members.far.place", { place: far.place }) : "", far.state === "off" ? t("room.members.far.off") : far.state === "missing" ? t("room.members.far.missing") : ""].filter(Boolean).join(" · ") : "";
     const task = b.tasks?.find((candidate) => candidate.threadId === group.threadId);
     const effective = busy ? effectivePlace(b, task) : "off";
     const showPlace = busy && effective !== "off" && effective !== "auto";
@@ -82,7 +85,7 @@ function memberMauses(group: Group, members: Bot[], placeOf: (entry: RoomQueueEn
             ? t("room.holds.avatarHeld", { name: b.name })
             : queueTitle ?? (busyElsewhere
               ? t("room.memberWorkingElsewhere", { name: b.name })
-              : `${b.name}${busy ? ` — ${t("room.member.working")}` : ""}${contextWarning ? ` — ${t("contextWarning.short", { percent: contextWarning.percent })}` : ""}`)
+              : `${b.name}${farNote ? ` (${farNote})` : ""}${busy ? ` — ${t("room.member.working")}` : ""}${contextWarning ? ` — ${t("contextWarning.short", { percent: contextWarning.percent })}` : ""}`)
         }
         className={cn(
           "relative inline-flex rounded-full",
@@ -91,7 +94,7 @@ function memberMauses(group: Group, members: Bot[], placeOf: (entry: RoomQueueEn
           queueTitle && !busyElsewhere && "ring-1 ring-accent/30 ring-offset-1 ring-offset-app",
         )}
       >
-        <span className={cn("inline-flex", held && "opacity-50 grayscale")}>
+        <span className={cn("inline-flex", held && "opacity-50 grayscale", !held && far && far.state !== "ok" && "opacity-55")}>
           <BotAvatar bot={b} state={normalizeState(b.mascotExpression) ?? "happy"} size={24} animated={false} />
         </span>
         {held && !busy && (

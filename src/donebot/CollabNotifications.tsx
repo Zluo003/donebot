@@ -15,7 +15,7 @@ import {
 } from "./collab-store";
 import { COLLAB_BUTTON } from "./collab-types";
 
-const POLL_INTERVAL_MS = 15_000;
+const POLL_INTERVAL_MS = 10_000;
 
 function supportsPopoverApi(): boolean {
   return typeof HTMLElement !== "undefined" && Object.hasOwn(HTMLElement.prototype, "popover");
@@ -40,19 +40,22 @@ export function CollabSyncHost() {
     if (!eligible || !authenticated || !state.hydrated) return;
     void refreshCollabOverview({ silent: true });
 
-    const refreshIfVisible = () => {
+    const poll = () => {
+      void refreshCollabOverview({ silent: true });
+    };
+    const refreshOnVisible = () => {
       if (typeof document === "undefined" || document.visibilityState === "visible") {
         void refreshCollabOverview({ silent: true });
       }
     };
 
-    const timer = window.setInterval(refreshIfVisible, POLL_INTERVAL_MS);
-    window.addEventListener("focus", refreshIfVisible);
-    document.addEventListener("visibilitychange", refreshIfVisible);
+    const timer = window.setInterval(poll, POLL_INTERVAL_MS);
+    window.addEventListener("focus", poll);
+    document.addEventListener("visibilitychange", refreshOnVisible);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("focus", refreshIfVisible);
-      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", poll);
+      document.removeEventListener("visibilitychange", refreshOnVisible);
     };
   }, [eligible, authenticated, state.hydrated, accountId]);
 

@@ -18,7 +18,7 @@ function proofs(body: Record<string, unknown>): Record<string, string> {
 }
 export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandler {
   return async ({ req, res, path, method, auth, json, readBody }) => {
-    if (!path.startsWith("/api/donebot/")) return PASS;
+    if (!path.startsWith("/api/donebot/") || path.startsWith("/api/donebot/collab/")) return PASS;
     if (!ownerOrAdmin(auth)) return json(res, 403, { error: "Only the workspace owner can manage the DoneBot account." });
     res.setHeader("Cache-Control", "no-store");
     try {

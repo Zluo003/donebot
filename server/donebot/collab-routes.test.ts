@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { readBody } from "../harness/http.ts";
+import { dispatchRoutes } from "../routes/table.ts";
+import { createDoneBotAccountRoutes } from "./routes.ts";
 import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./collab-routes.ts";
 import type { DoneBotGateway } from "./gateway.ts";
 import type { BotRecord } from "../store.ts";
@@ -111,5 +115,57 @@ describe("DoneBot collab routes and bot tools", () => {
       path: "",
     }));
     expect(badOut.status).toBe(400);
+  });
+
+  it("does not hang collab POST requests when mounted behind DoneBot account routes", async () => {
+    const gateway = {
+      collabSendFriendRequest: vi.fn().mockResolvedValue({ status: "pending", request: { id: "req-1" } }),
+      collabRelayPoll: vi.fn().mockResolvedValue({ job: null }),
+    } as unknown as DoneBotGateway;
+
+    const routes = [
+      createDoneBotAccountRoutes(gateway),
+      createDoneBotCollabRoutes({
+        gateway,
+        store: { bots: [], bot: () => null },
+        collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+        defaultSelection: vi.fn(),
+        packageImportDeps: vi.fn(),
+        broadcast: vi.fn(),
+        publicBot: b => b,
+      }),
+    ];
+
+    const req = Readable.from([JSON.stringify({ email: "bob@example.invalid", note: "hello" })]) as unknown as IncomingMessage;
+    const out = fakeRes();
+    const handled = await dispatchRoutes(routes, {
+      req,
+      res: out.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/friends/request"),
+      path: "/api/donebot/collab/friends/request",
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: out.json,
+      readBody,
+    });
+    expect(handled).toBe(true);
+    expect(out.status).toBe(200);
+    expect(gateway.collabSendFriendRequest).toHaveBeenCalledWith("bob@example.invalid", "hello");
+
+    const pollReq = Readable.from(["{}"]) as unknown as IncomingMessage;
+    const pollOut = fakeRes();
+    const pollHandled = await dispatchRoutes(routes, {
+      req: pollReq,
+      res: pollOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/relay/poll"),
+      path: "/api/donebot/collab/relay/poll",
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: pollOut.json,
+      readBody,
+    });
+    expect(pollHandled).toBe(true);
+    expect(pollOut.status).toBe(200);
+    expect(gateway.collabRelayPoll).toHaveBeenCalledTimes(1);
   });
 });

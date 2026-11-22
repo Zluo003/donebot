@@ -156,14 +156,15 @@ export class SharedComputers {
   private links: Pick<DeviceLinks, "drop"> | undefined;
   /** A Cloud home's copies of lent folders: what a computer that is away still lends (server/lent-copies.ts). */
   private copies: Pick<LentCopies, "away" | "answer"> | undefined;
+  private readonly pollWaitMs: number;
   /** A computer connected, changed what it lends, or stopped. */
   changed: () => void = () => {};
   /** When this server last woke from sleep; null when it never slept (off a Cloud home, or a plain restart). */
   wokeAt: () => number | null = () => null;
   /** On the person's own Cloud, the bots' tool that asks them to turn on what their computer doesn't give now. */
   askTool: string | null = null;
-  constructor(sessionLive: (id: string) => boolean, lent?: LentComputers, links?: Pick<DeviceLinks, "drop">, copies?: Pick<LentCopies, "away" | "answer">) {
-    this.sessionLive = sessionLive; this.lent = lent; this.links = links; this.copies = copies;
+  constructor(sessionLive: (id: string) => boolean, lent?: LentComputers, links?: Pick<DeviceLinks, "drop">, copies?: Pick<LentCopies, "away" | "answer">, pollWaitMs = 20_000) {
+    this.sessionLive = sessionLive; this.lent = lent; this.links = links; this.copies = copies; this.pollWaitMs = pollWaitMs;
   }
   private static key(session: string, id: string) { return `${session}\n${id}`; }
   register(registration: Registration, owner: SharedComputerOwner, secret: string) {
@@ -329,7 +330,7 @@ export class SharedComputers {
     if (queued) return queued;
     await new Promise<void>(resolve => {
       const wake = () => { clearTimeout(timer); gone?.removeEventListener("abort", wake); if (entry.wake === wake) entry.wake = undefined; resolve(); };
-      const timer = setTimeout(wake, 20_000);
+      const timer = setTimeout(wake, this.pollWaitMs);
       gone?.addEventListener("abort", wake, { once: true });
       entry.wake = wake;
     });

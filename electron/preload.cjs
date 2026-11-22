@@ -670,6 +670,13 @@ const bridge = {
     pause: () => ipcRenderer.invoke("sharing:pause"),
     resume: () => ipcRenderer.invoke("sharing:resume"),
   },
+  teamSharing: {
+    state: teamId => ipcRenderer.invoke("donebot-team-sharing:state", String(teamId)),
+    chooseFolder: () => ipcRenderer.invoke("donebot-team-sharing:choose-folder"),
+    save: input => ipcRenderer.invoke("donebot-team-sharing:save", input),
+    revoke: teamId => ipcRenderer.invoke("donebot-team-sharing:revoke", String(teamId)),
+    activity: teamId => ipcRenderer.invoke("donebot-team-sharing:activity", String(teamId)),
+  },
   confirm: message => ipcRenderer.invoke("dialog:confirm", message),
   /** The window onto My Cloud once it is the person's home: this computer's screen while My Cloud can't be opened, and
    * on My Cloud's own page a new session when its own has ended. */

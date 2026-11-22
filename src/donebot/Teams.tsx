@@ -25,6 +25,7 @@ export function DoneBotTeams({ standalone = false }: { standalone?: boolean }) {
   const [snapshot, setSnapshot] = useState<DoneBotWorkspaceSnapshot | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState("");
+  const [teamCloudInfo, setTeamCloudInfo] = useState<{ instanceId: string; ready: boolean } | null>(null);
   const [members, setMembers] = useState<DoneBotTeamMember[]>([]);
   const [panel, setPanel] = useState<"create" | "accept" | null>(null);
   const [name, setName] = useState(""), [token, setToken] = useState(""), [email, setEmail] = useState("");
@@ -62,7 +63,7 @@ export function DoneBotTeams({ standalone = false }: { standalone?: boolean }) {
   }, [refresh]);
 
   useEffect(() => {
-    const mine = ++memberGeneration.current; setMembers([]); setInvite(null);
+    const mine = ++memberGeneration.current; setMembers([]); setInvite(null); setTeamCloudInfo(null);
     if (selected) void api<DoneBotTeamMember[]>(`/api/donebot/teams/${selected}/members`).then(next => {
       if (mine === memberGeneration.current) setMembers(next);
     }).catch(cause => { if (mine === memberGeneration.current) setError(problem(cause)); });
@@ -271,7 +272,7 @@ export function DoneBotTeams({ standalone = false }: { standalone?: boolean }) {
     {team && (
       <div className="flex flex-col gap-5">
         {snapshot.capabilities.includes("cloud_access") ? (
-          <TeamCloudCard key={`cloud-${team.id}`} accountId={snapshot.account_id} team={team} />
+          <TeamCloudCard key={`cloud-${team.id}`} accountId={snapshot.account_id} team={team} onInstanceChange={setTeamCloudInfo} />
         ) : (
           <div className={cn(SIMPLE_CARD, "px-4 py-3.5 text-[13px] text-ink-secondary")}>
             协作运行服务尚未就绪，当前可管理团队和成员。
@@ -279,7 +280,7 @@ export function DoneBotTeams({ standalone = false }: { standalone?: boolean }) {
         )}
 
         {snapshot.capabilities.includes("local_execution") && (
-          <TeamDevicesCard key={`devices-${team.id}`} accountId={snapshot.account_id} team={team} members={members} />
+          <TeamDevicesCard key={`devices-${team.id}`} accountId={snapshot.account_id} team={team} members={members} teamCloud={teamCloudInfo} />
         )}
 
         <SettingsGroup label={members.length > 0 ? `团队成员（${members.length}）` : "团队成员"}>

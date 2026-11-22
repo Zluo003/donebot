@@ -4,7 +4,7 @@ import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession } from "./team-runtime.ts";
+import { DONEBOT_TEAM_LENDING, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession, teamRuntimeSessionLive, teamSharedComputersEnabled } from "./team-runtime.ts";
 import { createDoneBotRuntimeHost } from "./runtime-host.ts";
 import { resolveRequestAuth } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
@@ -69,4 +69,19 @@ it("reports authenticated team member account state without personal gateway cre
     else process.env.DONEBOT_FIXTURE_ORIGIN = previousOrigin;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+it("tracks live team member sessions by latest member_version and gates team folder sharing", () => {
+  expect(teamSharedComputersEnabled(null, { DONEBOT_TEAM_EXECUTION_ENABLED: "1" })).toBe(false);
+  expect(teamSharedComputersEnabled(runtime, {})).toBe(false);
+  expect(teamSharedComputersEnabled(runtime, { DONEBOT_TEAM_EXECUTION_ENABLED: "1" })).toBe(true);
+  expect(DONEBOT_TEAM_LENDING.sharedComputers).toBe(true);
+
+  const v2 = teamRuntimeSession(runtime, request({ user_id: "7", member_version: 2 }), now)!;
+  expect(teamRuntimeSessionLive(runtime, v2.id)).toBe(true);
+  expect(teamRuntimeSessionLive(runtime, `donebot-team:${randomUUID()}:7:2`)).toBe(false);
+  expect(teamRuntimeSessionLive(runtime, "not-a-team-session")).toBe(false);
+
+  const v3 = teamRuntimeSession(runtime, request({ user_id: "7", member_version: 3 }), now)!;
+  expect(teamRuntimeSessionLive(runtime, v3.id)).toBe(true);
+  expect(teamRuntimeSessionLive(runtime, v2.id)).toBe(false);
 });

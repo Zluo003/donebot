@@ -150,3 +150,69 @@ it("resolves admin device revocation permissions from team members when device p
   expect(items.find(item => item.textContent?.includes("Admin Mac（本机）"))?.querySelector("button")?.textContent).toBe("撤销设备");
   expect(items.find(item => item.textContent?.includes("Member Mac"))?.querySelector("button")?.textContent).toBe("撤销设备");
 });
+
+it("manages member-owned shared local folders with switch controls and revokes them when local participation is turned off", async () => {
+  const instanceId = "44444444-4444-4444-8444-444444444444";
+  const planId = "55555555-5555-4555-8555-555555555555";
+  const deviceId = "66666666-6666-4666-8666-666666666666";
+  const folderId = "88888888-8888-4888-8888-888888888888";
+  let currentSharing = { enabled: false, connected: false, folders: [] as DesktopSharedFolder[], terminal: false };
+  const chooseFolder = vi.fn(async () => ({ id: folderId, name: "Specs", path: "/Users/fixture/Specs", write: false }));
+  const save = vi.fn(async (input: { folders: DesktopSharedFolder[]; terminal: boolean }) => {
+    currentSharing = { enabled: true, connected: true, folders: input.folders, terminal: input.terminal };
+    return currentSharing;
+  });
+  const revoke = vi.fn(async () => {
+    currentSharing = { enabled: false, connected: false, folders: currentSharing.folders, terminal: false };
+    return currentSharing;
+  });
+  const state = vi.fn(async () => currentSharing);
+  const activity = vi.fn(async () => []);
+  (window as unknown as { ogb?: unknown }).ogb = {
+    teamSharing: { state, chooseFolder, save, revoke, activity },
+  };
+
+  let localEnabled = true;
+  snapshot.capabilities = ["identity", "cloud_access", "local_execution"];
+  fixture.api.mockImplementation(async (path, init) => {
+    if (path === "/api/donebot/workspaces") return structuredClone(snapshot);
+    if (path === `/api/donebot/teams/${teamA}/members`) return [{ user_id: 1, email: "owner@example.invalid", role: "owner", version: 1 }];
+    if (path === "/api/donebot/teams/plans") return [];
+    if (path === `/api/donebot/teams/${teamA}/cloud` && !init?.method) {
+      return { account_id: "1", instance: { instance_id: instanceId, desired: "running", actual: "running", generation: 1, error: "", paid_until: new Date(Date.now() + 86400000).toISOString(), subscription_state: "active", purge_locked: false, auto_renew: true, plan_id: planId, plan_name: "Studio" }, operations: [], connection_available: true };
+    }
+    if (path === `/api/donebot/teams/${teamA}/devices` && init?.method === "POST") {
+      localEnabled = JSON.parse(String(init.body)).enabled;
+      return { id: deviceId, user_id: 1, email: "owner@example.invalid", name: "MacBook", enabled: localEnabled, version: 2, online: localEnabled, last_seen: null, revoked_at: null };
+    }
+    if (path === `/api/donebot/teams/${teamA}/devices`) {
+      return { account_id: "1", installation_id: "77777777-7777-4777-8777-777777777777", local_device_id: deviceId, devices: [{ id: deviceId, user_id: 1, email: "owner@example.invalid", name: "MacBook", enabled: localEnabled, version: 1, online: localEnabled, last_seen: null, revoked_at: null }] };
+    }
+    return { ok: true };
+  });
+
+  await mount(true);
+  expect(host.textContent).toContain("共享给此团队的本机文件夹");
+  await act(async () => [...host.querySelectorAll("button")].find(b => b.textContent?.includes("添加文件夹"))!.click());
+  expect(chooseFolder).toHaveBeenCalledTimes(1);
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({
+    teamId: teamA,
+    instanceId,
+    accountId: "1",
+    folders: [{ id: folderId, name: "Specs", path: "/Users/fixture/Specs", write: false }],
+    terminal: false,
+  }));
+  expect(host.textContent).toContain("Specs");
+  expect(host.textContent).toContain("已连接");
+
+  const writeSwitch = host.querySelector<HTMLButtonElement>(`[data-team-folder-write="${folderId}"]`)!;
+  expect(writeSwitch.getAttribute("role")).toBe("switch");
+  expect(writeSwitch.getAttribute("aria-checked")).toBe("false");
+  await act(async () => writeSwitch.click());
+  expect(save).toHaveBeenLastCalledWith(expect.objectContaining({
+    folders: [{ id: folderId, name: "Specs", path: "/Users/fixture/Specs", write: true }],
+  }));
+
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-team-local-device-switch]')!.click());
+  expect(revoke).toHaveBeenCalledWith(teamA);
+});

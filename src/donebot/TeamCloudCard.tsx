@@ -22,7 +22,11 @@ const badgeTone: Record<StatusTone, { pill: string; dot: string }> = {
   neutral: { pill: "bg-ink/[0.06] text-ink-secondary ring-ink/10", dot: "bg-ink-tertiary" },
 };
 
-export function TeamCloudCard({ accountId, team }: { accountId: string; team: DoneBotTeamIdentity }) {
+export function TeamCloudCard({ accountId, team, onInstanceChange }: {
+  accountId: string;
+  team: DoneBotTeamIdentity;
+  onInstanceChange?: (info: { instanceId: string; ready: boolean } | null) => void;
+}) {
   const [cloud, setCloud] = useState<DoneBotTeamCloudSnapshot | null>(null);
   const [plans, setPlans] = useState<DoneBotTeamPlan[]>([]);
   const [planId, setPlanId] = useState("");
@@ -68,6 +72,10 @@ export function TeamCloudCard({ accountId, team }: { accountId: string; team: Do
   const paid = !!instance?.paid_until && Date.parse(instance.paid_until) > Date.now();
   const renewable = paid && (instance?.subscription_state === "active" || instance?.subscription_state === "pending");
   const ready = !!instance && instance.actual === "running" && instance.desired === "running" && instance.subscription_state === "active" && paid && !instance.purge_locked;
+  const instanceId = instance?.instance_id ?? null;
+  useEffect(() => {
+    onInstanceChange?.(instanceId ? { instanceId, ready } : null);
+  }, [instanceId, onInstanceChange, ready]);
   const latestOp = cloud?.operations[0];
   const staleOp = latestOp?.generation !== undefined && instance?.generation !== undefined && latestOp.generation < instance.generation;
   const failedStart = instance?.actual === "error" && !staleOp && latestOp?.action === "start" && latestOp.state === "failed";

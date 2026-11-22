@@ -8,6 +8,33 @@ import { personKey } from "../person-key.ts";
 import type { TeamRequestActor } from "./team-requests.ts";
 
 const verifiedActors = new WeakMap<SessionRecord, { runtime: DoneBotTeamRuntime; actor: TeamRequestActor }>();
+const latestTeamVersions = new WeakMap<DoneBotTeamRuntime, Map<string, number>>();
+
+/** Capabilities a DoneBot team Cloud container advertises for explicit member-owned folder sharing (no browser/egress lending). */
+export const DONEBOT_TEAM_LENDING = Object.freeze({
+  sharedComputers: true,
+  lendingDetails: true,
+  commandTimeouts: true,
+  longCommands: true,
+  fileEdits: true,
+});
+
+export function teamSharedComputersEnabled(runtime: DoneBotTeamRuntime | null, env: NodeJS.ProcessEnv): boolean {
+  return Boolean(runtime && env.DONEBOT_TEAM_EXECUTION_ENABLED === "1");
+}
+
+export function teamRuntimeSessionLive(runtime: DoneBotTeamRuntime | null, sessionId: string): boolean {
+  if (!runtime) return false;
+  const prefix = `donebot-team:${runtime.team.id}:`;
+  if (!sessionId.startsWith(prefix)) return false;
+  const rest = sessionId.slice(prefix.length);
+  const sep = rest.indexOf(":");
+  if (sep <= 0) return false;
+  const userId = rest.slice(0, sep);
+  const version = Number(rest.slice(sep + 1));
+  if (!Number.isSafeInteger(version) || version <= 0) return false;
+  return latestTeamVersions.get(runtime)?.get(userId) === version;
+}
 
 const uuid = z.uuid();
 const claim = z.object({
@@ -48,6 +75,9 @@ export function teamRuntimeSession(runtime: DoneBotTeamRuntime, req: Pick<Incomi
     const session: SessionRecord = { id: `donebot-team:${value.team_id}:${value.user_id}:${value.member_version}`, label: value.email, scopes: teamRoleScopes(value.role),
       tokenHash: "", createdAt: now, lastSeenAt: now, expiresAt, userId: value.user_id, email: value.email,
       membershipAuthority: "team", teamRole: value.role, memberCheckedAt: now };
+    const versions = latestTeamVersions.get(runtime) ?? new Map<string, number>();
+    if (!latestTeamVersions.has(runtime)) latestTeamVersions.set(runtime, versions);
+    if ((versions.get(value.user_id) ?? 0) < value.member_version) versions.set(value.user_id, value.member_version);
     verifiedActors.set(session, { runtime, actor: { userId: value.user_id, memberVersion: value.member_version, person: personKey(session) } });
     return session;
   } catch { return null; }

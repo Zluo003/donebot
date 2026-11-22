@@ -301,6 +301,22 @@ const __APP_VERSION__: string;
         pause?(): Promise<void>;
         resume?(): Promise<void>;
       };
+      /** Local main-window only: member-owned local folder sharing for DoneBot team Clouds. */
+      teamSharing?: {
+        state(teamId: string): Promise<{ enabled: boolean; connected: boolean; folders: DesktopSharedFolder[]; terminal: boolean; error?: string }>;
+        chooseFolder(): Promise<DesktopSharedFolder | null>;
+        save(input: {
+          teamId: string;
+          instanceId: string;
+          accountId: string;
+          teamName: string;
+          role: "owner" | "admin" | "member";
+          folders: DesktopSharedFolder[];
+          terminal: boolean;
+        }): Promise<{ enabled: boolean; connected: boolean; folders: DesktopSharedFolder[]; terminal: boolean; error?: string }>;
+        revoke(teamId: string): Promise<{ enabled: boolean; connected: boolean; folders: DesktopSharedFolder[]; terminal: boolean; error?: string }>;
+        activity(teamId: string): Promise<DesktopLendingActivity[]>;
+      };
       confirm(message: string): Promise<boolean>;
       getCapabilities(): Promise<DesktopCapabilities>;
       onCapabilitiesChanged(cb: (capabilities: DesktopCapabilities) => void): () => void;

@@ -1,4 +1,5 @@
 import { doneBotPurchaseVisible, UPSTREAM_SERVICES, UPSTREAM_SETTINGS } from "@/donebot/services";
+import { isCollabEligible, openCollabDestination, useCollabPendingCount } from "@/donebot/collab-store";
 import { useEffect, useRef, useState } from "react";
 import {
   Archive,
@@ -335,9 +336,10 @@ export function phoneMenuItems({
   ];
 }
 
-export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, onTeamMap, onRemoteCollab, onFiles, onTeamFiles, archived }: {
+export function toolMenuItems({ activeView, automationsNeedYou, collabPending = 0, onAutomations, onTeamMap, onRemoteCollab, onFiles, onTeamFiles, archived }: {
   activeView: string;
   automationsNeedYou: boolean;
+  collabPending?: number;
   onAutomations: () => void;
   onTeamMap: () => void;
   onRemoteCollab?: () => void;
@@ -349,7 +351,7 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
   return [
     { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "routines", attention: automationsNeedYou, onSelect: onAutomations },
     { key: "team-map", label: t("sidebar.nav.teamMap"), icon: <UsersRound size={16} />, active: activeView === "team-map", onSelect: onTeamMap },
-    ...(onRemoteCollab ? [{ key: "remote-collab", label: t("settings.section.teamCollaboration"), icon: <Share2 size={16} />, onSelect: onRemoteCollab }] : []),
+    ...(onRemoteCollab ? [{ key: "remote-collab", label: t("settings.section.teamCollaboration"), icon: <Share2 size={16} />, active: activeView === "collab", attention: collabPending > 0, value: collabPending > 0 ? String(collabPending) : undefined, onSelect: onRemoteCollab }] : []),
     ...(onFiles ? [{ key: "files", label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
     ...(onTeamFiles ? [{ key: "team-files", label: t("teamFiles.title"), icon: <FolderOpen size={16} />, active: activeView === "team-files", onSelect: onTeamFiles }] : []),
     ...(archived?.count ? [{ key: "archived", label: t("sidebar.archived.title"), icon: <Archive size={16} />, value: String(archived.count), onSelect: archived.open }] : []),
@@ -603,6 +605,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   const openCloudAccount = () => dispatch({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
   const move = useAccountMove(state.config?.cloudHome === true, { onOpen: openCloudAccount, onPairPhone: () => dispatch(phonePairingSettingsAction()) });
   const accounts = useAccounts();
+  const collabPending = useCollabPendingCount();
 
   const items = profileMenuItems({
     phone: simple
@@ -626,9 +629,10 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         automationsNeedYou: account.automationsNeedYou,
         onAutomations: () => dispatch({ type: "showRoutines", view: "list" }),
         onTeamMap: () => dispatch({ type: "showTeamMap" }),
-        onRemoteCollab: state.config?.donebot?.enabled === true && !state.config?.cloudHome && !state.config?.team && !remote && ownerOrAdmin
-          ? () => dispatch({ type: "toggleAppSettings", open: true, section: "teamCollaboration" })
+        onRemoteCollab: isCollabEligible(state.config) && !remote && ownerOrAdmin
+          ? () => openCollabDestination(dispatch)
           : undefined,
+        collabPending,
         onFiles: filesReady ? () => dispatch({ type: "showFiles" }) : undefined,
         onTeamFiles: state.config?.team?.sharedFiles === true ? () => dispatch({ type: "showTeamFiles" }) : undefined,
         archived: account.archived,

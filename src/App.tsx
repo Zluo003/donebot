@@ -45,6 +45,8 @@ import { InboxPanel } from "@/components/inbox/InboxPanel";
 import { PlacesRail } from "@/components/PlacesRail";
 import { NewLocalFromMenu } from "@/components/PlaceAddSheet";
 import { DoneBotCloudDialog } from "@/donebot/CloudDialog";
+import { CollabSyncHost, CollabToastHost } from "@/donebot/CollabNotifications";
+import { CollabWorkspacePage } from "@/donebot/CollabWorkspacePage";
 import { CloudHowTo } from "@/components/CloudHowTo";
 import { DesktopCapabilitiesProvider, useCaptionChrome, useDesktopCapabilities, WindowDragStrip, windowFramed } from "@/components/DesktopCapabilities";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
@@ -154,7 +156,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeDrawer = useCallback(() => { setDrawerOpen(false); menuButtonRef.current?.focus(); }, []);
   const previousViewRef = useRef(state.activeView);
-  const calendarOriginRef = useRef<"chat" | "team-map" | "web-panel">("chat");
+  const calendarOriginRef = useRef<"chat" | "team-map" | "web-panel" | "collab">("chat");
   const loading = loadingLine({ connected: state.connected, hydrated: state.hydrated === true, developer: import.meta.env.DEV });
   const group = state.groups.find((g) => g.id === state.selectedId);
   const chiefStep = useChiefStepOpen();
@@ -245,7 +247,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
 
   useEffect(() => {
     if (state.activeView === "routines" && previousViewRef.current !== "routines") {
-      calendarOriginRef.current = previousViewRef.current === "team-map" || previousViewRef.current === "web-panel" ? previousViewRef.current : "chat";
+      calendarOriginRef.current = previousViewRef.current === "team-map" || previousViewRef.current === "web-panel" || previousViewRef.current === "collab" ? previousViewRef.current : "chat";
     }
     previousViewRef.current = state.activeView;
   }, [state.activeView]);
@@ -273,6 +275,10 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   const closeCalendar = useCallback(() => {
     if (calendarOriginRef.current === "team-map") {
       dispatch({ type: "showTeamMap" });
+      return;
+    }
+    if (calendarOriginRef.current === "collab") {
+      dispatch({ type: "showCollab" });
       return;
     }
     if (calendarOriginRef.current === "web-panel" && state.webPanelId) {
@@ -373,7 +379,9 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         open={drawerOpen}
         onClose={closeDrawer}
       />}
-      {state.activeView === "team-map" ? (
+      {state.activeView === "collab" ? (
+        <CollabWorkspacePage />
+      ) : state.activeView === "team-map" ? (
         <TeamMapPage />
       ) : state.activeView === "team-files" && state.config?.team?.sharedFiles === true ? (
         <TeamFilesPage />
@@ -455,6 +463,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       <WelcomeKeeper viewer={viewer} />
       {state.pluginsOpen && <PluginsPanel />}
       <AppGrantNotice />
+      <CollabSyncHost />
+      <CollabToastHost />
       {state.shortcutsOpen && (
         <KeyboardShortcutsModal
           open={state.shortcutsOpen}

@@ -14,6 +14,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock("@/state/api", () => ({ api: fixture.api }));
 
 const { RemoteCollab } = await import("./RemoteCollab");
+const { resetCollabStore } = await import("./collab-store");
 
 const teamId = "11111111-1111-4111-8111-111111111111";
 const installId = "22222222-2222-4222-8222-222222222222";
@@ -100,6 +101,7 @@ afterEach(async () => {
   container?.remove();
   container = null;
   delete (window as { ogb?: unknown }).ogb;
+  resetCollabStore();
   fixture.api.mockReset();
 });
 

@@ -1,5 +1,6 @@
 import { AppWindow, FolderOpen, Globe, Puzzle, Share2, UsersRound, Zap } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
+import { isCollabEligible, openCollabDestination, useCollabPendingCount } from "@/donebot/collab-store";
 
 import { useAppTriggers } from "@/lib/app-triggers";
 import { automationsFrom, hasUnseenProblemRun } from "@/lib/automations";
@@ -21,6 +22,7 @@ function NavRow({
   icon,
   active = false,
   attention = false,
+  badge = 0,
   iconsOnly,
   rail = false,
   tourId,
@@ -31,6 +33,7 @@ function NavRow({
   icon: (active: boolean) => ReactNode;
   active?: boolean;
   attention?: boolean;
+  badge?: number;
   iconsOnly: boolean;
   rail?: boolean;
   tourId?: string;
@@ -53,7 +56,16 @@ function NavRow({
     >
       {icon(active)}
       {!iconsOnly && <span className="flex-1 truncate text-[14px] font-medium leading-5">{label}</span>}
-      {attention && (
+      {badge > 0 ? (
+        <span
+          className={cn(
+            "inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white",
+            iconsOnly && (rail ? "absolute right-0.5 top-0.5" : "absolute right-1.5 top-1.5"),
+          )}
+        >
+          {badge > 9 ? "9+" : badge}
+        </span>
+      ) : attention && (
         <span
           data-testid="routines-attention"
           className={cn("size-2 shrink-0 rounded-full bg-danger", iconsOnly && (rail ? "absolute right-1 top-1" : "absolute right-2 top-2"))}
@@ -128,6 +140,7 @@ export function SidebarFooterNav({
   const iconSize = iconsOnly && !rail ? 20 : 18;
   const tone = (active: boolean) => (active ? "text-accent" : "text-ink-secondary");
   const automationsNeedYou = useAutomationsNeedYou();
+  const collabPending = useCollabPendingCount();
   const automationsRow = <NavRow
     id="automations"
     label={t("sidebar.nav.automations")}
@@ -169,14 +182,15 @@ export function SidebarFooterNav({
   />;
   if (rail) return <nav data-tour="tools" aria-label={t("sidebar.tools")} className="flex flex-col items-center gap-0.5">{appsRow}</nav>;
 
-  const remoteCollabRow = state.config?.donebot?.enabled === true && !state.config?.cloudHome && !state.config?.team && <NavRow
+  const remoteCollabRow = isCollabEligible(state.config) && <NavRow
     id="remote-collab"
     label={t("settings.section.teamCollaboration")}
     iconsOnly={iconsOnly || toolbar}
     rail={rail}
-    active={state.appSettingsOpen && state.appSettingsSection === "teamCollaboration"}
+    active={state.activeView === "collab" || (state.appSettingsOpen && state.appSettingsSection === "teamCollaboration")}
+    badge={collabPending}
     icon={(active) => <Share2 size={iconSize} className={tone(active)} />}
-    onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "teamCollaboration" })}
+    onClick={() => openCollabDestination(dispatch)}
   />;
   const rows = (
     <>
@@ -218,7 +232,7 @@ export function SidebarFooterNav({
       <SidebarSectionHeader
         name={t("sidebar.tools")}
         collapsed={collapsed}
-        alert={collapsed && automationsNeedYou}
+        alert={collapsed && (automationsNeedYou || (isCollabEligible(state.config) && collabPending > 0))}
         onToggle={onToggleCollapsed}
         reorderable={false}
         dragging={false}

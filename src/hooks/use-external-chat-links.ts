@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { openChatLink } from "@/components/ThreadRefs";
+import { COLLAB_DESKTOP_NOTIFY_BOT_ID, openCollabDestination } from "@/donebot/collab-store";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { openThread, type Action, type AppState, type ThreadTarget } from "@/state/store";
 
@@ -24,6 +25,10 @@ export function useDesktopNotificationOpens(state: AppState, dispatch: (action: 
   useEffect(() => {
     if (!target || !state.hydrated) return;
     setTarget(null);
+    if (target.botId === COLLAB_DESKTOP_NOTIFY_BOT_ID) {
+      openCollabDestination(dispatch, { kind: "inbox" });
+      return;
+    }
     openThread(dispatch, target, state, showThreads);
   }, [target, state, showThreads, dispatch]);
 }

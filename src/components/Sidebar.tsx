@@ -1,5 +1,7 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
 import { DONEBOT_TEMPLATES_ENABLED } from "@/donebot/services";
+import { isCollabEligible, useCollabStore } from "@/donebot/collab-store";
+import { CollabSidebarList, CollabSidebarSwitch } from "@/donebot/CollabSidebar";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, LayoutTemplate, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, Plus, Search, SquarePen, TextQuote, Trash2, Users, X } from "lucide-react";
@@ -1052,6 +1054,8 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
     : undefined;
 
   const q = query.trim().toLowerCase();
+  const collabTab = useCollabStore().sidebarTab;
+  const collabActive = isCollabEligible(state.config) && collabTab === "collab";
   const sections = useSidebarSections({ simple, rail, density, query: q, label: sectionLabel, sidebarRef });
   const botDrag = useSidebarBotDrag({ dispatch, announce: sections.announce, onNamed: sections.focusHeader, onRenamed: sections.renamed,
     onError: (text) => setTeamFeedback({ error: true, text }), onCancelled: () => sidebarRef.current?.focus() });
@@ -1288,14 +1292,15 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            placeholder={t("sidebar.search")}
+            placeholder={collabActive ? "搜索好友或团队" : t("sidebar.search")}
             aria-label={t("sidebar.searchAria")}
             className="w-full bg-transparent text-[13px] text-ink placeholder:text-ink-tertiary focus:outline-none"
           />
         </div>
       </div>}
-      {!q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!q && <SidebarInboxRow icons={density === "icons"} large={!advanced} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}
-      {universalPins && pinnedBots.length > 0 && !simpleDesk && (
+      <CollabSidebarSwitch compact={density === "icons"} listOnly={phone} />
+      {!collabActive && !q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!collabActive && !q && <SidebarInboxRow icons={density === "icons"} large={!advanced} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}
+      {!collabActive && universalPins && pinnedBots.length > 0 && !simpleDesk && (
         <div
           data-sidebar-universal-pins=""
           // vh, not %: a percentage has no height to resolve against inside the glass head.
@@ -1316,7 +1321,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
         </div>
       )}
 
-      {attentionPinned && density !== "icons" && (
+      {!collabActive && attentionPinned && density !== "icons" && (
         <SidebarAttentionPanel
           entries={attention}
           onUnpin={() => setAttentionPinned(false)}
@@ -1326,7 +1331,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
         />
       )}
 
-      {density !== "icons" && (
+      {!collabActive && density !== "icons" && (
         <SidebarPinnedThreadsPanel
           entries={pinnedThreads}
           now={now}
@@ -1336,14 +1341,17 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onToggle={layoutInteractive ? () => toggleSection(PINNED_THREADS_SECTION_ID) : undefined}
         />
       )}
-      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} row={botRow} corner={corner} />}
-      {simpleDesk && !tiles && <SidebarNoBots />}
+      {!collabActive && tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} row={botRow} corner={corner} />}
+      {!collabActive && simpleDesk && !tiles && <SidebarNoBots />}
       </GlassBar>
 
       {!collapseToIcons && !phone && <SidebarResizeHandle sizing={sizing} sidebarRef={sidebarRef} avatars={density === "icons"} avatarsWidth={rail ? 92 : 80}
         onAvatars={(avatars) => setSidebarDensity(avatars ? "icons" : "comfortable")} style={windowNoDragStyle} />}
 
       <GlassScroller className={rail ? "[scrollbar-gutter:stable_both-edges]" : simpleDesk ? "px-3" : "px-2"}>
+        {collabActive ? (
+          <CollabSidebarList query={query} icons={density === "icons"} onClose={phone ? onClose : undefined} />
+        ) : (
         <div className={cn("flex flex-col", simpleDesk ? cn("gap-0.5 pb-2", !tiles && "pt-2") : advanced ? "gap-0.5" : "gap-1 pb-2 pt-2")}>
           {matchingBots.length === 0 && visibleGroups.length === 0 && q && q.length < MIN_QUERY && (
             <div className="px-3 py-6 text-center text-[13px] text-ink-secondary">{t("sidebar.noMatch", { query })}</div>
@@ -1469,6 +1477,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
             />
           )}
         </div>
+        )}
       </GlassScroller>
       <p className="sr-only" aria-live="polite" aria-atomic="true">
         {sections.announcement}

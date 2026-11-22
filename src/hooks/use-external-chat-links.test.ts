@@ -117,6 +117,16 @@ describe("useDesktopNotificationOpens", () => {
     expect(fixture.link).toBeNull();
   });
 
+  it("routes a collab desktop notification click directly to the collab workspace", () => {
+    let deliver: ((target: unknown) => void) | undefined;
+    vi.stubGlobal("window", { ogb: { desktopNotifications: { onOpen: (cb: (target: unknown) => void) => { deliver = cb; return vi.fn(); } } } });
+    const dispatch = vi.fn();
+    opens(ready, dispatch);
+    deliver!({ botId: "donebot-collab", threadId: "collab-inbox" });
+    opens(ready, dispatch);
+    expect(dispatch).toHaveBeenCalledWith({ type: "showCollab" });
+  });
+
   it("subscribes to nothing on a browser or an older app", () => {
     vi.stubGlobal("window", {});
     const dispatch = vi.fn();

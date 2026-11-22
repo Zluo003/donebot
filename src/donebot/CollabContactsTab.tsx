@@ -28,15 +28,19 @@ import {
 export function CollabContactsTab({
   overview,
   onReload,
+  initialFocus,
 }: {
   overview: CollabOverview;
   onReload: () => Promise<void>;
+  initialFocus?: "add-friend" | "create-team" | "accept-team";
 }) {
   const [selectedTeamId, setSelectedTeamId] = useState(overview.teams[0]?.id ?? "");
   const [teamInvitations, setTeamInvitations] = useState<DoneBotTeamInvitation[]>([]);
   const [friendEmail, setFriendEmail] = useState("");
   const [friendNote, setFriendNote] = useState("");
-  const [teamPanel, setTeamPanel] = useState<"create" | "accept" | "rename" | null>(null);
+  const [teamPanel, setTeamPanel] = useState<"create" | "accept" | "rename" | null>(
+    initialFocus === "create-team" ? "create" : initialFocus === "accept-team" ? "accept" : null,
+  );
   const [teamName, setTeamName] = useState("");
   const [acceptToken, setAcceptToken] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -46,7 +50,14 @@ export function CollabContactsTab({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const createKey = useRef<{ name: string; key: string } | null>(null);
+  const friendInputRef = useRef<HTMLInputElement>(null);
   const friendInputId = useId(), teamCreateId = useId(), teamAcceptId = useId(), teamInviteId = useId();
+
+  useEffect(() => {
+    if (initialFocus === "create-team") setTeamPanel("create");
+    else if (initialFocus === "accept-team") setTeamPanel("accept");
+    else if (initialFocus === "add-friend") friendInputRef.current?.focus();
+  }, [initialFocus]);
 
   useEffect(() => {
     setSelectedTeamId(current => {
@@ -245,8 +256,10 @@ export function CollabContactsTab({
             </label>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
+                ref={friendInputRef}
                 id={friendInputId}
                 type="email"
+                autoComplete="email"
                 required
                 maxLength={254}
                 placeholder="输入对方 DoneBot 账号邮箱"
@@ -586,6 +599,7 @@ export function CollabContactsTab({
                       <input
                         id={teamInviteId}
                         type="email"
+                        autoComplete="email"
                         required
                         maxLength={254}
                         placeholder="输入对方 DoneBot 账号邮箱"

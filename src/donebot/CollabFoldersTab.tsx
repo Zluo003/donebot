@@ -3,15 +3,12 @@ import {
   AlertCircle,
   Check,
   ChevronDown,
-  ChevronRight,
   Eye,
-  FileText,
   Folder,
   FolderOpen,
   FolderPlus,
   Loader2,
   Pencil,
-  RefreshCw,
   Shield,
   Trash2,
   Users,
@@ -21,6 +18,7 @@ import { api } from "@/state/api";
 import { SETTINGS_INPUT, SettingsGroup, SIMPLE_CARD, Switch } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
 import type { CollabAccess, DoneBotFolderGrantInput, DoneBotOwnedFolder, DoneBotSharedFolder } from "../../shared/donebot-collab";
+import { CollabFolderBrowser } from "./CollabFolderBrowser";
 import {
   accessLabel,
   buildGrantCandidates,
@@ -41,48 +39,7 @@ type DraftFolder = {
   isNew: boolean;
 };
 
-type RemoteDirEntry = { name: string; kind: "file" | "dir"; size?: number };
-
 const grantKey = (type: "user" | "team", id: string) => `${type}:${id}`;
-
-function parseDirectoryEntries(rawText: string): RemoteDirEntry[] {
-  try {
-    const parsed = JSON.parse(rawText) as { entries?: Array<{ name?: string; type?: string }> };
-    if (Array.isArray(parsed?.entries)) {
-      return parsed.entries
-        .filter(item => typeof item?.name === "string" && item.type !== "blocked-link" && item.type !== "protected")
-        .map(item => ({ name: item.name!, kind: item.type === "directory" ? "dir" : "file" }));
-    }
-  } catch { /* Fall back to plain-text line format */ }
-  const entries: RemoteDirEntry[] = [];
-  for (const line of rawText.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (trimmed.endsWith("/")) {
-      entries.push({ name: trimmed.slice(0, -1), kind: "dir" });
-    } else {
-      const match = /^(.+?)\s+\((\d+)\s*B\)$/.exec(trimmed);
-      entries.push(match ? { name: match[1]!, kind: "file", size: Number(match[2]) } : { name: trimmed, kind: "file" });
-    }
-  }
-  return entries;
-}
-
-function formatReadFilePreview(rawText: string): string {
-  try {
-    const parsed = JSON.parse(rawText) as { content?: unknown; encoding?: string };
-    if (typeof parsed?.content === "string") {
-      return parsed.encoding === "base64" ? `[二进制文件，Base64 长度 ${parsed.content.length}]` : parsed.content;
-    }
-  } catch { /* Plain text fallback */ }
-  return rawText;
-}
-
-function extractResultText(payload: unknown): { text: string; isError: boolean } {
-  const res = (payload as { result?: { isError?: boolean; content?: Array<{ text?: string }> } })?.result;
-  const text = Array.isArray(res?.content) ? res.content.map(part => part?.text ?? "").join("\n") : "";
-  return { text, isError: res?.isError === true };
-}
 
 export function CollabFoldersTab({
   overview,
@@ -99,15 +56,7 @@ export function CollabFoldersTab({
   const [draft, setDraft] = useState<DraftFolder | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  // Inline remote file browser state
   const [browsing, setBrowsing] = useState<DoneBotSharedFolder | null>(null);
-  const [browsePath, setBrowsePath] = useState("");
-  const [browseEntries, setBrowseEntries] = useState<RemoteDirEntry[]>([]);
-  const [browseRaw, setBrowseRaw] = useState("");
-  const [browseLoading, setBrowseLoading] = useState(false);
-  const [browseError, setBrowseError] = useState("");
-  const [preview, setPreview] = useState<{ path: string; text: string } | null>(null);
 
   const candidates = useMemo(() => buildGrantCandidates(overview), [overview]);
 
@@ -273,57 +222,6 @@ export function CollabFoldersTab({
       setBusy(false);
     }
   };
-
-  const loadRemoteDir = async (folder: DoneBotSharedFolder, relPath: string) => {
-    setBrowsing(folder);
-    setBrowsePath(relPath);
-    setPreview(null);
-    setBrowseLoading(true);
-    setBrowseError("");
-    try {
-      const res = await api(`/api/donebot/collab/folders/${folder.id}/invoke`, {
-        method: "POST",
-        body: JSON.stringify({ action: "list_files", path: relPath }),
-      });
-      const parsed = extractResultText(res);
-      if (parsed.isError) {
-        setBrowseError(parsed.text || "无法列出远程目录。");
-        setBrowseEntries([]);
-        setBrowseRaw("");
-      } else {
-        setBrowseRaw(parsed.text);
-        setBrowseEntries(parseDirectoryEntries(parsed.text));
-      }
-    } catch (cause) {
-      setBrowseError(cleanError(cause, "读取远程目录失败。"));
-      setBrowseEntries([]);
-    } finally {
-      setBrowseLoading(false);
-    }
-  };
-
-  const openRemoteFile = async (folder: DoneBotSharedFolder, filePath: string) => {
-    setBrowseLoading(true);
-    setBrowseError("");
-    try {
-      const res = await api(`/api/donebot/collab/folders/${folder.id}/invoke`, {
-        method: "POST",
-        body: JSON.stringify({ action: "read_file", path: filePath }),
-      });
-      const parsed = extractResultText(res);
-      if (parsed.isError) {
-        setBrowseError(parsed.text || "无法读取该文件。");
-      } else {
-        setPreview({ path: filePath, text: formatReadFilePreview(parsed.text) });
-      }
-    } catch (cause) {
-      setBrowseError(cleanError(cause, "读取远程文件失败。"));
-    } finally {
-      setBrowseLoading(false);
-    }
-  };
-
-  const parentPath = browsePath.includes("/") ? browsePath.slice(0, browsePath.lastIndexOf("/")) : "";
 
   return (
     <div className="flex flex-col gap-5">
@@ -648,7 +546,7 @@ export function CollabFoldersTab({
                       <button
                         type="button"
                         disabled={!folder.online}
-                        onClick={() => isOpen ? setBrowsing(null) : void loadRemoteDir(folder, "")}
+                        onClick={() => setBrowsing(isOpen ? null : folder)}
                         className={`${COLLAB_BUTTON} text-[12px]`}
                       >
                         <Eye size={13} aria-hidden="true" />
@@ -656,84 +554,7 @@ export function CollabFoldersTab({
                       </button>
                     </div>
 
-                    {isOpen && (
-                      <div className="flex flex-col gap-2.5 rounded-xl bg-inset/80 p-3 ring-1 ring-inset ring-hairline/60">
-                        <div className="flex items-center justify-between gap-2 text-[12px]">
-                          <div className="flex min-w-0 items-center gap-1.5 font-mono text-ink-secondary">
-                            <button type="button" onClick={() => void loadRemoteDir(folder, "")} className="hover:text-ink">
-                              /{folder.name}
-                            </button>
-                            {browsePath && (
-                              <>
-                                <ChevronRight size={12} aria-hidden="true" />
-                                <span className="truncate text-ink">{browsePath}</span>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {browsePath && (
-                              <button type="button" onClick={() => void loadRemoteDir(folder, parentPath)} className={`${COLLAB_BUTTON} h-7 px-2 text-[11px]`}>
-                                返回上级
-                              </button>
-                            )}
-                            <button type="button" onClick={() => void loadRemoteDir(folder, browsePath)} className={`${COLLAB_BUTTON} h-7 px-2 text-[11px]`}>
-                              <RefreshCw size={11} className={browseLoading ? "animate-spin" : ""} aria-hidden="true" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {browseError && (
-                          <div role="alert" className="text-[12px] text-danger">{browseError}</div>
-                        )}
-
-                        {browseLoading ? (
-                          <div className="flex items-center gap-2 py-3 text-[12px] text-ink-secondary">
-                            <Loader2 size={14} className="animate-spin" aria-hidden="true" />正在经网关读取对方文件夹…
-                          </div>
-                        ) : preview ? (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between text-[12px]">
-                              <span className="font-mono font-medium text-ink">{preview.path}</span>
-                              <button type="button" onClick={() => setPreview(null)} className={`${COLLAB_BUTTON} h-7 px-2 text-[11px]`}>
-                                返回目录
-                              </button>
-                            </div>
-                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-app p-3 font-mono text-[11px] leading-relaxed text-ink ring-1 ring-inset ring-hairline/50">
-                              {preview.text}
-                            </pre>
-                          </div>
-                        ) : browseEntries.length > 0 ? (
-                          <ul className="max-h-56 divide-y divide-hairline/30 overflow-y-auto rounded-lg bg-app/70 ring-1 ring-inset ring-hairline/50">
-                            {browseEntries.map(entry => {
-                              const fullPath = browsePath ? `${browsePath}/${entry.name}` : entry.name;
-                              return (
-                                <li key={fullPath}>
-                                  <button
-                                    type="button"
-                                    onClick={() => entry.kind === "dir" ? void loadRemoteDir(folder, fullPath) : void openRemoteFile(folder, fullPath)}
-                                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12px] transition-colors hover:bg-ink/[0.04]"
-                                  >
-                                    <span className="flex min-w-0 items-center gap-2">
-                                      {entry.kind === "dir"
-                                        ? <Folder size={13} className="shrink-0 text-accent-text" aria-hidden="true" />
-                                        : <FileText size={13} className="shrink-0 text-ink-tertiary" aria-hidden="true" />}
-                                      <span className="truncate text-ink">{entry.name}</span>
-                                    </span>
-                                    {entry.size !== undefined && (
-                                      <span className="shrink-0 tabular-nums text-[11px] text-ink-tertiary">{entry.size} B</span>
-                                    )}
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : (
-                          <p className="py-2 text-[12px] text-ink-tertiary">
-                            {browseRaw ? browseRaw : "此目录为空。"}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    {isOpen && <CollabFolderBrowser folder={folder} />}
                   </li>
                 );
               })}

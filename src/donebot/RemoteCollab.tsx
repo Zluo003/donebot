@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Bot, FolderOpen, Loader2, RefreshCw, Users } from "lucide-react";
-import { api } from "@/state/api";
 import { SIMPLE_CARD } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
-import { cleanError, COLLAB_BUTTON, type CollabOverview } from "./collab-types";
+import { refreshCollabOverview, useCollabStore } from "./collab-store";
+import { COLLAB_BUTTON } from "./collab-types";
 import { CollabFoldersTab } from "./CollabFoldersTab";
 import { CollabBotsTab } from "./CollabBotsTab";
 import { CollabContactsTab } from "./CollabContactsTab";
@@ -11,31 +11,15 @@ import { CollabContactsTab } from "./CollabContactsTab";
 type CollabTab = "folders" | "bots" | "contacts";
 
 export function RemoteCollab({ standalone = false }: { standalone?: boolean }) {
-  const [overview, setOverview] = useState<CollabOverview | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
+  const { overview, loaded, refreshing, error } = useCollabStore();
   const [tab, setTab] = useState<CollabTab>("folders");
-  const generation = useRef(0);
 
   const load = useCallback(async () => {
-    const mine = ++generation.current;
-    setRefreshing(true);
-    try {
-      const next = await api<CollabOverview>("/api/donebot/collab/overview");
-      if (generation.current !== mine) return;
-      setOverview(next);
-      setError("");
-    } catch (cause) {
-      if (generation.current === mine) setError(cleanError(cause, "无法加载远程协作数据，请确认已登录并升级网关。"));
-    } finally {
-      if (generation.current === mine) { setLoaded(true); setRefreshing(false); }
-    }
+    await refreshCollabOverview();
   }, []);
 
   useEffect(() => {
     void load();
-    return () => { generation.current++; };
   }, [load]);
 
   if (!loaded) {

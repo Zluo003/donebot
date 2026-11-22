@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import WebSocket from "ws";
 import { boundedResponseText } from "./bounded-response.ts";
 import { DEFAULT_DONEBOT_MEDIA_PREFERENCES, type DoneBotAccountState, type DoneBotCatalog, type DoneBotMediaPreferences } from "../../shared/donebot.ts";
@@ -528,6 +529,107 @@ export class DoneBotGateway {
       return JSON.parse(Buffer.concat(chunks).toString("utf8"));
     } finally { this.controllers.delete(controller); }
   }
+
+  private async collabRequest(path: string, method: string, body?: unknown, timeoutMs = 15_000): Promise<unknown> {
+    const epoch = this.epoch, session = await this.validSession();
+    this.checkEpoch(epoch);
+    if (session.mode === "installation") throw new DoneBotGatewayError(403, "collab_login_required", "请在本机登录 DoneBot 账号后使用远程协作。");
+    const controller = new AbortController(); this.controllers.add(controller);
+    try {
+      const response = await this.fetcher(`${this.origin}/api/v1/donebot/${path}`, {
+        method, redirect: "error", credentials: "omit",
+        headers: { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
+      });
+      const value = await this.readGatewayJson(response) as { code?: number; data?: unknown; message?: unknown; error?: unknown };
+      this.checkEpoch(epoch);
+      if (!response.ok || (value.code !== undefined && value.code !== 0)) {
+        const msg = typeof value.message === "string" && value.message.trim()
+          ? value.message.trim()
+          : typeof value.error === "string" && value.error.trim()
+            ? value.error.trim()
+            : response.status === 401 ? "登录已失效，请重新登录。" : "远程协作请求失败，请稍后重试。";
+        throw new DoneBotGatewayError(response.status, "collab_request_failed", msg);
+      }
+      return value.code === 0 && "data" in value ? value.data : value;
+    } finally { this.controllers.delete(controller); }
+  }
+
+  private async collabRuntimeRequest(path: string, method: string, body?: unknown, timeoutMs = 30_000): Promise<unknown> {
+    const epoch = this.epoch, session = await this.validSession();
+    this.checkEpoch(epoch);
+    const controller = new AbortController(); this.controllers.add(controller);
+    try {
+      const response = await this.fetcher(`${this.origin}/v1/donebot/runtime/collab/${path}`, {
+        method, redirect: "error", credentials: "omit",
+        headers: { authorization: `Bearer ${session.credential}`, "X-DoneBot-Installation": session.installationId, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
+      });
+      const value = await this.readGatewayJson(response) as { code?: number; data?: unknown; message?: unknown; error?: unknown };
+      this.checkEpoch(epoch);
+      if (!response.ok || (value.code !== undefined && value.code !== 0)) {
+        const msg = typeof value.message === "string" && value.message.trim()
+          ? value.message.trim()
+          : typeof value.error === "string" && value.error.trim()
+            ? value.error.trim()
+            : response.status === 401 ? "登录或安装凭据已失效，请重新登录。" : "远程协作请求失败，请稍后重试。";
+        throw new DoneBotGatewayError(response.status, "collab_runtime_failed", msg);
+      }
+      return value.code === 0 && "data" in value ? value.data : value;
+    } finally { this.controllers.delete(controller); }
+  }
+
+  async collabIdentity(): Promise<{ account_id: string; installation_id: string; device_name: string; email: string }> {
+    const session = await this.validSession();
+    return {
+      account_id: session.user.id,
+      installation_id: session.installationId,
+      device_name: sanitizeTeamDeviceName(hostname()),
+      email: session.user.email,
+    };
+  }
+
+  async collabFriends() { return this.collabRequest("friends", "GET"); }
+  async collabSendFriendRequest(email: string, note = "") { return this.collabRequest("friends/requests", "POST", { email, note }); }
+  async collabAcceptFriendRequest(id: string) { return this.collabRequest(`friends/requests/${id}/accept`, "POST", {}); }
+  async collabRejectFriendRequest(id: string) { return this.collabRequest(`friends/requests/${id}/reject`, "POST", {}); }
+  async collabRemoveFriend(userId: number) { return this.collabRequest(`friends/${userId}`, "DELETE"); }
+
+  async collabIncomingTeamInvitations() { return this.collabRequest("teams/invitations/incoming", "GET"); }
+  async collabTeamInvitations(teamId: string) { return this.collabRequest(`teams/${teamId}/invitations`, "GET"); }
+  async collabAcceptTeamInvitation(invitationId: string) { return this.collabRequest(`teams/invitations/${invitationId}/accept`, "POST", {}); }
+  async collabDeclineTeamInvitation(invitationId: string) { return this.collabRequest(`teams/invitations/${invitationId}/decline`, "POST", {}); }
+  async collabLeaveTeam(teamId: string) { return this.collabRequest(`teams/${teamId}/leave`, "POST", {}); }
+
+  async collabFolders() {
+    const session = await this.validSession();
+    return session.mode === "installation"
+      ? this.collabRuntimeRequest("folders", "GET", undefined, 15_000)
+      : this.collabRequest("collab/folders", "GET");
+  }
+  async collabSaveFolder(input: Record<string, unknown>, id?: string) {
+    const session = await this.validSession();
+    const payload = { ...input, installation_id: session.installationId, device_name: typeof input.device_name === "string" && input.device_name.trim() ? input.device_name.trim() : sanitizeTeamDeviceName(hostname()) };
+    return id ? this.collabRequest(`collab/folders/${id}`, "PUT", payload) : this.collabRequest("collab/folders", "POST", payload);
+  }
+  async collabDeleteFolder(id: string) { return this.collabRequest(`collab/folders/${id}`, "DELETE"); }
+  async collabInvokeFolder(id: string, operation: Record<string, unknown>) {
+    const session = await this.validSession();
+    return session.mode === "installation"
+      ? this.collabRuntimeRequest(`folders/${id}/invoke`, "POST", operation, 45_000)
+      : this.collabRequest(`collab/folders/${id}/invoke`, "POST", operation, 45_000);
+  }
+  async collabRelayPoll() { return this.collabRuntimeRequest("relay/poll", "POST", {}, 30_000); }
+  async collabRelayResult(jobId: string, result: unknown) { return this.collabRuntimeRequest("relay/result", "POST", { job_id: jobId, result }, 15_000); }
+
+  async collabBots() { return this.collabRequest("collab/bots", "GET"); }
+  async collabSaveBot(input: Record<string, unknown>, id?: string) {
+    return id ? this.collabRequest(`collab/bots/${id}`, "PUT", input, 30_000) : this.collabRequest("collab/bots", "POST", input, 30_000);
+  }
+  async collabBotPackage(id: string) { return this.collabRequest(`collab/bots/${id}/package`, "GET", undefined, 30_000); }
+  async collabDeleteBot(id: string) { return this.collabRequest(`collab/bots/${id}`, "DELETE"); }
 
   private async teamRequest(path: string, method: string, accountId?: string, body?: unknown, key?: string): Promise<unknown> {
     const epoch = this.epoch, session = await this.validSession();

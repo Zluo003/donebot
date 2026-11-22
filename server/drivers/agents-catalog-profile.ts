@@ -29,6 +29,7 @@ export interface CatalogProfile {
   room?: boolean;
   imageGeneration?: boolean;
   donebotMedia?: boolean;
+  donebotCollab?: boolean;
   /** A cloud computer can be had here (Boat): the meeting tools are mounted. */
   meetings?: boolean;
 }
@@ -51,6 +52,7 @@ export function catalogProfileFromEnv(env: NodeJS.ProcessEnv): CatalogProfile {
     room: env.DONEBOT_ROOM === "1",
     imageGeneration: env.DONEBOT_IMAGE_GENERATION === "1",
     donebotMedia: env.DONEBOT_MEDIA === "1",
+    donebotCollab: env.DONEBOT_COLLAB === "1",
     meetings: env.DONEBOT_MEETINGS === "1",
   };
 }

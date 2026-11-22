@@ -301,21 +301,14 @@ const __APP_VERSION__: string;
         pause?(): Promise<void>;
         resume?(): Promise<void>;
       };
-      /** Local main-window only: member-owned local folder sharing for DoneBot team Clouds. */
-      teamSharing?: {
-        state(teamId: string): Promise<{ enabled: boolean; connected: boolean; folders: DesktopSharedFolder[]; terminal: boolean; error?: string }>;
-        chooseFolder(): Promise<DesktopSharedFolder | null>;
-        save(input: {
-          teamId: string;
-          instanceId: string;
-          accountId: string;
-          teamName: string;
-          role: "owner" | "admin" | "member";
-          folders: DesktopSharedFolder[];
-          terminal: boolean;
-        }): Promise<{ enabled: boolean; connected: boolean; folders: DesktopSharedFolder[]; terminal: boolean; error?: string }>;
-        revoke(teamId: string): Promise<{ enabled: boolean; connected: boolean; folders: DesktopSharedFolder[]; terminal: boolean; error?: string }>;
-        activity(teamId: string): Promise<DesktopLendingActivity[]>;
+      /** Local main-window only: gateway-relayed folder sharing for DoneBot friends and teams. */
+      collab?: {
+        chooseFolder(): Promise<{ id: string; path: string; name: string } | null>;
+        listFolders(): Promise<Array<{ id: string; accountId: string; path: string; name: string; enabled: boolean; allowWrite: boolean }>>;
+        saveFolder(input: { id?: string; path?: string; name?: string; enabled?: boolean; allowWrite?: boolean }): Promise<{ id: string; accountId: string; path: string; name: string; enabled: boolean; allowWrite: boolean }>;
+        removeFolder(id: string): Promise<{ ok: boolean }>;
+        status(): Promise<{ connected: boolean; activeCount: number; error?: string }>;
+        activity(folderId?: string): Promise<Array<{ at: number; folderId: string; folderName: string; callerEmail: string; action: string; detail: string; ok: boolean; error?: string }>>;
       };
       confirm(message: string): Promise<boolean>;
       getCapabilities(): Promise<DesktopCapabilities>;

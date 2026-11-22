@@ -42432,8 +42432,8 @@
       "teamTemplates.removeBody": "b89101ef894dd80a491c034b62ce4da121c74090e78d2d936652bbdc57c5d9d0",
       "teamTemplates.published": "58a3c0694baabf474242b35ca64aaf978c2f3e604cde7009880f3df0532d90d3",
       "teamTemplates.publishedHint": "8b60f94d6aa73f9a5e76ba769c52342a1d43a7479ce98d167b4dc8e5eea2a65a",
-      "settings.section.cloudServer": "a836ece8cf9d9eeb8a6ac21b40163607a1e8d3810d678fe424bd252015788f1e",
-      "settings.section.teamCollaboration": "28b4d621fd9b5875996908013fd320fa128d9781ae913eeb453af1fea20ab8ee",
+      "settings.section.cloudServer": "b977b950c1ae31e5aeb9ef778cc20a66fc034eb81e738e0206104b677962c465",
+      "settings.section.teamCollaboration": "16b4272dce4d1f4259a73a6db2a4b2d90722c39672398749db6d7d0824121618",
       "room.members.far.section": "cf1c9f16c63e60360fbedd26a8d576440ae87903efdb306a96b6e8ededd7a3cb",
       "room.members.far.offline": "a1794783aab72d205dc532b1170d1be63ebdce8816b57c21acb451c15dab969a"
     },
@@ -52664,8 +52664,8 @@
       "teamFiles.intro": "dcdae0bfcea58e7103866dbff6cb7c014db874061cf4c7e92cf94b6150c6627c",
       "teamFiles.empty.body": "2cc5153504cbf474a60883cb941b91e518772d7199195237a72613d306ae57a8",
       "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f",
-      "settings.section.cloudServer": "a836ece8cf9d9eeb8a6ac21b40163607a1e8d3810d678fe424bd252015788f1e",
-      "settings.section.teamCollaboration": "28b4d621fd9b5875996908013fd320fa128d9781ae913eeb453af1fea20ab8ee"
+      "settings.section.cloudServer": "b977b950c1ae31e5aeb9ef778cc20a66fc034eb81e738e0206104b677962c465",
+      "settings.section.teamCollaboration": "16b4272dce4d1f4259a73a6db2a4b2d90722c39672398749db6d7d0824121618"
     },
     "uk": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",

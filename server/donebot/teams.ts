@@ -88,7 +88,7 @@ export function parseTeamDeviceCommand(input: unknown): DoneBotTeamDeviceCommand
   return teamDeviceCommandSchema.parse(input);
 }
 
-export const DONEBOT_CLIENT_TEAM_CAPABILITIES = ["identity", "cloud_access", "local_execution", "shared_files"] as const;
+export const DONEBOT_CLIENT_TEAM_CAPABILITIES = ["identity", "cloud_access", "local_execution", "shared_files", "collaboration"] as const;
 
 export function workspaceSnapshot(value: unknown, accountId: string): DoneBotWorkspaceSnapshot {
   const snapshot = z.object({ protocol: z.literal(DONEBOT_TEAMS_PROTOCOL), capabilities: z.array(z.string()).max(50), workspaces: z.array(teamIdentity).max(1000) }).parse(value);

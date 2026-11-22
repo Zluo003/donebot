@@ -31,6 +31,17 @@ export function reconcilePersonalCloud(state, accountId, activeInstanceId) {
   return { ...state, environments: kept, activeId };
 }
 
+function dropRetiredTeamClouds(state, accountId) {
+  if (!state || !Array.isArray(state.environments)) return state;
+  const kept = state.environments.filter(entry => {
+    if (!entry?.donebotCloud?.teamId) return true;
+    return Boolean(entry.donebotCloud.accountId && accountId && entry.donebotCloud.accountId !== accountId);
+  });
+  if (kept.length === state.environments.length) return state;
+  const activeId = kept.some(entry => entry.id === state.activeId) ? state.activeId : environments.LOCAL_ID;
+  return { ...state, environments: kept, activeId };
+}
+
 function dropReplacedTeamCloud(state, accountId, teamId, origin) {
   const kept = state.environments.filter(entry => {
     const entryTeam = entry.team?.id ?? entry.donebotCloud?.teamId;
@@ -175,7 +186,7 @@ export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, reque
             ? snapshot.instance.id : null;
           if (accountId) {
             const before = saved();
-            const after = reconcilePersonalCloud(before, accountId, activeInstanceId);
+            const after = dropRetiredTeamClouds(reconcilePersonalCloud(before, accountId, activeInstanceId), accountId);
             if (after !== before) persist(after);
           }
           lastSyncAt = Date.now();

@@ -25,7 +25,7 @@ import { callBurstTool } from "./agents-burst-tool.ts";
 import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { doneBotCredentialRefusal } from "../donebot/credential-policy.ts";
-import { callDoneBotMediaTool, DONEBOT_MEDIA_TOOL_NAMES } from "../donebot/media-tools.ts";
+import { callDoneBotMediaTool, DONEBOT_MEDIA_TOOL_NAMES } from "../donebot/media-tools.ts"; import { callDoneBotCollabTool, DONEBOT_COLLAB_TOOL_NAMES } from "../donebot/collab-tools.ts";
 import { callMeetingTool, MEETING_TOOL_NAMES } from "./agents-meeting-tools.ts";
 import { callMausBotTool, DONEBOT_TOOL_NAMES } from "./agents-mausbot-tools.ts";
 import { callPageTool, PAGE_TOOL_NAMES } from "./agents-pages-tools.ts";
@@ -33,7 +33,7 @@ import { callPersonTool, PERSON_TOOL_NAMES } from "./agents-person-tools.ts";
 import { callDevsTool, DEVS_TOOL_NAMES } from "./agents-devs-tools.ts";
 
 export interface ToolCallContext {
-  donebotMedia?: boolean;
+  donebotMedia?: boolean; donebotCollab?: boolean;
   botId: string;
   threadId: string;
   depth: number;
@@ -54,7 +54,7 @@ export function toolCallContextFromEnv(env: NodeJS.ProcessEnv): ToolCallContext 
   const profile = catalogProfileFromEnv(env);
   return {
     botId: profile.botId,
-    donebotMedia: profile.donebotMedia,
+    donebotMedia: profile.donebotMedia, donebotCollab: profile.donebotCollab,
     threadId: env.DONEBOT_THREAD_ID ?? "",
     depth: Number(env.DONEBOT_TURN_DEPTH ?? "0") || 0,
     externalRuntime: env.DONEBOT_EXTERNAL_RUNTIME === "1",
@@ -220,7 +220,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   const args = dropBlankArguments(name, given);
   const credentialRefusal = context.donebotMedia && doneBotCredentialRefusal(name, args);
   if (credentialRefusal) return { text: credentialRefusal, isError: true };
-  const refused = outOfBounds(name, fullInputSchema(name, context.donebotMedia), args);
+  const refused = outOfBounds(name, fullInputSchema(name, context.donebotMedia, context.donebotCollab), args);
   if (refused) return { text: refused, isError: true };
   const member = agentsCallMember(name, args);
   const { botId: BOT_ID, threadId: THREAD_ID, depth: DEPTH } = context;
@@ -252,7 +252,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   if (CARD_TOOL_NAMES.has(name)) return callCardTool(name, args, context);
   if (RESEARCH_TOOL_NAMES.has(name)) return callResearchTool(name, args, context);
   if (HELPER_TOOL_NAMES.has(name)) return callHelperTool(name, args, context);
-  if (context.donebotMedia && DONEBOT_MEDIA_TOOL_NAMES.has(name)) return callDoneBotMediaTool(name, args, context);
+  if (context.donebotMedia && DONEBOT_MEDIA_TOOL_NAMES.has(name)) return callDoneBotMediaTool(name, args, context); if (context.donebotCollab && DONEBOT_COLLAB_TOOL_NAMES.has(name)) return callDoneBotCollabTool(name, args, context);
   if (IMAGE_TOOL_NAMES.has(name)) return callImageTool(name, args, context);
   if (MEETING_TOOL_NAMES.has(name)) return callMeetingTool(name, args, context);
   if (DONEBOT_TOOL_NAMES.has(name)) return callMausBotTool(name, args, context);

@@ -1,4 +1,4 @@
-import { AppWindow, FolderOpen, Globe, Puzzle, UsersRound, Zap } from "lucide-react";
+import { AppWindow, FolderOpen, Globe, Puzzle, Share2, UsersRound, Zap } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
 import { useAppTriggers } from "@/lib/app-triggers";
@@ -169,6 +169,15 @@ export function SidebarFooterNav({
   />;
   if (rail) return <nav data-tour="tools" aria-label={t("sidebar.tools")} className="flex flex-col items-center gap-0.5">{appsRow}</nav>;
 
+  const remoteCollabRow = state.config?.donebot?.enabled === true && !state.config?.cloudHome && !state.config?.team && <NavRow
+    id="remote-collab"
+    label={t("settings.section.teamCollaboration")}
+    iconsOnly={iconsOnly || toolbar}
+    rail={rail}
+    active={state.appSettingsOpen && state.appSettingsSection === "teamCollaboration"}
+    icon={(active) => <Share2 size={iconSize} className={tone(active)} />}
+    onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "teamCollaboration" })}
+  />;
   const rows = (
     <>
       {automationsRow}
@@ -184,6 +193,7 @@ export function SidebarFooterNav({
           onClick={() => dispatch({ type: "showTeamMap" })}
         />
       )}
+      {remoteCollabRow}
       {filesRow}
       {teamFilesRow}
       {advanced && webPanels.map((panel) => (

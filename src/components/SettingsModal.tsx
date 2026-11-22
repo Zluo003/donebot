@@ -74,7 +74,7 @@ import { SavedStepsRow } from "./SavedStepsRow";
 import { BrowserProfilesRow, ColorUserBubblesRow, AdvancedModeRow, ExperimentalFeaturesRow, LanguageRow, NewBotEffortRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, FollowUpRow, SendKeyRow, ShowThreadsRow, ToolCallsRow, UniversalPinsRow, UpdatesRow } from "./AppSettingsRows";
 import { DoneBotAccountSettings } from "@/donebot/Account";
 import { DoneBotCloudAccess } from "@/donebot/CloudAccess";
-import { DoneBotTeams } from "@/donebot/Teams";
+import { RemoteCollab } from "@/donebot/RemoteCollab";
 import { DoneBotPayments } from "@/donebot/Payments";
 import { DoneBotModelPricing } from "@/donebot/ModelPricing";
 import { DoneBotDeviceName } from "@/donebot/DeviceName";
@@ -116,7 +116,7 @@ export const SECTIONS: Array<{
   { id: "organization", group: "account", labelKey: "settings.section.organization", icon: Building2, keywords: ["company", "organization", "organisation", "sign in", "enroll", "managed", "models", "disconnect"] },
   { id: "usage", group: "account", labelKey: "settings.section.usage", icon: Coins, keywords: ["tokens", "cost", "billing", "plan", "quota", "remaining", "weekly", "5-hour", "model", "used"] },
   { id: "cloudServer", group: "account", labelKey: "settings.section.cloudServer", icon: Cloud, keywords: ["云服务器", "云主机", "个人云", "Cloud", "DoneBot Cloud", "续费", "自动续费", "本机协作", "cloud server", "server"] },
-  { id: "teamCollaboration", group: "account", labelKey: "settings.section.teamCollaboration", icon: Users, keywords: ["团队", "团队协作", "成员", "邀请", "团队 Cloud", "本机执行", "设备", "team", "collaboration", "members", "invite", "devices"] },
+  { id: "teamCollaboration", group: "account", labelKey: "settings.section.teamCollaboration", icon: Users, keywords: ["远程协作", "协作", "好友", "团队", "共享文件夹", "共享 Bot", "邀请", "成员", "collab", "friend", "team", "shared folder", "shared bot"] },
   { id: "purchase", group: "account", labelKey: "settings.section.purchase", icon: Coins, keywords: ["购买", "算力", "充值", "支付", "支付宝", "微信", "purchase", "credits", "recharge", "payment", "alipay", "wechat"] },
   { id: "backups", group: "account", labelKey: "settings.section.backups", icon: Archive, keywords: ["export", "import", "restore", "full backup", "password", "recovery"] },
   { id: "import", group: "account", labelKey: "settings.section.import", icon: Download, keywords: ["import", "grok", "grok bot", "move", "cursor", "claude code", "codex", "gemini", "skills", "mcp", "tools", "bring"] },
@@ -372,7 +372,7 @@ function SettingsDialog() {
     switch (id) {
       case "modelPricing": return <DoneBotModelPricing />;
       case "cloudServer": return cloudServerAvailable ? <DoneBotCloudAccess key={state.config?.donebot?.user?.id} heading={false} /> : null;
-      case "teamCollaboration": return teamsAvailable ? <DoneBotTeams key={state.config?.donebot?.user?.id} standalone /> : null;
+      case "teamCollaboration": return teamsAvailable ? <RemoteCollab key={state.config?.donebot?.user?.id} standalone /> : null;
       case "purchase": return purchaseAvailable ? <DoneBotPayments key={state.config?.donebot?.user?.id} /> : null;
       case "desktopWorkspaces":
         return <><ConnectedWorkspacesSettings />{remoteAccess.client}</>;

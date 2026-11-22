@@ -670,12 +670,13 @@ const bridge = {
     pause: () => ipcRenderer.invoke("sharing:pause"),
     resume: () => ipcRenderer.invoke("sharing:resume"),
   },
-  teamSharing: {
-    state: teamId => ipcRenderer.invoke("donebot-team-sharing:state", String(teamId)),
-    chooseFolder: () => ipcRenderer.invoke("donebot-team-sharing:choose-folder"),
-    save: input => ipcRenderer.invoke("donebot-team-sharing:save", input),
-    revoke: teamId => ipcRenderer.invoke("donebot-team-sharing:revoke", String(teamId)),
-    activity: teamId => ipcRenderer.invoke("donebot-team-sharing:activity", String(teamId)),
+  collab: {
+    chooseFolder: () => ipcRenderer.invoke("donebot-collab:choose-folder"),
+    listFolders: () => ipcRenderer.invoke("donebot-collab:list-folders"),
+    saveFolder: input => ipcRenderer.invoke("donebot-collab:save-folder", input),
+    removeFolder: id => ipcRenderer.invoke("donebot-collab:remove-folder", String(id)),
+    status: () => ipcRenderer.invoke("donebot-collab:status"),
+    activity: folderId => ipcRenderer.invoke("donebot-collab:activity", folderId ? String(folderId) : undefined),
   },
   confirm: message => ipcRenderer.invoke("dialog:confirm", message),
   /** The window onto My Cloud once it is the person's home: this computer's screen while My Cloud can't be opened, and

@@ -226,7 +226,7 @@ test("drops deleted or replaced personal Cloud entries while keeping other accou
   });
 
   assert.equal(await connection.syncMenu(), true);
-  assert.deepEqual(state.environments.map(e => e.id), ["other-account", "team-cloud", "vps", "new-cloud"]);
+  assert.deepEqual(state.environments.map(e => e.id), ["other-account", "vps", "new-cloud"]);
 
   // Opening a newly provisioned personal Cloud also replaces any stale personal entry for the same account.
   const thirdId = "99861a47-7240-4f99-bf19-bd01d411596f";

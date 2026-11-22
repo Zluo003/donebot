@@ -77,7 +77,7 @@ import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { DONEBOT_TEAM_LENDING, teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession, teamRuntimeSessionLive, teamSharedComputersEnabled } from "./donebot/team-runtime.ts";
-import { createDoneBotTeamFiles } from "./donebot/team-files.ts";
+import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts";
 import { createTeamFilesRoutes } from "./routes/team-files.ts";
 import { createTeamTemplateRoutes } from "./routes/team-templates.ts";
 import { createShareGithubAccess } from "./host/share-github-access.ts";
@@ -1907,7 +1907,7 @@ function agentsIntegration(
   const bot = store.bot(botId), speaking = botForThread(botId, threadId) ?? bot;
   // Only advertises the tools; the routes behind them refuse regardless.
   const host = { skillAuthoring: skillAuthoringEnabled(cfg), sharedComputers: botLending(), cloudHome: Boolean(CLOUD_HOME), team: Boolean(CLOUD_TEAM),
-    donebotMedia: DONEBOT_GATEWAY, voiceNotes: tts.voiceReady(cfg, speaking?.voice) && speaking?.voiceNotes !== false, x: Boolean(researchCredential(cfg.treg?.key)), research: researchAvailability.available(), imageGeneration: !DONEBOT_GATEWAY && imageGenerationReady(cfg), meetings: boat.boatConfigured(cfg) };
+    donebotMedia: DONEBOT_GATEWAY, donebotCollab: DONEBOT_GATEWAY && !DONEBOT_TEAM_RUNTIME, voiceNotes: tts.voiceReady(cfg, speaking?.voice) && speaking?.voiceNotes !== false, x: Boolean(researchCredential(cfg.treg?.key)), research: researchAvailability.available(), imageGeneration: !DONEBOT_GATEWAY && imageGenerationReady(cfg), meetings: boat.boatConfigured(cfg) };
   return { ...agentsProxyLaunch(), env: agentsServerEnv({ threadId, bot: bot ?? { id: botId }, room: Boolean(store.groupByThread(threadId)), teamComputer: Boolean(bot && inheritedTeamComputer(bot)), botDriven: automated || botDrivenConversation(store.taskByThread(botId, threadId)), host },
     { generation, depth, skillAuthoring, roomHandoffId, ...(hostFiles && !CLOUD_HOME && !HOSTED_WORKSPACE ? { deliversSavedFiles: true } : {}) },
     (turn) => mintInternalCapability({ botId, threadId, kind: "agents", createdBots: 0, openedThreads: 0, ...turn }), `http://127.0.0.1:${PORT}`) };
@@ -12509,7 +12509,7 @@ ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));
 ROUTES.push(createTeamFilesRoutes({ ...donebotTeamFiles, personName: person => teamHost.personName(person), botName: botId => store.bot(botId)?.name }));
-ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles));
+ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot }));
 ROUTES.push(createTeamRoutes({
   store,
   cfg,
@@ -13422,6 +13422,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       }
       // The mail passwords stay here; the agent process holds only the turn's capability, and every call gets the live bot's verdict.
       if (method === "POST" && path === EMAIL_INTERNAL_MCP_PATH) { return json(res, 200, { result: await emailHost.handle(await readInternalBody(), internalCapability, requireActiveInternalCapability) }); }
+      if (DONEBOT_GATEWAY && !DONEBOT_TEAM_RUNTIME && await handleDoneBotCollabInternal(donebotHost.gateway, method, path, res, json, readInternalBody)) return;
       if (method === "POST" && path === PHONE_INTERNAL_MCP_PATH) {
         return json(res, 200, { result: await phones.handle(await readInternalBody(), internalCapability, requireActiveInternalCapability) });
       }

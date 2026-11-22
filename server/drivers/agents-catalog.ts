@@ -15,7 +15,7 @@ import { WAIT_TOOL_DEFINITIONS, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
 import { COMPUTER_ASK_TOOL_DEFINITIONS, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { doneBotCredentialTool } from "../donebot/credential-policy.ts";
-import { DONEBOT_MEDIA_TOOL_DEFINITIONS, DONEBOT_MEDIA_TOOL_NAMES } from "../donebot/media-tools.ts";
+import { DONEBOT_MEDIA_TOOL_DEFINITIONS, DONEBOT_MEDIA_TOOL_NAMES } from "../donebot/media-tools.ts"; import { DONEBOT_COLLAB_TOOL_DEFINITIONS, DONEBOT_COLLAB_TOOL_NAMES } from "../donebot/collab-tools.ts";
 import { MEETING_TOOL_DEFINITIONS, MEETING_TOOL_NAMES } from "./agents-meeting-tools.ts";
 import { DONEBOT_TOOL_DEFINITIONS } from "./agents-mausbot-tools.ts";
 import { PERSON_TOOL_DEFINITIONS } from "./agents-person-tools.ts";
@@ -975,13 +975,13 @@ export function availableTools(profile: CatalogProfile) {
 const FULL_INPUT_SCHEMAS = new Map<string, unknown>([...TOOL_DEFINITIONS, ...DONEBOT_TOOL_DEFINITIONS].map((tool) => [tool.name, tool.inputSchema]));
 
 /** A tool's input schema as the catalog writes it, before tools/list leaves anything out: what every call is held to. */
-export function fullInputSchema(name: string, donebotMedia = false): unknown {
+export function fullInputSchema(name: string, donebotMedia = false, donebotCollab = false): unknown {
   if (donebotMedia && DONEBOT_MEDIA_TOOL_NAMES.has(name)) return DONEBOT_MEDIA_TOOL_DEFINITIONS.find(tool => tool.name === name)?.inputSchema;
-  return FULL_INPUT_SCHEMAS.get(name);
+  return (donebotCollab && DONEBOT_COLLAB_TOOL_NAMES.has(name) ? DONEBOT_COLLAB_TOOL_DEFINITIONS.find(tool => tool.name === name)?.inputSchema : undefined) ?? FULL_INPUT_SCHEMAS.get(name);
 }
 
 function catalogTools(profile: CatalogProfile) {
-  const definitions = profile.donebotMedia ? [...TOOL_DEFINITIONS.filter(tool => !DONEBOT_MEDIA_TOOL_NAMES.has(tool.name)).map(doneBotCredentialTool), ...DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => ({ ...tool, annotations: agentToolAnnotations(tool.name) }))] : TOOL_DEFINITIONS;
+  const definitions = [...(profile.donebotMedia ? [...TOOL_DEFINITIONS.filter(tool => !DONEBOT_MEDIA_TOOL_NAMES.has(tool.name)).map(doneBotCredentialTool), ...DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => ({ ...tool, annotations: agentToolAnnotations(tool.name) }))] : TOOL_DEFINITIONS), ...(profile.donebotCollab ? DONEBOT_COLLAB_TOOL_DEFINITIONS.map(tool => ({ ...tool, annotations: tool.annotations ?? agentToolAnnotations(tool.name) })) : [])];
   const BOT_SCOPED_TOOLS = definitions.filter((tool) =>
     (profile.botId === WATCHER_OPTIONS_CARD_BOT_ID || !WATCHER_TOOL_NAMES.has(tool.name)) &&
     (profile.memoryEnabled !== false || (tool.name !== "memory_update" && tool.name !== "memory_log")) &&

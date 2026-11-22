@@ -393,7 +393,7 @@ export interface DoneBotCodingAgentRouteDeps {
   enabled: boolean;
   store: Pick<Store, "bots" | "bot" | "createBot" | "patchBot">;
   registry: Pick<ProviderRegistry, "get" | "cliTarget" | "refreshModels" | "installRuntime" | "forgetSnapshots">;
-  providerAuthSessions: Pick<ProviderAuthSessions, "start" | "status" | "cancel">;
+  providerAuthSessions: Pick<ProviderAuthSessions, "start" | "status" | "complete" | "cancel">;
   providerConfigs: () => InstanceConfigMap;
   engineLaunches: (configs: InstanceConfigMap) => Record<string, unknown>;
   reloadProviders: (before: Record<string, unknown>) => Promise<void>;
@@ -529,9 +529,12 @@ export function createDoneBotCodingAgentRoutes(deps: DoneBotCodingAgentRouteDeps
         return json(res, 400, { error: checkedCwd.error });
       }
 
-      resetPathCache();
-      await reloadChangedCodingAgents(deps, [spec.instanceId]);
-      const instance = deps.registry.get(spec.instanceId);
+      let instance = deps.registry.get(spec.instanceId);
+      if (!instance) {
+        resetPathCache();
+        await reloadChangedCodingAgents(deps, [spec.instanceId]);
+        instance = deps.registry.get(spec.instanceId);
+      }
       if (!instance) {
         return json(res, 503, { error: `${spec.displayName} 实例未就绪，请先点击重新检测。` });
       }
@@ -563,9 +566,9 @@ export function createDoneBotCodingAgentRoutes(deps: DoneBotCodingAgentRouteDeps
       resetPathCache();
       deps.registry.forgetSnapshots();
       await reloadChangedCodingAgents(deps, [spec.instanceId]);
-      try {
-        await deps.registry.refreshModels(spec.instanceId);
-      } catch { /* best-effort catalog refresh */ }
+      void deps.registry.refreshModels(spec.instanceId).then(() => {
+        deps.broadcast({ kind: "config", ...deps.configStatus() });
+      }).catch(() => {});
       deps.broadcast({ kind: "config", ...deps.configStatus() });
       const agent = await buildAgentStatus(spec, deps);
       return json(res, 200, { agent });
@@ -616,6 +619,16 @@ export function createDoneBotCodingAgentRoutes(deps: DoneBotCodingAgentRouteDeps
       if (!spec) return json(res, 404, { error: "不支持该外部编程 Agent。" });
       const flowId = url.searchParams.get("flowId") ?? "";
       if (!flowId) return json(res, 400, { error: "缺少 flowId。" });
+      const instance = deps.registry.get(spec.instanceId);
+      if (instance && !instance.getAuthentication) {
+        const snap = await instance.snapshot().catch(() => null);
+        if (snap?.state === "available" && snap.authenticated === true) {
+          deps.registry.forgetSnapshots();
+          deps.broadcast({ kind: "config", ...deps.configStatus() });
+          return json(res, 200, { auth: { phase: "succeeded", flowId, authorizationUrl: null, expiresAt: null } });
+        }
+        return json(res, 200, { auth: { phase: "waiting", flowId, authorizationUrl: null, expiresAt: null } });
+      }
       try {
         const status = await deps.providerAuthSessions.status(spec.instanceId, authOwner, flowId);
         if (status.phase === "succeeded") {
@@ -628,6 +641,32 @@ export function createDoneBotCodingAgentRoutes(deps: DoneBotCodingAgentRouteDeps
           ? (error as { status: number }).status
           : 400;
         return json(res, status, { error: error instanceof Error ? error.message : "查询登录状态失败。" });
+      }
+    }
+
+    const authCompleteMatch = path.match(/^\/api\/donebot\/coding-agents\/([a-z]+)\/auth\/complete$/);
+    if (method === "POST" && authCompleteMatch) {
+      const spec = codingAgentById(authCompleteMatch[1]);
+      if (!spec) return json(res, 404, { error: "不支持该外部编程 Agent。" });
+      const raw = await readBody(req).catch(() => ({}));
+      const parsed = z.object({
+        flowId: z.string().trim().min(1).max(200),
+        callbackUrl: z.string().trim().min(1).max(4096),
+      }).strict().safeParse(raw);
+      if (!parsed.success) {
+        return json(res, 400, { error: "请粘贴完整的浏览器回调地址或授权码。" });
+      }
+      try {
+        await deps.providerAuthSessions.complete(spec.instanceId, authOwner, parsed.data.flowId, parsed.data.callbackUrl);
+        deps.registry.forgetSnapshots();
+        deps.broadcast({ kind: "config", ...deps.configStatus() });
+        const agent = await buildAgentStatus(spec, deps);
+        return json(res, 200, { agent });
+      } catch (error) {
+        const status = typeof (error as { status?: unknown })?.status === "number"
+          ? (error as { status: number }).status
+          : 400;
+        return json(res, status, { error: error instanceof Error ? error.message : "完成登录授权失败。" });
       }
     }
 

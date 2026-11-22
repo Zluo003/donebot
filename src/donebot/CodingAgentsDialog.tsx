@@ -70,6 +70,8 @@ export function CodingAgentsDialog({
   const [customName, setCustomName] = useState("");
   const [customCwd, setCustomCwd] = useState("");
   const [authFlow, setAuthFlow] = useState<AuthFlowView | null>(null);
+  const [callbackUrl, setCallbackUrl] = useState("");
+  const [completingAuth, setCompletingAuth] = useState(false);
 
   const loadAgents = useCallback(async (fresh = false) => {
     setError("");
@@ -235,13 +237,44 @@ export function CodingAgentsDialog({
         authorizationUrl: res.auth.authorizationUrl,
         userCode: res.auth.userCode,
       });
+      setCallbackUrl("");
       if (res.auth.authorizationUrl && typeof window !== "undefined") {
-        window.open(res.auth.authorizationUrl, "_blank", "noopener,noreferrer");
+        if (window.ogb?.openExternal) {
+          await window.ogb.openExternal(res.auth.authorizationUrl).catch(() => {});
+        } else {
+          window.open(res.auth.authorizationUrl, "_blank", "noopener,noreferrer");
+        }
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `发起 ${agent.displayName} 登录失败。`);
     } finally {
       setBusyAgentId(null);
+    }
+  };
+
+  const submitManualCallback = async () => {
+    if (!authFlow?.flowId || !callbackUrl.trim()) return;
+    setError("");
+    setCompletingAuth(true);
+    try {
+      const res = await api<{ agent: ExternalCodingAgentStatus }>(
+        `/api/donebot/coding-agents/${authFlow.agentId}/auth/complete`,
+        {
+          method: "POST",
+          body: JSON.stringify({ flowId: authFlow.flowId, callbackUrl: callbackUrl.trim() }),
+        },
+      );
+      setAuthFlow(null);
+      setCallbackUrl("");
+      if (res.agent) {
+        setAgents((prev) => prev.map((item) => (item.id === authFlow.agentId ? res.agent : item)));
+      } else {
+        await loadAgents(true);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "提交授权回调失败。");
+    } finally {
+      setCompletingAuth(false);
     }
   };
 
@@ -341,15 +374,36 @@ export function CodingAgentsDialog({
                 </div>
               )}
               {authFlow.authorizationUrl && (
-                <a
-                  href={authFlow.authorizationUrl}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.ogb?.openExternal) void window.ogb.openExternal(authFlow.authorizationUrl!);
+                    else window.open(authFlow.authorizationUrl!, "_blank", "noopener,noreferrer");
+                  }}
                   className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline"
                 >
                   打开登录页面
                   <ExternalLink size={12} aria-hidden="true" />
-                </a>
+                </button>
+              )}
+              {authFlow.flowId && (
+                <div className="mt-2.5 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={callbackUrl}
+                    onChange={(event) => setCallbackUrl(event.target.value)}
+                    placeholder="如果浏览器未自动跳回，可粘贴回调地址或授权码"
+                    className="h-7 min-w-0 flex-1 rounded-lg border border-hairline/50 bg-panel px-2.5 text-[12px] text-ink focus:border-accent focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={completingAuth || !callbackUrl.trim()}
+                    onClick={() => void submitManualCallback()}
+                    className="h-7 shrink-0 rounded-lg bg-accent px-2.5 text-[12px] font-medium text-white hover:brightness-110 disabled:opacity-40"
+                  >
+                    {completingAuth ? "验证中…" : "完成登录"}
+                  </button>
+                </div>
               )}
             </div>
           )}

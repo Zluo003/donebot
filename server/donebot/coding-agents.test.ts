@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EXTERNAL_CODING_AGENT_GROUP_REFUSAL,
@@ -10,6 +11,7 @@ import {
   isExternalCodingAgentDriver,
 } from "../../shared/coding-agents.ts";
 import { hasDeepSeekKey } from "../drivers/acp/deepseek.ts";
+import { PASS } from "../routes/table.ts";
 import type { BotRecord } from "../store.ts";
 import {
   buildExternalCodingAgentConfigs,
@@ -21,6 +23,7 @@ import {
 } from "./coding-agents.ts";
 import { handleCollabGroupWrite } from "./collab-group-routes.ts";
 import { DoneBotGatewayError } from "./gateway.ts";
+import { createDoneBotAccountRoutes } from "./routes.ts";
 
 const tempDirs: string[] = [];
 
@@ -223,6 +226,7 @@ describe("external local coding agents", () => {
       providerAuthSessions: {
         start: async () => ({ phase: "succeeded", flowId: null, authorizationUrl: null, expiresAt: null }),
         status: async () => ({ phase: "succeeded", flowId: null, authorizationUrl: null, expiresAt: null }),
+        complete: async () => {},
         cancel: async () => {},
       },
       providerConfigs: () => ({
@@ -258,7 +262,7 @@ describe("external local coding agents", () => {
       enabled: false,
       store: { bots: [], bot: () => null, createBot: () => { throw new Error(); }, patchBot: () => null },
       registry: { get: () => null, cliTarget: () => null, refreshModels: async () => true, installRuntime: async () => false, forgetSnapshots: () => {} },
-      providerAuthSessions: { start: async () => ({ phase: "succeeded", flowId: null, authorizationUrl: null, expiresAt: null }), status: async () => ({ phase: "succeeded", flowId: null, authorizationUrl: null, expiresAt: null }), cancel: async () => {} },
+      providerAuthSessions: { start: async () => ({ phase: "succeeded", flowId: null, authorizationUrl: null, expiresAt: null }), status: async () => ({ phase: "succeeded", flowId: null, authorizationUrl: null, expiresAt: null }), complete: async () => {}, cancel: async () => {} },
       providerConfigs: () => ({}),
       engineLaunches: () => ({}),
       reloadProviders: async () => {},
@@ -278,5 +282,135 @@ describe("external local coding agents", () => {
       readBody: async () => ({}),
     });
     expect(disabledResponses[0]?.status).toBe(403);
+  });
+
+  it("does not let account routes consume POST /api/donebot/coding-agents/:id/bot stream and polls Antigravity auth via snapshot", async () => {
+    const accountRoute = createDoneBotAccountRoutes({} as never);
+    let authed = false;
+    const createdBots: BotRecord[] = [];
+    const codingRoute = createDoneBotCodingAgentRoutes({
+      enabled: true,
+      store: {
+        get bots() { return createdBots; },
+        bot: (id) => createdBots.find((b) => b.id === id) ?? null,
+        createBot: (profile = {}) => {
+          const rec = {
+            id: "bot-ag-1",
+            threadId: "th-ag-1",
+            name: profile.name ?? "Antigravity",
+            title: profile.title ?? "",
+            description: profile.description ?? "",
+            color: profile.color ?? "blue",
+            modelSelection: profile.modelSelection ?? { instanceId: "coding-antigravity", model: "gemini-3.8-flash" },
+          } as unknown as BotRecord;
+          createdBots.push(rec);
+          return rec;
+        },
+        patchBot: (id, patch) => {
+          const target = createdBots.find((b) => b.id === id);
+          if (!target) return null;
+          Object.assign(target, patch);
+          return target;
+        },
+      },
+      registry: {
+        get: (id) =>
+          id === "coding-antigravity"
+            ? ({
+                instanceId: "coding-antigravity",
+                driverKind: "antigravityAgent",
+                displayName: "Antigravity",
+                enabled: true,
+                models: { default: "gemini-3.8-flash", options: [{ id: "gemini-3.8-flash", label: "Gemini 3.8 Flash" }] },
+                // Note: AntigravityDriver intentionally omits getAuthentication.
+                snapshot: async () => ({ state: "available", authenticated: authed, version: "1.4.3" }),
+              } as never)
+            : null,
+        cliTarget: () => ({ driverKind: "antigravityAgent", cli: "agy" }),
+        refreshModels: async () => true,
+        installRuntime: async () => false,
+        forgetSnapshots: () => {},
+      },
+      providerAuthSessions: {
+        start: async () => ({ phase: "waiting", flowId: "flow-ag", authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth", expiresAt: null }),
+        status: async () => { throw new Error("should not call status when getAuthentication is absent"); },
+        complete: async () => {},
+        cancel: async () => {},
+      },
+      providerConfigs: () => ({}),
+      engineLaunches: () => ({}),
+      reloadProviders: async () => {},
+      publicBot: (bot) => bot,
+      broadcast: () => {},
+      configStatus: () => ({}),
+    });
+
+    const reqStream = Readable.from([Buffer.from(JSON.stringify({ name: "Antigravity" }))]) as unknown as IncomingMessage;
+    let reads = 0;
+    const realReadBody = async (req: IncomingMessage) => {
+      reads += 1;
+      let text = "";
+      for await (const chunk of req) text += String(chunk);
+      return text ? JSON.parse(text) : {};
+    };
+    const res = { setHeader: vi.fn() } as unknown as ServerResponse;
+    const answers: Array<{ status: number; value: unknown }> = [];
+    const json = (_r: ServerResponse, status: number, value: unknown) => { answers.push({ status, value }); };
+
+    // Account route must PASS without touching the request stream.
+    const accountResult = await accountRoute({
+      req: reqStream,
+      res,
+      url: new URL("http://localhost/api/donebot/coding-agents/antigravity/bot"),
+      path: "/api/donebot/coding-agents/antigravity/bot",
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json,
+      readBody: realReadBody,
+    });
+    expect(accountResult).toBe(PASS);
+    expect(reads).toBe(0);
+
+    await codingRoute({
+      req: reqStream,
+      res,
+      url: new URL("http://localhost/api/donebot/coding-agents/antigravity/bot"),
+      path: "/api/donebot/coding-agents/antigravity/bot",
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json,
+      readBody: realReadBody,
+    });
+    expect(reads).toBe(1);
+    expect(answers[0]?.status).toBe(201);
+    expect(createdBots[0]?.modelSelection).toEqual({ instanceId: "coding-antigravity", model: "gemini-3.8-flash" });
+
+    // Poll Antigravity auth status before and after token arrives.
+    const statusAnswers: Array<{ status: number; value: any }> = [];
+    const statusJson = (_r: ServerResponse, status: number, value: unknown) => { statusAnswers.push({ status, value }); };
+    await codingRoute({
+      req: {} as IncomingMessage,
+      res,
+      url: new URL("http://localhost/api/donebot/coding-agents/antigravity/auth/status?flowId=flow-ag"),
+      path: "/api/donebot/coding-agents/antigravity/auth/status",
+      method: "GET",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: statusJson,
+      readBody: async () => ({}),
+    });
+    expect(statusAnswers[0]).toMatchObject({ status: 200, value: { auth: { phase: "waiting" } } });
+
+    authed = true;
+    await codingRoute({
+      req: {} as IncomingMessage,
+      res,
+      url: new URL("http://localhost/api/donebot/coding-agents/antigravity/auth/status?flowId=flow-ag"),
+      path: "/api/donebot/coding-agents/antigravity/auth/status",
+      method: "GET",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: statusJson,
+      readBody: async () => ({}),
+    });
+    expect(statusAnswers[1]).toMatchObject({ status: 200, value: { auth: { phase: "succeeded" } } });
   });
 });

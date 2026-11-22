@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { AlertCircle, Bot, Camera, Check, Loader2, Trash2, X } from "lucide-react";
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
-import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
+import { CHROME_EYES, MAUS_COLORS, type MausColor } from "@/lib/mascot";
 import { cn } from "@/lib/cn";
 import {
   cleanError,
@@ -160,6 +160,7 @@ export function CollabBotBadge({
 
   const key = (color ?? "").trim().toLowerCase() as MausColor;
   const hex = (key && key in MAUS_COLORS ? MAUS_COLORS[key] : null) ?? MAUS_COLORS.blue;
+  const isLightMetallic = key === "chrome" || key === "silver";
   const iconSize = Math.max(13, Math.round(size * 0.52));
 
   return (
@@ -175,7 +176,7 @@ export function CollabBotBadge({
           ? {}
           : {
             background: `radial-gradient(circle at 32% 28%, color-mix(in srgb, ${hex} 65%, white), ${hex} 72%, color-mix(in srgb, ${hex} 68%, black))`,
-            color: "#ffffff",
+            color: isLightMetallic ? CHROME_EYES : "#ffffff",
           }),
       }}
       title={name}

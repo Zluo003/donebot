@@ -1,7 +1,17 @@
 import { redactSecretsInText } from "../../shared/redact.ts";
-import type { DoneBotClaimedBotInvocation } from "../../shared/donebot-collab.ts";
+import type {
+  DoneBotClaimedBotInvocation,
+  DoneBotCollabChatBot,
+  DoneBotCollabGroup,
+} from "../../shared/donebot-collab.ts";
+import type { DoneBotTeamMember } from "../../shared/donebot-teams.ts";
 import type { Message, Store } from "../store.ts";
-import { collabClaimBotInvocation, collabReplyBotInvocation } from "./collab-gateway.ts";
+import {
+  collabClaimBotInvocation,
+  collabListChatBots,
+  collabListGroups,
+  collabReplyBotInvocation,
+} from "./collab-gateway.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 export interface CollabBotTurnOutcome {
@@ -34,28 +44,172 @@ function hasPendingCard(lines: readonly Message[]): boolean {
   return lines.some(line => line.card?.requestId !== undefined && !line.card.answered && !line.card.dismissed);
 }
 
-function collectReplyText(lines: readonly Message[]): string {
-  return redactSecretsInText(
-    lines
-      .filter(line => line.role === "bot" && line.kind === "text" && typeof line.text === "string" && line.text.trim())
-      .map(line => line.text!.trim())
-      .join("\n\n"),
-  );
+export interface CollabChatContextMember {
+  userId: number;
+  name: string;
+  roleLabel: string;
 }
 
-function formatChatPrompt(inv: DoneBotClaimedBotInvocation): { display: string; full: string } {
+export interface CollabChatContextBot {
+  id: string;
+  name: string;
+  title: string;
+  ownerUserId: number;
+  ownerName: string;
+}
+
+export interface CollabChatContext {
+  chatName?: string;
+  ownerUserId: number;
+  ownerName: string;
+  members: CollabChatContextMember[];
+  chatBots: CollabChatContextBot[];
+}
+
+function formatPersonLabel(person: { remark?: string; nickname?: string; email?: string }): string {
+  const remark = person.remark?.trim() || "";
+  const nickname = person.nickname?.trim() || "";
+  const email = person.email?.trim() || "";
+  if (remark && nickname && remark !== nickname) return `${remark}（昵称：${nickname}）`;
+  return remark || nickname || email || "群成员";
+}
+
+function teamRoleLabel(role: DoneBotTeamMember["role"]): string {
+  if (role === "owner") return "团队所有者";
+  if (role === "admin") return "团队管理员";
+  return "团队成员";
+}
+
+export function collectReplyText(lines: readonly Message[]): string {
+  const picked: string[] = [];
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]!;
+    if (line.role !== "bot") continue;
+    if (line.kind === "text") {
+      const text = typeof line.text === "string" ? line.text.trim() : "";
+      if (text) picked.unshift(text);
+      continue;
+    }
+    if (picked.length > 0) break;
+  }
+  return redactSecretsInText(picked.join("\n\n"));
+}
+
+async function loadChatContext(
+  deps: CollabChatBotWorkerDeps,
+  inv: DoneBotClaimedBotInvocation,
+  ownerIdentity: { account_id: string; email: string },
+): Promise<CollabChatContext> {
+  const ctx = deps.gateway.collabCtx();
+  const ownerUserId = Number(ownerIdentity.account_id) || 0;
+  let chatName = inv.chat_name?.trim() || "";
+  let members: CollabChatContextMember[] = [];
+  let chatBots: CollabChatContextBot[] = [];
+
+  await Promise.all([
+    (async () => {
+      try {
+        if (inv.scope_type === "group") {
+          const raw = await collabListGroups(ctx);
+          const groups = Array.isArray(raw) ? (raw as DoneBotCollabGroup[]) : [];
+          const found = groups.find(g => g.id === inv.target_id);
+          if (found) {
+            if (!chatName && found.name?.trim()) chatName = found.name.trim();
+            members = (found.members ?? []).map(m => ({
+              userId: m.user_id,
+              name: formatPersonLabel(m),
+              roleLabel: m.user_id === found.creator_id ? "群主" : "群成员",
+            }));
+          }
+        } else if (inv.scope_type === "team" && typeof deps.gateway.teamMembers === "function") {
+          const list = await deps.gateway.teamMembers(inv.target_id);
+          members = (Array.isArray(list) ? list : []).map(m => ({
+            userId: m.user_id,
+            name: formatPersonLabel(m),
+            roleLabel: teamRoleLabel(m.role),
+          }));
+        }
+      } catch { /* Best-effort roster lookup */ }
+    })(),
+    (async () => {
+      try {
+        const raw = await collabListChatBots(ctx, inv.scope_type, inv.target_id);
+        const list = Array.isArray(raw) ? (raw as DoneBotCollabChatBot[]) : [];
+        chatBots = list.map(b => ({
+          id: b.id,
+          name: b.bot_name,
+          title: b.bot_title?.trim() || "",
+          ownerUserId: b.owner_user_id,
+          ownerName: formatPersonLabel({
+            remark: b.owner_remark,
+            nickname: b.owner_nickname,
+            email: b.owner_email,
+          }),
+        }));
+      } catch { /* Best-effort chat bots lookup */ }
+    })(),
+  ]);
+
+  const ownerFromRoster = members.find(m => m.userId === ownerUserId)?.name
+    || chatBots.find(b => b.id === inv.chat_bot_id)?.ownerName
+    || ownerIdentity.email;
+
+  return {
+    chatName,
+    ownerUserId,
+    ownerName: ownerFromRoster,
+    members,
+    chatBots,
+  };
+}
+
+export function formatChatPrompt(
+  inv: DoneBotClaimedBotInvocation,
+  chatContext?: CollabChatContext,
+): { display: string; full: string } {
   const kindLabel = inv.scope_type === "team" ? "团队聊天" : "好友群聊";
-  const chatTitle = inv.chat_name?.trim() || inv.target_id;
+  const chatTitle = chatContext?.chatName?.trim() || inv.chat_name?.trim() || inv.target_id;
+  const memberById = new Map((chatContext?.members ?? []).map(m => [m.userId, m]));
   const trigger = inv.recent_messages.find(m => m.id === inv.message_id) ?? inv.recent_messages[inv.recent_messages.length - 1];
-  const triggerSender = trigger
-    ? (trigger.sender_remark?.trim() || trigger.sender_nickname?.trim() || trigger.sender_email)
-    : "群成员";
+  const triggerSenderId = trigger?.sender_id ?? 0;
+  const triggerSender = (triggerSenderId ? memberById.get(triggerSenderId)?.name : undefined)
+    || (trigger ? formatPersonLabel({
+      remark: trigger.sender_remark,
+      nickname: trigger.sender_nickname,
+      email: trigger.sender_email,
+    }) : "群成员");
   const triggerBody = trigger?.body?.trim() || "(空消息)";
+  const ownerUserId = chatContext?.ownerUserId ?? 0;
+  const ownerName = chatContext?.ownerName || "";
+  const callerIsOwner = ownerUserId > 0 && triggerSenderId === ownerUserId;
+
+  const rosterLines: string[] = [];
+  if (chatContext && chatContext.members.length > 0) {
+    rosterLines.push(`当前${kindLabel}完整成员名单（共 ${chatContext.members.length} 人）：`);
+    for (const m of chatContext.members) {
+      const tags = [m.roleLabel];
+      if (ownerUserId > 0 && m.userId === ownerUserId) tags.push("你的主人/Bot所有者");
+      if (triggerSenderId > 0 && m.userId === triggerSenderId) tags.push("当前发言人");
+      rosterLines.push(`- ${m.name}（${tags.join("、")}）`);
+    }
+  }
+  if (chatContext && chatContext.chatBots.length > 0) {
+    rosterLines.push(`当前群内已添加的机器人（共 ${chatContext.chatBots.length} 个）：`);
+    for (const b of chatContext.chatBots) {
+      const selfTag = b.id === inv.chat_bot_id ? "你本人，" : "";
+      const titlePart = b.title ? `，简介：${b.title}` : "";
+      rosterLines.push(`- ${b.name}（${selfTag}所有者：${b.ownerName}${titlePart}）`);
+    }
+  }
 
   const historyLines = inv.recent_messages.slice(-20).map(msg => {
     const who = msg.sender_kind === "bot"
       ? `[机器人] ${msg.sender_bot_name || "Bot"}`
-      : (msg.sender_remark?.trim() || msg.sender_nickname?.trim() || msg.sender_email);
+      : (memberById.get(msg.sender_id)?.name || formatPersonLabel({
+        remark: msg.sender_remark,
+        nickname: msg.sender_nickname,
+        email: msg.sender_email,
+      }));
     const content = msg.kind === "file"
       ? `[文件: ${msg.file_name || "文件"}]${msg.body ? ` ${msg.body}` : ""}`
       : msg.body;
@@ -63,17 +217,25 @@ function formatChatPrompt(inv: DoneBotClaimedBotInvocation): { display: string; 
   });
 
   const display = `[${kindLabel} · ${chatTitle}] ${triggerSender}: ${triggerBody}`;
-  const full = [
-    `你在 DoneBot ${kindLabel}「${chatTitle}」中被已获授权的成员 ${triggerSender} 通过 @${inv.bot_name} 调用。`,
-    "你正在机器人所有者的本机 DoneBot 中执行任务，请结合最近群聊上下文直接回复对方的问题或任务，回答要清晰、实用、简洁，不要泄露本机隐私路径或凭据。",
+  const fullParts = [
+    `你在 DoneBot ${kindLabel}「${chatTitle}」中被${callerIsOwner ? "你的主人" : "已获主人授权的群成员"} ${triggerSender} 通过 @${inv.bot_name} 调用。`,
+    ownerName ? `你的主人（Bot 所有者）是：${ownerName}。` : "",
+    "你正在主人本机 DoneBot 中处理群聊任务，请结合群成员名单和最近群聊上下文直接回复，回答清晰、实用、简洁，不要泄露本机隐私路径或凭据。",
+    ...(rosterLines.length > 0
+      ? [
+        "",
+        ...rosterLines,
+        "重要：以上成员和机器人名单就是本群当前的全部真实成员（包括尚未发言的成员），请直接以此名单为准，无需调用工具去查群成员；切勿把主人本机中未加入本群的其他机器人或联系人混成本群成员。",
+      ]
+      : []),
     "",
     "最近群聊记录：",
     ...historyLines,
     "",
     `请直接回复 ${triggerSender} 的最新消息：${triggerBody}`,
-  ].join("\n");
+  ].filter((line, idx, arr) => !(line === "" && (idx === 0 || arr[idx - 1] === "")));
 
-  return { display, full };
+  return { display, full: fullParts.join("\n") };
 }
 
 export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
@@ -147,7 +309,10 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
     return settled?.text?.trim() ? redactSecretsInText(settled.text.trim()) : "";
   }
 
-  async function processInvocation(inv: DoneBotClaimedBotInvocation): Promise<void> {
+  async function processInvocation(
+    inv: DoneBotClaimedBotInvocation,
+    identity: { account_id: string; email: string },
+  ): Promise<void> {
     if (runningInvocations.has(inv.id)) return;
     runningInvocations.add(inv.id);
     const ctx = deps.gateway.collabCtx();
@@ -160,7 +325,8 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
         return;
       }
 
-      const { display, full } = formatChatPrompt(inv);
+      const chatContext = await loadChatContext(deps, inv, identity);
+      const { display, full } = formatChatPrompt(inv, chatContext);
       let reply = "";
       try {
         reply = await runViaLocalTurn(inv, display, full);
@@ -195,7 +361,7 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
         invocation?: DoneBotClaimedBotInvocation | null;
       };
       if (res?.invocation) {
-        void processInvocation(res.invocation);
+        void processInvocation(res.invocation, identity);
       }
     } catch (error) {
       if (error instanceof DoneBotGatewayError && (error.status === 401 || error.status === 403 || error.status === 404)) {

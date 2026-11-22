@@ -153,7 +153,7 @@ async function hostCheck() {
     ...(compensateSystemPaths ? ["--security-opt", "systempaths=unconfined"] : []),
     "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
     "--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777", "--tmpfs", "/run:rw,nosuid,nodev,mode=755",
-    "--tmpfs", "/data:rw,nosuid,nodev,uid=1001,gid=1001,mode=700",
+    "--tmpfs", "/data:rw,exec,nosuid,nodev,uid=1001,gid=1001,mode=700",
     "--mount", `type=bind,source=${fileURLToPath(import.meta.url)},target=/opt/team-qualification.mjs,readonly`,
     info.Id, "node", "/opt/team-qualification.mjs", "--container"];
   try {

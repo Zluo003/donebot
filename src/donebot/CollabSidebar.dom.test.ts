@@ -41,7 +41,8 @@ const {
 const { CollabSidebarList, CollabSidebarSwitch } = await import("./CollabSidebar");
 const { CollabWorkspacePage } = await import("./CollabWorkspacePage");
 const { CollabSyncHost, CollabToastHost } = await import("./CollabNotifications");
-const { CollabProfileDialog } = await import("./CollabAvatar");
+const { CollabBotBadge, CollabProfileDialog } = await import("./CollabAvatar");
+const { MASCOT_BODIES } = await import("../../shared/mascot-bodies");
 
 const teamId = "11111111-1111-4111-8111-111111111111";
 const installId = "22222222-2222-4222-8222-222222222222";
@@ -714,5 +715,28 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
         }),
       }),
     }));
+  });
+
+  it("falls back to DoneBot circle mascot body instead of legacy cursor triangle in group chat", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const clipPathD = (clipSvg: string) => clipSvg.match(/d="([^"]+)"/)?.[1];
+
+    await act(async () => {
+      root!.render(createElement(CollabBotBadge, { name: "多宝", color: "chrome", size: 30 }));
+    });
+    expect(container.querySelector("clipPath path")?.getAttribute("d")).toBe(clipPathD(MASCOT_BODIES.circle.clip));
+    expect(container.querySelector("clipPath path")?.getAttribute("d")).not.toBe(clipPathD(MASCOT_BODIES.cursor.clip));
+
+    await act(async () => {
+      root!.render(createElement(CollabBotBadge, { name: "多宝", color: "chrome", bodyId: "cursor", size: 30 }));
+    });
+    expect(container.querySelector("clipPath path")?.getAttribute("d")).toBe(clipPathD(MASCOT_BODIES.circle.clip));
+
+    await act(async () => {
+      root!.render(createElement(CollabBotBadge, { name: "多宝", color: "blue", bodyId: "star", size: 30 }));
+    });
+    expect(container.querySelector("clipPath path")?.getAttribute("d")).toBe(clipPathD(MASCOT_BODIES.star.clip));
   });
 });

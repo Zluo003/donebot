@@ -5,8 +5,9 @@ import { useStore } from "@/state/store";
 import { MausAvatar } from "@/components/Avatar";
 import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
 import { cn } from "@/lib/cn";
-import type { BotBodyId } from "../../shared/bot-body";
+import { botBodySchema, type BotBodyId } from "../../shared/bot-body";
 import type { MascotFaceColor } from "../../shared/bot-avatar";
+import { newBotBody } from "./avatars";
 import {
   cleanError,
   COLLAB_BUTTON,
@@ -168,6 +169,7 @@ export function CollabBotBadge({
   const rawColor = (color ?? "").trim().toLowerCase();
   const resolvedColor: MausColor = rawColor && rawColor in MAUS_COLORS ? (rawColor as MausColor) : "blue";
   const resolvedFace: MascotFaceColor | null = faceColor === "white" || faceColor === "black" ? faceColor : null;
+  const resolvedBody: BotBodyId = newBotBody(botBodySchema.safeParse(bodyId).data);
 
   if (src && !imgFailed) {
     return (
@@ -198,7 +200,7 @@ export function CollabBotBadge({
     >
       <MausAvatar
         color={resolvedColor}
-        bodyId={(bodyId || undefined) as BotBodyId | undefined}
+        bodyId={resolvedBody}
         faceColor={resolvedFace}
         size={size}
         label={name}

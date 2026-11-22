@@ -75,6 +75,17 @@ export function createDoneBotCloudConnection({ request, fetch: cookieFetch, save
       await account(owner);
       if (still()) remember(renewed);
     },
+    async ensure({ id, accountId, entry, still = () => true }) {
+      id ??= entry?.donebotCloud?.id ?? new URL(entry.origin).hostname.split(".")[0];
+      if (!instanceId.test(id ?? "")) throw new Error("无效的 Cloud 实例。");
+      const owner = await account(accountId ?? entry?.donebotCloud?.accountId);
+      if (!still()) return null;
+      const destination = await target(id, owner, entry);
+      await account(owner);
+      if (!still()) return null;
+      remember(destination);
+      return destination;
+    },
     async open({ id, accountId, entry, still = () => true, progress = () => {} }) {
       const mine = ++turn;
       id ??= entry?.donebotCloud?.id ?? new URL(entry.origin).hostname.split(".")[0];

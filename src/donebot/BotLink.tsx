@@ -19,7 +19,7 @@ export function DoneBotBotLink({ accountId, instanceId, ready }: { accountId: st
     void read();
     const timer = window.setInterval(() => { if (!document.hidden) void read(); }, 5_000);
     return () => { epoch.current++; window.clearInterval(timer); };
-  }, [bridge, accountId, instanceId]);
+  }, [bridge, accountId, instanceId, ready]);
   if (!bridge) return null;
   const toggle = async () => {
     if (changing.current || !state) return;
@@ -35,9 +35,9 @@ export function DoneBotBotLink({ accountId, instanceId, ready }: { accountId: st
       <span id="donebot-bot-link-title" className="text-[13px] font-medium text-ink">本机与 Cloud 协作</span>
       <button type="button" role="switch" aria-labelledby="donebot-bot-link-title" aria-checked={state?.enabled ?? false} disabled={busy || !state || !state.enabled && !ready} onClick={() => void toggle()} className="ui-button text-[12px] disabled:opacity-50">{busy ? "正在设置…" : state?.enabled ? "关闭" : "开启"}</button>
     </div>
-    <p className="text-[12px] leading-relaxed text-ink-secondary">开启后，两处的 Bot 可相互委派任务，并传递任务所需的上下文和附件。本机任务需要这台电脑保持运行；离线时拒绝新任务。个人历史、记忆和目录不会自动同步。</p>
+    <p className="text-[12px] leading-relaxed text-ink-secondary">开通个人 Cloud 后默认开启：两处的 Bot 可相互委派任务，并传递任务所需的上下文和附件。本机任务需要这台电脑保持运行；离线时拒绝新任务。个人历史、记忆和目录不会自动同步。</p>
     {state?.enabled && <p role="status" className="text-[12px] text-ink-secondary">{state.connected ? "协作已连接" : "协作已开启，等待连接"}</p>}
-    {!ready && !state?.enabled && <p className="text-[12px] text-ink-secondary">先连接当前账号的个人 Cloud，再开启协作。</p>}
+    {!ready && !state?.enabled && <p className="text-[12px] text-ink-secondary">个人 Cloud 启动运行后将自动开启协作。</p>}
     {(error || state?.error) && <p role="alert" className="text-[12px] text-danger">{error || state?.error}</p>}
   </div>;
 }

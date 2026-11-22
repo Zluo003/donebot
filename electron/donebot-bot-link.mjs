@@ -1,13 +1,18 @@
 import { BACKGROUND_HEADERS } from "./cloud-power.mjs";
 
 const STATE = "/api/bot-link", PAIR = "/api/bot-link/pair";
-const RETRY_MS = 6 * 60 * 60_000;
+const RETRY_MS = 30_000;
+const STARTUP_MS = 5_000;
 const CLOUD_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
-export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref, renew, allowed = () => true, now = Date.now, watchMs = 30_000 }) {
-  let epoch = 0, closed = false, flight = null, retryAt = 0;
+export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref, renew, ensure, allowed = () => true, now = Date.now, watchMs = 30_000 }) {
+  let epoch = 0, closed = false, flight = null, retryAt = 0, lastTarget = null;
   let shown = { enabled: false, connected: false, available: false, error: "" };
-  const preference = () => { try { const value = pref.read(); return value?.v === 1 && value.enabled === true ? value : null; } catch { return null; } };
+  const preference = () => { try { const value = pref.read(); return value?.v === 1 ? value : null; } catch { return null; } };
+  const isDisabledFor = (target, setting) => Boolean(setting && setting.enabled === false && target.accountId && target.id && setting.accountId === target.accountId && setting.instanceId === target.id);
+  const validCloudOrigin = (origin, id) => {
+    try { const url = new URL(origin); return url.protocol === "https:" && url.origin === origin && url.hostname.startsWith(id + "."); } catch { return false; }
+  };
   async function local(path, init = {}) {
     const response = await request(path, { ...init, signal: AbortSignal.timeout(15_000) });
     const value = await response.json();
@@ -15,21 +20,27 @@ export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref,
     return value;
   }
   const write = payload => local(STATE, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+  function findSavedEntry(id, owner) {
+    if (!CLOUD_ID.test(id ?? "") || !owner) return { entry: null, tampered: false };
+    const matched = saved().environments.filter(candidate => candidate.donebotCloud?.id === id && candidate.donebotCloud.accountId === owner);
+    const valid = matched.find(candidate => validCloudOrigin(candidate.origin, id)) ?? null;
+    return { entry: valid, tampered: !valid && matched.length > 0 };
+  }
   async function discover() {
     const state = await local("/api/donebot/state");
-    if (!state.authenticated || !state.user?.id) return { accountId: null, id: null, entry: null, running: false };
+    if (!state.authenticated || !state.user?.id) return { accountId: null, id: null, entry: null, tampered: false, running: false };
     const snapshot = await local("/api/donebot/cloud");
     if (snapshot.account_id !== state.user.id) throw new Error("DoneBot 账号已变化，请重试。");
     const instance = snapshot.instance;
-    const entry = CLOUD_ID.test(instance?.id ?? "") ? saved().environments.find(candidate => {
-      if (candidate.donebotCloud?.id !== instance.id || candidate.donebotCloud.accountId !== state.user.id) return false;
-      try { const url = new URL(candidate.origin); return url.protocol === "https:" && url.origin === candidate.origin && url.hostname.startsWith(instance.id + "."); } catch { return false; }
-    }) ?? null : null;
-    const running = Boolean(instance && instance.actual === "running" && instance.desired === "running" && instance.subscription_state === "active" && !instance.purge_locked && Date.parse(instance.paid_until) > now() && snapshot.connection_available);
-    return { accountId: state.user.id, id: instance?.id ?? null, entry, running };
+    const id = CLOUD_ID.test(instance?.id ?? "") ? instance.id : null;
+    const { entry, tampered } = findSavedEntry(id, state.user.id);
+    const running = Boolean(id && instance.actual === "running" && instance.desired === "running" && instance.subscription_state === "active" && !instance.purge_locked && Date.parse(instance.paid_until) > now() && snapshot.connection_available);
+    const result = { accountId: state.user.id, id, entry, tampered, running };
+    if (id) lastTarget = { accountId: state.user.id, id };
+    return result;
   }
-  const same = (target, setting) => Boolean(setting && setting.accountId === target.accountId && setting.instanceId === target.id && target.entry);
-  const current = (mine, target) => !closed && epoch === mine && allowed() && same(target, preference());
+  const wants = (target, setting) => Boolean(allowed() && target.accountId && target.id && !target.tampered && !isDisabledFor(target, setting));
+  const current = (mine, target) => !closed && epoch === mine && wants(target, preference());
   async function forget(target, computer) {
     try {
       const response = await cookieFetch(`${target.entry.origin}${PAIR}?${new URLSearchParams({ computer: computer.id })}`, { method: "DELETE", credentials: "include", redirect: "error", signal: AbortSignal.timeout(10_000), headers: { origin: target.entry.origin, ...BACKGROUND_HEADERS } });
@@ -58,7 +69,7 @@ export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref,
     try {
       if (typeof paired.token !== "string" || typeof paired.place?.id !== "string") throw new Error("Cloud 协作响应无效。");
       const latest = await discover();
-      if (!current(mine, target) || !same(latest, preference()) || !latest.running || latest.entry.origin !== target.entry.origin) throw new Error("DoneBot 账号或 Cloud 已变化。");
+      if (!current(mine, target) || latest.accountId !== target.accountId || latest.id !== target.id || !latest.running || !latest.entry || latest.entry.origin !== target.entry.origin) throw new Error("DoneBot 账号或 Cloud 已变化。");
       const state = await write({ on: true, origin: target.entry.origin, token: paired.token, name: computer.name, cloud: paired.place, account: target.accountId });
       if (!current(mine, target)) { await write({ on: false }); throw new Error("协作已关闭。"); }
       return state;
@@ -66,26 +77,47 @@ export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref,
   }
   async function reconcile(force) {
     const mine = epoch;
-    const state = await local(STATE);
+    let state;
+    try { state = await local(STATE); } catch (cause) {
+      if (cause instanceof Error && cause.message === "not running") return shown;
+      throw cause;
+    }
     if (closed) return shown;
-    const setting = preference();
-    if (!setting || !allowed()) {
+    if (!allowed()) {
       if (state.on && state.role === "dialer") await write({ on: false });
       return (shown = { enabled: false, connected: false, available: false, error: "" });
     }
-    const target = await discover();
-    if (!current(mine, target)) {
-      if (mine === epoch) {
-        pref.write({ v: 1, enabled: false });
-        if (state.on && state.role === "dialer") await write({ on: false });
-      }
-      return (shown = { enabled: false, connected: false, available: Boolean(target.entry), error: "" });
+    let target = await discover();
+    if (closed || mine !== epoch) return shown;
+    if (!wants(target, preference())) {
+      if (state.on && state.role === "dialer") await write({ on: false });
+      return (shown = { enabled: false, connected: false, available: Boolean(target.id && target.running && !target.tampered), error: "" });
     }
     let next = state;
-    if (state.on && (state.origin !== target.entry.origin || state.account !== target.accountId)) next = await write({ on: false });
+    if (state.on && (state.account !== target.accountId || (target.entry && state.origin !== target.entry.origin))) next = await write({ on: false });
     if (!target.running) {
-      if (next.on && !next.asleep) next = await write({ cloud: "asleep", origin: target.entry.origin });
-    } else if (!next.on || next.needsPairing) {
+      if (next.on && !next.asleep && target.entry) next = await write({ cloud: "asleep", origin: target.entry.origin });
+      if (current(mine, target)) shown = { enabled: true, connected: false, available: false, error: "" };
+      return shown;
+    }
+    if (!target.entry) {
+      if (!ensure) {
+        if (next.on && next.role === "dialer") await write({ on: false });
+        return (shown = { enabled: false, connected: false, available: false, error: "" });
+      }
+      if (force || now() >= retryAt) {
+        retryAt = now() + RETRY_MS;
+        await ensure({ id: target.id, accountId: target.accountId, still: () => current(mine, target) });
+        if (!current(mine, target)) return shown;
+        target = await discover();
+        if (!current(mine, target) || !target.running || !target.entry) return (shown = { enabled: true, connected: false, available: false, error: "" });
+        retryAt = 0;
+      } else {
+        return (shown = { enabled: true, connected: false, available: false, error: "" });
+      }
+    }
+    if (next.on && next.origin !== target.entry.origin) next = await write({ on: false });
+    if (!next.on || next.needsPairing) {
       if (force || now() >= retryAt) {
         retryAt = now() + RETRY_MS;
         next = await pair(target, mine) ?? next;
@@ -104,6 +136,8 @@ export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref,
     }).finally(() => { flight = null; });
     return flight;
   }
+  const startup = watchMs < 60_000 ? setTimeout(() => { void look(); }, STARTUP_MS) : null;
+  startup?.unref?.();
   const timer = setInterval(() => { void look(); }, watchMs);
   timer.unref?.();
   return {
@@ -112,15 +146,43 @@ export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref,
       if (typeof enabled !== "boolean") throw new Error("无效的协作开关。");
       const mine = ++epoch;
       if (!enabled) {
-        pref.write({ v: 1, enabled: false });
+        let targetAccount = typeof accountId === "string" && accountId ? accountId : lastTarget?.accountId ?? null;
+        let targetInstance = typeof instanceId === "string" && instanceId ? instanceId : lastTarget?.id ?? null;
+        let forgetTarget = null;
+        let wasOn = false;
+        try {
+          const prev = await local(STATE);
+          wasOn = prev.on === true && prev.role === "dialer";
+        } catch {}
+        try {
+          const live = await discover();
+          if (live.accountId && live.id) {
+            targetAccount ??= live.accountId;
+            targetInstance ??= live.id;
+            if (wasOn && live.entry && live.accountId === targetAccount && live.id === targetInstance) forgetTarget = live;
+          }
+        } catch {}
+        pref.write({ v: 1, enabled: false, ...(targetAccount ? { accountId: targetAccount } : {}), ...(targetInstance ? { instanceId: targetInstance } : {}) });
         await write({ on: false });
+        if (forgetTarget) {
+          try {
+            const described = await local("/.well-known/donebot/environment");
+            if (typeof described.environmentId === "string" && described.environmentId) await forget(forgetTarget, { id: described.environmentId });
+          } catch {}
+        }
         shown = { enabled: false, connected: false, available: false, error: "" };
         return shown;
       }
       if (!allowed()) throw new Error("只能在本机个人工作空间启用协作。");
-      const target = await discover();
+      let target = await discover();
       if (mine !== epoch || closed) return shown;
-      if (!target.entry || !target.running || target.accountId !== accountId || target.id !== instanceId) throw new Error("请先连接当前账号的个人 Cloud，再启用协作。");
+      if (target.tampered || !target.running || target.accountId !== accountId || target.id !== instanceId) throw new Error("请先连接当前账号的个人 Cloud，再启用协作。");
+      if (!target.entry && ensure) {
+        await ensure({ id: target.id, accountId: target.accountId, still: () => !closed && epoch === mine && allowed() });
+        if (mine !== epoch || closed) return shown;
+        target = await discover();
+      }
+      if (!target.entry || target.tampered || !target.running || target.accountId !== accountId || target.id !== instanceId) throw new Error("请先连接当前账号的个人 Cloud，再启用协作。");
       pref.write({ v: 1, enabled: true, accountId, instanceId });
       retryAt = 0;
       shown = { enabled: true, connected: false, available: true, error: "" };
@@ -128,7 +190,7 @@ export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref,
       if (mine !== epoch || closed) return shown;
       return look(true);
     },
-    close() { closed = true; epoch++; clearInterval(timer); },
+    close() { closed = true; epoch++; if (startup) clearTimeout(startup); clearInterval(timer); },
   };
 }
 

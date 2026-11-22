@@ -59,3 +59,14 @@ it("does not offer a native setting to browser-only clients", async () => {
   await mount();
   expect(host.textContent).toBe("");
 });
+
+it("refreshes collaboration state when Cloud becomes ready and reflects default-on status", async () => {
+  await mount(false);
+  expect(host.textContent).toContain("开通个人 Cloud 后默认开启");
+  expect(host.textContent).toContain("个人 Cloud 启动运行后将自动开启协作");
+  state.mockResolvedValueOnce({ enabled: true, connected: true, available: true, error: "" });
+  await mount(true);
+  expect(state).toHaveBeenCalledTimes(2);
+  expect(toggle().getAttribute("aria-checked")).toBe("true");
+  expect(host.textContent).toContain("协作已连接");
+});

@@ -3,12 +3,13 @@ import test from "node:test";
 import { createDoneBotBotLink, installDoneBotBotLink } from "./donebot-bot-link.mjs";
 
 const id = "11861a47-7240-4f99-bf19-bd01d411596f", origin = `https://${id}.cloud.donebot.cn`;
-function fixture() {
-  let owner = "101", enabled = null, linked = { on: false }, running = true, failLocal = false, pairGate = async () => {};
-  const entry = { origin, donebotCloud: { id, accountId: "101" } };
+function fixture({ savedEntry = true, withEnsure = false, initialPref = null } = {}) {
+  let owner = "101", enabled = initialPref, linked = { on: false }, running = true, failLocal = false, pairGate = async () => {};
+  const entries = savedEntry ? [{ origin, donebotCloud: { id, accountId: "101" } }] : [];
   const calls = [], handlers = new Map();
+  let ensured = 0;
   const deps = {
-    saved: () => ({ environments: [entry] }),
+    saved: () => ({ environments: entries }),
     pref: { read: () => enabled, write: value => { enabled = value; } },
     request: async (path, init = {}) => {
       calls.push([path, init]);
@@ -36,45 +37,68 @@ function fixture() {
       return Response.json({ token: "personal-link-token-do-not-expose", place: { id: "cloud-1", name: "DoneBot Cloud" } });
     },
     renew: async () => {},
+    ...(withEnsure ? {
+      ensure: async ({ id: targetId, accountId }) => {
+        ensured++;
+        entries.push({ origin: `https://${targetId}.cloud.donebot.cn`, donebotCloud: { id: targetId, accountId } });
+        return { origin: `https://${targetId}.cloud.donebot.cn`, id: targetId, accountId };
+      },
+    } : {}),
     watchMs: 2 ** 30,
   };
   const link = createDoneBotBotLink(deps);
-  return { link, calls, entry, deps, handlers, get linked() { return linked; }, get preference() { return enabled; }, set owner(value) { owner = value; }, set running(value) { running = value; }, set failLocal(value) { failLocal = value; }, set pairGate(value) { pairGate = value; } };
+  return { link, calls, entries, get entry() { return entries[0]; }, deps, handlers, get ensured() { return ensured; }, get linked() { return linked; }, get preference() { return enabled; }, set owner(value) { owner = value; }, set running(value) { running = value; }, set failLocal(value) { failLocal = value; }, set pairGate(value) { pairGate = value; } };
 }
 
-test("off by default; only explicit consent pairs the matching personal Cloud and returns no credentials", async t => {
+test("on by default when personal Cloud is provisioned and running; manual opt-out persists and returns no credentials", async t => {
   const f = fixture(); t.after(() => f.link.close());
-  assert.equal((await f.link.state()).enabled, false);
-  assert.deepEqual(f.calls.map(([path]) => path), ["/api/bot-link"]);
-  await assert.rejects(f.link.set(true, "foreign", id), /当前账号/);
-  assert.ok(!f.calls.some(([path]) => path.startsWith("https:")));
-  const state = await f.link.set(true, "101", id);
+  const state = await f.link.state();
   assert.deepEqual(state, { enabled: true, connected: true, available: true, error: "" });
   assert.ok(!JSON.stringify(state).includes("token"));
   const pair = f.calls.find(([path]) => path === origin + "/api/bot-link/pair");
   assert.deepEqual(JSON.parse(pair[1].body), { computer: { id: "mac-1", name: "Mac mini" }, name: "DoneBot Cloud" });
-  assert.equal(f.preference.instanceId, id);
-  assert.deepEqual(await f.link.set(false), { enabled: false, connected: false, available: false, error: "" });
+
+  // Explicit opt-out disables collaboration and remembers it across subsequent checks.
+  assert.deepEqual(await f.link.set(false, "101", id), { enabled: false, connected: false, available: false, error: "" });
   assert.equal(f.linked.on, false);
+  assert.deepEqual(f.preference, { v: 1, enabled: false, accountId: "101", instanceId: id });
+  assert.equal((await f.link.state()).enabled, false);
+  assert.equal(f.calls.filter(([path]) => path === origin + "/api/bot-link/pair").length, 1);
+
+  // Foreign account cannot enable; matching account can re-enable.
+  await assert.rejects(f.link.set(true, "foreign", id), /当前账号/);
+  assert.deepEqual(await f.link.set(true, "101", id), { enabled: true, connected: true, available: true, error: "" });
 });
 
-test("account change and sign-out revoke the standing link and its saved consent", async t => {
+test("auto-ensures personal Cloud session and pairs automatically even before user clicks Connect Cloud", async t => {
+  const f = fixture({ savedEntry: false, withEnsure: true }); t.after(() => f.link.close());
+  const state = await f.link.state();
+  assert.equal(f.ensured, 1);
+  assert.deepEqual(state, { enabled: true, connected: true, available: true, error: "" });
+  assert.equal(f.linked.on, true);
+});
+
+test("account change and sign-out revoke the standing link immediately", async t => {
   for (const next of ["202", null]) {
     const f = fixture(); t.after(() => f.link.close());
-    await f.link.set(true, "101", id);
+    assert.equal((await f.link.state()).enabled, true);
     f.owner = next;
     assert.equal((await f.link.state()).enabled, false);
     assert.equal(f.linked.on, false);
-    assert.equal(f.preference.enabled, false);
-    f.owner = "101";
-    await f.link.state();
-    assert.equal(f.calls.filter(([path]) => path === origin + "/api/bot-link/pair").length, 1);
   }
 });
 
-test("sleeping Cloud is never woken for background pairing", async t => {
-  const f = fixture(); t.after(() => f.link.close());
-  await f.link.set(true, "101", id);
+test("sleeping Cloud is never woken for background pairing even with default-on enabled", async t => {
+  const f = fixture({ savedEntry: false, withEnsure: true }); t.after(() => f.link.close());
+  f.running = false;
+  const stopped = await f.link.state();
+  assert.equal(stopped.enabled, true);
+  assert.equal(stopped.connected, false);
+  assert.equal(f.ensured, 0);
+  assert.equal(f.calls.filter(([path]) => path.startsWith("https:")).length, 0);
+
+  f.running = true;
+  assert.equal((await f.link.state()).connected, true);
   f.running = false;
   await f.link.state();
   assert.equal(f.linked.asleep, true);
@@ -91,11 +115,12 @@ test("disabling while pairing is pending cleans up the new Cloud grant and canno
   let release, entered;
   const waiting = new Promise(resolve => { entered = resolve; });
   f.pairGate = () => new Promise(resolve => { release = resolve; entered(); });
-  const opening = f.link.set(true, "101", id);
+  const opening = f.link.state();
   await waiting;
-  await f.link.set(false);
+  await f.link.set(false, "101", id);
   release(); await opening;
   assert.equal((await f.link.state()).error, "");
+  assert.equal((await f.link.state()).enabled, false);
   assert.equal(f.linked.on, false);
   assert.equal(f.preference.enabled, false);
   assert.equal(f.calls.filter(([, init]) => init.method === "DELETE").length, 1);
@@ -106,7 +131,7 @@ test("account change during pairing or a local acceptance failure leaves no orph
     const f = fixture(); t.after(() => f.link.close());
     if (change === "account") f.pairGate = async () => { f.owner = "202"; };
     else f.failLocal = true;
-    const state = await f.link.set(true, "101", id);
+    const state = await f.link.state();
     assert.ok(state.error);
     assert.equal(f.linked.on, false);
     assert.equal(f.calls.filter(([, init]) => init.method === "DELETE").length, 1);
@@ -118,6 +143,7 @@ test("unverified saved origins and absent account bindings cannot receive a link
     const f = fixture(); t.after(() => f.link.close());
     if (change === "origin") f.entry.origin = "https://foreign.invalid";
     else delete f.entry.donebotCloud;
+    assert.equal((await f.link.state()).enabled, false);
     await assert.rejects(f.link.set(true, "101", id), /当前账号/);
     assert.ok(!f.calls.some(([path]) => path.startsWith("https:")));
   }

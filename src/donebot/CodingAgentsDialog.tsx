@@ -442,7 +442,9 @@ export function CodingAgentsDialog({
                             </span>
                           ) : agent.installed ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning">
-                              已检测（{sourceLabel(agent.source)}）· 待登录
+                              {!agent.version && agent.reason
+                                ? `已检测（${sourceLabel(agent.source)}）· 启动异常`
+                                : `已检测（${sourceLabel(agent.source)}）· 待登录`}
                             </span>
                           ) : agent.desktopAppDetected ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-raised px-2 py-0.5 text-[11px] font-medium text-ink-secondary">

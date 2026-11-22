@@ -171,13 +171,28 @@ export function findDeepSeekDesktopBinary(
   }
   if (platform === "win32") {
     const localAppData = env.LOCALAPPDATA ?? join(home, "AppData", "Local");
-    const found = findFirstExisting([
-      join(localAppData, "Programs", "DeepSeek Harness", "resources", "runtime", "cli", "bin", "dsh.cmd"),
-      join(localAppData, "Programs", "DeepSeek Harness", "resources", "runtime", "cli", "bin", "dsh.exe"),
-    ]);
-    const desktopAppDetected =
-      Boolean(found) || existsSync(join(localAppData, "Programs", "DeepSeek Harness", "DeepSeek Harness.exe"));
-    return { cliPath: found, desktopAppDetected };
+    const programFiles = env.ProgramFiles ?? "C:\\Program Files";
+    const programFilesX86 = env["ProgramFiles(x86)"];
+    const installRoots = [
+      join(localAppData, "Programs", "DeepSeek Harness"),
+      join(programFiles, "DeepSeek Harness"),
+      ...(programFilesX86 ? [join(programFilesX86, "DeepSeek Harness")] : []),
+    ];
+    for (const root of installRoots) {
+      const cliCandidate = findFirstExisting([
+        join(root, "resources", "runtime", "cli", "bin", "dsh.cmd"),
+        join(root, "resources", "runtime", "cli", "bin", "dsh.exe"),
+      ]);
+      if (cliCandidate) {
+        return { cliPath: cliCandidate, desktopAppDetected: true };
+      }
+      const exe = join(root, "DeepSeek Harness.exe");
+      if (existsSync(exe)) {
+        const hasAsar = existsSync(join(root, "resources", "app.asar"));
+        return { cliPath: hasAsar ? exe : null, desktopAppDetected: true };
+      }
+    }
+    return { cliPath: null, desktopAppDetected: false };
   }
   return { cliPath: null, desktopAppDetected: false };
 }

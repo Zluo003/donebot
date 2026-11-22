@@ -19,6 +19,7 @@ import {
   fetchDeepSeekCatalog,
   hasDeepSeekKey,
   parseDeepSeekCatalog,
+  resolveDeepSeekLaunch,
 } from "./deepseek.ts";
 
 describe("DeepSeek model ids", () => {
@@ -130,6 +131,62 @@ describe("DeepSeek key detection", () => {
     const h = home();
     mkdirSync(join(h, "profiles"), { recursive: true });
     expect(hasDeepSeekKey({ DSH_HOME: h })).toBe(false);
+  });
+
+  it("recognizes any deepseek-account-platform token record while ignoring device-only records", () => {
+    const h = home();
+    writeFileSync(
+      join(h, ".credentials.yaml"),
+      [
+        "version: 1",
+        "records:",
+        "  deepseek-account-platform/device:",
+        "    kind: device",
+        "    payload:",
+        "      id: dev-1",
+      ].join("\n"),
+    );
+    expect(hasDeepSeekKey({ DSH_HOME: h })).toBe(false);
+
+    writeFileSync(
+      join(h, ".credentials.yaml"),
+      [
+        "version: 1",
+        "records:",
+        "  deepseek-account-platform/cn:",
+        "    kind: token",
+        "    payload:",
+        "      token: tok-123",
+      ].join("\n"),
+    );
+    expect(hasDeepSeekKey({ DSH_HOME: h })).toBe(true);
+  });
+
+  it("resolves Windows DeepSeek Harness Desktop dsh.cmd directly to Electron-as-Node", () => {
+    const root = join(home(), "Programs", "DeepSeek Harness");
+    const resources = join(root, "resources");
+    const cmdDir = join(resources, "runtime", "cli", "bin");
+    mkdirSync(cmdDir, { recursive: true });
+    const exe = join(root, "DeepSeek Harness.exe");
+    const asar = join(resources, "app.asar");
+    const cmd = join(cmdDir, "dsh.cmd");
+    writeFileSync(exe, "exe");
+    writeFileSync(asar, "asar");
+    writeFileSync(cmd, '@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"%~dp0..\\..\\..\\..\\DeepSeek Harness.exe" --expose-internals "%~dp0..\\..\\..\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\cli.js" %*\r\n');
+
+    const expectedEntry = join(asar, "dsh", "node_modules", "@deepseek-ai", "dsh-desktop-host", "lib", "cli.js");
+    const fromCmd = resolveDeepSeekLaunch(cmd, {}, "win32");
+    expect(fromCmd.command).toBe(exe);
+    expect(fromCmd.args).toEqual(["--expose-internals", expectedEntry]);
+    expect(fromCmd.env?.ELECTRON_RUN_AS_NODE).toBe("1");
+
+    const fromExe = resolveDeepSeekLaunch(exe, {}, "win32");
+    expect(fromExe.command).toBe(exe);
+    expect(fromExe.args).toEqual(["--expose-internals", expectedEntry]);
+    expect(fromExe.env?.ELECTRON_RUN_AS_NODE).toBe("1");
+
+    const onDarwin = resolveDeepSeekLaunch(cmd, {}, "darwin");
+    expect(onDarwin).toEqual({ command: cmd, args: [] });
   });
 });
 

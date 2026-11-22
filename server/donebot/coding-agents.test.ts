@@ -20,6 +20,7 @@ import {
   externalCodingAgentMemberRefusal,
   externalCodingAgentSwitchRefusal,
   findClaudeDesktopBinary,
+  findDeepSeekDesktopBinary,
 } from "./coding-agents.ts";
 import { handleCollabGroupWrite } from "./collab-group-routes.ts";
 import { DoneBotGatewayError } from "./gateway.ts";
@@ -104,6 +105,35 @@ describe("external local coding agents", () => {
       "utf8",
     );
     expect(hasDeepSeekKey({ DSH_HOME: dshDir })).toBe(true);
+  });
+
+  it("discovers DeepSeek Harness Desktop on Windows from Program Files and direct exe+asar installs", () => {
+    const prevSealed = process.env.DONEBOT_TEST_SEALED_PATH;
+    delete process.env.DONEBOT_TEST_SEALED_PATH;
+    try {
+      const root = makeTempDir("donebot-win-dsh-");
+      const localAppData = join(root, "Local");
+      const programFiles = join(root, "ProgramFiles");
+      const appDir = join(programFiles, "DeepSeek Harness");
+      const resDir = join(appDir, "resources");
+      mkdirSync(resDir, { recursive: true });
+      const exe = join(appDir, "DeepSeek Harness.exe");
+      writeFileSync(exe, "exe");
+      writeFileSync(join(resDir, "app.asar"), "asar");
+
+      const foundExe = findDeepSeekDesktopBinary({ LOCALAPPDATA: localAppData, ProgramFiles: programFiles }, "win32");
+      expect(foundExe).toEqual({ cliPath: exe, desktopAppDetected: true });
+
+      const cmdDir = join(resDir, "runtime", "cli", "bin");
+      mkdirSync(cmdDir, { recursive: true });
+      const cmd = join(cmdDir, "dsh.cmd");
+      writeFileSync(cmd, "@echo off\r\n");
+
+      const foundCmd = findDeepSeekDesktopBinary({ LOCALAPPDATA: localAppData, ProgramFiles: programFiles }, "win32");
+      expect(foundCmd).toEqual({ cliPath: cmd, desktopAppDetected: true });
+    } finally {
+      if (prevSealed !== undefined) process.env.DONEBOT_TEST_SEALED_PATH = prevSealed;
+    }
   });
 
   it("blocks external coding agent bots from local groups, engine switching, and collab group/team chats", async () => {

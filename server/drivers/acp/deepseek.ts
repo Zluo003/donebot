@@ -23,15 +23,16 @@
 // Picker ids are `<provider>/<model>` so bot settings, badges and config.json
 // stay readable; resolveTurnModel turns them into dsh's wire pair just before
 // the core selects the model.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import type { ModelCatalog } from "../../contracts.ts";
-import { harnessHome } from "../../env-path.ts";
-import { resolveCli, spawnCli } from "../../procs.ts";
+import { harnessHome, sealedFixture, whichWin } from "../../env-path.ts";
+import { execCli, resolveCli, spawnCli } from "../../procs.ts";
 import { createAcpDriver, type AcpSupport } from "./core.ts";
+import { versionFromProbe } from "./version-probe.ts";
 
 export const DEEPSEEK_MODELS: ModelCatalog = {
   default: "deepseek-official/deepseek-v4-flash",
@@ -65,10 +66,118 @@ export function deepseekPickerId(wireValue: string): string | null {
 }
 
 export function dshHome(env: Record<string, string | undefined>): string {
-  return env.DSH_HOME || harnessHome("dsh", env);
+  return env.DSH_HOME?.trim() || harnessHome("dsh", env);
 }
 
 const nonEmpty = (value: unknown): boolean => typeof value === "string" && value.trim() !== "";
+
+const DESKTOP_HOST_CLI_SEGMENTS = ["dsh", "node_modules", "@deepseek-ai", "dsh-desktop-host", "lib", "cli.js"] as const;
+
+export interface DeepSeekResolvedLaunch {
+  command: string;
+  args: string[];
+  env?: Record<string, string | undefined>;
+}
+
+function desktopAppRootFromPath(targetPath: string): string | null {
+  const trimmed = targetPath.trim();
+  if (!trimmed) return null;
+  if (basename(trimmed).toLowerCase() === "deepseek harness.exe") {
+    const root = dirname(trimmed);
+    if (existsSync(trimmed) && existsSync(join(root, "resources", "app.asar"))) return root;
+    return null;
+  }
+  let cur = dirname(trimmed);
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (basename(cur).toLowerCase() === "resources") {
+      const root = dirname(cur);
+      if (existsSync(join(root, "DeepSeek Harness.exe")) && existsSync(join(cur, "app.asar"))) {
+        return root;
+      }
+    }
+    const parent = dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  return null;
+}
+
+function windowsDesktopInstallRoots(env: Record<string, string | undefined>): string[] {
+  if (sealedFixture()) return [];
+  const roots: string[] = [];
+  const home = env.USERPROFILE || env.HOME || "";
+  const localAppData = env.LOCALAPPDATA || (home ? join(home, "AppData", "Local") : "");
+  if (localAppData) roots.push(join(localAppData, "Programs", "DeepSeek Harness"));
+  const programFiles = env.ProgramFiles || "C:\\Program Files";
+  if (programFiles) roots.push(join(programFiles, "DeepSeek Harness"));
+  const programFilesX86 = env["ProgramFiles(x86)"];
+  if (programFilesX86) roots.push(join(programFilesX86, "DeepSeek Harness"));
+  return roots;
+}
+
+function buildWindowsDesktopLaunch(
+  appRoot: string,
+  env: Record<string, string | undefined>,
+  cmdShimPath?: string,
+): DeepSeekResolvedLaunch {
+  const exe = join(appRoot, "DeepSeek Harness.exe");
+  const asar = join(appRoot, "resources", "app.asar");
+  let entry = join(asar, ...DESKTOP_HOST_CLI_SEGMENTS);
+  if (cmdShimPath && existsSync(cmdShimPath)) {
+    try {
+      const text = readFileSync(cmdShimPath, "utf8");
+      const match = /app\.asar[\\/]([^"'\r\n]+?\.m?c?js)\b/i.exec(text);
+      if (match?.[1]) {
+        entry = join(asar, ...match[1].split(/[\\/]+/).filter(Boolean));
+      }
+    } catch { /* fall back to standard desktop-host cli entry */ }
+  }
+  return {
+    command: exe,
+    args: ["--expose-internals", entry],
+    env: { ...env, ELECTRON_RUN_AS_NODE: "1" },
+  };
+}
+
+/**
+ * DeepSeek Harness Desktop on Windows ships `resources\runtime\cli\bin\dsh.cmd`, which sets
+ * `ELECTRON_RUN_AS_NODE=1` and runs `DeepSeek Harness.exe --expose-internals ...\app.asar\...\cli.js`.
+ * Node 24 refuses to spawn `.cmd` directly without a shell (`EINVAL`), and plain `node.exe` cannot
+ * read inside Electron's `app.asar`, so resolve Desktop installs directly to `DeepSeek Harness.exe`.
+ */
+export function resolveDeepSeekLaunch(
+  cli: string,
+  env: Record<string, string | undefined>,
+  platform: NodeJS.Platform = process.platform,
+): DeepSeekResolvedLaunch {
+  const trimmed = cli.trim() || "dsh";
+  if (platform !== "win32") {
+    return { command: trimmed, args: [] };
+  }
+
+  const directRoot = desktopAppRootFromPath(trimmed);
+  if (directRoot) {
+    const ext = extname(trimmed).toLowerCase();
+    return buildWindowsDesktopLaunch(directRoot, env, ext === ".cmd" || ext === ".bat" ? trimmed : undefined);
+  }
+
+  if (trimmed.toLowerCase() === "dsh" || trimmed.toLowerCase() === "dsh.cmd") {
+    const onPath = whichWin("dsh", env as NodeJS.ProcessEnv);
+    if (onPath) {
+      const pathRoot = desktopAppRootFromPath(onPath);
+      if (pathRoot) return buildWindowsDesktopLaunch(pathRoot, env, onPath);
+      return { command: trimmed, args: [] };
+    }
+    for (const root of windowsDesktopInstallRoots(env)) {
+      if (existsSync(join(root, "DeepSeek Harness.exe")) && existsSync(join(root, "resources", "app.asar"))) {
+        const shim = join(root, "resources", "runtime", "cli", "bin", "dsh.cmd");
+        return buildWindowsDesktopLaunch(root, env, existsSync(shim) ? shim : undefined);
+      }
+    }
+  }
+
+  return { command: trimmed, args: [] };
+}
 
 /** dsh 0.2.1 writes `version: 1` with the key under `refs:`; it also migrates
  * the pre-release flat layout (the key at the top level), so both count. An
@@ -85,10 +194,13 @@ function storedCredentialPresent(path: string): boolean {
   const refs = root.refs && typeof root.refs === "object" ? root.refs as Record<string, unknown> : {};
   if (nonEmpty(refs.DEEPSEEK_API_KEY) || nonEmpty(root.DEEPSEEK_API_KEY)) return true;
   const records = root.records && typeof root.records === "object" ? root.records as Record<string, unknown> : {};
-  const account = records["deepseek-account-platform/default"];
-  if (account && typeof account === "object") {
-    const payload = (account as Record<string, unknown>).payload;
-    if (payload && typeof payload === "object" && nonEmpty((payload as Record<string, unknown>).token)) {
+  for (const [key, entry] of Object.entries(records)) {
+    if (!key.startsWith("deepseek-account-platform/")) continue;
+    if (!entry || typeof entry !== "object") continue;
+    const payload = (entry as Record<string, unknown>).payload;
+    if (!payload || typeof payload !== "object") continue;
+    const p = payload as Record<string, unknown>;
+    if (nonEmpty(p.token) || nonEmpty(p.accessToken) || nonEmpty(p.access_token)) {
       return true;
     }
   }
@@ -122,8 +234,12 @@ function dotenvValuePresent(path: string): boolean {
  * file outranks the env inside dsh; for "is there a key at all" any layer counts. */
 export function hasDeepSeekKey(env: Record<string, string | undefined>): boolean {
   if (nonEmpty(env.DEEPSEEK_API_KEY)) return true;
-  const home = dshHome(env);
-  return storedCredentialPresent(join(home, ".credentials.yaml")) || dotenvValuePresent(join(home, ".env"));
+  const homes = [dshHome(env)];
+  if (!env.DSH_HOME?.trim() && env.HOME?.trim() && env.USERPROFILE?.trim() && env.HOME.trim() !== env.USERPROFILE.trim()) {
+    const other = join(process.platform === "win32" ? env.HOME.trim() : env.USERPROFILE.trim(), ".dsh");
+    if (!homes.includes(other)) homes.push(other);
+  }
+  return homes.some((home) => storedCredentialPresent(join(home, ".credentials.yaml")) || dotenvValuePresent(join(home, ".env")));
 }
 
 /** Every `value` string under a select option, descending into groups. */
@@ -202,8 +318,10 @@ export function fetchDeepSeekCatalog(
     let child: ReturnType<typeof spawnCli>;
     try {
       // Security: while the bot box is on, dsh runs in it, as a bot's turn does: it reads ~/.dsh, which a bot can write.
-      const resolved = resolveCli(cli, ["--profile", "acp"], env as NodeJS.ProcessEnv);
-      child = spawnCli(resolved.command, resolved.args, { stdio: ["pipe", "pipe", "ignore"], env: env as NodeJS.ProcessEnv, box: { allowEnv } });
+      const launch = resolveDeepSeekLaunch(cli, env);
+      const launchEnv = (launch.env ?? env) as NodeJS.ProcessEnv;
+      const resolved = resolveCli(launch.command, [...launch.args, "--profile", "acp"], launchEnv);
+      child = spawnCli(resolved.command, resolved.args, { stdio: ["pipe", "pipe", "ignore"], env: launchEnv, box: { allowEnv } });
     } catch (error) {
       return reject(error instanceof Error ? error : new Error(String(error)));
     }
@@ -313,6 +431,32 @@ export const deepseekSupport: AcpSupport = {
   },
 
   spawnArgs: () => ["--profile", "acp"],
+  resolveCommand: async (env, config) => resolveDeepSeekLaunch(config.cli || "dsh", env),
+  snapshot: async (env, config) => {
+    const cli = config.cli || "dsh";
+    const launch = resolveDeepSeekLaunch(cli, env);
+    const probeEnv = (launch.env ?? env) as NodeJS.ProcessEnv;
+    const probe = await new Promise<{ version?: string; reason?: string }>((resolve) => {
+      execCli(launch.command, [...launch.args, "--version"], { timeout: 15_000, env: probeEnv }, (err, stdout, stderr) => {
+        if (err) {
+          const failure = err as NodeJS.ErrnoException & { killed?: boolean };
+          const reason = failure.code === "ENOENT"
+            ? `\`${cli}\` isn't installed, or isn't on this app's PATH. Install it for the user running DoneBot or use Set CLI, then check again.`
+            : failure.code === "EACCES" || failure.code === "EPERM"
+              ? `\`${cli}\` isn't executable. Check its file permissions, then check again.`
+              : failure.killed && failure.code == null
+                ? `\`${cli}\` version check timed out after 15 seconds. Check it in a terminal on the server, then try again.`
+                : `\`${cli}\` version check failed. Run it with --version on the server to diagnose the installation, then check again.`;
+          resolve({ reason });
+          return;
+        }
+        const version = versionFromProbe(stdout, stderr);
+        resolve(version ? { version } : { reason: `\`${cli}\` returned no version. Check the configured executable with --version, then try again.` });
+      });
+    });
+    if (!probe.version) return { state: "unavailable", reason: probe.reason };
+    return { state: "available", version: probe.version, authenticated: hasDeepSeekKey(env) };
+  },
   credentialEnv: ["DEEPSEEK_API_KEY"],
   // Model and reasoning effort are session config options (see header).
   selectModel: { configId: "model" },

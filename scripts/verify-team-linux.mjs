@@ -27,6 +27,15 @@ async function containerCheck() {
   const probe = JSON.parse(check.output.trim().split("\n").at(-1));
   assert.ok([0, 1, 2].includes(check.code), check.output);
   if (check.code === 0) assert.ok(probe.total > 0 && probe.passed === probe.total && probe.failed.length === 0);
+  let bwrapDiagnostic;
+  if (check.code === 2 && probe.reason === "userns-refused") {
+    const diag = await command("bwrap", [
+      "--unshare-user", "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts", "--die-with-parent",
+      "--ro-bind", "/usr", "/usr", "--symlink", "usr/bin", "/bin", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64",
+      "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "/bin/true",
+    ], 10_000);
+    bwrapDiagnostic = diag.output.trim().slice(0, 500) || `exit ${diag.code}`;
+  }
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
   const teamId = randomUUID(), instanceId = randomUUID(), origin = "http://127.0.0.1:18899";
   const dataDir = "/data/qualification";
@@ -89,7 +98,7 @@ async function containerCheck() {
       const unchanged = (await result.json()).bots.find(item => item.id === bot.id);
       assert.ok(unchanged); assert.equal(Boolean(unchanged.busy), false);
     }
-    const result = { probeExit: check.code, probe, readiness, authenticatedReads: "passed", foreignTeam: "refused",
+    const result = { probeExit: check.code, probe, ...(bwrapDiagnostic ? { bwrapDiagnostic } : {}), readiness, authenticatedReads: "passed", foreignTeam: "refused",
       execution: check.code === 0 ? "not exercised" : "refused with 503", acceptance: check.code === 0 ? "isolation-only" : "blocked" };
     console.log(JSON.stringify(result));
     return check.code === 0 ? 0 : 2;
@@ -119,6 +128,16 @@ async function hostCheck() {
   if (apparmor !== null) {
     assert.match(apparmor, /^[a-z0-9][a-z0-9._-]{1,63}$/);
     assert.notEqual(apparmor, "unconfined", "apparmor=unconfined is forbidden");
+    assert.notEqual(apparmor, "docker-default", "docker-default cannot compensate systempaths");
+  }
+  const compensateSystemPaths = Boolean(seccomp && apparmor);
+  if (compensateSystemPaths) {
+    try {
+      const profiles = readFileSync("/sys/kernel/security/apparmor/profiles", "utf8").split("\n").map(line => line.trim());
+      assert.ok(profiles.includes(`${apparmor} (enforce)`), `AppArmor profile ${apparmor} is not loaded in enforce mode`);
+    } catch (error) {
+      if (error?.code !== "EACCES") throw error;
+    }
   }
   const inspected = await command("docker", ["image", "inspect", image]);
   assert.equal(inspected.code, 0, inspected.output);
@@ -131,6 +150,7 @@ async function hostCheck() {
     "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
     ...(seccomp ? ["--security-opt", `seccomp=${seccomp}`] : []),
     ...(apparmor ? ["--security-opt", `apparmor=${apparmor}`] : []),
+    ...(compensateSystemPaths ? ["--security-opt", "systempaths=unconfined"] : []),
     "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
     "--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777", "--tmpfs", "/run:rw,nosuid,nodev,mode=755",
     "--tmpfs", "/data:rw,nosuid,nodev,uid=1001,gid=1001,mode=700",
@@ -142,7 +162,7 @@ async function hostCheck() {
     let container;
     try { container = JSON.parse(result.output.trim().split("\n").at(-1)); } catch { container = null; }
     const record = { imageId: info.Id, digests: info.RepoDigests, revision, architecture: info.Architecture,
-      code: result.code, security: { unprivileged: true, readOnly: true, capabilities: [], noNewPrivileges: true, network: "none", seccomp: seccomp ? "team-minimal" : "docker-default", apparmor: apparmor ?? "docker-default" },
+      code: result.code, security: { unprivileged: true, readOnly: true, capabilities: [], noNewPrivileges: true, network: "none", seccomp: seccomp ? "team-minimal" : "docker-default", apparmor: apparmor ?? "docker-default", systempaths: compensateSystemPaths ? "unconfined-compensated-by-apparmor" : "docker-default" },
       container, ...(container ? {} : { outputTail: result.output.slice(-2000) }) };
     writeFileSync(join(evidence, "receipt.json"), JSON.stringify(record, null, 2), { mode: 0o600 });
     console.log(JSON.stringify({ evidence, ...record }, null, 2));

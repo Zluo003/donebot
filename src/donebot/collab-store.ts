@@ -11,12 +11,15 @@ export type CollabSidebarTab = "bots" | "collab";
 export type CollabSelection =
   | { kind: "friend"; userId: number }
   | { kind: "team"; teamId: string }
+  | { kind: "group"; groupId: string }
   | null;
 
 export type CollabDialogTarget =
   | null
   | { kind: "add-friend" }
-  | { kind: "add-team"; mode?: "create" | "join" }
+  | { kind: "add-team" }
+  | { kind: "create-group" }
+  | { kind: "add-group-members"; groupId: string }
   | { kind: "requests" }
   | { kind: "invite-team"; teamId: string };
 
@@ -55,10 +58,12 @@ const NOTIFIED_STORAGE_PREFIX = "donebot.collab.notified.";
 
 function defaultSelectionFor(overview: CollabOverview | null): CollabSelection {
   if (!overview) return null;
-  const firstFriend = overview.friends.friends[0];
-  if (firstFriend) return { kind: "friend", userId: firstFriend.user_id };
   const firstTeam = overview.teams[0];
   if (firstTeam) return { kind: "team", teamId: firstTeam.id };
+  const firstGroup = overview.groups?.[0];
+  if (firstGroup) return { kind: "group", groupId: firstGroup.id };
+  const firstFriend = overview.friends.friends[0];
+  if (firstFriend) return { kind: "friend", userId: firstFriend.user_id };
   return null;
 }
 
@@ -368,11 +373,13 @@ export function upsertChatSummaryFromMessage(msg: DoneBotChatMessage, unreadDelt
   const overview = state.overview;
   if (!overview) return;
   const list = [...(overview.chat_summaries ?? [])];
-  const senderName = displayPersonName({
-    remark: msg.sender_remark,
-    nickname: msg.sender_nickname,
-    email: msg.sender_email,
-  });
+  const senderName = msg.sender_kind === "bot" && msg.sender_bot_name?.trim()
+    ? msg.sender_bot_name.trim()
+    : displayPersonName({
+      remark: msg.sender_remark,
+      nickname: msg.sender_nickname,
+      email: msg.sender_email,
+    });
   const idx = list.findIndex(item => item.scope_type === msg.scope_type && item.target_id === msg.target_id);
   const prevUnread = idx >= 0 ? list[idx]!.unread_count : 0;
   const updated: DoneBotChatSummary = {
@@ -416,10 +423,12 @@ export async function refreshCollabOverview(opts: { silent?: boolean } = {}): Pr
         refreshing: false,
         error: "",
       };
-      // Keep selection valid; auto-pick first friend/team if none selected yet.
+      // Keep selection valid; auto-pick first team/group/friend if none selected yet.
       if (state.selection?.kind === "friend" && !next.friends.friends.some(f => f.user_id === (state.selection as { kind: "friend"; userId: number }).userId)) {
         patch.selection = defaultSelectionFor(next);
       } else if (state.selection?.kind === "team" && !next.teams.some(t => t.id === (state.selection as { kind: "team"; teamId: string }).teamId)) {
+        patch.selection = defaultSelectionFor(next);
+      } else if (state.selection?.kind === "group" && !(next.groups ?? []).some(g => g.id === (state.selection as { kind: "group"; groupId: string }).groupId)) {
         patch.selection = defaultSelectionFor(next);
       } else if (!state.selection) {
         patch.selection = defaultSelectionFor(next);
@@ -427,7 +436,11 @@ export async function refreshCollabOverview(opts: { silent?: boolean } = {}): Pr
       // If currently viewing an active chat, keep its unread count at 0 until poll catches up.
       if (uiActiveView === "collab" && state.selection && next.chat_summaries) {
         const activeScope = state.selection.kind;
-        const activeTarget = state.selection.kind === "friend" ? String(state.selection.userId) : state.selection.teamId;
+        const activeTarget = state.selection.kind === "friend"
+          ? String(state.selection.userId)
+          : state.selection.kind === "team"
+            ? state.selection.teamId
+            : state.selection.groupId;
         patch.overview = {
           ...next,
           chat_summaries: next.chat_summaries.map(item =>

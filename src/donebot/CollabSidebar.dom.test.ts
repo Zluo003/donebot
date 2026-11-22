@@ -49,6 +49,9 @@ const sharedFolderId = "33333333-3333-4333-8333-333333333333";
 const sharedBotId = "44444444-4444-4444-8444-444444444444";
 const incomingReqId = "55555555-5555-4555-8555-555555555555";
 const incomingInvId = "66666666-6666-4666-8666-666666666666";
+const groupId = "88888888-8888-4888-8888-888888888888";
+const chatBot1Id = "99999999-9999-4999-8999-999999999991";
+const chatBot2Id = "99999999-9999-4999-8999-999999999992";
 
 function makeOverview(opts: { incomingFriend?: boolean; incomingTeam?: boolean } = {}): CollabOverview {
   return {
@@ -61,7 +64,7 @@ function makeOverview(opts: { incomingFriend?: boolean; incomingTeam?: boolean }
       avatar_url: "data:image/jpeg;base64,/9j/4AAQ",
     },
     friends: {
-      friends: [{ user_id: 202, email: "bob@example.invalid", created_at: "2026-11-22T00:00:00Z" }],
+      friends: [{ user_id: 202, email: "bob@example.invalid", nickname: "小罗", created_at: "2026-11-22T00:00:00Z" }],
       incoming_requests: opts.incomingFriend === false ? [] : [{
         id: incomingReqId,
         requester_id: 303,
@@ -103,12 +106,68 @@ function makeOverview(opts: { incomingFriend?: boolean; incomingTeam?: boolean }
         updated_at: "2026-11-22T00:00:00Z",
       }],
     },
-    teams: [{ id: teamId, name: "产品研发组", role: "owner", member_version: 1, created_at: "2026-11-22T00:00:00Z" }],
+    teams: [{
+      id: teamId,
+      name: "产品研发组",
+      role: "owner",
+      member_version: 1,
+      avatar_url: "data:image/jpeg;base64,TEAMICON",
+      created_at: "2026-11-22T00:00:00Z",
+    }],
+    groups: [{
+      id: groupId,
+      name: "设计协作群",
+      avatar_url: "data:image/jpeg;base64,GROUPICON",
+      creator_id: 101,
+      members: [
+        { user_id: 101, email: "alice@example.invalid", nickname: "老罗", avatar_url: "data:image/jpeg;base64,/9j/4AAQ", joined_at: "2026-11-22T00:00:00Z" },
+        { user_id: 202, email: "bob@example.invalid", nickname: "小罗", joined_at: "2026-11-22T00:00:00Z" },
+      ],
+      created_at: "2026-11-22T00:00:00Z",
+      updated_at: "2026-11-22T00:00:00Z",
+    }],
+    chat_bots: {
+      [`group:${groupId}`]: [
+        {
+          id: chatBot1Id,
+          scope_type: "group",
+          target_id: groupId,
+          owner_user_id: 101,
+          owner_email: "alice@example.invalid",
+          owner_nickname: "老罗",
+          installation_id: installId,
+          local_bot_id: "bot-writer",
+          bot_name: "写作助手",
+          bot_color: "green",
+          bot_title: "中文文案",
+          allow_all_members: false,
+          allowed_user_ids: [202],
+          can_invoke: true,
+          created_at: "2026-11-22T00:00:00Z",
+        },
+        {
+          id: chatBot2Id,
+          scope_type: "group",
+          target_id: groupId,
+          owner_user_id: 202,
+          owner_email: "bob@example.invalid",
+          owner_nickname: "小罗",
+          installation_id: "77777777-7777-4777-8777-777777777777",
+          local_bot_id: "bot-bob",
+          bot_name: "私有设计助手",
+          bot_color: "purple",
+          allow_all_members: false,
+          allowed_user_ids: [],
+          can_invoke: false,
+          created_at: "2026-11-22T00:00:00Z",
+        },
+      ],
+    },
     team_capabilities: ["identity", "collaboration"],
     team_members: {
       [teamId]: [
-        { user_id: 101, email: "alice@example.invalid", role: "owner", version: 1 },
-        { user_id: 202, email: "bob@example.invalid", role: "member", version: 1 },
+        { user_id: 101, email: "alice@example.invalid", nickname: "老罗", avatar_url: "data:image/jpeg;base64,/9j/4AAQ", role: "owner", version: 1 },
+        { user_id: 202, email: "bob@example.invalid", nickname: "小罗", role: "member", version: 1 },
       ],
     },
     incoming_team_invitations: opts.incomingTeam === false ? [] : [{
@@ -125,6 +184,7 @@ function makeOverview(opts: { incomingFriend?: boolean; incomingTeam?: boolean }
       name: "写作助手",
       title: "中文文案",
       description: "擅长产品文档",
+      color: "green",
       has_soul: true,
       skill_count: 2,
     }],
@@ -254,21 +314,35 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
       title: "新的好友申请",
     }));
 
-    // Switch sidebar to 好友与团队: sidebar has ONLY Friends & Teams (no top nav items for 消息与申请 / 共享文件夹 / 共享 Bot).
+    // Switch sidebar to 好友与团队: teams on top, groups middle, friends below; no top nav clutter.
     await act(async () => { collabOption.click(); });
     await renderHarness();
     const sidebarList = container!.querySelector('[data-collab-sidebar-list="full"]')!;
     expect(sidebarList.querySelector("[data-collab-nav]")).toBeNull();
     expect(sidebarList.textContent).not.toContain("消息与申请");
     expect(sidebarList.textContent).not.toContain("共享 Bot");
-    expect(sidebarList.textContent).toContain("bob@example.invalid");
+    const sections = [...sidebarList.querySelectorAll("[data-collab-section]")].map(el => el.getAttribute("data-collab-section"));
+    expect(sections).toEqual(["teams", "groups", "friends"]);
+    expect(sidebarList.textContent).toContain("小罗");
     expect(sidebarList.textContent).toContain("产品研发组");
+    expect(sidebarList.textContent).toContain("设计协作群");
 
-    // Friend chat auto-opened with messages & right inspector drawer!
+    // Team auto-selected first with custom avatar, member nicknames, and editable team icon.
+    expect(container!.querySelector(`[data-collab-chat="team:${teamId}"]`)).not.toBeNull();
+    expect(container!.querySelector("[data-collab-right-invite-member]")).not.toBeNull();
+    expect(container!.querySelector("[data-collab-avatar-edit] img")?.getAttribute("src")).toBe("data:image/jpeg;base64,TEAMICON");
+    const rightPanel = container!.querySelector("[data-collab-right-panel]")!;
+    expect(rightPanel.textContent).toContain("老罗");
+    expect(rightPanel.textContent).toContain("小罗");
+
+    // Click friend in sidebar -> friend chat with avatars on BOTH peer and own bubbles & folder browser hiding dotfiles.
+    const friendBtn = container!.querySelector<HTMLButtonElement>('[data-collab-friend-row="202"]')!;
+    await act(async () => { friendBtn.click(); });
+    await renderHarness();
     expect(container!.querySelector('[data-collab-chat="friend:202"]')).not.toBeNull();
     expect(container!.textContent).toContain("你好，设计稿发你了");
 
-    // Send a chat message.
+    // Send a chat message and verify own bubble also shows own avatar.
     const chatInput = container!.querySelector<HTMLTextAreaElement>("[data-collab-chat-input]")!;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
@@ -283,6 +357,8 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
       body: JSON.stringify({ body: "收到，我马上看" }),
     });
     expect(container!.textContent).toContain("收到，我马上看");
+    const selfMsg = container!.querySelector('[data-collab-msg="12"]')!;
+    expect(selfMsg.querySelector("img")?.getAttribute("src")).toBe("data:image/jpeg;base64,/9j/4AAQ");
 
     // Right drawer「文件夹」tab drills into shared folder browser and hides dotfiles & dotdirs.
     const foldersTab = container!.querySelector<HTMLButtonElement>('[data-collab-right-tab="folders"]')!;
@@ -303,17 +379,129 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
     expect(container!.textContent).toContain("添加好友");
     expect(container!.querySelector('input[name="friend_email"]')).not.toBeNull();
 
-    // Select a team in sidebar -> team chat + right drawer shows team members & invite button.
-    const teamBtn = container!.querySelector<HTMLButtonElement>(`[data-collab-team-row="${teamId}"]`)!;
-    await act(async () => { teamBtn.click(); });
-    await renderHarness();
-    expect(container!.querySelector(`[data-collab-chat="team:${teamId}"]`)).not.toBeNull();
-    expect(container!.querySelector("[data-collab-right-invite-member]")).not.toBeNull();
-
     // Switch back to 机器人 returns right pane to chat.
     const botsOption = container!.querySelector<HTMLButtonElement>('[data-collab-switch-option="bots"]')!;
     await act(async () => { botsOption.click(); });
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showChat" });
+  });
+
+  it("supports friend group chat avatars, own+peer nicknames on bubbles, @bot picker authorization, and removes invite-code UI", async () => {
+    fixture.dispatch.mockImplementation((action: { type: string }) => {
+      if (action.type === "showCollab") fixture.storeState.activeView = "collab";
+    });
+    const overview = makeOverview({ incomingFriend: false, incomingTeam: false });
+    fixture.api.mockImplementation(async (path, init) => {
+      if (path === "/api/donebot/collab/overview") return overview;
+      if (path.startsWith(`/api/donebot/collab/chats/group/${groupId}/messages`) && !init?.method) {
+        return [
+          {
+            id: 21,
+            scope_type: "group",
+            target_id: groupId,
+            sender_id: 101,
+            sender_email: "alice@example.invalid",
+            sender_nickname: "老罗",
+            sender_avatar_url: "data:image/jpeg;base64,/9j/4AAQ",
+            kind: "text",
+            body: "大家看下方案",
+            created_at: "2026-11-23T00:10:00Z",
+          },
+          {
+            id: 22,
+            scope_type: "group",
+            target_id: groupId,
+            sender_id: 101,
+            sender_email: "alice@example.invalid",
+            sender_nickname: "老罗",
+            sender_kind: "bot",
+            sender_bot_id: chatBot1Id,
+            sender_bot_name: "写作助手",
+            sender_bot_color: "green",
+            kind: "text",
+            body: "已整理好要点",
+            created_at: "2026-11-23T00:11:00Z",
+          },
+        ];
+      }
+      if (path === `/api/donebot/collab/chats/group/${groupId}/messages` && init?.method === "POST") {
+        return {
+          id: 23,
+          scope_type: "group",
+          target_id: groupId,
+          sender_id: 101,
+          sender_email: "alice@example.invalid",
+          sender_nickname: "老罗",
+          kind: "text",
+          body: "@写作助手 写一段公告",
+          triggered_bot_ids: [chatBot1Id],
+          created_at: "2026-11-23T00:12:00Z",
+        };
+      }
+      if (path.startsWith("/api/donebot/collab/chats/")) return [];
+      return { ok: true };
+    });
+
+    await renderHarness();
+    const collabOption = container!.querySelector<HTMLButtonElement>('[data-collab-switch-option="collab"]')!;
+    await act(async () => { collabOption.click(); });
+    await renderHarness();
+
+    // Open AddTeamDialog -> no invite-code tab.
+    const addTeamBtn = container!.querySelector<HTMLButtonElement>("[data-collab-add-team]")!;
+    await act(async () => { addTeamBtn.click(); });
+    await renderHarness();
+    expect(container!.textContent).not.toContain("邀请码加入");
+    expect(container!.textContent).not.toContain("43 位团队邀请码");
+
+    // Select friend group chat.
+    const groupRow = container!.querySelector<HTMLButtonElement>(`[data-collab-group-row="${groupId}"]`)!;
+    await act(async () => { groupRow.click(); });
+    await renderHarness();
+
+    // Own bubble in group chat displays BOTH own avatar AND own nickname; bot reply displays 机器人 badge.
+    const selfMsg = container!.querySelector('[data-collab-msg="21"]')!;
+    expect(selfMsg.querySelector("[data-collab-msg-sender]")?.textContent).toBe("老罗");
+    expect(selfMsg.querySelector("img")?.getAttribute("src")).toBe("data:image/jpeg;base64,/9j/4AAQ");
+    const botMsg = container!.querySelector('[data-collab-msg="22"]')!;
+    expect(botMsg.textContent).toContain("写作助手");
+    expect(botMsg.textContent).toContain("机器人");
+    expect(botMsg.textContent).toContain("已整理好要点");
+
+    // Group icon is clickable for avatar replacement and shows current custom group avatar.
+    expect(container!.querySelector("[data-collab-avatar-edit] img")?.getAttribute("src")).toBe("data:image/jpeg;base64,GROUPICON");
+
+    // Click @ button -> mention picker lists authorized bot (enabled) and unauthorized bot (disabled).
+    const atBtn = container!.querySelector<HTMLButtonElement>("[data-collab-chat-at-btn]")!;
+    await act(async () => { atBtn.click(); });
+    const menu = container!.querySelector("[data-collab-mention-menu]")!;
+    expect(menu).not.toBeNull();
+    const allowedBtn = menu.querySelector<HTMLButtonElement>(`[data-collab-mention-item="${chatBot1Id}"]`)!;
+    const deniedBtn = menu.querySelector<HTMLButtonElement>(`[data-collab-mention-item="${chatBot2Id}"]`)!;
+    expect(allowedBtn.disabled).toBe(false);
+    expect(deniedBtn.disabled).toBe(true);
+    expect(deniedBtn.textContent).toContain("需所有者授权");
+
+    // Select authorized bot and send -> sends mention_bot_ids.
+    await act(async () => { allowedBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); });
+    const chatInput = container!.querySelector<HTMLTextAreaElement>("[data-collab-chat-input]")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(chatInput, "@写作助手 写一段公告");
+      chatInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const sendBtn = container!.querySelector<HTMLButtonElement>("[data-collab-chat-send]")!;
+    await act(async () => { sendBtn.click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(fixture.api).toHaveBeenCalledWith(`/api/donebot/collab/chats/group/${groupId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ body: "@写作助手 写一段公告", mention_bot_ids: [chatBot1Id] }),
+    });
+
+    // Right panel「Bot」tab shows group bots and owner authorization button.
+    const botsTab = container!.querySelector<HTMLButtonElement>('[data-collab-right-tab="bots"]')!;
+    await act(async () => { botsTab.click(); });
+    expect(container!.querySelector(`[data-collab-bot-grants="${chatBot1Id}"]`)).not.toBeNull();
+    expect(container!.querySelector(`[data-collab-bot-grants="${chatBot2Id}"]`)).toBeNull();
   });
 
   it("suppresses toast overlay while a modal dialog is open and supports one-click accept from toast", async () => {

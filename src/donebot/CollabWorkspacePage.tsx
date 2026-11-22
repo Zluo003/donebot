@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, KeyRound, Loader2, RefreshCw, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Loader2, MessageSquarePlus, RefreshCw, UserPlus, Users } from "lucide-react";
 import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { cn } from "@/lib/cn";
 import {
@@ -30,6 +30,16 @@ export function CollabWorkspacePage() {
   const activeTeam = selection?.kind === "team"
     ? overview?.teams.find(t => t.id === selection.teamId) ?? null
     : null;
+  const activeGroup = selection?.kind === "group"
+    ? (overview?.groups ?? []).find(g => g.id === selection.groupId) ?? null
+    : null;
+  const activeScope = activeFriend ? "friend" : activeTeam ? "team" : "group";
+  const activeTargetId = activeFriend ? String(activeFriend.user_id) : activeTeam ? activeTeam.id : (activeGroup?.id ?? "");
+  const activeChatBots = activeTeam
+    ? (overview?.chat_bots?.[`team:${activeTeam.id}`] ?? [])
+    : activeGroup
+      ? (overview?.chat_bots?.[`group:${activeGroup.id}`] ?? [])
+      : [];
 
   if (!loaded) {
     return (
@@ -69,7 +79,7 @@ export function CollabWorkspacePage() {
     );
   }
 
-  if (!activeFriend && !activeTeam) {
+  if (!activeFriend && !activeTeam && !activeGroup) {
     return (
       <main data-collab-workspace="" className="flex min-w-0 flex-1 flex-col bg-app text-ink">
         <header {...dragProps} className="h-[50px] shrink-0" />
@@ -81,30 +91,30 @@ export function CollabWorkspacePage() {
             <div>
               <h1 className="text-[17px] font-semibold text-ink">开始与好友或团队协作</h1>
               <p className="mt-1.5 text-[13px] leading-relaxed text-ink-secondary">
-                添加好友或创建团队后，可直接发消息、互传最大 100 MB 文件，并在右侧栏管理共享文件夹与共享 Bot。
+                创建团队、发起好友群聊或添加好友后，可直接发消息、互传最大 100 MB 文件，并添加授权本机 Bot 在群内 @ 调用。
               </p>
             </div>
             <div className="mt-1 flex flex-wrap items-center justify-center gap-2.5">
               <button
                 type="button"
-                onClick={() => openCollabDialog({ kind: "add-friend" })}
+                onClick={() => openCollabDialog({ kind: "add-team" })}
                 className={`${COLLAB_BUTTON} ui-button-primary h-9 px-4 text-[13px]`}
-              >
-                <UserPlus size={14} aria-hidden="true" />添加好友
-              </button>
-              <button
-                type="button"
-                onClick={() => openCollabDialog({ kind: "add-team", mode: "create" })}
-                className={`${COLLAB_BUTTON} h-9 px-4 text-[13px]`}
               >
                 <Users size={14} aria-hidden="true" />新建团队
               </button>
               <button
                 type="button"
-                onClick={() => openCollabDialog({ kind: "add-team", mode: "join" })}
+                onClick={() => openCollabDialog({ kind: "create-group" })}
                 className={`${COLLAB_BUTTON} h-9 px-4 text-[13px]`}
               >
-                <KeyRound size={14} aria-hidden="true" />邀请码加入
+                <MessageSquarePlus size={14} aria-hidden="true" />发起群聊
+              </button>
+              <button
+                type="button"
+                onClick={() => openCollabDialog({ kind: "add-friend" })}
+                className={`${COLLAB_BUTTON} h-9 px-4 text-[13px]`}
+              >
+                <UserPlus size={14} aria-hidden="true" />添加好友
               </button>
             </div>
           </div>
@@ -116,10 +126,12 @@ export function CollabWorkspacePage() {
   return (
     <main data-collab-workspace="" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-app text-ink">
       <CollabChatView
-        scopeType={activeFriend ? "friend" : "team"}
-        targetId={activeFriend ? String(activeFriend.user_id) : activeTeam!.id}
+        scopeType={activeScope}
+        targetId={activeTargetId}
         friend={activeFriend}
         team={activeTeam}
+        group={activeGroup}
+        chatBots={activeChatBots}
         overview={overview}
         onChatFileSent={() => setFilesRefreshKey(k => k + 1)}
       />
@@ -127,6 +139,8 @@ export function CollabWorkspacePage() {
         <CollabRightPanel
           friend={activeFriend}
           team={activeTeam}
+          group={activeGroup}
+          chatBots={activeChatBots}
           overview={overview}
           filesRefreshKey={filesRefreshKey}
           onReload={reload}

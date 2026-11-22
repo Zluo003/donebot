@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   AlertCircle,
+  Camera,
   Check,
+  Loader2,
   LogOut,
   Mail,
   Pencil,
@@ -17,7 +19,12 @@ import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { Card, ItemRow, NavRow, PageHeader, panelActionCls, roundButtonCls } from "@/components/bot-panel/rows";
 import { imeComposing } from "@/lib/send-key";
 import { cn } from "@/lib/cn";
-import type { DoneBotFriend, DoneBotSharedFolder } from "../../shared/donebot-collab";
+import type {
+  DoneBotCollabChatBot,
+  DoneBotCollabGroup,
+  DoneBotFriend,
+  DoneBotSharedFolder,
+} from "../../shared/donebot-collab";
 import type { DoneBotTeamCommand, DoneBotTeamIdentity } from "../../shared/donebot-teams";
 import {
   openCollabDialog,
@@ -35,7 +42,8 @@ import {
   TEAM_ROLES,
   type CollabOverview,
 } from "./collab-types";
-import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
+import { CollabAvatar, CollabTeamBadge, compressAvatarFile } from "./CollabAvatar";
+import { CollabChatBotsPanel } from "./CollabChatBotsPanel";
 import { CollabFolderBrowser } from "./CollabFolderBrowser";
 import { CollabRightBotsTab, CollabRightFilesTab, CollabRightFoldersTab } from "./CollabRightResources";
 import "./collab.css";
@@ -45,12 +53,16 @@ type RightTabId = "info" | "folders" | "bots" | "files";
 export function CollabRightPanel({
   friend,
   team,
+  group,
+  chatBots = [],
   overview,
   filesRefreshKey,
   onReload,
 }: {
   friend?: DoneBotFriend | null;
   team?: DoneBotTeamIdentity | null;
+  group?: DoneBotCollabGroup | null;
+  chatBots?: DoneBotCollabChatBot[];
   overview: CollabOverview;
   filesRefreshKey: number;
   onReload: () => Promise<void>;
@@ -60,13 +72,17 @@ export function CollabRightPanel({
   const [tab, setTab] = useState<RightTabId>("info");
   const [browsingFolderId, setBrowsingFolderId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const tabIdPrefix = useId();
-  const entityKey = friend ? `friend:${friend.user_id}` : team ? `team:${team.id}` : "";
+  const entityKey = friend ? `friend:${friend.user_id}` : team ? `team:${team.id}` : group ? `group:${group.id}` : "";
+
+  const isGroup = Boolean(group);
 
   useEffect(() => {
     setBrowsingFolderId(null);
@@ -75,6 +91,10 @@ export function CollabRightPanel({
     setNotice("");
     bodyRef.current?.scrollTo({ top: 0 });
   }, [entityKey]);
+
+  useEffect(() => {
+    if (isGroup) setTab(prev => (prev === "folders" ? "info" : prev));
+  }, [isGroup]);
 
   const sharedTeamIds = useMemo(() => {
     const ids = new Set<string>();
@@ -136,20 +156,68 @@ export function CollabRightPanel({
     [browsingFolderId, incomingFolders],
   );
 
-  const primaryTitle = friend ? displayPersonName(friend) : (team?.name ?? "");
+  const primaryTitle = friend ? displayPersonName(friend) : team ? team.name : (group?.name ?? "");
   const subtitle = friend
     ? personSecondaryLabel(friend) || friend.email
     : team
       ? `${overview.team_members[team.id]?.length ?? 0} 位成员 · ${TEAM_ROLES[team.role]}`
-      : "";
-  const canEditTitle = Boolean(friend || (team && team.role !== "member"));
+      : group
+        ? `${group.members.length} 位好友成员`
+        : "";
+  const canEditTitle = Boolean(friend || (team && team.role !== "member") || group);
+  const canEditAvatar = Boolean((team && team.role !== "member") || group);
+  const currentBadgeAvatar = team?.avatar_url ?? group?.avatar_url ?? "";
 
-  const tabs: ReadonlyArray<{ id: RightTabId; label: string }> = [
-    { id: "info", label: team ? "成员" : "详情" },
-    { id: "folders", label: "文件夹" },
-    { id: "bots", label: "Bot" },
-    { id: "files", label: "文件" },
-  ];
+  const tabs: ReadonlyArray<{ id: RightTabId; label: string }> = group
+    ? [
+      { id: "info", label: "成员" },
+      { id: "bots", label: "Bot" },
+      { id: "files", label: "文件" },
+    ]
+    : [
+      { id: "info", label: team ? "成员" : "详情" },
+      { id: "folders", label: "文件夹" },
+      { id: "bots", label: "Bot" },
+      { id: "files", label: "文件" },
+    ];
+
+  const updateGroupOrTeamAvatar = async (nextAvatarUrl: string) => {
+    if (avatarBusy || !canEditAvatar) return;
+    setAvatarBusy(true); setError(""); setNotice("");
+    try {
+      if (team) {
+        await api(`/api/donebot/collab/teams/${team.id}/avatar`, {
+          method: "PUT",
+          body: JSON.stringify({ avatar_url: nextAvatarUrl }),
+        });
+        setNotice(nextAvatarUrl ? "团队头像已更新" : "已恢复团队默认图标");
+      } else if (group) {
+        await api(`/api/donebot/collab/groups/${group.id}/avatar`, {
+          method: "PUT",
+          body: JSON.stringify({ avatar_url: nextAvatarUrl }),
+        });
+        setNotice(nextAvatarUrl ? "群聊头像已更新" : "已恢复群聊默认图标");
+      }
+      await onReload();
+    } catch (cause) {
+      setError(cleanError(cause, "更新头像失败，请确认网关已升级至最新版本。"));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const handleAvatarFilePicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError(""); setNotice("");
+    try {
+      const compressed = await compressAvatarFile(file);
+      await updateGroupOrTeamAvatar(compressed);
+    } catch (cause) {
+      setError(cleanError(cause, "处理头像图片失败，请换一张图片重试。"));
+    }
+  };
 
   const commitTitle = async (raw: string) => {
     setEditingTitle(null);
@@ -186,6 +254,22 @@ export function CollabRightPanel({
         await onReload();
       } catch (cause) {
         setError(cleanError(cause, "修改团队名称失败。"));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (group && clean && clean !== group.name) {
+      setBusy(true); setError(""); setNotice("");
+      try {
+        await api(`/api/donebot/collab/groups/${group.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name: clean }),
+        });
+        setNotice(`群名称已修改为「${clean}」`);
+        await onReload();
+      } catch (cause) {
+        setError(cleanError(cause, "修改群聊名称失败。"));
       } finally {
         setBusy(false);
       }
@@ -262,7 +346,24 @@ export function CollabRightPanel({
     }
   };
 
+  const leaveGroup = async () => {
+    if (!group || busy) return;
+    if (!window.confirm(`确定退出群聊「${group.name}」？你在本群添加的机器人也将自动移出。`)) return;
+    setBusy(true); setError("");
+    try {
+      await api(`/api/donebot/collab/groups/${group.id}/leave`, { method: "POST", body: "{}" });
+      await onReload();
+      setCollabSelection(null);
+    } catch (cause) {
+      setError(cleanError(cause, "退出群聊失败。"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const members = team ? (overview.team_members[team.id] ?? []) : [];
+  const groupMembers = group?.members ?? [];
+  const myUserId = Number(overview.identity.account_id);
 
   return (
     <aside
@@ -278,6 +379,17 @@ export function CollabRightPanel({
             aria-label="邀请成员"
             title="邀请成员"
             onClick={() => openCollabDialog({ kind: "invite-team", teamId: team.id })}
+            className={roundButtonCls}
+          >
+            <UserPlus size={15} className="pointer-events-none" aria-hidden="true" />
+          </button>
+        )}
+        {group && (
+          <button
+            type="button"
+            aria-label="添加好友进群"
+            title="添加好友进群"
+            onClick={() => openCollabDialog({ kind: "add-group-members", groupId: group.id })}
             className={roundButtonCls}
           >
             <UserPlus size={15} className="pointer-events-none" aria-hidden="true" />
@@ -338,8 +450,44 @@ export function CollabRightPanel({
                   size={64}
                   online={incomingFolders.some(f => f.online) ? true : undefined}
                 />
-              ) : team ? (
-                <CollabTeamBadge name={team.name} size={64} />
+              ) : (team || group) ? (
+                <div className="relative flex flex-col items-center">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    aria-label={team ? "上传团队头像" : "上传群聊头像"}
+                    onChange={e => void handleAvatarFilePicked(e)}
+                    className="sr-only"
+                  />
+                  {canEditAvatar ? (
+                    <button
+                      type="button"
+                      data-collab-avatar-edit=""
+                      disabled={avatarBusy}
+                      aria-label={team ? "点击更换团队头像" : "点击更换群聊头像"}
+                      title={team ? "点击更换团队头像" : "点击更换群聊头像"}
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="group relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border"
+                    >
+                      <CollabTeamBadge name={primaryTitle} avatarUrl={currentBadgeAvatar} size={64} />
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 text-white opacity-0 transition-[opacity,background-color] group-hover:bg-black/45 group-hover:opacity-100 group-focus-visible:bg-black/45 group-focus-visible:opacity-100"
+                      >
+                        {avatarBusy ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute left-1/2 top-[calc(100%+4px)] z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-hairline bg-menu px-[7px] py-0.5 text-[11.5px] text-ink opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        更换头像
+                      </span>
+                    </button>
+                  ) : (
+                    <CollabTeamBadge name={primaryTitle} avatarUrl={currentBadgeAvatar} size={64} />
+                  )}
+                </div>
               ) : null}
 
               <div className="mt-2.5 flex max-w-full items-center justify-center">
@@ -347,8 +495,8 @@ export function CollabRightPanel({
                   <input
                     autoFocus
                     data-collab-inline-title-input=""
-                    aria-label={friend ? "修改好友备注" : "修改团队名称"}
-                    placeholder={friend ? "输入备注名（留空恢复昵称）" : "输入团队名称"}
+                    aria-label={friend ? "修改好友备注" : team ? "修改团队名称" : "修改群聊名称"}
+                    placeholder={friend ? "输入备注名（留空恢复昵称）" : team ? "输入团队名称" : "输入群聊名称"}
                     maxLength={friend ? 64 : 100}
                     value={editingTitle}
                     onChange={e => setEditingTitle(e.target.value)}
@@ -360,8 +508,8 @@ export function CollabRightPanel({
                   <button
                     type="button"
                     data-collab-inline-title=""
-                    title={friend ? "点击修改好友备注" : "点击修改团队名称"}
-                    onClick={() => setEditingTitle(friend ? (friend.remark ?? "") : (team?.name ?? ""))}
+                    title={friend ? "点击修改好友备注" : team ? "点击修改团队名称" : "点击修改群聊名称"}
+                    onClick={() => setEditingTitle(friend ? (friend.remark ?? "") : (team?.name ?? group?.name ?? ""))}
                     className="group/name relative inline-flex max-w-full items-center rounded-[8px] px-1.5 text-[17px] font-medium leading-6 text-ink hover:bg-ink/[0.04]"
                   >
                     <span className="min-w-0 truncate">{primaryTitle}</span>
@@ -378,6 +526,16 @@ export function CollabRightPanel({
 
               {subtitle && subtitle !== primaryTitle && (
                 <p className="mt-0.5 max-w-full truncate text-[13px] text-ink-secondary">{subtitle}</p>
+              )}
+              {canEditAvatar && currentBadgeAvatar && (
+                <button
+                  type="button"
+                  disabled={avatarBusy}
+                  onClick={() => void updateGroupOrTeamAvatar("")}
+                  className="mt-1 text-[11px] text-ink-tertiary hover:text-danger"
+                >
+                  移除头像
+                </button>
               )}
             </div>
 
@@ -570,27 +728,108 @@ export function CollabRightPanel({
                   )}
                 </div>
               )}
-            </div>
 
-            <div role="tabpanel" aria-labelledby={`${tabIdPrefix}-tab-folders`} hidden={tab !== "folders"}>
-              {(friend || team) && (
-                <CollabRightFoldersTab
-                  subjectType={friend ? "user" : "team"}
-                  subjectId={friend ? String(friend.user_id) : team!.id}
-                  subjectLabel={primaryTitle}
-                  incomingFolders={incomingFolders}
-                  outgoingFolders={outgoingFolders}
-                  overview={overview}
-                  onReload={onReload}
-                  onOpenFolder={folder => {
-                    setBrowsingFolderId(folder.id);
-                    bodyRef.current?.scrollTo({ top: 0 });
-                  }}
-                />
+              {group && (
+                <div className="flex flex-col">
+                  <div className="mt-3 flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      data-collab-right-add-group-member=""
+                      onClick={() => openCollabDialog({ kind: "add-group-members", groupId: group.id })}
+                      className={panelActionCls}
+                    >
+                      <UserPlus size={16} aria-hidden="true" />
+                      <span>添加好友进群</span>
+                    </button>
+                  </div>
+
+                  <Card label={`群聊成员（${groupMembers.length}）`}>
+                    {groupMembers.map(member => {
+                      const name = displayPersonName(member);
+                      const sub = personSecondaryLabel(member);
+                      const isCreator = member.user_id === group.creator_id;
+                      return (
+                        <div key={member.user_id} className="flex items-center gap-2.5 px-3.5 py-2.5">
+                          <CollabAvatar
+                            avatarUrl={member.avatar_url}
+                            remark={member.remark}
+                            nickname={member.nickname}
+                            email={member.email}
+                            size={32}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-[13.5px] font-medium text-ink">{name}</span>
+                              {isCreator && (
+                                <span className={cn("inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL.owner)}>
+                                  群主
+                                </span>
+                              )}
+                            </div>
+                            {sub && <div className="truncate text-[11.5px] text-ink-tertiary">{sub}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Card>
+
+                  <Card>
+                    <NavRow
+                      icon={LogOut}
+                      title="退出群聊"
+                      danger
+                      drill={false}
+                      disabled={busy}
+                      onClick={() => void leaveGroup()}
+                    />
+                  </Card>
+                </div>
               )}
             </div>
 
+            {!group && (
+              <div role="tabpanel" aria-labelledby={`${tabIdPrefix}-tab-folders`} hidden={tab !== "folders"}>
+                {(friend || team) && (
+                  <CollabRightFoldersTab
+                    subjectType={friend ? "user" : "team"}
+                    subjectId={friend ? String(friend.user_id) : team!.id}
+                    subjectLabel={primaryTitle}
+                    incomingFolders={incomingFolders}
+                    outgoingFolders={outgoingFolders}
+                    overview={overview}
+                    onReload={onReload}
+                    onOpenFolder={folder => {
+                      setBrowsingFolderId(folder.id);
+                      bodyRef.current?.scrollTo({ top: 0 });
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
             <div role="tabpanel" aria-labelledby={`${tabIdPrefix}-tab-bots`} hidden={tab !== "bots"}>
+              {team && (
+                <CollabChatBotsPanel
+                  scopeType="team"
+                  targetId={team.id}
+                  members={members}
+                  chatBots={chatBots}
+                  overview={overview}
+                  canModerate={team.role !== "member"}
+                  onReload={onReload}
+                />
+              )}
+              {group && (
+                <CollabChatBotsPanel
+                  scopeType="group"
+                  targetId={group.id}
+                  members={groupMembers}
+                  chatBots={chatBots}
+                  overview={overview}
+                  canModerate={group.creator_id === myUserId}
+                  onReload={onReload}
+                />
+              )}
               {(friend || team) && (
                 <CollabRightBotsTab
                   subjectType={friend ? "user" : "team"}
@@ -605,10 +844,10 @@ export function CollabRightPanel({
             </div>
 
             <div role="tabpanel" aria-labelledby={`${tabIdPrefix}-tab-files`} hidden={tab !== "files"}>
-              {(friend || team) && (
+              {(friend || team || group) && (
                 <CollabRightFilesTab
-                  scopeType={friend ? "friend" : "team"}
-                  targetId={friend ? String(friend.user_id) : team!.id}
+                  scopeType={friend ? "friend" : team ? "team" : "group"}
+                  targetId={friend ? String(friend.user_id) : team ? team.id : group!.id}
                   refreshKey={filesRefreshKey}
                 />
               )}

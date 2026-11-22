@@ -5,6 +5,7 @@ import { readBody } from "../harness/http.ts";
 import { dispatchRoutes } from "../routes/table.ts";
 import { createDoneBotAccountRoutes } from "./routes.ts";
 import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./collab-routes.ts";
+import { teamIdentity, teamMembers } from "./teams.ts";
 import type { DoneBotGateway } from "./gateway.ts";
 import type { BotRecord } from "../store.ts";
 
@@ -249,7 +250,7 @@ describe("DoneBot collab routes and bot tools", () => {
       readBody: async () => ({ body: "收到" }),
     });
     expect(sendChatOut.status).toBe(200);
-    expect(gateway.collabSendChatMessage).toHaveBeenCalledWith("friend", "202", "收到");
+    expect(gateway.collabSendChatMessage).toHaveBeenCalledWith("friend", "202", "收到", undefined);
 
     const tooBigChatOut = fakeRes();
     const tooBigChatReq = Object.assign(Readable.from([]), {
@@ -284,5 +285,175 @@ describe("DoneBot collab routes and bot tools", () => {
     });
     expect(tooBigOut.status).toBe(413);
     expect(gateway.collabUploadFile).not.toHaveBeenCalled();
+  });
+
+  it("handles team/group avatars, friend groups, and authorized local chat bots", async () => {
+    const teamId = "11111111-1111-4111-8111-111111111111";
+    const groupId = "22222222-2222-4222-8222-222222222222";
+    const chatBotId = "33333333-3333-4333-8333-333333333333";
+    const installId = "44444444-4444-4444-8444-444444444444";
+
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    const collabCtx = {
+      origin: "https://donebot.invalid",
+      controllers: new Set<AbortController>(),
+      epoch: () => 1,
+      checkEpoch: () => {},
+      validSession: async () => ({ mode: "jwt", accessToken: "tok", user: { id: "101", email: "alice@example.invalid" } }),
+      readGatewayJson: async (res: Response) => res.json(),
+      fetcher: vi.fn().mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const reqUrl = new URL(String(input));
+        const method = init?.method ?? "GET";
+        const body = typeof init?.body === "string" && init.body ? JSON.parse(init.body) : undefined;
+        calls.push({ method, path: reqUrl.pathname, body });
+        if (method === "POST" && reqUrl.pathname === "/api/v1/donebot/collab/groups") {
+          return Response.json({ code: 0, data: { id: groupId, name: "周末讨论群", creator_id: 101, members: [] } });
+        }
+        if (method === "POST" && reqUrl.pathname.endsWith("/bots")) {
+          return Response.json({ code: 0, data: { id: chatBotId, bot_name: "写作助手", allow_all_members: false, allowed_user_ids: [202] } });
+        }
+        if (method === "PUT" && reqUrl.pathname.endsWith("/grants")) {
+          return Response.json({ code: 0, data: { id: chatBotId, allow_all_members: true, allowed_user_ids: [] } });
+        }
+        return Response.json({ code: 0, data: { ok: true } });
+      }),
+    };
+
+    const gateway = {
+      collabCtx: () => collabCtx,
+      collabIdentity: vi.fn().mockResolvedValue({
+        account_id: "101",
+        installation_id: installId,
+        device_name: "Alice Mac",
+        email: "alice@example.invalid",
+      }),
+      collabSendChatMessage: vi.fn().mockResolvedValue({
+        id: 88,
+        scope_type: "group",
+        target_id: groupId,
+        sender_id: 101,
+        sender_email: "alice@example.invalid",
+        kind: "text",
+        body: "@写作助手 帮我总结",
+        triggered_bot_ids: [chatBotId],
+        created_at: "2026-11-23T00:00:00Z",
+      }),
+    } as unknown as DoneBotGateway;
+
+    const bot = {
+      id: "bot-writer",
+      name: "写作助手",
+      title: "中文文案",
+      color: "green",
+      hidden: false,
+    } as unknown as BotRecord;
+
+    const handler = createDoneBotCollabRoutes({
+      gateway,
+      store: { bots: [bot], bot: id => (id === bot.id ? bot : null) },
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+      defaultSelection: vi.fn(),
+      packageImportDeps: vi.fn(),
+      broadcast: vi.fn(),
+      publicBot: b => b,
+    });
+
+    const teamAvatarOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: teamAvatarOut.res,
+      url: new URL(`http://127.0.0.1/api/donebot/collab/teams/${teamId}/avatar`),
+      path: `/api/donebot/collab/teams/${teamId}/avatar`,
+      method: "PUT",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: teamAvatarOut.json,
+      readBody: async () => ({ avatar_url: "data:image/jpeg;base64,/9j/4AAQ" }),
+    });
+    expect(teamAvatarOut.status).toBe(200);
+
+    const createGroupOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: createGroupOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/groups"),
+      path: "/api/donebot/collab/groups",
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: createGroupOut.json,
+      readBody: async () => ({ name: "周末讨论群", member_ids: [202] }),
+    });
+    expect(createGroupOut.status).toBe(200);
+
+    const addBotOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: addBotOut.res,
+      url: new URL(`http://127.0.0.1/api/donebot/collab/chats/group/${groupId}/bots`),
+      path: `/api/donebot/collab/chats/group/${groupId}/bots`,
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: addBotOut.json,
+      readBody: async () => ({ bot_id: "bot-writer", allow_all_members: false, allowed_user_ids: [202] }),
+    });
+    expect(addBotOut.status).toBe(200);
+    expect(calls.find(c => c.path.endsWith("/bots"))?.body).toEqual(expect.objectContaining({
+      installation_id: installId,
+      local_bot_id: "bot-writer",
+      bot_name: "写作助手",
+      allow_all_members: false,
+      allowed_user_ids: [202],
+    }));
+
+    const updateGrantOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: updateGrantOut.res,
+      url: new URL(`http://127.0.0.1/api/donebot/collab/chats/group/${groupId}/bots/${chatBotId}/grants`),
+      path: `/api/donebot/collab/chats/group/${groupId}/bots/${chatBotId}/grants`,
+      method: "PUT",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: updateGrantOut.json,
+      readBody: async () => ({ allow_all_members: true, allowed_user_ids: [] }),
+    });
+    expect(updateGrantOut.status).toBe(200);
+
+    const mentionOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: mentionOut.res,
+      url: new URL(`http://127.0.0.1/api/donebot/collab/chats/group/${groupId}/messages`),
+      path: `/api/donebot/collab/chats/group/${groupId}/messages`,
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: mentionOut.json,
+      readBody: async () => ({ body: "@写作助手 帮我总结", mention_bot_ids: [chatBotId] }),
+    });
+    expect(mentionOut.status).toBe(200);
+    expect(gateway.collabSendChatMessage).toHaveBeenCalledWith("group", groupId, "@写作助手 帮我总结", [chatBotId]);
+
+    const parsedIdentity = teamIdentity.parse({
+      id: teamId,
+      name: "研发组",
+      avatar_url: "data:image/jpeg;base64,/9j/4AAQ",
+      role: "owner",
+      member_version: 1,
+      created_at: "2026-11-23T00:00:00Z",
+    });
+    expect(parsedIdentity.avatar_url).toBe("data:image/jpeg;base64,/9j/4AAQ");
+
+    const parsedMembers = teamMembers.parse([{
+      user_id: 202,
+      email: "bob@example.invalid",
+      nickname: "小罗",
+      remark: "设计师小罗",
+      avatar_url: "data:image/jpeg;base64,/9j/4AAQ",
+      role: "member",
+      version: 1,
+    }]);
+    expect(parsedMembers[0]).toEqual(expect.objectContaining({
+      nickname: "小罗",
+      remark: "设计师小罗",
+      avatar_url: "data:image/jpeg;base64,/9j/4AAQ",
+    }));
   });
 });

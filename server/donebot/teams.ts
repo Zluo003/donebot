@@ -8,8 +8,16 @@ const id = z.uuid().refine(value => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab
 const name = z.string().trim().min(1).max(100).refine(value => !/\p{Cc}/u.test(value));
 const role = z.enum(["owner", "admin", "member"]);
 const assignable = z.enum(["admin", "member"]);
-export const teamIdentity = z.object({ id, name, role, member_version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), created_at: z.iso.datetime({ offset: true }) });
-export const teamMembers = z.array(z.object({ user_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), email: z.email().max(254), role, version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) })).max(10_000);
+export const teamIdentity = z.object({ id, name, avatar_url: z.string().max(750_000).optional(), role, member_version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), created_at: z.iso.datetime({ offset: true }) });
+export const teamMembers = z.array(z.object({
+  user_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  email: z.email().max(254),
+  nickname: z.string().max(120).optional(),
+  avatar_url: z.string().max(750_000).optional(),
+  remark: z.string().max(120).optional(),
+  role,
+  version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+})).max(10_000);
 export const teamInvitation = z.object({ id, email: z.email().max(254), role: assignable, expires_at: z.iso.datetime({ offset: true }), token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 const account_id = z.string().regex(/^[1-9][0-9]{0,19}$/);
 const team_id = id;

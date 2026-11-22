@@ -7,6 +7,7 @@ export type DoneBotTeamRole = "owner" | "admin" | "member";
 export interface DoneBotTeamIdentity {
   id: string;
   name: string;
+  avatar_url?: string;
   role: DoneBotTeamRole;
   member_version: number;
   created_at: string;

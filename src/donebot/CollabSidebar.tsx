@@ -35,6 +35,7 @@ function selectionEquals(a: CollabSelection, b: CollabSelection): boolean {
   if (!a || !b || a.kind !== b.kind) return false;
   if (a.kind === "friend" && b.kind === "friend") return a.userId === b.userId;
   if (a.kind === "team" && b.kind === "team") return a.teamId === b.teamId;
+  if (a.kind === "group" && b.kind === "group") return a.groupId === b.groupId;
   return false;
 }
 
@@ -42,13 +43,22 @@ function friendHasOnlineFolder(overview: CollabOverview, userId: number): boolea
   return overview.folders.shared_with_me.some(f => f.owner_user_id === userId && f.online);
 }
 
-function chatSnippet(summary: DoneBotChatSummary | undefined, showSender: boolean, myUserId: number): string {
+function chatSnippet(
+  summary: DoneBotChatSummary | undefined,
+  showSender: boolean,
+  myUserId: number,
+  myLabel: string,
+): string {
   if (!summary || !summary.last_message_id) return "";
   const content = summary.last_kind === "file"
     ? `[文件] ${summary.last_file_name || "文件"}`
     : (summary.last_body || "").replace(/\s+/g, " ").trim();
   if (!content) return "";
-  if (showSender && summary.last_sender_id && summary.last_sender_id !== myUserId && summary.last_sender_name) {
+  if (
+    showSender
+    && summary.last_sender_name
+    && (summary.last_sender_id !== myUserId || summary.last_sender_name !== myLabel)
+  ) {
     return `${summary.last_sender_name}: ${content}`;
   }
   return content;
@@ -141,6 +151,26 @@ export function CollabSidebarList({
   const isCollabView = state.activeView === "collab";
   const needle = query.trim().toLowerCase();
   const myUserId = Number(overview?.identity.account_id ?? 0);
+  const myLabel = overview ? displayPersonName({ nickname: overview.identity.nickname, email: overview.identity.email }) : "";
+
+  const teams = useMemo(() => {
+    const list = overview?.teams ?? [];
+    if (!needle) return list;
+    return list.filter(t => t.name.toLowerCase().includes(needle));
+  }, [overview, needle]);
+
+  const groups = useMemo(() => {
+    const list = overview?.groups ?? [];
+    if (!needle) return list;
+    return list.filter(g =>
+      g.name.toLowerCase().includes(needle)
+      || g.members.some(m =>
+        m.email.toLowerCase().includes(needle)
+        || (m.nickname ?? "").toLowerCase().includes(needle)
+        || (m.remark ?? "").toLowerCase().includes(needle),
+      ),
+    );
+  }, [overview, needle]);
 
   const friends = useMemo(() => {
     const list = overview?.friends.friends ?? [];
@@ -150,12 +180,6 @@ export function CollabSidebarList({
       || (f.nickname ?? "").toLowerCase().includes(needle)
       || (f.remark ?? "").toLowerCase().includes(needle),
     );
-  }, [overview, needle]);
-
-  const teams = useMemo(() => {
-    const list = overview?.teams ?? [];
-    if (!needle) return list;
-    return list.filter(t => t.name.toLowerCase().includes(needle));
   }, [overview, needle]);
 
   const select = (target: CollabSelection) => {
@@ -187,6 +211,60 @@ export function CollabSidebarList({
           </button>
         )}
 
+        {teams.map(team => {
+          const active = isCollabView && selectionEquals(selection, { kind: "team", teamId: team.id });
+          const unread = findChatSummary(overview, "team", team.id)?.unread_count ?? 0;
+          return (
+            <button
+              key={`t:${team.id}`}
+              type="button"
+              onClick={() => select({ kind: "team", teamId: team.id })}
+              aria-label={team.name}
+              title={team.name}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "relative flex size-10 items-center justify-center rounded-xl transition-transform hover:scale-105",
+                FOCUS_RING,
+                active && "ring-2 ring-accent ring-offset-2 ring-offset-panel",
+              )}
+            >
+              <CollabTeamBadge name={team.name} avatarUrl={team.avatar_url} size={36} />
+              {unread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 text-white">
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        {groups.map(group => {
+          const active = isCollabView && selectionEquals(selection, { kind: "group", groupId: group.id });
+          const unread = findChatSummary(overview, "group", group.id)?.unread_count ?? 0;
+          return (
+            <button
+              key={`g:${group.id}`}
+              type="button"
+              onClick={() => select({ kind: "group", groupId: group.id })}
+              aria-label={group.name}
+              title={group.name}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "relative flex size-10 items-center justify-center rounded-xl transition-transform hover:scale-105",
+                FOCUS_RING,
+                active && "ring-2 ring-accent ring-offset-2 ring-offset-panel",
+              )}
+            >
+              <CollabTeamBadge name={group.name} avatarUrl={group.avatar_url} size={36} />
+              {unread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 text-white">
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
         {friends.map(friend => {
           const active = isCollabView && selectionEquals(selection, { kind: "friend", userId: friend.user_id });
           const name = displayPersonName(friend);
@@ -213,33 +291,6 @@ export function CollabSidebarList({
                 size={36}
                 online={overview && friendHasOnlineFolder(overview, friend.user_id) ? true : undefined}
               />
-              {unread > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 text-white">
-                  {unread > 9 ? "9+" : unread}
-                </span>
-              )}
-            </button>
-          );
-        })}
-
-        {teams.map(team => {
-          const active = isCollabView && selectionEquals(selection, { kind: "team", teamId: team.id });
-          const unread = findChatSummary(overview, "team", team.id)?.unread_count ?? 0;
-          return (
-            <button
-              key={`t:${team.id}`}
-              type="button"
-              onClick={() => select({ kind: "team", teamId: team.id })}
-              aria-label={team.name}
-              title={team.name}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "relative flex size-10 items-center justify-center rounded-xl transition-transform hover:scale-105",
-                FOCUS_RING,
-                active && "ring-2 ring-accent ring-offset-2 ring-offset-panel",
-              )}
-            >
-              <CollabTeamBadge name={team.name} size={36} />
               {unread > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 text-white">
                   {unread > 9 ? "9+" : unread}
@@ -296,8 +347,145 @@ export function CollabSidebarList({
 
       {overview && (
         <>
-          {/* Friends section */}
-          <div className="flex flex-col gap-1">
+          {/* Teams section (top) */}
+          <div className="flex flex-col gap-1" data-collab-section="teams">
+            <div className="flex items-center justify-between px-2.5 py-0.5">
+              <span className="text-[11px] font-semibold tracking-wide text-ink-tertiary">
+                团队 · {overview.teams.length}
+              </span>
+              <button
+                type="button"
+                data-collab-add-team=""
+                aria-label="新建团队"
+                title="新建团队"
+                onClick={() => openCollabDialog({ kind: "add-team" })}
+                className={cn("flex size-6 items-center justify-center rounded-md text-ink-secondary hover:bg-raised hover:text-ink", FOCUS_RING)}
+              >
+                <Plus size={14} aria-hidden="true" />
+              </button>
+            </div>
+            {teams.length > 0 ? (
+              <ul className="flex flex-col gap-0.5">
+                {teams.map(team => {
+                  const active = isCollabView && selectionEquals(selection, { kind: "team", teamId: team.id });
+                  const memberCount = overview.team_members[team.id]?.length ?? 0;
+                  const summary = findChatSummary(overview, "team", team.id);
+                  const snippet = chatSnippet(summary, true, myUserId, myLabel)
+                    || `${memberCount > 0 ? `${memberCount} 人 · ` : ""}${TEAM_ROLES[team.role]}`;
+                  const timeText = formatChatTime(summary?.last_created_at);
+                  const unread = summary?.unread_count ?? 0;
+                  return (
+                    <li key={team.id}>
+                      <button
+                        type="button"
+                        data-collab-team-row={team.id}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => select({ kind: "team", teamId: team.id })}
+                        className={cn(
+                          "flex min-h-[50px] w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left transition-colors",
+                          FOCUS_RING,
+                          active ? "bg-raised text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)]" : "text-ink hover:bg-raised/50",
+                        )}
+                      >
+                        <CollabTeamBadge name={team.name} avatarUrl={team.avatar_url} size={34} />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-1.5">
+                            <span className="truncate text-[13.5px] font-medium text-ink">{team.name}</span>
+                            {timeText && (
+                              <span className="shrink-0 text-[10.5px] tabular-nums text-ink-tertiary">{timeText}</span>
+                            )}
+                          </span>
+                          <span className="flex items-center justify-between gap-1.5">
+                            <span className="truncate text-[11.5px] text-ink-tertiary">{snippet}</span>
+                            {unread > 0 && (
+                              <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white">
+                                {unread > 99 ? "99+" : unread}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="px-2.5 py-2 text-[12px] text-ink-tertiary">
+                {needle ? "没有匹配的团队" : "还没有团队，点右上角 + 创建"}
+              </p>
+            )}
+          </div>
+
+          {/* Friend Groups section */}
+          <div className="flex flex-col gap-1" data-collab-section="groups">
+            <div className="flex items-center justify-between px-2.5 py-0.5">
+              <span className="text-[11px] font-semibold tracking-wide text-ink-tertiary">
+                群聊 · {(overview.groups ?? []).length}
+              </span>
+              <button
+                type="button"
+                data-collab-create-group=""
+                aria-label="发起好友群聊"
+                title="发起好友群聊"
+                onClick={() => openCollabDialog({ kind: "create-group" })}
+                className={cn("flex size-6 items-center justify-center rounded-md text-ink-secondary hover:bg-raised hover:text-ink", FOCUS_RING)}
+              >
+                <Plus size={14} aria-hidden="true" />
+              </button>
+            </div>
+            {groups.length > 0 ? (
+              <ul className="flex flex-col gap-0.5">
+                {groups.map(group => {
+                  const active = isCollabView && selectionEquals(selection, { kind: "group", groupId: group.id });
+                  const summary = findChatSummary(overview, "group", group.id);
+                  const snippet = chatSnippet(summary, true, myUserId, myLabel)
+                    || `${group.members.length} 位成员`;
+                  const timeText = formatChatTime(summary?.last_created_at);
+                  const unread = summary?.unread_count ?? 0;
+                  return (
+                    <li key={group.id}>
+                      <button
+                        type="button"
+                        data-collab-group-row={group.id}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => select({ kind: "group", groupId: group.id })}
+                        className={cn(
+                          "flex min-h-[50px] w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left transition-colors",
+                          FOCUS_RING,
+                          active ? "bg-raised text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)]" : "text-ink hover:bg-raised/50",
+                        )}
+                      >
+                        <CollabTeamBadge name={group.name} avatarUrl={group.avatar_url} size={34} />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-1.5">
+                            <span className="truncate text-[13.5px] font-medium text-ink">{group.name}</span>
+                            {timeText && (
+                              <span className="shrink-0 text-[10.5px] tabular-nums text-ink-tertiary">{timeText}</span>
+                            )}
+                          </span>
+                          <span className="flex items-center justify-between gap-1.5">
+                            <span className="truncate text-[11.5px] text-ink-tertiary">{snippet}</span>
+                            {unread > 0 && (
+                              <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white">
+                                {unread > 99 ? "99+" : unread}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="px-2.5 py-2 text-[12px] text-ink-tertiary">
+                {needle ? "没有匹配的群聊" : "还没有好友群聊，点右上角 + 发起"}
+              </p>
+            )}
+          </div>
+
+          {/* Friends section (below teams & groups) */}
+          <div className="flex flex-col gap-1" data-collab-section="friends">
             <div className="flex items-center justify-between px-2.5 py-0.5">
               <span className="text-[11px] font-semibold tracking-wide text-ink-tertiary">
                 好友 · {overview.friends.friends.length}
@@ -320,7 +508,7 @@ export function CollabSidebarList({
                   const name = displayPersonName(friend);
                   const hasOnline = friendHasOnlineFolder(overview, friend.user_id);
                   const summary = findChatSummary(overview, "friend", String(friend.user_id));
-                  const snippet = chatSnippet(summary, false, myUserId) || (hasOnline ? "共享文件夹在线" : "点击开始聊天");
+                  const snippet = chatSnippet(summary, false, myUserId, myLabel) || (hasOnline ? "共享文件夹在线" : "点击开始聊天");
                   const timeText = formatChatTime(summary?.last_created_at);
                   const unread = summary?.unread_count ?? 0;
                   return (
@@ -368,75 +556,6 @@ export function CollabSidebarList({
             ) : (
               <p className="px-2.5 py-2 text-[12px] text-ink-tertiary">
                 {needle ? "没有匹配的好友" : "还没有好友，点右上角 + 添加"}
-              </p>
-            )}
-          </div>
-
-          {/* Teams section */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between px-2.5 py-0.5">
-              <span className="text-[11px] font-semibold tracking-wide text-ink-tertiary">
-                团队 · {overview.teams.length}
-              </span>
-              <button
-                type="button"
-                data-collab-add-team=""
-                aria-label="新建或加入团队"
-                title="新建或加入团队"
-                onClick={() => openCollabDialog({ kind: "add-team", mode: "create" })}
-                className={cn("flex size-6 items-center justify-center rounded-md text-ink-secondary hover:bg-raised hover:text-ink", FOCUS_RING)}
-              >
-                <Plus size={14} aria-hidden="true" />
-              </button>
-            </div>
-            {teams.length > 0 ? (
-              <ul className="flex flex-col gap-0.5">
-                {teams.map(team => {
-                  const active = isCollabView && selectionEquals(selection, { kind: "team", teamId: team.id });
-                  const memberCount = overview.team_members[team.id]?.length ?? 0;
-                  const summary = findChatSummary(overview, "team", team.id);
-                  const snippet = chatSnippet(summary, true, myUserId)
-                    || `${memberCount > 0 ? `${memberCount} 人 · ` : ""}${TEAM_ROLES[team.role]}`;
-                  const timeText = formatChatTime(summary?.last_created_at);
-                  const unread = summary?.unread_count ?? 0;
-                  return (
-                    <li key={team.id}>
-                      <button
-                        type="button"
-                        data-collab-team-row={team.id}
-                        aria-current={active ? "page" : undefined}
-                        onClick={() => select({ kind: "team", teamId: team.id })}
-                        className={cn(
-                          "flex min-h-[50px] w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left transition-colors",
-                          FOCUS_RING,
-                          active ? "bg-raised text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)]" : "text-ink hover:bg-raised/50",
-                        )}
-                      >
-                        <CollabTeamBadge name={team.name} size={34} />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[13.5px] font-medium text-ink">{team.name}</span>
-                            {timeText && (
-                              <span className="shrink-0 text-[10.5px] tabular-nums text-ink-tertiary">{timeText}</span>
-                            )}
-                          </span>
-                          <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[11.5px] text-ink-tertiary">{snippet}</span>
-                            {unread > 0 && (
-                              <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white">
-                                {unread > 99 ? "99+" : unread}
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="px-2.5 py-2 text-[12px] text-ink-tertiary">
-                {needle ? "没有匹配的团队" : "还没有团队，点右上角 + 创建"}
               </p>
             )}
           </div>

@@ -1,18 +1,63 @@
 export type CollabAccess = "read" | "write";
 export type CollabSubjectType = "user" | "team";
-export type CollabChatScopeType = "friend" | "team";
+export type CollabChatScopeType = "friend" | "team" | "group";
 
 export const DONEBOT_COLLAB_MAX_FILE_BYTES = 100 * 1024 * 1024;
+
+export interface DoneBotCollabGroupMember {
+  user_id: number;
+  email: string;
+  nickname?: string;
+  avatar_url?: string;
+  remark?: string;
+  joined_at: string;
+}
+
+export interface DoneBotCollabGroup {
+  id: string;
+  name: string;
+  avatar_url?: string;
+  creator_id: number;
+  members: DoneBotCollabGroupMember[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DoneBotCollabChatBot {
+  id: string;
+  scope_type: "team" | "group";
+  target_id: string;
+  owner_user_id: number;
+  owner_email: string;
+  owner_nickname?: string;
+  owner_avatar_url?: string;
+  owner_remark?: string;
+  installation_id: string;
+  local_bot_id: string;
+  bot_name: string;
+  bot_color: string;
+  bot_avatar_url?: string;
+  bot_title?: string;
+  allow_all_members: boolean;
+  allowed_user_ids: number[];
+  can_invoke: boolean;
+  created_at: string;
+}
 
 export interface DoneBotChatMessage {
   id: number;
   scope_type: CollabChatScopeType;
   target_id: string;
   sender_id: number;
+  sender_kind?: "user" | "bot";
   sender_email: string;
   sender_nickname?: string;
   sender_avatar_url?: string;
   sender_remark?: string;
+  sender_bot_id?: string;
+  sender_bot_name?: string;
+  sender_bot_color?: string;
+  sender_bot_avatar_url?: string;
   kind: "text" | "file";
   body: string;
   file_id?: string;
@@ -20,7 +65,21 @@ export interface DoneBotChatMessage {
   file_mime?: string;
   file_size?: number;
   file_sha256?: string;
+  triggered_bot_ids?: string[];
+  denied_bot_names?: string[];
   created_at: string;
+}
+
+export interface DoneBotClaimedBotInvocation {
+  id: string;
+  chat_bot_id: string;
+  message_id: number;
+  scope_type: "team" | "group";
+  target_id: string;
+  chat_name?: string;
+  local_bot_id: string;
+  bot_name: string;
+  recent_messages: DoneBotChatMessage[];
 }
 
 export interface DoneBotChatSummary {

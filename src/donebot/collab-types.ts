@@ -3,7 +3,9 @@ import type {
   DoneBotChatSummary,
   DoneBotCollabActivity,
   DoneBotCollabBotsSnapshot,
+  DoneBotCollabChatBot,
   DoneBotCollabFoldersSnapshot,
+  DoneBotCollabGroup,
   DoneBotCollabSource,
   DoneBotFriendsSnapshot,
   DoneBotIncomingTeamInvitation,
@@ -34,6 +36,8 @@ export interface CollabOverview {
   folders: DoneBotCollabFoldersSnapshot;
   bots: DoneBotCollabBotsSnapshot;
   teams: DoneBotTeamIdentity[];
+  groups?: DoneBotCollabGroup[];
+  chat_bots?: Record<string, DoneBotCollabChatBot[]>;
   team_capabilities: string[];
   team_members: Record<string, DoneBotTeamMember[]>;
   incoming_team_invitations: DoneBotIncomingTeamInvitation[];

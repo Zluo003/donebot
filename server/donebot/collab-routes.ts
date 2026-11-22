@@ -17,6 +17,9 @@ import { importPackageDocument, PackageImportError, type PackageImportDeps } fro
 import type { ModelSelection } from "../contracts.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { boundedResponseText } from "./bounded-response.ts";
+import { createCollabChatBotWorker, type CollabBotTurnOptions } from "./collab-chat-bots.ts";
+import { collabListChatBots, collabListGroups } from "./collab-gateway.ts";
+import { handleCollabGroupReadOrDelete, handleCollabGroupWrite } from "./collab-group-routes.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -84,6 +87,7 @@ const friendRemarkSchema = z.object({
 }).strict();
 const chatMessageSchema = z.object({
   body: z.string().trim().min(1).max(8000),
+  mention_bot_ids: z.array(uuidV4).max(10).optional(),
 }).strict();
 const chatReadSchema = z.object({
   last_read_id: z.number().int().min(0).optional(),
@@ -91,7 +95,7 @@ const chatReadSchema = z.object({
 
 function validChatTarget(scopeType: string, targetId: string): boolean {
   if (scopeType === "friend") return /^[1-9]\d{0,18}$/.test(targetId);
-  if (scopeType === "team") return uuidV4.safeParse(targetId).success;
+  if (scopeType === "team" || scopeType === "group") return uuidV4.safeParse(targetId).success;
   return false;
 }
 
@@ -99,7 +103,7 @@ const INLINE_AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-
 
 export interface DoneBotCollabRouteDeps {
   gateway: DoneBotGateway;
-  store: Pick<Store, "bots" | "bot">;
+  store: Pick<Store, "bots" | "bot"> & Partial<Pick<Store, "taskByThread" | "createTask" | "appendMessage" | "messagesFor">>;
   collectTeamSkills(bots: readonly BotRecord[], selection: unknown):
     | { ok: true; all: boolean; skillsByBot: Map<string, ExportablePackageSkill[]>; skipped: TeamExportSkip[]; available: string[] }
     | { ok: false; error: string; available: string[] };
@@ -109,6 +113,9 @@ export interface DoneBotCollabRouteDeps {
   publicBot(bot: BotRecord): unknown;
   syncLocalProfile?(patch: { name?: string; avatarUrl?: string; email?: string }): void;
   currentLocalProfile?(): { name?: string; avatarUrl?: string; email?: string } | undefined;
+  startTurn?: (botId: string, text: string, opts: CollabBotTurnOptions) => Promise<unknown>;
+  threadBusy?: (botId: string, threadId: string) => boolean;
+  generateBotText?: (botId: string, prompt: string, signal?: AbortSignal) => Promise<string | undefined>;
 }
 
 function cleanRelativeFilePath(raw: string | null): string | null {
@@ -225,6 +232,13 @@ function buildBotSharePayload(deps: DoneBotCollabRouteDeps, bot: BotRecord, auth
 
 export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHandler {
   const { gateway } = deps;
+  const botWorker = createCollabChatBotWorker({
+    gateway,
+    store: deps.store,
+    startTurn: deps.startTurn,
+    threadBusy: deps.threadBusy,
+    generateBotText: deps.generateBotText,
+  });
   return async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
     if (!reqPath.startsWith("/api/donebot/collab/")) return PASS;
     if (!ownerOrAdmin(auth)) return json(res, 403, { error: "仅工作空间所有者可使用远程协作。" });
@@ -252,7 +266,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return;
       }
 
-      const chatFileUpload = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/files$/);
+      const chatFileUpload = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/files$/);
       if (chatFileUpload && method === "POST") {
         const [, scopeType, targetId] = chatFileUpload;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -423,7 +437,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
       }
 
       if (method === "GET" && reqPath === "/api/donebot/collab/overview") {
-        const [identity, profile, friends, folders, bots, workspaces, incomingInvitations, chatSummaries] = await Promise.all([
+        const ctx = typeof gateway.collabCtx === "function" ? gateway.collabCtx() : null;
+        const [identity, profile, friends, folders, bots, workspaces, incomingInvitations, chatSummaries, groups] = await Promise.all([
           gateway.collabIdentity(),
           gateway.collabUserProfile?.().catch(() => null) ?? Promise.resolve(null),
           gateway.collabFriends(),
@@ -432,6 +447,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           gateway.workspaceSnapshot().catch(() => ({ account_id: "", protocol: "donebot.teams.v1", capabilities: [], workspaces: [] })),
           gateway.collabIncomingTeamInvitations().catch(() => []),
           gateway.collabChatSummaries?.().catch(() => []) ?? Promise.resolve([]),
+          ctx ? collabListGroups(ctx).catch(() => []) : Promise.resolve([]),
         ]);
         const nickname = typeof profile?.username === "string" ? profile.username.trim() : "";
         const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
@@ -455,14 +471,41 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           }
         }
         const teamMembers: Record<string, unknown[]> = {};
+        const chatBots: Record<string, unknown[]> = {};
         const teamList = Array.isArray(workspaces?.workspaces) ? workspaces.workspaces : [];
-        await Promise.all(teamList.map(async team => {
-          try {
-            teamMembers[team.id] = await gateway.teamMembers(team.id);
-          } catch {
-            teamMembers[team.id] = [];
-          }
-        }));
+        const groupList = Array.isArray(groups) ? (groups as Array<{ id: string }>) : [];
+        let hasOwnedChatBots = false;
+        const myId = Number(identity.account_id);
+        await Promise.all([
+          ...teamList.map(async team => {
+            try {
+              teamMembers[team.id] = await gateway.teamMembers(team.id);
+            } catch {
+              teamMembers[team.id] = [];
+            }
+            if (ctx) {
+              try {
+                const list = await collabListChatBots(ctx, "team", team.id) as Array<{ owner_user_id?: number }>;
+                chatBots[`team:${team.id}`] = Array.isArray(list) ? list : [];
+                if (Array.isArray(list) && list.some(b => b.owner_user_id === myId)) hasOwnedChatBots = true;
+              } catch {
+                chatBots[`team:${team.id}`] = [];
+              }
+            }
+          }),
+          ...groupList.map(async group => {
+            if (ctx) {
+              try {
+                const list = await collabListChatBots(ctx, "group", group.id) as Array<{ owner_user_id?: number }>;
+                chatBots[`group:${group.id}`] = Array.isArray(list) ? list : [];
+                if (Array.isArray(list) && list.some(b => b.owner_user_id === myId)) hasOwnedChatBots = true;
+              } catch {
+                chatBots[`group:${group.id}`] = [];
+              }
+            }
+          }),
+        ]);
+        if (ctx) botWorker.setActive(hasOwnedChatBots);
         const localBots = deps.store.bots
           .filter(bot => !bot.hidden)
           .map(bot => {
@@ -488,6 +531,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           folders,
           bots,
           teams: teamList,
+          groups: groupList,
+          chat_bots: chatBots,
           team_capabilities: workspaces?.capabilities ?? [],
           team_members: teamMembers,
           incoming_team_invitations: incomingInvitations,
@@ -496,7 +541,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         });
       }
 
-      const chatMessagesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/messages$/);
+      const chatMessagesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/messages$/);
       if (method === "GET" && chatMessagesGet) {
         const [, scopeType, targetId] = chatMessagesGet;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -510,13 +555,18 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return json(res, 200, await gateway.collabChatMessages(scopeType, targetId, params.toString()));
       }
 
-      const chatFilesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/files$/);
+      const chatFilesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/files$/);
       if (method === "GET" && chatFilesGet) {
         const [, scopeType, targetId] = chatFilesGet;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
           return json(res, 400, { error: "无效的聊天对象。" });
         }
         return json(res, 200, await gateway.collabChatFiles(scopeType, targetId));
+      }
+
+      if ((method === "GET" || method === "DELETE") && (reqPath.startsWith("/api/donebot/collab/groups") || reqPath.includes("/bots"))) {
+        const handled = await handleCollabGroupReadOrDelete({ method, reqPath, gateway, res, json });
+        if (handled !== PASS) return handled;
       }
 
       const teamInvList = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/invitations$/);
@@ -542,7 +592,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return PASS;
       }
 
-      if (method !== "POST" && method !== "PUT") return PASS;
+      if (method !== "POST" && method !== "PUT" && method !== "PATCH") return PASS;
       const body = await readBody(req, 4 * 1024 * 1024);
 
       if (method === "PUT" && reqPath === "/api/donebot/collab/profile") {
@@ -576,7 +626,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         });
       }
 
-      const chatSendPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/messages$/);
+      const chatSendPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/messages$/);
       if (method === "POST" && chatSendPost) {
         const [, scopeType, targetId] = chatSendPost;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -584,10 +634,14 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         }
         const parsed = chatMessageSchema.safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "消息内容不能为空且不超过 8000 字。");
-        return json(res, 200, await gateway.collabSendChatMessage(scopeType, targetId, parsed.data.body));
+        const sent = await gateway.collabSendChatMessage(scopeType, targetId, parsed.data.body, parsed.data.mention_bot_ids) as { triggered_bot_ids?: string[] };
+        if (Array.isArray(sent?.triggered_bot_ids) && sent.triggered_bot_ids.length > 0 && typeof gateway.collabCtx === "function") {
+          botWorker.kick();
+        }
+        return json(res, 200, sent);
       }
 
-      const chatReadPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team)\/([^/]+)\/read$/);
+      const chatReadPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/read$/);
       if (method === "POST" && chatReadPost) {
         const [, scopeType, targetId] = chatReadPost;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -597,6 +651,18 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的已读标记。");
         return json(res, 200, await gateway.collabMarkChatRead(scopeType, targetId, parsed.data.last_read_id));
       }
+
+      const groupWriteHandled = await handleCollabGroupWrite({
+        method,
+        reqPath,
+        body,
+        gateway,
+        store: deps.store,
+        activateBotWorker: () => botWorker.setActive(true),
+        res,
+        json,
+      });
+      if (groupWriteHandled !== PASS) return groupWriteHandled;
 
       const friendRemark = reqPath.match(/^\/api\/donebot\/collab\/friends\/([1-9]\d{0,18})\/remark$/);
       if (method === "PUT" && friendRemark) {

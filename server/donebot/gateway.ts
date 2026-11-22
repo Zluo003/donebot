@@ -533,7 +533,7 @@ export class DoneBotGateway {
     } finally { this.controllers.delete(controller); }
   }
 
-  private collabCtx(): CollabGatewayTransport {
+  collabCtx(): CollabGatewayTransport {
     return {
       origin: this.origin, fetcher: this.fetcher, controllers: this.controllers,
       epoch: () => this.epoch, checkEpoch: epoch => this.checkEpoch(epoch),
@@ -614,8 +614,8 @@ export class DoneBotGateway {
     return this.collabRequest(`collab/chats/${scopeType}/${targetId}/messages${query ? `?${query}` : ""}`, "GET");
   }
   collabChatFiles(scopeType: string, targetId: string) { return this.collabRequest(`collab/chats/${scopeType}/${targetId}/files`, "GET"); }
-  collabSendChatMessage(scopeType: string, targetId: string, body: string) {
-    return this.collabRequest(`collab/chats/${scopeType}/${targetId}/messages`, "POST", { body });
+  collabSendChatMessage(scopeType: string, targetId: string, body: string, mentionBotIds?: string[]) {
+    return this.collabRequest(`collab/chats/${scopeType}/${targetId}/messages`, "POST", mentionBotIds?.length ? { body, mention_bot_ids: mentionBotIds } : { body });
   }
   collabMarkChatRead(scopeType: string, targetId: string, lastReadId?: number) {
     return this.collabRequest(`collab/chats/${scopeType}/${targetId}/read`, "POST", lastReadId ? { last_read_id: lastReadId } : {});

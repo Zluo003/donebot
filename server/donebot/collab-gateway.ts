@@ -135,3 +135,43 @@ export async function collabStreamCall(
     throw error;
   }
 }
+
+export function collabSetTeamAvatar(ctx: CollabGatewayTransport, teamId: string, avatarUrl: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/avatar`, "PUT", { avatar_url: avatarUrl });
+}
+export function collabListGroups(ctx: CollabGatewayTransport) {
+  return collabJsonCall(ctx, "user", "/api/v1/donebot/collab/groups", "GET");
+}
+export function collabCreateGroup(ctx: CollabGatewayTransport, name: string, memberIds: number[]) {
+  return collabJsonCall(ctx, "user", "/api/v1/donebot/collab/groups", "POST", { name, member_ids: memberIds });
+}
+export function collabRenameGroup(ctx: CollabGatewayTransport, groupId: string, name: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/groups/${groupId}`, "PATCH", { name });
+}
+export function collabSetGroupAvatar(ctx: CollabGatewayTransport, groupId: string, avatarUrl: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/groups/${groupId}/avatar`, "PUT", { avatar_url: avatarUrl });
+}
+export function collabAddGroupMembers(ctx: CollabGatewayTransport, groupId: string, memberIds: number[]) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/groups/${groupId}/members`, "POST", { member_ids: memberIds });
+}
+export function collabLeaveGroup(ctx: CollabGatewayTransport, groupId: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/groups/${groupId}/leave`, "POST", {});
+}
+export function collabListChatBots(ctx: CollabGatewayTransport, scopeType: string, targetId: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/chats/${scopeType}/${targetId}/bots`, "GET");
+}
+export function collabAddChatBot(ctx: CollabGatewayTransport, scopeType: string, targetId: string, payload: Record<string, unknown>) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/chats/${scopeType}/${targetId}/bots`, "POST", payload);
+}
+export function collabUpdateChatBotGrants(ctx: CollabGatewayTransport, scopeType: string, targetId: string, botId: string, payload: { allow_all_members: boolean; allowed_user_ids: number[] }) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/chats/${scopeType}/${targetId}/bots/${botId}/grants`, "PUT", payload);
+}
+export function collabRemoveChatBot(ctx: CollabGatewayTransport, scopeType: string, targetId: string, botId: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/chats/${scopeType}/${targetId}/bots/${botId}`, "DELETE");
+}
+export function collabClaimBotInvocation(ctx: CollabGatewayTransport, installationId: string) {
+  return collabJsonCall(ctx, "user", "/api/v1/donebot/collab/chat-bots/claim", "POST", { installation_id: installationId }, 15_000);
+}
+export function collabReplyBotInvocation(ctx: CollabGatewayTransport, invocationId: string, payload: { body?: string; error?: string }) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/chat-bots/invocations/${invocationId}/reply`, "POST", payload, 15_000);
+}

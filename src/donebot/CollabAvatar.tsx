@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { AlertCircle, Camera, Check, Loader2, Trash2, X } from "lucide-react";
+import { AlertCircle, Bot, Camera, Check, Loader2, Trash2, X } from "lucide-react";
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
+import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
 import { cn } from "@/lib/cn";
 import {
   cleanError,
@@ -100,31 +101,101 @@ export function CollabAvatar({
 
 export function CollabTeamBadge({
   name,
+  avatarUrl,
   size = 36,
   className,
 }: {
   name: string;
+  avatarUrl?: string | null;
   size?: number;
   className?: string;
 }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const src = avatarUrl?.trim() || "";
+  useEffect(() => { setImgFailed(false); }, [src]);
+
   const tone = AVATAR_TONES[hashToneIndex(`team:${name.trim().toLowerCase()}`)]!;
   const fontSize = Math.max(12, Math.round(size * 0.4));
   return (
     <span
-      aria-hidden="true"
+      aria-hidden={!(src && !imgFailed) ? "true" : undefined}
       className={cn(
-        "inline-flex shrink-0 select-none items-center justify-center rounded-xl font-semibold ring-1 ring-inset",
-        tone,
+        "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-xl font-semibold ring-1 ring-inset",
+        src && !imgFailed ? "bg-raised ring-ink/12" : tone,
         className,
       )}
       style={{ width: size, height: size, fontSize }}
     >
-      {initialGlyph(name)}
+      {src && !imgFailed ? (
+        <img
+          src={src}
+          alt={name}
+          className="size-full object-cover"
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <span aria-hidden="true">{initialGlyph(name)}</span>
+      )}
     </span>
   );
 }
 
-async function compressAvatarFile(file: File): Promise<string> {
+export function CollabBotBadge({
+  name,
+  color,
+  avatarUrl,
+  size = 30,
+  className,
+}: {
+  name: string;
+  color?: string | null;
+  avatarUrl?: string | null;
+  size?: number;
+  className?: string;
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const src = avatarUrl?.trim() || "";
+  useEffect(() => { setImgFailed(false); }, [src]);
+
+  const key = (color ?? "").trim().toLowerCase() as MausColor;
+  const hex = (key && key in MAUS_COLORS ? MAUS_COLORS[key] : null) ?? MAUS_COLORS.blue;
+  const iconSize = Math.max(13, Math.round(size * 0.52));
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full ring-1 ring-inset ring-white/18",
+        className,
+      )}
+      style={{
+        width: size,
+        height: size,
+        ...(src && !imgFailed
+          ? {}
+          : {
+            background: `radial-gradient(circle at 32% 28%, color-mix(in srgb, ${hex} 65%, white), ${hex} 72%, color-mix(in srgb, ${hex} 68%, black))`,
+            color: "#ffffff",
+          }),
+      }}
+      title={name}
+    >
+      {src && !imgFailed ? (
+        <img
+          src={src}
+          alt={name}
+          className="size-full object-cover"
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <Bot size={iconSize} strokeWidth={2} aria-hidden="true" />
+      )}
+    </span>
+  );
+}
+
+export async function compressAvatarFile(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new Error("请选择 PNG、JPEG 或 WebP 格式的图片文件。");
   }

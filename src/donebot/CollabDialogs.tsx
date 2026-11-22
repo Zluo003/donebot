@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Bell,
   Check,
-  KeyRound,
   Loader2,
   Send,
   Trash2,
@@ -12,7 +11,6 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/state/api";
-import { CommandLine } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
 import type { DoneBotTeamCommand, DoneBotTeamIdentity, DoneBotTeamInvitation } from "../../shared/donebot-teams";
 import {
@@ -32,9 +30,10 @@ import {
   type CollabOverview,
 } from "./collab-types";
 import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
+import { AddGroupMembersDialog, CreateGroupDialog } from "./CollabGroupDialogs";
 import "./collab.css";
 
-function CollabModalDialog({
+export function CollabModalDialog({
   open,
   onClose,
   title,
@@ -301,33 +300,26 @@ function AddFriendDialog({
 
 function AddTeamDialog({
   open,
-  initialMode,
   overview,
   onClose,
 }: {
   open: boolean;
-  initialMode: "create" | "join";
   overview: CollabOverview | null;
   onClose: () => void;
 }) {
-  const [mode, setMode] = useState<"create" | "join">(initialMode);
   const [teamName, setTeamName] = useState("");
-  const [inviteToken, setInviteToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const createKey = useRef<{ name: string; key: string } | null>(null);
   const nameId = useId();
-  const tokenId = useId();
 
   useEffect(() => {
     if (open) {
-      setMode(initialMode);
       setTeamName("");
-      setInviteToken("");
       setError("");
       createKey.current = null;
     }
-  }, [open, initialMode]);
+  }, [open]);
 
   const submitCommand = async (command: DoneBotTeamCommand) => {
     if (busy) return;
@@ -342,7 +334,7 @@ function AddTeamDialog({
       if (createdId) setCollabSelection({ kind: "team", teamId: createdId });
       onClose();
     } catch (cause) {
-      setError(cleanError(cause, "团队操作失败，请稍后重试。"));
+      setError(cleanError(cause, "创建团队失败，请稍后重试。"));
     } finally {
       setBusy(false);
     }
@@ -354,132 +346,52 @@ function AddTeamDialog({
     <CollabModalDialog
       open={open}
       onClose={onClose}
-      title="新建或加入团队"
-      subtitle="团队内支持群聊、发文件以及批量共享文件夹与 Bot"
+      title="新建团队"
+      subtitle="创建后可直接邀请好友或成员加入，对方同意即可进团队"
       icon={<Users size={16} aria-hidden="true" />}
     >
-      <div className="flex flex-col gap-4">
-        <div role="tablist" aria-label="团队操作模式" className="flex rounded-full bg-ink/[0.06] p-[3px]">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "create"}
-            onClick={() => { setMode("create"); setError(""); }}
-            className={cn(
-              "donebot-collab-tab h-7 flex-1 rounded-full text-[12.5px] font-medium transition-colors",
-              mode === "create" ? "bg-ink/[0.12] text-ink" : "text-ink-secondary hover:text-ink",
-            )}
-          >
-            新建团队
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "join"}
-            onClick={() => { setMode("join"); setError(""); }}
-            className={cn(
-              "donebot-collab-tab h-7 flex-1 rounded-full text-[12.5px] font-medium transition-colors",
-              mode === "join" ? "bg-ink/[0.12] text-ink" : "text-ink-secondary hover:text-ink",
-            )}
-          >
-            邀请码加入
+      <form
+        onSubmit={e => {
+          e.preventDefault();
+          const clean = teamName.trim();
+          if (!clean || !accountId) return;
+          if (!createKey.current || createKey.current.name !== clean) {
+            createKey.current = { name: clean, key: crypto.randomUUID() };
+          }
+          void submitCommand({ action: "create", account_id: accountId, name: clean, key: createKey.current.key });
+        }}
+        className="flex flex-col gap-3.5"
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={nameId} className="text-[12px] font-medium text-ink-secondary">团队名称</label>
+          <input
+            id={nameId}
+            name="team_name"
+            type="text"
+            autoFocus
+            required
+            maxLength={100}
+            placeholder="例如：产品研发组、内容工作室"
+            value={teamName}
+            onChange={e => setTeamName(e.target.value)}
+            disabled={busy}
+            className={COLLAB_INPUT}
+          />
+        </div>
+        {error && (
+          <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3 py-2 text-[12px] text-danger ring-1 ring-inset ring-danger/20">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span>{error}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>取消</button>
+          <button type="submit" disabled={busy || !teamName.trim() || !accountId} className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}>
+            {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
+            创建团队
           </button>
         </div>
-
-        {mode === "create" ? (
-          <form
-            onSubmit={e => {
-              e.preventDefault();
-              const clean = teamName.trim();
-              if (!clean || !accountId) return;
-              if (!createKey.current || createKey.current.name !== clean) {
-                createKey.current = { name: clean, key: crypto.randomUUID() };
-              }
-              void submitCommand({ action: "create", account_id: accountId, name: clean, key: createKey.current.key });
-            }}
-            className="flex flex-col gap-3.5"
-          >
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={nameId} className="text-[12px] font-medium text-ink-secondary">团队名称</label>
-              <input
-                id={nameId}
-                name="team_name"
-                type="text"
-                autoFocus
-                required
-                maxLength={100}
-                placeholder="例如：产品研发组、内容工作室"
-                value={teamName}
-                onChange={e => setTeamName(e.target.value)}
-                disabled={busy}
-                className={COLLAB_INPUT}
-              />
-            </div>
-            {error && (
-              <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3 py-2 text-[12px] text-danger ring-1 ring-inset ring-danger/20">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                <span>{error}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>取消</button>
-              <button type="submit" disabled={busy || !teamName.trim() || !accountId} className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}>
-                {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
-                创建团队
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form
-            onSubmit={e => {
-              e.preventDefault();
-              if (!accountId) return;
-              void submitCommand({ action: "accept", account_id: accountId, token: inviteToken.trim() });
-            }}
-            className="flex flex-col gap-3.5"
-          >
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={tokenId} className="flex items-center gap-1.5 text-[12px] font-medium text-ink-secondary">
-                <KeyRound size={12} aria-hidden="true" />43 位团队邀请码
-              </label>
-              <input
-                id={tokenId}
-                name="invite_token"
-                type="text"
-                autoFocus
-                required
-                maxLength={43}
-                pattern="[A-Za-z0-9_-]{43}"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                placeholder="粘贴管理员发给你的团队邀请码"
-                value={inviteToken}
-                onChange={e => setInviteToken(e.target.value)}
-                disabled={busy}
-                className={cn(COLLAB_INPUT, "font-mono")}
-              />
-            </div>
-            {error && (
-              <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3 py-2 text-[12px] text-danger ring-1 ring-inset ring-danger/20">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                <span>{error}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>取消</button>
-              <button
-                type="submit"
-                disabled={busy || !/^[A-Za-z0-9_-]{43}$/.test(inviteToken.trim()) || !accountId}
-                className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}
-              >
-                {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
-                加入团队
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
+      </form>
     </CollabModalDialog>
   );
 }
@@ -497,7 +409,6 @@ function InviteTeamMemberDialog({
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"member" | "admin">("member");
-  const [latestInvite, setLatestInvite] = useState<DoneBotTeamInvitation | null>(null);
   const [invitations, setInvitations] = useState<DoneBotTeamInvitation[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -518,33 +429,40 @@ function InviteTeamMemberDialog({
     if (open && team) {
       setEmail("");
       setRole("member");
-      setLatestInvite(null);
       setNotice("");
       setError("");
       void loadInvitations();
     }
   }, [open, team, loadInvitations]);
 
+  const invitableFriends = useMemo(() => {
+    if (!team || !overview) return [];
+    const memberIds = new Set((overview.team_members[team.id] ?? []).map(m => m.user_id));
+    const pendingEmails = new Set(invitations.map(i => i.email.toLowerCase()));
+    return overview.friends.friends.filter(
+      f => !memberIds.has(f.user_id) && !pendingEmails.has(f.email.toLowerCase()),
+    );
+  }, [team, overview, invitations]);
+
   if (!team || !overview) return null;
 
-  const invite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy || !email.trim()) return;
+  const sendInvite = async (targetEmail: string, targetLabel?: string) => {
+    const clean = targetEmail.trim();
+    if (busy || !clean) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const res = await api<DoneBotTeamInvitation>("/api/donebot/teams", {
+      await api<DoneBotTeamInvitation>("/api/donebot/teams", {
         method: "POST",
         body: JSON.stringify({
           action: "invite",
           account_id: overview.identity.account_id,
           team_id: team.id,
-          email: email.trim(),
+          email: clean,
           role: team.role === "owner" ? role : "member",
         } satisfies DoneBotTeamCommand),
       });
-      setLatestInvite(res);
       setEmail("");
-      setNotice("邀请已发出！对方客户端会立即收到提醒，也可复制下方备用邀请码。");
+      setNotice(`已向 ${targetLabel || clean} 发送团队邀请，对方同意后将自动加入团队。`);
       await loadInvitations();
     } catch (cause) {
       setError(cleanError(cause, "发送团队邀请失败。"));
@@ -566,7 +484,6 @@ function InviteTeamMemberDialog({
           invitation_id: invitationId,
         } satisfies DoneBotTeamCommand),
       });
-      if (latestInvite?.id === invitationId) setLatestInvite(null);
       await loadInvitations();
     } catch (cause) {
       setError(cleanError(cause));
@@ -580,19 +497,63 @@ function InviteTeamMemberDialog({
       open={open}
       onClose={onClose}
       title={`邀请成员加入「${team.name}」`}
-      subtitle="成员各自使用自己的算力，可共享团队聊天、文件夹与 Bot"
+      subtitle="发出邀请后对方客户端将收到提醒，直接同意即可加入团队"
       icon={<UserPlus size={16} aria-hidden="true" />}
     >
       <div className="flex flex-col gap-4">
-        <form onSubmit={e => void invite(e)} className="flex flex-col gap-3">
+        {invitableFriends.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="text-[12px] font-medium text-ink-secondary">直接邀请好友</div>
+            <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-xl bg-inset/45 p-1.5 ring-1 ring-inset ring-ink/[0.06]">
+              {invitableFriends.map(friend => {
+                const label = displayPersonName(friend);
+                return (
+                  <li key={friend.user_id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-ink/[0.04]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <CollabAvatar
+                        avatarUrl={friend.avatar_url}
+                        remark={friend.remark}
+                        nickname={friend.nickname}
+                        email={friend.email}
+                        size={26}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-[12.5px] font-medium text-ink">{label}</div>
+                        {label !== friend.email && (
+                          <div className="truncate text-[11px] text-ink-tertiary">{friend.email}</div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void sendInvite(friend.email, label)}
+                      className={`${COLLAB_BUTTON} h-7 shrink-0 px-2.5 text-[11.5px]`}
+                    >
+                      邀请
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            void sendInvite(email);
+          }}
+          className="flex flex-col gap-3"
+        >
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={emailId} className="text-[12px] font-medium text-ink-secondary">对方 DoneBot 账号邮箱</label>
+            <label htmlFor={emailId} className="text-[12px] font-medium text-ink-secondary">或通过 DoneBot 账号邮箱邀请</label>
             <div className="flex gap-2">
               <input
                 id={emailId}
                 name="invite_email"
                 type="email"
-                autoFocus
+                autoFocus={invitableFriends.length === 0}
                 autoComplete="email"
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -642,16 +603,9 @@ function InviteTeamMemberDialog({
           </div>
         </form>
 
-        {latestInvite?.token && (
-          <div className="flex flex-col gap-1.5 rounded-xl bg-inset/75 p-3 ring-1 ring-inset ring-ink/[0.08]">
-            <div className="text-[11.5px] font-medium text-ink">备用邀请码（发给 {latestInvite.email}，仅显示一次）</div>
-            <CommandLine command={latestInvite.token} />
-          </div>
-        )}
-
         {invitations.length > 0 && (
           <div className="flex flex-col gap-2 border-t border-hairline/40 pt-3">
-            <div className="text-[11.5px] font-medium text-ink-tertiary">待确认的团队邀请（{invitations.length}）</div>
+            <div className="text-[11.5px] font-medium text-ink-tertiary">待对方确认的邀请（{invitations.length}）</div>
             <ul className="flex flex-col gap-1.5">
               {invitations.map(inv => (
                 <li key={inv.id} className="flex items-center justify-between gap-2 rounded-xl bg-inset/60 px-3 py-2 text-[12px]">
@@ -834,13 +788,18 @@ export function CollabDialogsHost() {
   const inviteTeam = activeDialog?.kind === "invite-team"
     ? overview?.teams.find(t => t.id === activeDialog.teamId) ?? null
     : null;
+  const targetGroup = activeDialog?.kind === "add-group-members"
+    ? (overview?.groups ?? []).find(g => g.id === activeDialog.groupId) ?? null
+    : null;
 
   return (
     <>
       <AddFriendDialog open={activeDialog?.kind === "add-friend"} overview={overview} onClose={close} />
-      <AddTeamDialog
-        open={activeDialog?.kind === "add-team"}
-        initialMode={activeDialog?.kind === "add-team" ? (activeDialog.mode ?? "create") : "create"}
+      <AddTeamDialog open={activeDialog?.kind === "add-team"} overview={overview} onClose={close} />
+      <CreateGroupDialog open={activeDialog?.kind === "create-group"} overview={overview} onClose={close} />
+      <AddGroupMembersDialog
+        open={activeDialog?.kind === "add-group-members" && Boolean(targetGroup)}
+        group={targetGroup}
         overview={overview}
         onClose={close}
       />

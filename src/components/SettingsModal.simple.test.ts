@@ -63,6 +63,8 @@ vi.mock("./LocalComputerSection", () => ({ LocalComputerSection: marker("compute
 vi.mock("./CloudAccountSettings", () => ({ CloudAccountSettings: marker("cloudAccount") }));
 vi.mock("@/donebot/Payments", () => ({ DoneBotPayments: marker("purchase") }));
 vi.mock("@/donebot/ModelPricing", () => ({ DoneBotModelPricing: marker("modelPricing") }));
+vi.mock("@/donebot/CloudAccess", () => ({ DoneBotCloudAccess: marker("cloudServer") }));
+vi.mock("@/donebot/Teams", () => ({ DoneBotTeams: marker("teamCollaboration") }));
 vi.mock("./OrganizationSettings", () => ({ OrganizationSettings: marker("organization") }));
 vi.mock("./PeopleSection", () => ({ PeopleSection: marker("people") }));
 vi.mock("./ActivitySection", () => ({ ActivitySection: marker("activity") }));
@@ -140,18 +142,30 @@ describe("Settings in Simple mode", () => {
       fixture.ownerOrAdmin = location === "member" ? false : true;
       vi.stubGlobal("window", { ogb: { ...desktop.ogb, remoteClient: { active: location === "remote" } } });
       vi.stubGlobal("sessionStorage", { getItem: () => location === "browser" ? "1" : null });
-      const html = open("purchase");
-      expect(pages(html), location).not.toContain("purchase");
-      expect(markers(html), location).not.toContain("purchase");
+      for (const section of ["purchase", "cloudServer", "teamCollaboration"] as const) {
+        const html = open(section);
+        expect(pages(html), `${location}:${section}`).not.toContain(section);
+        expect(markers(html), `${location}:${section}`).not.toContain(section);
+      }
     }
   });
 
-  it("offers Buy credits as a separate page when the DoneBot gateway is enabled", () => {
+  it("offers Buy credits, Cloud server, and Team collaboration as separate pages when the DoneBot gateway is enabled", () => {
     fixture.config = { ...fixture.config, donebot: { enabled: true, user: { id: "fixture-user" } } };
     const html = open("purchase");
     expect(pages(html)).toContain("purchase");
+    expect(pages(html)).toContain("cloudServer");
+    expect(pages(html)).toContain("teamCollaboration");
     expect(currentPage(html)).toBe("purchase");
     expect(markers(html)).toContain("purchase");
+
+    const cloudHtml = open("cloudServer");
+    expect(currentPage(cloudHtml)).toBe("cloudServer");
+    expect(markers(cloudHtml)).toContain("cloudServer");
+
+    const teamHtml = open("teamCollaboration");
+    expect(currentPage(teamHtml)).toBe("teamCollaboration");
+    expect(markers(teamHtml)).toContain("teamCollaboration");
   });
   it.each([false, true])("offers model prices on local, Cloud and remote settings (advanced=%s)", advanced => {
     fixture.advancedMode = advanced;
@@ -189,7 +203,7 @@ describe("Settings in Simple mode", () => {
   it("draws five pages on the desktop, General, AI, Computer, Usage & billing and Updates, and none of the Advanced-only ones", () => {
     const html = render();
     expect(pages(html)).toEqual(["general", "ai", "computer", "billing", "updates"]);
-    expect(SIMPLE_PAGES.map((page) => page.id)).toEqual(["general", "botAccess", "ai", "modelPricing", "computer", "billing", "purchase", "updates"]);
+    expect(SIMPLE_PAGES.map((page) => page.id)).toEqual(["general", "botAccess", "ai", "cloudServer", "teamCollaboration", "modelPricing", "computer", "billing", "purchase", "updates"]);
     expect(html).toMatch(/General<\/span>[\s\S]*Account &amp; models<\/span>[\s\S]*Computer<\/span>[\s\S]*Usage &amp; billing<\/span>[\s\S]*Updates<\/span>/);
     expect(html).not.toContain("data-settings-group=");
     expect(html).not.toContain("data-settings-section=");

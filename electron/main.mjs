@@ -117,7 +117,7 @@ import { createWindowStateFile } from "./window-state-file.mjs";
 import { createEnvironmentsFile, ENVIRONMENTS_SAVE_FAILED } from "./environments-file.mjs";
 import { createWorkspaceSettings, createClipboardServerConnect } from "./workspace-settings.mjs";
 import { createWorkspaceNavigation } from "./workspace-navigation.mjs";
-import { installDoneBotCloud, doneBotCloudEntry, doneBotPersonalCloudEntry, hasDoneBotCloud } from "./donebot-cloud.mjs";
+import { installDoneBotCloud, doneBotCloudEntry, doneBotPersonalCloudEntry } from "./donebot-cloud.mjs";
 import { installDoneBotBotLink } from "./donebot-bot-link.mjs";
 import { installDoneBotCloudFrontend } from "./donebot-cloud-frontend.mjs";
 import { createOrgLibrary } from "./org-library.mjs";
@@ -2695,7 +2695,7 @@ ipcMain.handle("workspaces:menu", workspaceOnly(async (event, from) => {
   workspaceMenuOpen = true;
   try {
     await cloudOffersReady();
-    const hasCloud = await hasDoneBotCloud(localServerRequest, environmentsState);
+    const hasCloud = await donebotCloud.syncMenu();
     const menu = Menu.buildFromTemplate(workspaceMenuTemplate(environmentsState, {
       onSwitch: (id) => void workspaceMenuAction(() => switchEnvironment(id)),
       onConnect: () => void workspaceMenuAction(openWorkspaceSettings),

@@ -10288,6 +10288,8 @@
   "artifacts.kind.video": "Video",
   "artifacts.kind.audio": "Audio",
   "artifacts.kind.document": "Document",
+  "settings.section.cloudServer": "Cloud server",
+  "settings.section.teamCollaboration": "Team collaboration",
   "settings.section.purchase": "Buy credits",
   "donebot.payments.balance": "Available balance",
   "donebot.payments.subtitle": "Top up the balance used by your DoneBot models and cloud server. Pay with Alipay or WeChat without leaving this page.",

@@ -525,7 +525,7 @@ export type AppSettingsSection =
   | "computer"
   | "logins"
   | "usage"
-  | "purchase"
+  | "cloudServer" | "teamCollaboration" | "purchase"
   | "people" | "botAccess"
   | "activity"
   | "backups"

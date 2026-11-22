@@ -9,6 +9,39 @@ const teamRoles = new Set(["owner", "admin", "member"]);
 export const doneBotCloudEntry = environments.doneBotCloudEntry;
 export const doneBotPersonalCloudEntry = environments.doneBotPersonalCloudEntry;
 
+function extractCloudInstanceId(entry) {
+  if (instanceId.test(entry?.donebotCloud?.id ?? "")) return entry.donebotCloud.id;
+  try {
+    const host = new URL(entry?.origin ?? "").hostname.split(".")[0];
+    return instanceId.test(host) ? host : null;
+  } catch { return null; }
+}
+
+/** Keeps at most the gateway-verified personal Cloud instance for this account, dropping deleted or replaced entries. */
+export function reconcilePersonalCloud(state, accountId, activeInstanceId) {
+  if (!state || !Array.isArray(state.environments) || typeof accountId !== "string" || !accountId) return state;
+  if (activeInstanceId !== null && !instanceId.test(activeInstanceId)) return state;
+  const kept = state.environments.filter(entry => {
+    if (!doneBotPersonalCloudEntry(entry)) return true;
+    if (entry.donebotCloud?.accountId && entry.donebotCloud.accountId !== accountId) return true;
+    return activeInstanceId !== null && extractCloudInstanceId(entry) === activeInstanceId;
+  });
+  if (kept.length === state.environments.length) return state;
+  const activeId = kept.some(entry => entry.id === state.activeId) ? state.activeId : environments.LOCAL_ID;
+  return { ...state, environments: kept, activeId };
+}
+
+function dropReplacedTeamCloud(state, accountId, teamId, origin) {
+  const kept = state.environments.filter(entry => {
+    const entryTeam = entry.team?.id ?? entry.donebotCloud?.teamId;
+    if (entryTeam !== teamId || entry.origin === origin) return true;
+    return Boolean(entry.donebotCloud?.accountId && entry.donebotCloud.accountId !== accountId);
+  });
+  if (kept.length === state.environments.length) return state;
+  const activeId = kept.some(entry => entry.id === state.activeId) ? state.activeId : environments.LOCAL_ID;
+  return { ...state, environments: kept, activeId };
+}
+
 export async function hasDoneBotCloud(request, state) {
   if (state.environments.some(doneBotPersonalCloudEntry)) return true;
   try {
@@ -124,16 +157,53 @@ export function createDoneBotCloudConnection({ request, fetch: cookieFetch, save
 
 export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, request, fetch, saved, persist, cancelHome, navigate, local, expires, lifecycle, loading }) {
   const { withEnvironment, withActive, activeEnvironment } = environments;
+  let syncFlight = null, lastSyncAt = 0, lastSyncHasCloud = false;
+  async function syncPersonal({ force = false, timeoutMs = 2_500 } = {}) {
+    const current = saved();
+    const personalCount = current.environments.filter(doneBotPersonalCloudEntry).length;
+    if (!force && personalCount <= 1 && Date.now() - lastSyncAt < 10_000) {
+      return personalCount > 0 || lastSyncHasCloud;
+    }
+    if (!syncFlight) {
+      syncFlight = (async () => {
+        try {
+          const response = await request("/api/donebot/cloud", { signal: AbortSignal.timeout(timeoutMs) });
+          if (!response.ok) return saved().environments.some(doneBotPersonalCloudEntry);
+          const snapshot = await response.json();
+          const accountId = typeof snapshot?.account_id === "string" ? snapshot.account_id : "";
+          const activeInstanceId = instanceId.test(snapshot?.instance?.id ?? "") && snapshot.instance.actual !== "deleted"
+            ? snapshot.instance.id : null;
+          if (accountId) {
+            const before = saved();
+            const after = reconcilePersonalCloud(before, accountId, activeInstanceId);
+            if (after !== before) persist(after);
+          }
+          lastSyncAt = Date.now();
+          lastSyncHasCloud = Boolean(snapshot?.instance?.paid_until);
+          return saved().environments.some(doneBotPersonalCloudEntry) || lastSyncHasCloud;
+        } catch {
+          return saved().environments.some(doneBotPersonalCloudEntry);
+        } finally {
+          syncFlight = null;
+        }
+      })();
+    }
+    return syncFlight;
+  }
   const connection = createDoneBotCloudConnection({ request, fetch, saved,
     remember: target => {
-      const name = target.team ? (target.name ?? saved().environments.find(entry => entry.origin === target.origin)?.name ?? "团队 Cloud")
-        : (saved().environments.find(entry => entry.origin === target.origin)?.name ?? "DoneBot Cloud");
-      const next = withEnvironment(saved(), { origin: target.origin, name }, randomUUID);
+      const base = target.team
+        ? dropReplacedTeamCloud(saved(), target.accountId, target.team.id, target.origin)
+        : reconcilePersonalCloud(saved(), target.accountId, target.id);
+      const name = target.team ? (target.name ?? base.environments.find(entry => entry.origin === target.origin)?.name ?? "团队 Cloud")
+        : (base.environments.find(entry => entry.origin === target.origin)?.name ?? "DoneBot Cloud");
+      const next = withEnvironment(base, { origin: target.origin, name }, randomUUID);
       persist({ ...next, environments: next.environments.map(entry => entry.origin === target.origin ? {
         ...entry,
         ...(target.team ? { team: { id: target.team.id, role: target.team.role } } : {}),
         donebotCloud: { id: target.id, accountId: target.accountId, ...(target.team ? { teamId: target.team.id } : {}) },
       } : entry) });
+      if (!target.team) { lastSyncAt = Date.now(); lastSyncHasCloud = true; }
     },
     activate: async origin => {
       const state = saved(), entry = state.environments.find(candidate => candidate.origin === origin);
@@ -152,7 +222,11 @@ export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, reque
       if (result.outcome === "connected") await screen?.finish();
       else screen?.close();
       return result;
-    } catch (error) { screen?.fail(); throw error; }
+    } catch (error) {
+      screen?.fail();
+      if (!args?.team && (!args?.entry || doneBotPersonalCloudEntry(args.entry))) void syncPersonal({ force: true });
+      throw error;
+    }
   };
   ipcMain.handle("donebot-cloud:open", guardLocal("donebot-cloud:open", (_event, id, accountId) => open({ id, accountId })));
   ipcMain.handle("donebot-cloud:open-team", guardLocal("donebot-cloud:open-team", (_event, teamId, instanceIdArg, accountId, teamName, role) =>
@@ -169,7 +243,7 @@ export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, reque
   }, expires, renew: connection.renew }) : null;
   lifecycle?.whenReady().then(() => renewal?.start());
   lifecycle?.once("before-quit", () => { renewal?.stop(); cancel(); });
-  return { ...connection, open, cancel, refreshTheme: () => display?.refreshTheme(), hidesRail: () => Boolean(display?.visible()) || doneBotCloudEntry(activeEnvironment(saved())), start: () => renewal?.start(), stop: () => { renewal?.stop(); cancel(); }, select(entry, still) {
+  return { ...connection, open, cancel, syncMenu: () => syncPersonal(), refreshTheme: () => display?.refreshTheme(), hidesRail: () => Boolean(display?.visible()) || doneBotCloudEntry(activeEnvironment(saved())), start: () => renewal?.start(), stop: () => { renewal?.stop(); cancel(); }, select(entry, still) {
     connection.cancel();
     if (doneBotCloudEntry(entry)) return open({ entry, still });
     display?.hide();

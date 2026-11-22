@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDoneBotCloudConnection, doneBotCloudEntry, hasDoneBotCloud, installDoneBotCloud } from "./donebot-cloud.mjs";
+import { createDoneBotCloudConnection, doneBotCloudEntry, hasDoneBotCloud, installDoneBotCloud, reconcilePersonalCloud } from "./donebot-cloud.mjs";
 import environments from "./environments.cjs";
 
 const id = "11861a47-7240-4f99-bf19-bd01d411596f", origin = `https://${id}.cloud.donebot.cn`;
@@ -177,4 +177,74 @@ test("team Cloud entries preserve real team name and role separately from person
   await connection.renew(entry);
   assert.equal(calls.filter(c => c.path === `/api/donebot/teams/${teamId}/cloud/connect`).length, 2);
   assert.deepEqual(navigated, [teamOrigin]);
+});
+
+test("drops deleted or replaced personal Cloud entries while keeping other accounts, teams, and self-hosted servers", async () => {
+  const oldId = "44861a47-7240-4f99-bf19-bd01d411596f";
+  const newId = "55861a47-7240-4f99-bf19-bd01d411596f";
+  const otherId = "66861a47-7240-4f99-bf19-bd01d411596f";
+  const teamId = "77861a47-7240-4f99-bf19-bd01d411596f";
+  const teamInstanceId = "88861a47-7240-4f99-bf19-bd01d411596f";
+  let state = environments.parseEnvironments({
+    version: 2,
+    activeId: "old-cloud",
+    environments: [
+      { id: "old-cloud", kind: "remote", name: "DoneBot Cloud", origin: `https://${oldId}.cloud.donebot.cn`, donebotCloud: { id: oldId, accountId: "101" } },
+      { id: "legacy-cloud", kind: "remote", name: "DoneBot Cloud", origin: `https://${id}.cloud.donebot.cn` },
+      { id: "other-account", kind: "remote", name: "DoneBot Cloud", origin: `https://${otherId}.cloud.donebot.cn`, donebotCloud: { id: otherId, accountId: "202" } },
+      { id: "team-cloud", kind: "remote", name: "Studio", origin: `https://${teamInstanceId}.cloud.donebot.cn`, team: { id: teamId, role: "owner" }, donebotCloud: { id: teamInstanceId, accountId: "101", teamId } },
+      { id: "vps", kind: "remote", name: "My VPS", origin: "https://vps.example.invalid" },
+    ],
+  });
+
+  // Reconciling with a deleted personal Cloud removes stale personal entries for account 101 and resets activeId to local.
+  const cleared = reconcilePersonalCloud(state, "101", null);
+  assert.deepEqual(cleared.environments.map(e => e.id), ["other-account", "team-cloud", "vps"]);
+  assert.equal(cleared.activeId, "local");
+
+  // Reconciling via syncMenu keeps only the newly recreated instance and deduplicates multiple personal Cloud entries.
+  const handlers = new Map();
+  let cloudReply = { account_id: "101", instance: { id: newId, actual: "running", paid_until: "2026-12-22T00:00:00Z" } };
+  state = {
+    ...state,
+    environments: [
+      ...state.environments,
+      { id: "new-cloud", kind: "remote", name: "DoneBot Cloud", origin: `https://${newId}.cloud.donebot.cn`, donebotCloud: { id: newId, accountId: "101" } },
+    ],
+  };
+  const connection = installDoneBotCloud({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    guardLocal: (_name, handler) => handler, guardWorkspace: handler => handler,
+    saved: () => state, persist: value => { state = value; }, cancelHome: () => {},
+    navigate: async () => true, local: () => { state = environments.withActive(state, "local"); },
+    request: async path => {
+      if (path === "/api/donebot/cloud") return Response.json(cloudReply);
+      if (path === "/api/donebot/state") return Response.json({ authenticated: true, user: { id: "101" } });
+      return Response.json({ url: `donebot://pair?address=${encodeURIComponent(`https://${newId}.cloud.donebot.cn`)}&token=omb_pair_${"d".repeat(43)}` });
+    },
+    fetch: async () => new Response("{}", { headers: { "x-donebot-cloud": "1" } }),
+  });
+
+  assert.equal(await connection.syncMenu(), true);
+  assert.deepEqual(state.environments.map(e => e.id), ["other-account", "team-cloud", "vps", "new-cloud"]);
+
+  // Opening a newly provisioned personal Cloud also replaces any stale personal entry for the same account.
+  const thirdId = "99861a47-7240-4f99-bf19-bd01d411596f";
+  cloudReply = { account_id: "101", instance: { id: thirdId, actual: "running", paid_until: "2026-12-22T00:00:00Z" } };
+  const connection2 = installDoneBotCloud({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    guardLocal: (_name, handler) => handler, guardWorkspace: handler => handler,
+    saved: () => state, persist: value => { state = value; }, cancelHome: () => {},
+    navigate: async () => true, local: () => { state = environments.withActive(state, "local"); },
+    request: async path => {
+      if (path === "/api/donebot/state") return Response.json({ authenticated: true, user: { id: "101" } });
+      return Response.json({ url: `donebot://pair?address=${encodeURIComponent(`https://${thirdId}.cloud.donebot.cn`)}&token=omb_pair_${"e".repeat(43)}` });
+    },
+    fetch: async () => new Response("{}", { headers: { "x-donebot-cloud": "1" } }),
+  });
+  await handlers.get("donebot-cloud:open")({}, thirdId, "101");
+  const personalFor101 = state.environments.filter(e => environments.doneBotPersonalCloudEntry(e) && (!e.donebotCloud?.accountId || e.donebotCloud.accountId === "101"));
+  assert.equal(personalFor101.length, 1);
+  assert.equal(personalFor101[0].donebotCloud.id, thirdId);
+  assert.ok(connection2);
 });

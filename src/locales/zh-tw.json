@@ -9996,6 +9996,8 @@
   "artifacts.kind.video": "影片",
   "artifacts.kind.audio": "音訊",
   "artifacts.kind.document": "文件",
+  "settings.section.cloudServer": "雲端伺服器",
+  "settings.section.teamCollaboration": "團隊協作",
   "settings.section.purchase": "購買算力",
   "donebot.payments.balance": "可用餘額",
   "donebot.payments.subtitle": "儲值餘額可用於 DoneBot 模型服務和雲端伺服器。選擇支付寶或微信，在此頁面掃碼付款。",

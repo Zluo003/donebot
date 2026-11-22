@@ -39,6 +39,9 @@ export function doneBotPurchaseVisible({ enabled, cloudHome, team, remote, owner
   return enabled === true && cloudHome !== true && team !== true && remote !== true && !isDoneBotCloudBrowser() && ownerOrAdmin !== false;
 }
 
+export const doneBotCloudServerVisible = doneBotPurchaseVisible;
+export const doneBotTeamsVisible = doneBotPurchaseVisible;
+
 export const UPSTREAM_SERVICES = {
   promotions: false,
   cloud: false,

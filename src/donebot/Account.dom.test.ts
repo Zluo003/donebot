@@ -7,29 +7,25 @@ const fixture = vi.hoisted(() => ({ api: vi.fn(), config: {} as Record<string, u
 vi.mock("@/state/api", () => ({ api: fixture.api }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: { config: fixture.config } }) }));
 vi.mock("@/components/DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({ capabilities: { windowChrome: "native" } }) }));
-vi.mock("./CloudAccess", () => ({ DoneBotCloudAccess: () => "Fixture Cloud access" }));
 vi.mock("./MediaSettings", () => ({ DoneBotMediaSettingsPanel: () => "Fixture media preferences" }));
 const { DoneBotAccountGate, DoneBotAccountSettings } = await import("./Account");
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   fixture.config = { donebot: { enabled: true, authenticated: true, persistent: true, user: { id: "fixture-user", email: "fixture@example.invalid" } } };
-  fixture.api.mockReset().mockImplementation(async path => path === "/api/donebot/workspaces"
-    ? { protocol: "donebot.teams.v1", account_id: "fixture-user", capabilities: [], workspaces: [] }
-    : { balance_cents: 1234, concurrency: 30 });
+  fixture.api.mockReset().mockResolvedValue({ balance_cents: 1234, concurrency: 30 });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
 
-it("keeps account, Cloud and media preferences without the old available-model list", async () => {
+it("keeps account and media preferences cleanly separated from Cloud and team pages", async () => {
   await act(async () => root.render(createElement(DoneBotAccountSettings)));
   expect(host.textContent).toContain("12.34");
   expect(host.textContent).toContain("账号总并发：30");
-  expect(host.textContent).toContain("Fixture Cloud access");
   expect(host.textContent).toContain("Fixture media preferences");
   expect(host.textContent).not.toContain("可用模型");
   expect(host.textContent).not.toContain("刷新模型");
-  expect(fixture.api.mock.calls.map(([path]) => path).sort()).toEqual(["/api/donebot/account", "/api/donebot/workspaces"]);
+  expect(fixture.api.mock.calls.map(([path]) => path)).toEqual(["/api/donebot/account"]);
 });
 it("retains account error feedback after the model list is removed", async () => {
   fixture.api.mockRejectedValue(new Error("隔离测试：账号同步失败"));

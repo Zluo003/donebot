@@ -109,10 +109,13 @@ it("refuses to pair when the account switches during the connection request", as
   await mount(); await click("连接 Cloud");
   expect(add).not.toHaveBeenCalled(); expect(host.textContent).toContain("连接 Cloud 未完成");
 });
-it("cancels renewal without offering an immediate stop and keeps the Cloud connected", async () => {
+it("cancels renewal via switch without offering an immediate stop and keeps the Cloud connected", async () => {
   running(); await mount();
   expect(host.textContent).not.toContain("停机并保留数据");
-  await click("取消自动续费");
+  const renewSwitch = host.querySelector<HTMLButtonElement>('[data-cloud-auto-renew-switch]')!;
+  expect(renewSwitch?.getAttribute("role")).toBe("switch");
+  expect(renewSwitch.getAttribute("aria-checked")).toBe("true");
+  await act(async () => renewSwitch.click());
   expect(host.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("Cloud 继续运行至");
   expect(posts()).toHaveLength(0);
   fixture.api.mockImplementation(async (_path, init) => {
@@ -122,19 +125,33 @@ it("cancels renewal without offering an immediate stop and keeps the Cloud conne
   await click("确认");
   expect(JSON.parse(posts()[0]![1].body)).toMatchObject({ id: "fixture-id", action: "cancel" });
   expect(host.textContent).toContain("连接 Cloud");
-  expect([...host.querySelectorAll("button")].some(button => button.textContent === "自动续费")).toBe(true);
+  expect(host.querySelector('[data-cloud-auto-renew-switch]')?.getAttribute("aria-checked")).toBe("false");
 });
-it("enables renewal during a paid period without buying a new period", async () => {
+it("enables renewal via switch during a paid period without buying a new period", async () => {
   running(); snapshot.instance!.auto_renew = false; await mount();
-  await click("自动续费");
+  const renewSwitch = host.querySelector<HTMLButtonElement>('[data-cloud-auto-renew-switch]')!;
+  expect(renewSwitch.getAttribute("aria-checked")).toBe("false");
+  await act(async () => renewSwitch.click());
   expect(host.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("本次不扣款，不改变当前到期时间");
   fixture.api.mockImplementation(async (_path, init) => init?.method === "POST" ? { operation: { state: "succeeded" } } : structuredClone(snapshot));
   await click("确认"); expect(JSON.parse(posts()[0]![1].body)).toMatchObject({ id: "fixture-id", action: "keep" });
 });
+it("clears historical insufficient-balance operation errors once the instance is running", async () => {
+  running();
+  snapshot.operations = [
+    { id: "op-old-fail", action: "start", state: "failed", error: "billing_insufficient_balance" },
+    { id: "op-latest-ok", action: "start", state: "succeeded", error: "" },
+  ];
+  await mount();
+  expect(host.textContent).toContain("运行中");
+  expect(host.textContent).not.toContain("账户余额不足");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+});
 it("offers a purchase after expiry even when the runtime has not stopped yet", async () => {
   running(); snapshot.instance!.auto_renew = false; snapshot.instance!.paid_until = new Date(Date.now() - 1000).toISOString(); await mount();
   const labels = [...host.querySelectorAll("button")].map(button => button.textContent);
-  expect(labels).toContain("购买 Cloud 云主机"); expect(labels).not.toContain("自动续费"); expect(labels).not.toContain("连接 Cloud");
+  expect(labels).toContain("购买 Cloud 云主机"); expect(labels).not.toContain("连接 Cloud");
+  expect(host.querySelector('[data-cloud-auto-renew-switch]')).toBeNull();
   await click("购买 Cloud 云主机"); expect(host.querySelector('[aria-label="Cloud 操作确认"]')?.textContent).toContain("确认后从当前 DoneBot 账号余额扣款");
 });
 it("does not apply an old read after the account view was replaced", async () => {

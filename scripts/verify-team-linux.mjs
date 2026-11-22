@@ -101,9 +101,26 @@ async function containerCheck() {
 }
 
 async function hostCheck() {
-  assert.equal(process.argv.length, 4, "Usage: node scripts/verify-team-linux.mjs --image LOCAL_IMAGE");
-  assert.equal(process.argv[2], "--image");
-  const inspected = await command("docker", ["image", "inspect", process.argv[3]]);
+  let image = null, seccomp = null, apparmor = null;
+  for (let i = 2; i < process.argv.length; i += 2) {
+    const flag = process.argv[i], value = process.argv[i + 1];
+    assert.ok(value, "Usage: node scripts/verify-team-linux.mjs --image LOCAL_IMAGE [--seccomp FILE] [--apparmor PROFILE]");
+    if (flag === "--image") image = value;
+    else if (flag === "--seccomp") seccomp = value;
+    else if (flag === "--apparmor") apparmor = value;
+    else assert.fail(`Unknown option: ${flag}`);
+  }
+  assert.ok(image, "Usage: node scripts/verify-team-linux.mjs --image LOCAL_IMAGE [--seccomp FILE] [--apparmor PROFILE]");
+  if (seccomp !== null) {
+    assert.notEqual(seccomp.toLowerCase(), "unconfined", "seccomp=unconfined is forbidden");
+    const parsed = JSON.parse(readFileSync(seccomp, "utf8"));
+    assert.equal(parsed.defaultAction, "SCMP_ACT_ERRNO", "team seccomp must deny by default");
+  }
+  if (apparmor !== null) {
+    assert.match(apparmor, /^[a-z0-9][a-z0-9._-]{1,63}$/);
+    assert.notEqual(apparmor, "unconfined", "apparmor=unconfined is forbidden");
+  }
+  const inspected = await command("docker", ["image", "inspect", image]);
   assert.equal(inspected.code, 0, inspected.output);
   const info = JSON.parse(inspected.output)[0];
   assert.equal(info.Os, "linux"); assert.equal(info.Config.Labels?.["cn.donebot.teams.protocol"], "donebot.teams.v1");
@@ -111,7 +128,10 @@ async function hostCheck() {
   assert.match(revision ?? "", /^[a-f0-9]{40}$/);
   const evidence = mkdtempSync(join(tmpdir(), "donebot-team-linux-evidence-")), name = `donebot-team-check-${randomUUID()}`;
   const args = ["run", "--rm", "--pull=never", "--name", name, "--init", "--network", "none", "--user", "1001:1001", "--read-only",
-    "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--memory", "1g", "--cpus", "1", "--pids-limit", "128",
+    "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+    ...(seccomp ? ["--security-opt", `seccomp=${seccomp}`] : []),
+    ...(apparmor ? ["--security-opt", `apparmor=${apparmor}`] : []),
+    "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
     "--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777", "--tmpfs", "/run:rw,nosuid,nodev,mode=755",
     "--tmpfs", "/data:rw,nosuid,nodev,uid=1001,gid=1001,mode=700",
     "--mount", `type=bind,source=${fileURLToPath(import.meta.url)},target=/opt/team-qualification.mjs,readonly`,
@@ -122,8 +142,8 @@ async function hostCheck() {
     let container;
     try { container = JSON.parse(result.output.trim().split("\n").at(-1)); } catch { container = null; }
     const record = { imageId: info.Id, digests: info.RepoDigests, revision, architecture: info.Architecture,
-      code: result.code, security: { unprivileged: true, readOnly: true, capabilities: [], noNewPrivileges: true, network: "none" },
-      container };
+      code: result.code, security: { unprivileged: true, readOnly: true, capabilities: [], noNewPrivileges: true, network: "none", seccomp: seccomp ? "team-minimal" : "docker-default", apparmor: apparmor ?? "docker-default" },
+      container, ...(container ? {} : { outputTail: result.output.slice(-2000) }) };
     writeFileSync(join(evidence, "receipt.json"), JSON.stringify(record, null, 2), { mode: 0o600 });
     console.log(JSON.stringify({ evidence, ...record }, null, 2));
     return container && (result.code === 0 && container.acceptance === "isolation-only" || result.code === 2 && container.acceptance === "blocked") ? result.code : 1;

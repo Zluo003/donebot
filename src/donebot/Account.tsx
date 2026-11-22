@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2, LogOut } from "lucide-react";
+import { Loader2, LogOut, Pencil } from "lucide-react";
 import { doneBotMediaConcurrency, type DoneBotAccountState } from "../../shared/donebot";
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
@@ -10,6 +10,8 @@ import { useDesktopCapabilities } from "@/components/DesktopCapabilities";
 import { DoneBotSignIn } from "./SignIn";
 import { isDoneBotCloudBrowser } from "./services";
 import { DoneBotMediaSettingsPanel } from "./MediaSettings";
+import { CollabAvatar, CollabProfileDialog } from "./CollabAvatar";
+import { isCollabEligible, refreshCollabOverview } from "./collab-store";
 
 const buttonClass = "ui-button inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "请求失败，请稍后重试。";
@@ -29,19 +31,36 @@ export function DoneBotAccountSettings() {
   const team = state.config?.team;
   const [balance, setBalance] = useState<number | null>(null);
   const [concurrency, setConcurrency] = useState<number | null>(null);
+  const [profile, setProfile] = useState<{ nickname: string; avatar_url: string }>({
+    nickname: state.config?.profile?.name ?? "",
+    avatar_url: state.config?.profile?.avatarUrl ?? "",
+  });
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const epoch = useRef(0);
   const email = state.config?.donebot?.user?.email || state.config?.profile?.email;
+  const canEditProfile = isCollabEligible(state.config);
   const refresh = async () => {
     const generation = ++epoch.current;
     setBusy(true); setError(""); setBalance(null); setConcurrency(null);
     try {
-      const account = await api<{ balance_cents?: number | string; concurrency?: number }>("/api/donebot/account");
+      const [account, remoteProfile] = await Promise.all([
+        api<{ balance_cents?: number | string; concurrency?: number }>("/api/donebot/account"),
+        canEditProfile
+          ? api<{ nickname?: string; avatar_url?: string }>("/api/donebot/collab/profile").catch(() => null)
+          : Promise.resolve(null),
+      ]);
       if (generation !== epoch.current) return;
       const cents = account.balance_cents === undefined ? NaN : Number(account.balance_cents);
       setBalance(Number.isFinite(cents) ? cents / 100 : null);
       setConcurrency(typeof account.concurrency === "number" && doneBotMediaConcurrency(account.concurrency) !== null ? account.concurrency : null);
+      if (remoteProfile) {
+        setProfile({
+          nickname: remoteProfile.nickname?.trim() || state.config?.profile?.name || "",
+          avatar_url: remoteProfile.avatar_url?.trim() || state.config?.profile?.avatarUrl || "",
+        });
+      }
     } catch (error) { if (generation === epoch.current) setError(errorText(error)); }
     finally { if (generation === epoch.current) setBusy(false); }
   };
@@ -64,13 +83,51 @@ export function DoneBotAccountSettings() {
   };
   return <div data-donebot-account className="flex flex-col gap-4">
     <Card title="DoneBot 账号" subtitle="模型服务由 DoneBot 统一提供。">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-[14px] text-ink"><span className="min-w-0 break-all">{email ?? "已登录"}</span>{!isDoneBotCloudBrowser() && <button type="button" disabled={busy} onClick={() => void logout()} className={buttonClass}><LogOut size={14} />退出登录</button>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-[14px] text-ink">
+        <div className="flex min-w-0 items-center gap-3">
+          <CollabAvatar
+            avatarUrl={profile.avatar_url || state.config?.profile?.avatarUrl}
+            nickname={profile.nickname || state.config?.profile?.name}
+            email={email}
+            size={40}
+          />
+          <div className="min-w-0">
+            <div className="truncate font-medium text-ink">
+              {profile.nickname || state.config?.profile?.name || email || "已登录"}
+            </div>
+            {(profile.nickname || state.config?.profile?.name) && email && (
+              <div className="truncate text-[12px] text-ink-secondary">{email}</div>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {canEditProfile && (
+            <button type="button" disabled={busy} onClick={() => setProfileDialogOpen(true)} className={buttonClass}>
+              <Pencil size={13} aria-hidden="true" />编辑资料
+            </button>
+          )}
+          {!isDoneBotCloudBrowser() && <button type="button" disabled={busy} onClick={() => void logout()} className={buttonClass}><LogOut size={14} aria-hidden="true" />退出登录</button>}
+        </div>
+      </div>
       {balance !== null && <p className="mt-3 text-[13px] text-ink-secondary">可用余额（CNY）：{balance.toLocaleString(undefined, { maximumFractionDigits: 4 })}</p>}
       <p className="mt-3 text-[13px] text-ink-secondary">{concurrency === null ? "账号并发尚未同步，媒体任务将等待配置。" : `账号总并发：${doneBotMediaConcurrency(concurrency)}；文本、语音和媒体共同使用全部额度。`}</p>
       <p className="mt-2 text-[13px] text-ink-secondary">文本、语音和媒体共用账号并发，图片、视频和音乐任务在并发用满时自动排队。</p>
       {!state.config?.donebot?.persistent && <p className="mt-3 text-[13px] text-ink-secondary">当前设备未启用凭据持久保存，重启后需要重新登录。</p>}
       {error && <p role="alert" className="mt-3 text-[13px] text-danger">{error}</p>}
     </Card>
+    {canEditProfile && (
+      <CollabProfileDialog
+        open={profileDialogOpen}
+        onClose={() => setProfileDialogOpen(false)}
+        email={email ?? ""}
+        initialNickname={profile.nickname || state.config?.profile?.name || ""}
+        initialAvatarUrl={profile.avatar_url || state.config?.profile?.avatarUrl || ""}
+        onSaved={async next => {
+          setProfile(next);
+          await refreshCollabOverview({ silent: true });
+        }}
+      />
+    )}
     <DoneBotMediaSettingsPanel key={state.config?.donebot?.user?.id} />
   </div>;
 }

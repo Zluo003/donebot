@@ -1,0 +1,137 @@
+import { DoneBotGatewayError, type DoneBotCredential } from "./gateway.ts";
+
+export interface CollabGatewayTransport {
+  readonly origin: string;
+  readonly fetcher: typeof fetch;
+  readonly controllers: Set<AbortController>;
+  epoch(): number;
+  checkEpoch(epoch: number): void;
+  validSession(): Promise<DoneBotCredential>;
+  readGatewayJson(res: Response): Promise<unknown>;
+}
+
+export const COLLAB_TRANSFER_TIMEOUT_MS = 15 * 60_000;
+
+function extractGatewayError(value: unknown, status: number, fallback: string): string {
+  if (value && typeof value === "object") {
+    const rec = value as { message?: unknown; error?: unknown };
+    if (typeof rec.message === "string" && rec.message.trim()) return rec.message.trim();
+    if (typeof rec.error === "string" && rec.error.trim()) return rec.error.trim();
+  }
+  return status === 401 ? "登录或安装凭据已失效，请重新登录。" : fallback;
+}
+
+export async function collabJsonCall(
+  ctx: CollabGatewayTransport,
+  mode: "user" | "runtime",
+  fullPath: string,
+  method: string,
+  body?: unknown,
+  timeoutMs = 15_000,
+): Promise<unknown> {
+  const epoch = ctx.epoch();
+  const session = await ctx.validSession();
+  ctx.checkEpoch(epoch);
+  if (mode === "user" && session.mode === "installation") {
+    throw new DoneBotGatewayError(403, "collab_login_required", "请在本机登录 DoneBot 账号后使用远程协作。");
+  }
+  const controller = new AbortController();
+  ctx.controllers.add(controller);
+  const headers: Record<string, string> = mode === "runtime"
+    ? { authorization: `Bearer ${session.credential}`, "X-DoneBot-Installation": session.installationId, "content-type": "application/json" }
+    : { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json" };
+  try {
+    const response = await ctx.fetcher(`${ctx.origin}${fullPath}`, {
+      method,
+      redirect: "error",
+      credentials: "omit",
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
+    });
+    const value = await ctx.readGatewayJson(response) as { code?: number; data?: unknown };
+    ctx.checkEpoch(epoch);
+    if (!response.ok || (value.code !== undefined && value.code !== 0)) {
+      throw new DoneBotGatewayError(
+        response.status,
+        mode === "runtime" ? "collab_runtime_failed" : "collab_request_failed",
+        extractGatewayError(value, response.status, "远程协作请求失败，请稍后重试。"),
+      );
+    }
+    return value.code === 0 && "data" in value ? value.data : value;
+  } finally {
+    ctx.controllers.delete(controller);
+  }
+}
+
+export async function collabStreamCall(
+  ctx: CollabGatewayTransport,
+  mode: "auto" | "runtime",
+  pathBuilder: (runtime: boolean) => string,
+  options: {
+    method: "GET" | "POST" | "PUT";
+    body?: ReadableStream<Uint8Array> | Uint8Array | Buffer;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
+): Promise<Response> {
+  const epoch = ctx.epoch();
+  const session = await ctx.validSession();
+  ctx.checkEpoch(epoch);
+  const useRuntime = mode === "runtime" || session.mode === "installation";
+  const controller = new AbortController();
+  ctx.controllers.add(controller);
+  const headers = new Headers(options.headers);
+  for (const key of ["authorization", "cookie", "proxy-authorization", "host"]) headers.delete(key);
+  if (useRuntime) {
+    headers.set("authorization", `Bearer ${session.credential}`);
+    headers.set("X-DoneBot-Installation", session.installationId);
+  } else {
+    headers.set("authorization", `Bearer ${session.accessToken}`);
+  }
+  const timeout = AbortSignal.timeout(options.timeoutMs ?? COLLAB_TRANSFER_TIMEOUT_MS);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal, timeout])
+    : AbortSignal.any([controller.signal, timeout]);
+  const release = () => { ctx.controllers.delete(controller); };
+  try {
+    const fetchInit: RequestInit & { duplex?: "half" } = {
+      method: options.method,
+      redirect: "error",
+      credentials: "omit",
+      headers,
+      signal,
+      ...(options.body !== undefined ? { body: options.body as RequestInit["body"], duplex: "half" } : {}),
+    };
+    const response = await ctx.fetcher(`${ctx.origin}${pathBuilder(useRuntime)}`, fetchInit);
+    ctx.checkEpoch(epoch);
+    if (!response.body) {
+      release();
+      return response;
+    }
+    const reader = response.body.getReader();
+    let closed = false;
+    const done = () => { if (!closed) { closed = true; release(); } };
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(target) {
+        try {
+          const next = await reader.read();
+          if (next.done) { done(); target.close(); } else target.enqueue(next.value);
+        } catch (error) {
+          done();
+          target.error(error);
+        }
+      },
+      async cancel(reason) {
+        done();
+        controller.abort(reason);
+        await reader.cancel(reason).catch(() => {});
+      },
+    });
+    return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
+  } catch (error) {
+    release();
+    throw error;
+  }
+}

@@ -47,6 +47,7 @@ export interface DoneBotAccountState {
   authenticated: boolean;
   user?: { id: string; email: string };
   requires2fa?: boolean;
+  cloudManaged?: true;
   modelCount: number;
   persistent: boolean;
 }

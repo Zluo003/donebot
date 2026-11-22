@@ -108,3 +108,102 @@ test("gateway-relayed collab executes read/write by per-caller access, blocks es
     fs.rmSync(sharedParent, { recursive: true, force: true });
   }
 });
+
+test("streaming collab handles >2MB download/upload (Chinese filenames), reports file sizes, and blocks >max_bytes", async () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "donebot-collab-stream-state-"));
+  const sharedParent = fs.mkdtempSync(path.join(os.tmpdir(), "donebot-collab-stream-files-"));
+  const sharedDir = path.join(sharedParent, "media-docs");
+  fs.mkdirSync(sharedDir, { recursive: true });
+  const bigReadBytes = Buffer.alloc(3 * 1024 * 1024, 0x5a);
+  fs.writeFileSync(path.join(sharedDir, "产品方案.bin"), bigReadBytes);
+
+  const bigWriteBytes = Buffer.alloc(4 * 1024 * 1024, 0x6b);
+  const folderId = randomUUID();
+  const readTransferId = randomUUID();
+  const oversizedTransferId = randomUUID();
+  const writeTransferId = randomUUID();
+  const jobs = [];
+  const results = [];
+  const failedTransfers = [];
+  let uploadedStreamBytes = null;
+  let uploadedHeaders = null;
+  let queued = false;
+
+  const controller = createDoneBotCollab({
+    file: path.join(stateDir, "donebot-collab-folders.json"),
+    activityFile: path.join(stateDir, "donebot-collab-activity.jsonl"),
+    home: os.homedir(),
+    localRequest: async (route, init) => {
+      if (route === "/api/donebot/state") {
+        return Response.json({ authenticated: true, user: { id: "101" } });
+      }
+      if (route === "/api/donebot/collab/relay/poll") {
+        if (!queued) {
+          queued = true;
+          jobs.push(
+            { id: randomUUID(), folder_id: folderId, caller_user_id: 202, caller_email: "bob@example.invalid", granted_access: "read", operation: { action: "list_files", path: "" } },
+            { id: randomUUID(), folder_id: folderId, caller_user_id: 202, caller_email: "bob@example.invalid", granted_access: "read", operation: { action: "stream_read_file", path: "产品方案.bin", transfer_id: readTransferId } },
+            { id: randomUUID(), folder_id: folderId, caller_user_id: 202, caller_email: "bob@example.invalid", granted_access: "read", operation: { action: "stream_read_file", path: "产品方案.bin", transfer_id: oversizedTransferId, max_bytes: 1024 } },
+            { id: randomUUID(), folder_id: folderId, caller_user_id: 303, caller_email: "carol@example.invalid", granted_access: "write", operation: { action: "stream_write_file", path: "交付/视频素材.bin", transfer_id: writeTransferId } },
+          );
+        }
+        const job = jobs.shift() ?? null;
+        if (!job) await wait(40);
+        return Response.json({ job });
+      }
+      if (route === `/api/donebot/collab/relay/transfers/${readTransferId}/upload`) {
+        uploadedHeaders = init.headers;
+        const chunks = [];
+        for await (const chunk of init.body) chunks.push(Buffer.from(chunk));
+        uploadedStreamBytes = Buffer.concat(chunks);
+        return Response.json({ ok: true });
+      }
+      if (route === `/api/donebot/collab/relay/transfers/${oversizedTransferId}/fail`) {
+        failedTransfers.push(JSON.parse(String(init.body)));
+        return Response.json({ ok: true });
+      }
+      if (route === `/api/donebot/collab/relay/transfers/${writeTransferId}/download`) {
+        return new Response(bigWriteBytes, { status: 200, headers: { "content-type": "application/octet-stream" } });
+      }
+      if (route === "/api/donebot/collab/relay/result") {
+        results.push(JSON.parse(String(init.body)));
+        return Response.json({ ok: true });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+
+  try {
+    await controller.saveLocalFolder({
+      id: folderId,
+      path: sharedDir,
+      name: "素材库",
+      enabled: true,
+      allowWrite: true,
+    });
+
+    for (let i = 0; i < 80 && (!uploadedStreamBytes || failedTransfers.length < 1 || results.length < 2); i += 1) {
+      await wait(25);
+    }
+
+    assert.equal(uploadedStreamBytes?.length, bigReadBytes.length);
+    assert.equal(uploadedHeaders["x-file-name"], undefined); // non-ASCII omitted safely
+    assert.equal(failedTransfers.length, 1);
+    assert.match(failedTransfers[0].error, /100 MB/);
+
+    const listRes = results.find(r => r.result?.content?.[0]?.text?.includes("产品方案.bin"));
+    assert.ok(listRes);
+    const listParsed = JSON.parse(listRes.result.content[0].text);
+    assert.equal(listParsed.entries.find(e => e.name === "产品方案.bin")?.size, bigReadBytes.length);
+
+    const writeRes = results.find(r => r.result?.content?.[0]?.text?.includes('"written":true'));
+    assert.ok(writeRes);
+    const saved = fs.readFileSync(path.join(sharedDir, "交付", "视频素材.bin"));
+    assert.equal(saved.length, bigWriteBytes.length);
+    assert.ok(saved.equals(bigWriteBytes));
+  } finally {
+    controller.close();
+    fs.rmSync(stateDir, { recursive: true, force: true });
+    fs.rmSync(sharedParent, { recursive: true, force: true });
+  }
+});

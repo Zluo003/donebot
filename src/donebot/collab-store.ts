@@ -3,6 +3,7 @@ import { api } from "@/state/api";
 import type { Action, AppState } from "@/state/store";
 import { notificationSoundsEnabled } from "@/lib/notification-preferences";
 import { cleanError, type CollabOverview } from "./collab-types";
+import { isDoneBotCloudBrowser } from "./services";
 
 export type CollabSidebarTab = "bots" | "collab";
 
@@ -22,6 +23,8 @@ export interface CollabToastItem {
   requestId?: string;
   invitationId?: string;
   email?: string;
+  avatarUrl?: string;
+  displayName?: string;
   teamName?: string;
 }
 
@@ -77,7 +80,12 @@ function setState(patch: Partial<CollabStoreState>) {
 }
 
 export function isCollabEligible(config?: AppState["config"] | null): boolean {
-  return config?.donebot?.enabled === true && !config?.cloudHome && !config?.team;
+  if (typeof window !== "undefined" && window.ogb?.remoteClient?.active === true) return false;
+  if (isDoneBotCloudBrowser()) return false;
+  return config?.donebot?.enabled === true
+    && config?.donebot?.cloudManaged !== true
+    && !config?.cloudHome
+    && !config?.team;
 }
 
 export function collabPendingCount(overview: CollabOverview | null): number {
@@ -166,22 +174,28 @@ function fireDesktopNotification(item: CollabToastItem) {
 function incomingItemsFrom(overview: CollabOverview): CollabToastItem[] {
   const items: CollabToastItem[] = [];
   for (const req of overview.friends.incoming_requests) {
+    const sender = req.requester_nickname?.trim() || req.requester_email;
     items.push({
       id: `friend-req:${req.id}`,
       kind: "friend-request",
       title: "新的好友申请",
-      body: req.note ? `${req.requester_email} 请求添加你为好友 · ${req.note}` : `${req.requester_email} 请求添加你为好友`,
+      body: req.note ? `${sender} 请求添加你为好友 · ${req.note}` : `${sender} 请求添加你为好友`,
       requestId: req.id,
       email: req.requester_email,
+      displayName: sender,
+      avatarUrl: req.requester_avatar_url,
     });
   }
   for (const inv of overview.incoming_team_invitations) {
+    const inviter = inv.invited_by_nickname?.trim() || inv.invited_by_email;
     items.push({
       id: `team-inv:${inv.id}`,
       kind: "team-invitation",
       title: "新的团队邀请",
-      body: `${inv.invited_by_email} 邀请你加入团队「${inv.team_name}」`,
+      body: `${inviter} 邀请你加入团队「${inv.team_name}」`,
       invitationId: inv.id,
+      displayName: inviter,
+      avatarUrl: inv.invited_by_avatar_url,
       teamName: inv.team_name,
     });
   }

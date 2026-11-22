@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "../config.ts";
 import type { DoneBotGateway } from "./gateway.ts";
-import { createDoneBotHelpers } from "./helpers.ts";
+import { createDoneBotHelpers, describeDoneBotDecider } from "./helpers.ts";
 
 describe("DoneBot decision routing", () => {
   it("uses the original Jev System One request through the fixed gateway", async () => {
@@ -42,5 +42,25 @@ describe("DoneBot decision routing", () => {
       instructions: "Pick one.", options: { "bot-a": "A", "bot-b": "B" },
     })).resolves.toMatchObject({ ok: false, reason: "disabled" });
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("reports gateway-backed Jev as enabled when signed in so auto group chats route through donebot.cn", () => {
+    expect(describeDoneBotDecider({} as AppConfig, true)).toEqual({
+      provider: "jev",
+      configured: true,
+      enabled: true,
+      included: true,
+      jobs: { roomRouting: true },
+    });
+    expect(describeDoneBotDecider({} as AppConfig, false)).toMatchObject({
+      provider: "jev",
+      configured: false,
+      enabled: false,
+    });
+    expect(describeDoneBotDecider({ decider: { enabled: false } } as AppConfig, true)).toMatchObject({
+      provider: "jev",
+      configured: true,
+      enabled: false,
+    });
   });
 });

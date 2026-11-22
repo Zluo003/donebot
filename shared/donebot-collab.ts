@@ -1,9 +1,14 @@
 export type CollabAccess = "read" | "write";
 export type CollabSubjectType = "user" | "team";
 
+export const DONEBOT_COLLAB_MAX_FILE_BYTES = 100 * 1024 * 1024;
+
 export interface DoneBotFriend {
   user_id: number;
   email: string;
+  nickname?: string;
+  avatar_url?: string;
+  remark?: string;
   created_at: string;
 }
 
@@ -11,8 +16,12 @@ export interface DoneBotFriendRequest {
   id: string;
   requester_id: number;
   requester_email: string;
+  requester_nickname?: string;
+  requester_avatar_url?: string;
   recipient_id: number;
   recipient_email: string;
+  recipient_nickname?: string;
+  recipient_avatar_url?: string;
   note: string;
   status: string;
   created_at: string;
@@ -30,6 +39,8 @@ export interface DoneBotIncomingTeamInvitation {
   team_name: string;
   role: "admin" | "member";
   invited_by_email: string;
+  invited_by_nickname?: string;
+  invited_by_avatar_url?: string;
   expires_at: string;
 }
 
@@ -64,6 +75,9 @@ export interface DoneBotSharedFolder {
   id: string;
   owner_user_id: number;
   owner_email: string;
+  owner_nickname?: string;
+  owner_avatar_url?: string;
+  owner_remark?: string;
   device_name: string;
   name: string;
   access: CollabAccess;
@@ -102,6 +116,9 @@ export interface DoneBotSharedBot {
   id: string;
   owner_user_id: number;
   owner_email: string;
+  owner_nickname?: string;
+  owner_avatar_url?: string;
+  owner_remark?: string;
   name: string;
   title: string;
   description: string;
@@ -123,13 +140,16 @@ export interface DoneBotCollabRelayJob {
   caller_email: string;
   granted_access: CollabAccess;
   operation: {
-    action: "list_files" | "read_file" | "write_file" | "edit_file" | "append_file" | "delete_file";
+    action: "list_files" | "read_file" | "write_file" | "edit_file" | "append_file" | "delete_file" | "stream_read_file" | "stream_write_file";
     path?: string;
     content?: string;
     encoding?: "utf8" | "base64";
     old_text?: string;
     new_text?: string;
     expected_sha256?: string;
+    transfer_id?: string;
+    max_bytes?: number;
+    content_type?: string;
   };
 }
 

@@ -11,7 +11,7 @@ export interface DoneBotTeamIdentity {
   member_version: number;
   created_at: string;
 }
-export interface DoneBotTeamMember { user_id: number; email: string; role: DoneBotTeamRole; version: number }
+export interface DoneBotTeamMember { user_id: number; email: string; nickname?: string; avatar_url?: string; remark?: string; role: DoneBotTeamRole; version: number }
 export interface DoneBotTeamInvitation { id: string; email: string; role: "admin" | "member"; expires_at: string; token: string }
 export interface DoneBotTeamResources { cpu_millis: number; memory_mib: number; storage_gib: number; pids: number }
 export interface DoneBotTeamPlan {

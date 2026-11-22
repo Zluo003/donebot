@@ -11,7 +11,7 @@ import { cloudCredentialStore } from "./cloud-credential.ts";
 import { DoneBotInstallationIdentity } from "./installation-identity.ts";
 import { doneBotDeviceName } from "./device-name.ts";
 import { createDoneBotLlmDriver } from "./llm-driver.ts";
-import { createDoneBotHelpers } from "./helpers.ts";
+import { createDoneBotHelpers, describeDoneBotDecider } from "./helpers.ts";
 import { createDoneBotAccountRoutes } from "./routes.ts";
 import { bindDoneBotVoice } from "../tts/index.ts";
 import { createDoneBotVoice } from "./tts.ts";
@@ -128,6 +128,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     } : undefined,
     routes: enabled ? team ? [teamRoute] : [createDoneBotMediaSettingsRoute(gateway, mediaPreferences), createDoneBotAccountRoutes(gateway)] : [],
     helpers: () => createDoneBotHelpers(gateway, config, dataDir),
+    describeDecider: () => describeDoneBotDecider(config(), authenticated()),
     async restore() {
       if (!enabled) return;
       if (team) {

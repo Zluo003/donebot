@@ -1,5 +1,5 @@
 import type { AppConfig } from "../config.ts";
-import { createDecider, type Decider } from "../decider/index.ts";
+import { createDecider, describeDecider, type Decider } from "../decider/index.ts";
 import type { AskOptions } from "../decider/types.ts";
 import type { Extractor } from "../extractor/index.ts";
 import { EXTRACT_KEY_CHECK, extractRequestProblem, parseExtractValues } from "../extractor/contract.ts";
@@ -10,9 +10,23 @@ import { createDoneBotCompletion } from "./llm-protocol.ts";
 import { DONEBOT_ORIGIN, type DoneBotGateway } from "./gateway.ts";
 import { doneBotProtocol, doneBotTextModels } from "./catalog.ts";
 
+const DONEBOT_ROOM_ROUTING_MIN_TIMEOUT_MS = 4_500;
+
+export function describeDoneBotDecider(cfg: AppConfig, authenticated: boolean) {
+  const base = describeDecider(cfg);
+  const enabled = authenticated && cfg.decider?.enabled !== false && cfg.decider?.provider !== "off";
+  return {
+    ...base,
+    provider: "jev" as const,
+    configured: authenticated,
+    enabled,
+    ...(authenticated ? { included: true as const } : {}),
+  };
+}
+
 export function createDoneBotHelpers(gateway: DoneBotGateway, config: () => AppConfig, dataDir?: string): { decider: Decider; extractor: Extractor } {
   const complete = createDoneBotCompletion((path, init) => gateway.request(path, init), model => doneBotProtocol(model, gateway.models()));
-  const decider = createDecider({
+  const rawDecider = createDecider({
     config() {
       const current = config();
       const available = gateway.authenticated();
@@ -36,6 +50,20 @@ export function createDoneBotHelpers(gateway: DoneBotGateway, config: () => AppC
     },
     ...(dataDir ? { dataDir } : {}),
   });
+  const withGatewayTimeout = (seam: string, options?: AskOptions): AskOptions | undefined => {
+    if (seam !== "roomRouting") return options;
+    const requested = options?.timeoutMs ?? 0;
+    return requested >= DONEBOT_ROOM_ROUTING_MIN_TIMEOUT_MS
+      ? options
+      : { ...options, timeoutMs: DONEBOT_ROOM_ROUTING_MIN_TIMEOUT_MS };
+  };
+  const decider: Decider = {
+    ask: (seam, state, questions, options) => rawDecider.ask(seam, state, questions, withGatewayTimeout(seam, options)),
+    choose: (seam, state, question, options) => rawDecider.choose(seam, state, question, withGatewayTimeout(seam, options)),
+    score: (seam, state, question, options) => rawDecider.score(seam, state, question, withGatewayTimeout(seam, options)),
+    yesNo: (seam, state, instructions, options) => rawDecider.yesNo(seam, state, instructions, withGatewayTimeout(seam, options)),
+    testKey: (input, options) => rawDecider.testKey(input, options),
+  };
   const enabled = () => config().decider?.provider !== "off" && config().decider?.enabled !== false;
   async function answer(messages: OpenAIChatMessage[], options: AskOptions | ExtractOptions, images = false): Promise<{ text: string; model: string }> {
     const offered = doneBotTextModels(gateway.models()).options.filter(option => {

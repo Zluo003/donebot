@@ -1,5 +1,14 @@
-import type { ServerResponse } from "node:http";
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
+import fs from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { z } from "zod";
+import { botAvatarUrlFromStoredPath } from "../../shared/bot-avatar.ts";
+import { DONEBOT_COLLAB_MAX_FILE_BYTES } from "../../shared/donebot-collab.ts";
+import { saveImage } from "../attachments.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { parsePackageDocument } from "../bot-package.ts";
@@ -7,9 +16,11 @@ import { createTeamPackageExport, TeamExportError, type ExportablePackageSkill, 
 import { importPackageDocument, PackageImportError, type PackageImportDeps } from "../package-import.ts";
 import type { ModelSelection } from "../contracts.ts";
 import type { BotRecord, Store } from "../store.ts";
+import { boundedResponseText } from "./bounded-response.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+const transferIdPattern = /^[a-f0-9-]{36}$/;
 const subjectTypeSchema = z.enum(["user", "team"]);
 const accessSchema = z.enum(["read", "write"]);
 const folderGrantSchema = z.object({
@@ -37,6 +48,20 @@ const invokeFolderSchema = z.object({
   new_text: z.string().max(350_000).optional(),
   expected_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict();
+const internalTransferSchema = z.discriminatedUnion("action", [
+  z.object({
+    folder_id: uuidV4,
+    action: z.literal("download_file"),
+    path: z.string().min(1).max(2048),
+    save_to: z.string().min(1).max(4096),
+  }).strict(),
+  z.object({
+    folder_id: uuidV4,
+    action: z.literal("upload_file"),
+    path: z.string().min(1).max(2048),
+    local_path: z.string().min(1).max(4096),
+  }).strict(),
+]);
 const internalInvokeSchema = invokeFolderSchema.extend({ folder_id: uuidV4 }).strict();
 const shareBotSchema = z.object({
   id: uuidV4.optional(),
@@ -50,6 +75,15 @@ const updateSharedBotSchema = z.object({
   description: z.string().max(1000).optional(),
   grants: z.array(botGrantSchema).max(200),
 }).strict();
+const profileUpdateSchema = z.object({
+  nickname: z.string().trim().max(64).optional(),
+  avatar_url: z.string().max(750_000).optional(),
+}).strict();
+const friendRemarkSchema = z.object({
+  remark: z.string().max(64),
+}).strict();
+
+const INLINE_AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/;
 
 export interface DoneBotCollabRouteDeps {
   gateway: DoneBotGateway;
@@ -61,6 +95,88 @@ export interface DoneBotCollabRouteDeps {
   packageImportDeps(selection: ModelSelection): PackageImportDeps;
   broadcast(payload: Record<string, unknown>): void;
   publicBot(bot: BotRecord): unknown;
+  syncLocalProfile?(patch: { name?: string; avatarUrl?: string; email?: string }): void;
+  currentLocalProfile?(): { name?: string; avatarUrl?: string; email?: string } | undefined;
+}
+
+function cleanRelativeFilePath(raw: string | null): string | null {
+  const value = (raw ?? "").trim().replace(/^\/+/, "");
+  if (!value || value.length > 2048 || /[\\:\0]/.test(value)) return null;
+  if (value.split("/").some(part => part === "..")) return null;
+  return value;
+}
+
+function storeLocalAvatarFromDataUrl(dataUrl: string): string | undefined {
+  if (dataUrl === "") return "";
+  const match = INLINE_AVATAR_DATA_URL.exec(dataUrl.trim());
+  if (!match) return undefined;
+  try {
+    const mime = match[1] === "image/jpg" ? "image/jpeg" : match[1]!;
+    const bytes = Buffer.from(match[2]!, "base64");
+    if (bytes.byteLength === 0 || bytes.byteLength > 512 * 1024) return undefined;
+    const saved = saveImage(bytes, mime);
+    return botAvatarUrlFromStoredPath(saved.path) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function boundedRequestWebStream(req: IncomingMessage, maxBytes: number): ReadableStream<Uint8Array> {
+  const web = Readable.toWeb(req) as unknown as ReadableStream<Uint8Array>;
+  let seen = 0;
+  return web.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      seen += chunk.byteLength;
+      if (seen > maxBytes) {
+        controller.error(new DoneBotGatewayError(413, "file_too_large", "文件不能超过 100 MB。"));
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  }));
+}
+
+async function readUpstreamError(response: Response, fallback: string): Promise<string> {
+  try {
+    const text = await boundedResponseText(response, 16_384);
+    if (!text) return fallback;
+    try {
+      const parsed = JSON.parse(text) as { message?: unknown; error?: unknown };
+      if (typeof parsed.message === "string" && parsed.message.trim()) return parsed.message.trim();
+      if (typeof parsed.error === "string" && parsed.error.trim()) return parsed.error.trim();
+    } catch { /* plain text */ }
+    return text.slice(0, 300);
+  } catch {
+    return fallback;
+  }
+}
+
+async function pipeUpstreamStream(
+  upstream: Response,
+  res: ServerResponse,
+  json: (res: ServerResponse, status: number, value: unknown) => void,
+  fallbackError: string,
+  extraHeaders: string[],
+): Promise<void> {
+  if (!upstream.ok) {
+    const message = await readUpstreamError(upstream, fallbackError);
+    json(res, upstream.status >= 400 ? upstream.status : 502, { error: message });
+    return;
+  }
+  const headers: Record<string, string> = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  };
+  for (const name of extraHeaders) {
+    const value = upstream.headers.get(name);
+    if (value) headers[name] = value;
+  }
+  res.writeHead(upstream.status, headers);
+  if (!upstream.body) {
+    res.end();
+    return;
+  }
+  await pipeline(Readable.fromWeb(upstream.body as unknown as import("node:stream/web").ReadableStream), res);
 }
 
 function buildBotSharePayload(deps: DoneBotCollabRouteDeps, bot: BotRecord, authorEmail: string) {
@@ -97,8 +213,8 @@ function buildBotSharePayload(deps: DoneBotCollabRouteDeps, bot: BotRecord, auth
 
 export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHandler {
   const { gateway } = deps;
-  return async ({ req, res, path, method, auth, json, readBody }) => {
-    if (!path.startsWith("/api/donebot/collab/")) return PASS;
+  return async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
+    if (!reqPath.startsWith("/api/donebot/collab/")) return PASS;
     if (!ownerOrAdmin(auth)) return json(res, 403, { error: "仅工作空间所有者可使用远程协作。" });
     res.setHeader("Cache-Control", "no-store");
     try {
@@ -106,15 +222,160 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return json(res, 403, { error: "远程协作仅在本机个人空间使用。" });
       }
 
-      if (method === "GET" && path === "/api/donebot/collab/overview") {
-        const [identity, friends, folders, bots, workspaces, incomingInvitations] = await Promise.all([
+      // --- Streaming file transfer routes (never call readBody) ---
+      const folderFile = reqPath.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})\/file$/);
+      if (folderFile && method === "GET") {
+        const relPath = cleanRelativeFilePath(url.searchParams.get("path"));
+        if (!relPath) return json(res, 400, { error: "请输入有效的相对文件路径。" });
+        const abort = new AbortController();
+        const onClose = () => abort.abort();
+        res.once("close", onClose);
+        try {
+          const upstream = await gateway.collabDownloadFile(folderFile[1]!, relPath, abort.signal);
+          await pipeUpstreamStream(upstream, res, json, "下载远程共享文件失败。", [
+            "Content-Type", "Content-Disposition", "Content-Length", "X-File-Sha256",
+          ]);
+        } finally {
+          res.off("close", onClose);
+        }
+        return;
+      }
+
+      if (folderFile && method === "PUT") {
+        const relPath = cleanRelativeFilePath(url.searchParams.get("path"));
+        if (!relPath) return json(res, 400, { error: "请输入有效的相对文件路径。" });
+        const rawLen = req.headers["content-length"];
+        const parsedLen = typeof rawLen === "string" && /^\d+$/.test(rawLen) ? Number(rawLen) : -1;
+        if (parsedLen > DONEBOT_COLLAB_MAX_FILE_BYTES) {
+          return json(res, 413, { error: "上传文件不能超过 100 MB。" });
+        }
+        const headers: Record<string, string> = {
+          "content-type": typeof req.headers["content-type"] === "string" && req.headers["content-type"].trim()
+            ? req.headers["content-type"].trim()
+            : "application/octet-stream",
+        };
+        if (parsedLen >= 0) headers["content-length"] = String(parsedLen);
+        const abort = new AbortController();
+        const onClose = () => abort.abort();
+        req.once("aborted", onClose);
+        try {
+          const upstream = await gateway.collabUploadFile(
+            folderFile[1]!,
+            relPath,
+            boundedRequestWebStream(req, DONEBOT_COLLAB_MAX_FILE_BYTES),
+            headers,
+            abort.signal,
+          );
+          if (!upstream.ok) {
+            return json(res, upstream.status >= 400 ? upstream.status : 502, {
+              error: await readUpstreamError(upstream, "上传文件到共享文件夹失败。"),
+            });
+          }
+          const payload = await upstream.json() as { code?: number; data?: unknown };
+          return json(res, 200, payload?.code === 0 && "data" in payload ? payload.data : payload);
+        } finally {
+          req.off("aborted", onClose);
+        }
+      }
+
+      const relayTransfer = reqPath.match(/^\/api\/donebot\/collab\/relay\/transfers\/([a-f0-9-]{36})\/(upload|download|fail)$/);
+      if (relayTransfer) {
+        const [, transferId, action] = relayTransfer;
+        if (!transferId || !transferIdPattern.test(transferId)) return json(res, 400, { error: "无效的传输标识。" });
+        if (action === "upload" && method === "POST") {
+          const rawLen = req.headers["content-length"];
+          const parsedLen = typeof rawLen === "string" && /^\d+$/.test(rawLen) ? Number(rawLen) : -1;
+          if (parsedLen > DONEBOT_COLLAB_MAX_FILE_BYTES) {
+            return json(res, 413, { error: "共享文件不能超过 100 MB。" });
+          }
+          const headers: Record<string, string> = {
+            "content-type": typeof req.headers["content-type"] === "string" ? req.headers["content-type"] : "application/octet-stream",
+          };
+          for (const key of ["content-length", "x-file-size", "x-file-name", "x-file-content-type", "x-file-sha256"]) {
+            const val = req.headers[key];
+            if (typeof val === "string" && val.trim()) headers[key] = val.trim();
+          }
+          const abort = new AbortController();
+          const onClose = () => abort.abort();
+          req.once("aborted", onClose);
+          try {
+            const upstream = await gateway.collabRelayTransferUpload(
+              transferId,
+              boundedRequestWebStream(req, DONEBOT_COLLAB_MAX_FILE_BYTES),
+              headers,
+              abort.signal,
+            );
+            if (!upstream.ok) {
+              return json(res, upstream.status >= 400 ? upstream.status : 502, {
+                error: await readUpstreamError(upstream, "发送共享文件流失败。"),
+              });
+            }
+            return json(res, 200, { ok: true });
+          } finally {
+            req.off("aborted", onClose);
+          }
+        }
+        if (action === "download" && method === "GET") {
+          const abort = new AbortController();
+          const onClose = () => abort.abort();
+          res.once("close", onClose);
+          try {
+            const upstream = await gateway.collabRelayTransferDownload(transferId, abort.signal);
+            await pipeUpstreamStream(upstream, res, json, "接收远程上传流失败。", ["Content-Type", "Content-Length"]);
+          } finally {
+            res.off("close", onClose);
+          }
+          return;
+        }
+        if (action === "fail" && method === "POST") {
+          const body = await readBody(req, 32 * 1024);
+          const msg = typeof (body as { error?: unknown })?.error === "string" ? String((body as { error?: unknown }).error).slice(0, 500) : "文件传输失败。";
+          return json(res, 200, await gateway.collabRelayTransferFail(transferId, msg));
+        }
+      }
+
+      // --- Standard JSON collab routes ---
+      if (method === "GET" && reqPath === "/api/donebot/collab/profile") {
+        const [identity, profile] = await Promise.all([
           gateway.collabIdentity(),
+          gateway.collabUserProfile().catch(() => null),
+        ]);
+        return json(res, 200, {
+          email: identity.email,
+          nickname: typeof profile?.username === "string" ? profile.username.trim() : "",
+          avatar_url: typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "",
+        });
+      }
+
+      if (method === "GET" && reqPath === "/api/donebot/collab/overview") {
+        const [identity, profile, friends, folders, bots, workspaces, incomingInvitations] = await Promise.all([
+          gateway.collabIdentity(),
+          gateway.collabUserProfile?.().catch(() => null) ?? Promise.resolve(null),
           gateway.collabFriends(),
           gateway.collabFolders(),
           gateway.collabBots(),
           gateway.workspaceSnapshot().catch(() => ({ account_id: "", protocol: "donebot.teams.v1", capabilities: [], workspaces: [] })),
           gateway.collabIncomingTeamInvitations().catch(() => []),
         ]);
+        const nickname = typeof profile?.username === "string" ? profile.username.trim() : "";
+        const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
+        if (deps.syncLocalProfile && deps.currentLocalProfile) {
+          const local = deps.currentLocalProfile();
+          const needName = !local?.name?.trim() && Boolean(nickname);
+          const needAvatar = !local?.avatarUrl?.trim() && Boolean(avatarUrl);
+          if (needName || needAvatar) {
+            const localAvatar = needAvatar ? storeLocalAvatarFromDataUrl(avatarUrl) : undefined;
+            if (needName || localAvatar) {
+              try {
+                deps.syncLocalProfile({
+                  ...(needName ? { name: nickname } : {}),
+                  ...(localAvatar ? { avatarUrl: localAvatar } : {}),
+                  ...(identity.email && !local?.email ? { email: identity.email } : {}),
+                });
+              } catch { /* Best-effort local profile sync */ }
+            }
+          }
+        }
         const teamMembers: Record<string, unknown[]> = {};
         const teamList = Array.isArray(workspaces?.workspaces) ? workspaces.workspaces : [];
         await Promise.all(teamList.map(async team => {
@@ -140,7 +401,11 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
             };
           });
         return json(res, 200, {
-          identity,
+          identity: {
+            ...identity,
+            ...(nickname ? { nickname } : {}),
+            ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+          },
           friends,
           folders,
           bots,
@@ -152,39 +417,76 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         });
       }
 
-      const teamInvList = path.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/invitations$/);
+      const teamInvList = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/invitations$/);
       if (method === "GET" && teamInvList) {
         return json(res, 200, await gateway.collabTeamInvitations(teamInvList[1]!));
       }
 
-      if (method === "GET" && path === "/api/donebot/collab/folders") {
+      if (method === "GET" && reqPath === "/api/donebot/collab/folders") {
         return json(res, 200, await gateway.collabFolders());
       }
 
-      if (method === "GET" && path === "/api/donebot/collab/bots") {
+      if (method === "GET" && reqPath === "/api/donebot/collab/bots") {
         return json(res, 200, await gateway.collabBots());
       }
 
       if (method === "DELETE") {
-        const friendDel = path.match(/^\/api\/donebot\/collab\/friends\/([1-9]\d{0,18})$/);
+        const friendDel = reqPath.match(/^\/api\/donebot\/collab\/friends\/([1-9]\d{0,18})$/);
         if (friendDel) return json(res, 200, await gateway.collabRemoveFriend(Number(friendDel[1])));
-        const folderDel = path.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})$/);
+        const folderDel = reqPath.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})$/);
         if (folderDel) return json(res, 200, await gateway.collabDeleteFolder(folderDel[1]!));
-        const botDel = path.match(/^\/api\/donebot\/collab\/bots\/([0-9a-f-]{36})$/);
+        const botDel = reqPath.match(/^\/api\/donebot\/collab\/bots\/([0-9a-f-]{36})$/);
         if (botDel) return json(res, 200, await gateway.collabDeleteBot(botDel[1]!));
         return PASS;
       }
 
       if (method !== "POST" && method !== "PUT") return PASS;
-      const body = await readBody(req, 2 * 1024 * 1024);
+      const body = await readBody(req, 4 * 1024 * 1024);
 
-      if (method === "POST" && path === "/api/donebot/collab/friends/request") {
+      if (method === "PUT" && reqPath === "/api/donebot/collab/profile") {
+        const parsed = profileUpdateSchema.safeParse(body);
+        if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "请填写有效的昵称或头像图片。");
+        if (parsed.data.avatar_url !== undefined && parsed.data.avatar_url !== "" && !INLINE_AVATAR_DATA_URL.test(parsed.data.avatar_url.trim())) {
+          throw new DoneBotGatewayError(400, "invalid_avatar", "头像仅支持 PNG、JPEG 或 WebP 图片。");
+        }
+        const payload: { username?: string; avatar_url?: string } = {};
+        if (parsed.data.nickname !== undefined) payload.username = parsed.data.nickname;
+        if (parsed.data.avatar_url !== undefined) payload.avatar_url = parsed.data.avatar_url.trim();
+        const updated = await gateway.collabUpdateProfile(payload);
+        const identity = await gateway.collabIdentity();
+        const nextNickname = typeof updated?.username === "string" ? updated.username.trim() : (parsed.data.nickname ?? "");
+        const nextAvatar = typeof updated?.avatar_url === "string" ? updated.avatar_url.trim() : (parsed.data.avatar_url ?? "");
+        if (deps.syncLocalProfile) {
+          const localAvatar = parsed.data.avatar_url !== undefined ? storeLocalAvatarFromDataUrl(parsed.data.avatar_url) : undefined;
+          try {
+            deps.syncLocalProfile({
+              ...(parsed.data.nickname !== undefined ? { name: nextNickname } : {}),
+              ...(localAvatar !== undefined ? { avatarUrl: localAvatar } : {}),
+              email: identity.email,
+            });
+          } catch { /* Best-effort local profile sync */ }
+        }
+        return json(res, 200, {
+          email: identity.email,
+          nickname: nextNickname,
+          avatar_url: nextAvatar,
+        });
+      }
+
+      const friendRemark = reqPath.match(/^\/api\/donebot\/collab\/friends\/([1-9]\d{0,18})\/remark$/);
+      if (method === "PUT" && friendRemark) {
+        const parsed = friendRemarkSchema.safeParse(body);
+        if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "好友备注最多 64 个字符。");
+        return json(res, 200, await gateway.collabSetFriendRemark(Number(friendRemark[1]), parsed.data.remark));
+      }
+
+      if (method === "POST" && reqPath === "/api/donebot/collab/friends/request") {
         const parsed = z.object({ email: z.string().trim().min(3).max(254), note: z.string().max(200).optional() }).strict().safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "请输入有效的好友账号邮箱。");
         return json(res, 200, await gateway.collabSendFriendRequest(parsed.data.email, parsed.data.note ?? ""));
       }
 
-      const friendReqAction = path.match(/^\/api\/donebot\/collab\/friends\/requests\/([0-9a-f-]{36})\/(accept|reject)$/);
+      const friendReqAction = reqPath.match(/^\/api\/donebot\/collab\/friends\/requests\/([0-9a-f-]{36})\/(accept|reject)$/);
       if (method === "POST" && friendReqAction) {
         const [, id, action] = friendReqAction;
         return json(res, 200, action === "accept"
@@ -192,7 +494,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           : await gateway.collabRejectFriendRequest(id!));
       }
 
-      const teamInvAction = path.match(/^\/api\/donebot\/collab\/teams\/invitations\/([0-9a-f-]{36})\/(accept|decline)$/);
+      const teamInvAction = reqPath.match(/^\/api\/donebot\/collab\/teams\/invitations\/([0-9a-f-]{36})\/(accept|decline)$/);
       if (method === "POST" && teamInvAction) {
         const [, id, action] = teamInvAction;
         return json(res, 200, action === "accept"
@@ -200,42 +502,42 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           : await gateway.collabDeclineTeamInvitation(id!));
       }
 
-      const teamLeave = path.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/leave$/);
+      const teamLeave = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/leave$/);
       if (method === "POST" && teamLeave) {
         return json(res, 200, await gateway.collabLeaveTeam(teamLeave[1]!));
       }
 
-      if (method === "POST" && path === "/api/donebot/collab/folders") {
+      if (method === "POST" && reqPath === "/api/donebot/collab/folders") {
         const parsed = saveFolderSchema.safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的共享文件夹配置。");
         return json(res, 200, await gateway.collabSaveFolder(parsed.data));
       }
 
-      const folderPut = path.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})$/);
+      const folderPut = reqPath.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})$/);
       if (method === "PUT" && folderPut) {
         const parsed = saveFolderSchema.safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的共享文件夹权限配置。");
         return json(res, 200, await gateway.collabSaveFolder(parsed.data, folderPut[1]!));
       }
 
-      const folderInvoke = path.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})\/invoke$/);
+      const folderInvoke = reqPath.match(/^\/api\/donebot\/collab\/folders\/([0-9a-f-]{36})\/invoke$/);
       if (method === "POST" && folderInvoke) {
         const parsed = invokeFolderSchema.safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "不支持的远程文件夹操作。");
         return json(res, 200, await gateway.collabInvokeFolder(folderInvoke[1]!, parsed.data));
       }
 
-      if (method === "POST" && path === "/api/donebot/collab/relay/poll") {
+      if (method === "POST" && reqPath === "/api/donebot/collab/relay/poll") {
         return json(res, 200, await gateway.collabRelayPoll());
       }
 
-      if (method === "POST" && path === "/api/donebot/collab/relay/result") {
+      if (method === "POST" && reqPath === "/api/donebot/collab/relay/result") {
         const parsed = z.object({ job_id: z.string().min(1).max(128), result: z.unknown() }).strict().safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的中继结果。");
         return json(res, 200, await gateway.collabRelayResult(parsed.data.job_id, parsed.data.result));
       }
 
-      if (method === "POST" && path === "/api/donebot/collab/bots/share") {
+      if (method === "POST" && reqPath === "/api/donebot/collab/bots/share") {
         const parsed = shareBotSchema.safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "请选择要共享的 Bot 和授权对象。");
         const bot = deps.store.bot(parsed.data.bot_id);
@@ -249,7 +551,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         }, parsed.data.id));
       }
 
-      const botPut = path.match(/^\/api\/donebot\/collab\/bots\/([0-9a-f-]{36})$/);
+      const botPut = reqPath.match(/^\/api\/donebot\/collab\/bots\/([0-9a-f-]{36})$/);
       if (method === "PUT" && botPut) {
         const parsed = updateSharedBotSchema.safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的共享 Bot 权限配置。");
@@ -267,7 +569,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return json(res, 200, await gateway.collabSaveBot(payload, botPut[1]!));
       }
 
-      const botInstall = path.match(/^\/api\/donebot\/collab\/bots\/([0-9a-f-]{36})\/install$/);
+      const botInstall = reqPath.match(/^\/api\/donebot\/collab\/bots\/([0-9a-f-]{36})\/install$/);
       if (method === "POST" && botInstall) {
         const fetched = await gateway.collabBotPackage(botInstall[1]!) as { id: string; name: string; package: unknown };
         const parsedDoc = parsePackageDocument(fetched.package, { trust: "file" });
@@ -283,6 +585,10 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
 
       return PASS;
     } catch (error) {
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
       if (error instanceof DoneBotGatewayError) return json(res, error.status, { error: error.message, code: error.code });
       if (error instanceof TeamExportError || error instanceof PackageImportError) return json(res, error.status, { error: error.message });
       return json(res, 502, { error: error instanceof Error ? error.message : "远程协作请求失败，请稍后重试。" });
@@ -290,23 +596,109 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
   };
 }
 
+async function handleInternalFileTransfer(
+  gateway: DoneBotGateway,
+  input: z.infer<typeof internalTransferSchema>,
+): Promise<unknown> {
+  const relPath = cleanRelativeFilePath(input.path);
+  if (!relPath) throw new DoneBotGatewayError(400, "invalid_path", "Invalid remote relative file path.");
+
+  if (input.action === "download_file") {
+    const dest = input.save_to.trim();
+    if (!dest || dest.includes("\0") || !path.isAbsolute(dest)) {
+      throw new DoneBotGatewayError(400, "invalid_path", "save_to must be an absolute local file path.");
+    }
+    const existing = await fs.lstat(dest).catch(() => null);
+    if (existing?.isSymbolicLink() || existing?.isDirectory()) {
+      throw new DoneBotGatewayError(400, "invalid_path", "save_to must point to a regular file path.");
+    }
+    const upstream = await gateway.collabDownloadFile(input.folder_id, relPath);
+    if (!upstream.ok) {
+      throw new DoneBotGatewayError(upstream.status >= 400 ? upstream.status : 502, "download_failed", await readUpstreamError(upstream, "下载远程共享文件失败。"));
+    }
+    if (!upstream.body) throw new DoneBotGatewayError(502, "download_failed", "远程文件流为空。");
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    const tmp = `${dest}.${process.pid}.${randomUUID()}.part`;
+    const hasher = createHash("sha256");
+    let bytes = 0;
+    const reader = upstream.body.getReader();
+    const out = createWriteStream(tmp, { flags: "wx", mode: 0o644 });
+    try {
+      for (;;) {
+        const next = await reader.read();
+        if (next.done) break;
+        bytes += next.value.byteLength;
+        if (bytes > DONEBOT_COLLAB_MAX_FILE_BYTES) {
+          throw new DoneBotGatewayError(413, "file_too_large", "远程文件超过 100 MB 限制。");
+        }
+        hasher.update(next.value);
+        if (!out.write(next.value)) {
+          await new Promise<void>((resolve, reject) => {
+            out.once("drain", resolve);
+            out.once("error", reject);
+          });
+        }
+      }
+      await new Promise<void>((resolve, reject) => {
+        out.once("error", reject);
+        out.end(() => resolve());
+      });
+      await fs.rename(tmp, dest);
+      return { result: { saved: true, path: dest, bytes, sha256: hasher.digest("hex") } };
+    } catch (error) {
+      out.destroy();
+      await reader.cancel().catch(() => {});
+      await fs.unlink(tmp).catch(() => {});
+      throw error;
+    }
+  }
+
+  const src = input.local_path.trim();
+  if (!src || src.includes("\0") || !path.isAbsolute(src)) {
+    throw new DoneBotGatewayError(400, "invalid_path", "local_path must be an absolute local file path.");
+  }
+  const stat = await fs.lstat(src).catch(() => null);
+  if (!stat || stat.isSymbolicLink() || !stat.isFile()) {
+    throw new DoneBotGatewayError(400, "invalid_path", "local_path must be an existing regular file.");
+  }
+  if (stat.size > DONEBOT_COLLAB_MAX_FILE_BYTES) {
+    throw new DoneBotGatewayError(413, "file_too_large", "上传文件不能超过 100 MB。");
+  }
+  const fileStream = Readable.toWeb(createReadStream(src)) as unknown as ReadableStream<Uint8Array>;
+  const upstream = await gateway.collabUploadFile(input.folder_id, relPath, fileStream, {
+    "content-type": "application/octet-stream",
+    "content-length": String(stat.size),
+  });
+  if (!upstream.ok) {
+    throw new DoneBotGatewayError(upstream.status >= 400 ? upstream.status : 502, "upload_failed", await readUpstreamError(upstream, "上传文件到远程共享文件夹失败。"));
+  }
+  const payload = await upstream.json() as { code?: number; data?: unknown };
+  return payload?.code === 0 && "data" in payload ? payload.data : payload;
+}
+
 export async function handleDoneBotCollabInternal(
   gateway: DoneBotGateway,
   method: string,
-  path: string,
+  reqPath: string,
   res: ServerResponse,
   json: (res: ServerResponse, status: number, value: unknown) => void,
   readInternalBody: () => Promise<Record<string, unknown>>,
 ): Promise<boolean> {
-  if (method !== "POST" || !path.startsWith("/api/internal/donebot/collab/")) return false;
+  if (method !== "POST" || !reqPath.startsWith("/api/internal/donebot/collab/")) return false;
   try {
-    if (path === "/api/internal/donebot/collab/folders") {
+    if (reqPath === "/api/internal/donebot/collab/folders") {
       const snapshot = await gateway.collabFolders() as { shared_with_me?: unknown[] };
       json(res, 200, { folders: snapshot?.shared_with_me ?? [] });
       return true;
     }
-    if (path === "/api/internal/donebot/collab/invoke") {
+    if (reqPath === "/api/internal/donebot/collab/invoke") {
       const body = await readInternalBody();
+      const transferParsed = internalTransferSchema.safeParse(body);
+      if (transferParsed.success) {
+        const answer = await handleInternalFileTransfer(gateway, transferParsed.data);
+        json(res, 200, answer);
+        return true;
+      }
       const parsed = internalInvokeSchema.safeParse(body);
       if (!parsed.success) {
         json(res, 400, { error: "Invalid collab_folder arguments." });

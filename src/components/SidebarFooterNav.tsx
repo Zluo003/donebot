@@ -1,6 +1,5 @@
-import { AppWindow, FolderOpen, Globe, Puzzle, Share2, UsersRound, Zap } from "lucide-react";
+import { AppWindow, FolderOpen, Globe, Puzzle, UsersRound, Zap } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
-import { isCollabEligible, openCollabDestination, useCollabPendingCount } from "@/donebot/collab-store";
 
 import { useAppTriggers } from "@/lib/app-triggers";
 import { automationsFrom, hasUnseenProblemRun } from "@/lib/automations";
@@ -140,7 +139,6 @@ export function SidebarFooterNav({
   const iconSize = iconsOnly && !rail ? 20 : 18;
   const tone = (active: boolean) => (active ? "text-accent" : "text-ink-secondary");
   const automationsNeedYou = useAutomationsNeedYou();
-  const collabPending = useCollabPendingCount();
   const automationsRow = <NavRow
     id="automations"
     label={t("sidebar.nav.automations")}
@@ -182,16 +180,6 @@ export function SidebarFooterNav({
   />;
   if (rail) return <nav data-tour="tools" aria-label={t("sidebar.tools")} className="flex flex-col items-center gap-0.5">{appsRow}</nav>;
 
-  const remoteCollabRow = isCollabEligible(state.config) && <NavRow
-    id="remote-collab"
-    label={t("settings.section.teamCollaboration")}
-    iconsOnly={iconsOnly || toolbar}
-    rail={rail}
-    active={state.activeView === "collab" || (state.appSettingsOpen && state.appSettingsSection === "teamCollaboration")}
-    badge={collabPending}
-    icon={(active) => <Share2 size={iconSize} className={tone(active)} />}
-    onClick={() => openCollabDestination(dispatch)}
-  />;
   const rows = (
     <>
       {automationsRow}
@@ -207,7 +195,6 @@ export function SidebarFooterNav({
           onClick={() => dispatch({ type: "showTeamMap" })}
         />
       )}
-      {remoteCollabRow}
       {filesRow}
       {teamFilesRow}
       {advanced && webPanels.map((panel) => (
@@ -232,7 +219,7 @@ export function SidebarFooterNav({
       <SidebarSectionHeader
         name={t("sidebar.tools")}
         collapsed={collapsed}
-        alert={collapsed && (automationsNeedYou || (isCollabEligible(state.config) && collabPending > 0))}
+        alert={collapsed && automationsNeedYou}
         onToggle={onToggleCollapsed}
         reorderable={false}
         dragging={false}

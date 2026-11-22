@@ -168,4 +168,71 @@ describe("DoneBot collab routes and bot tools", () => {
     expect(pollOut.status).toBe(200);
     expect(gateway.collabRelayPoll).toHaveBeenCalledTimes(1);
   });
+
+  it("updates user profile + local sync, sets friend remark, and rejects oversized (>100MB) file uploads", async () => {
+    const syncLocalProfile = vi.fn();
+    const gateway = {
+      collabIdentity: vi.fn().mockResolvedValue({ account_id: "101", installation_id: "11111111-1111-4111-8111-111111111111", device_name: "Alice Mac", email: "alice@example.invalid" }),
+      collabUpdateProfile: vi.fn().mockResolvedValue({ username: "阿泽", avatar_url: "" }),
+      collabSetFriendRemark: vi.fn().mockResolvedValue({ user_id: 202, remark: "产品老王" }),
+      collabUploadFile: vi.fn().mockResolvedValue(Response.json({ code: 0, data: { result: { written: true, bytes: 10 } } })),
+    } as unknown as DoneBotGateway;
+
+    const handler = createDoneBotCollabRoutes({
+      gateway,
+      store: { bots: [], bot: () => null },
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+      defaultSelection: vi.fn(),
+      packageImportDeps: vi.fn(),
+      broadcast: vi.fn(),
+      publicBot: b => b,
+      syncLocalProfile,
+    });
+
+    const profileOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: profileOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/profile"),
+      path: "/api/donebot/collab/profile",
+      method: "PUT",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: profileOut.json,
+      readBody: async () => ({ nickname: "阿泽", avatar_url: "" }),
+    });
+    expect(profileOut.status).toBe(200);
+    expect(gateway.collabUpdateProfile).toHaveBeenCalledWith({ username: "阿泽", avatar_url: "" });
+    expect(syncLocalProfile).toHaveBeenCalledWith({ name: "阿泽", avatarUrl: "", email: "alice@example.invalid" });
+
+    const remarkOut = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: remarkOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/friends/202/remark"),
+      path: "/api/donebot/collab/friends/202/remark",
+      method: "PUT",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: remarkOut.json,
+      readBody: async () => ({ remark: "产品老王" }),
+    });
+    expect(remarkOut.status).toBe(200);
+    expect(gateway.collabSetFriendRemark).toHaveBeenCalledWith(202, "产品老王");
+
+    const tooBigOut = fakeRes();
+    const tooBigReq = Object.assign(Readable.from([]), {
+      headers: { "content-length": String(101 * 1024 * 1024), "content-type": "application/octet-stream" },
+    }) as unknown as IncomingMessage;
+    await handler({
+      req: tooBigReq,
+      res: tooBigOut.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/folders/33333333-3333-4333-8333-333333333333/file?path=movie.mp4"),
+      path: "/api/donebot/collab/folders/33333333-3333-4333-8333-333333333333/file",
+      method: "PUT",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: tooBigOut.json,
+      readBody,
+    });
+    expect(tooBigOut.status).toBe(413);
+    expect(gateway.collabUploadFile).not.toHaveBeenCalled();
+  });
 });

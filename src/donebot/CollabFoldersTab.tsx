@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -7,23 +7,27 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  HardDrive,
   Loader2,
   Pencil,
-  Shield,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
 import { api } from "@/state/api";
-import { SETTINGS_INPUT, SettingsGroup, SIMPLE_CARD, Switch } from "@/components/SettingsPrimitives";
+import { Switch } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
 import type { CollabAccess, DoneBotFolderGrantInput, DoneBotOwnedFolder, DoneBotSharedFolder } from "../../shared/donebot-collab";
+import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
 import { CollabFolderBrowser } from "./CollabFolderBrowser";
 import {
   accessLabel,
   buildGrantCandidates,
   cleanError,
   COLLAB_BUTTON,
+  COLLAB_CARD,
+  COLLAB_HERO,
+  COLLAB_INPUT,
+  displayPersonName,
   sourceText,
   type CollabOverview,
   type LocalCollabActivity,
@@ -57,6 +61,7 @@ export function CollabFoldersTab({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [browsing, setBrowsing] = useState<DoneBotSharedFolder | null>(null);
+  const folderNameId = useId();
 
   const candidates = useMemo(() => buildGrantCandidates(overview), [overview]);
 
@@ -91,13 +96,12 @@ export function CollabFoldersTab({
     try {
       const picked = await bridge.chooseFolder();
       if (!picked) return;
-      const grants = new Map<string, DoneBotFolderGrantInput>();
       setDraft({
         id: picked.id,
         path: picked.path,
         name: picked.name,
         enabled: true,
-        grants,
+        grants: new Map(),
         isNew: true,
       });
     } catch (cause) {
@@ -224,53 +228,66 @@ export function CollabFoldersTab({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
+      {/* Hero Banner */}
+      <section className={cn(COLLAB_HERO, "flex flex-wrap items-center justify-between gap-4 p-5")}>
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[#009957]/15 text-[#4CC98C] ring-1 ring-inset ring-[#009957]/25">
+            <HardDrive size={20} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[16px] font-semibold text-ink">本机文件夹直连共享</h2>
+              {relayStatus && relayStatus.activeCount > 0 && (
+                <span className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                  relayStatus.connected
+                    ? "bg-success/12 text-success ring-success/25"
+                    : "bg-accent/12 text-accent-text ring-accent/25",
+                )}>
+                  <span className={cn("size-1.5 rounded-full", relayStatus.connected ? "bg-success" : "bg-accent")} aria-hidden="true" />
+                  {relayStatus.connected ? "中继在线" : "正在连接"}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-[12.5px] text-ink-secondary">
+              文件始终保留在你的本机硬盘，绝不上传云端存储；单个文件支持最大 100 MB 流式读写与下载。
+            </p>
+          </div>
+        </div>
+        {bridge && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void startPickFolder()}
+            className={`${COLLAB_BUTTON} ui-button-primary shrink-0 px-3.5 text-[12.5px]`}
+          >
+            <FolderPlus size={14} aria-hidden="true" />共享本机文件夹
+          </button>
+        )}
+      </section>
+
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger ring-1 ring-inset ring-danger/20">
-          <AlertCircle size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
+        <div role="alert" className="flex items-start gap-2.5 rounded-2xl bg-danger/10 px-4 py-3 text-[13px] text-danger ring-1 ring-inset ring-danger/20">
+          <AlertCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {/* 1. Owned local folders */}
-      <SettingsGroup
-        label={`我共享的本机文件夹（${overview.folders.owned.length}）`}
-        actions={
-          <div className="flex items-center gap-2">
-            {relayStatus && relayStatus.activeCount > 0 && (
-              <span className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset",
-                relayStatus.connected
-                  ? "bg-success/12 text-success ring-success/25"
-                  : "bg-accent/12 text-accent-text ring-accent/25",
-              )}>
-                <span className={cn("size-1.5 rounded-full", relayStatus.connected ? "bg-success" : "bg-accent")} aria-hidden="true" />
-                {relayStatus.connected ? "中继在线" : "正在连接"}
-              </span>
-            )}
-            {bridge && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void startPickFolder()}
-                className={`${COLLAB_BUTTON} ui-button-primary text-[12px]`}
-              >
-                <FolderPlus size={13} aria-hidden="true" />共享本机文件夹
-              </button>
-            )}
-          </div>
-        }
-        footnote="文件始终保存在你的电脑硬盘里，绝不上传云端；授权的好友或团队成员仅可在你设定的只读/可编辑范围内远程访问，随时可一键收回。"
-      >
-        <div className={cn(SIMPLE_CARD, "flex flex-col divide-y divide-hairline/40 p-0")}>
+      <section className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-[13px] font-semibold text-ink">我共享的本机文件夹（{overview.folders.owned.length}）</h3>
+        </div>
+        <div className={cn(COLLAB_CARD, "overflow-hidden divide-y divide-ink/[0.06]")}>
           {!bridge && (
-            <div className="px-4 py-3 text-[12px] text-ink-secondary">
+            <div className="px-5 py-3.5 text-[12.5px] text-ink-secondary">
               请在桌面端本机窗口中添加或管理本机共享文件夹。
             </div>
           )}
 
           {relayStatus?.error && (
-            <div role="alert" className="flex items-start gap-2 bg-danger/8 px-4 py-2.5 text-[12px] text-danger">
+            <div role="alert" className="flex items-start gap-2 bg-danger/8 px-5 py-3 text-[12.5px] text-danger">
               <AlertCircle size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
               <span>{relayStatus.error}</span>
             </div>
@@ -278,14 +295,14 @@ export function CollabFoldersTab({
 
           {/* Inline editor for creating or updating folder ACL */}
           {draft && (
-            <div className="flex flex-col gap-3.5 bg-inset/70 p-4">
+            <div className="flex flex-col gap-4 bg-inset/65 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[13px] font-medium text-ink">
-                    {draft.isNew ? "配置新共享文件夹权限" : `编辑「${draft.name}」的访问权限`}
+                  <div className="text-[14px] font-semibold text-ink">
+                    {draft.isNew ? "配置新共享文件夹" : `编辑「${draft.name}」的共享权限`}
                   </div>
                   {draft.path && (
-                    <div className="mt-0.5 truncate font-mono text-[11px] text-ink-tertiary" title={draft.path}>
+                    <div className="mt-1 truncate font-mono text-[11.5px] text-ink-tertiary" title={draft.path}>
                       本机路径（仅本地可见）：{draft.path}
                     </div>
                   )}
@@ -296,29 +313,31 @@ export function CollabFoldersTab({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[12px] font-medium text-ink-secondary">共享显示名称</label>
+                <label htmlFor={folderNameId} className="text-[12px] font-medium text-ink-secondary">共享显示名称</label>
                 <input
+                  id={folderNameId}
+                  name="folder_name"
                   value={draft.name}
                   onChange={e => setDraft({ ...draft, name: e.target.value })}
                   maxLength={120}
                   placeholder="例如：产品方案文档"
-                  className={SETTINGS_INPUT}
+                  className={COLLAB_INPUT}
                   disabled={busy}
                 />
               </div>
 
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-medium text-ink-secondary">选择可访问的团队或好友（精确配置只读 / 可编辑）</span>
-                  <span className="text-[11px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
+                  <span className="text-[12px] font-medium text-ink-secondary">选择可访问的团队或好友（可按人/团队精确配置只读或可编辑）</span>
+                  <span className="text-[11.5px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
                 </div>
                 {candidates.length > 0 ? (
-                  <div className="max-h-56 divide-y divide-hairline/40 overflow-y-auto rounded-xl bg-app/70 ring-1 ring-inset ring-hairline/60">
+                  <div className="max-h-60 divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/80 ring-1 ring-inset ring-ink/[0.08]">
                     {candidates.map(item => {
                       const key = grantKey(item.subject_type, item.subject_id);
                       const granted = draft.grants.get(key);
                       return (
-                        <div key={key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+                        <div key={key} className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5">
                           <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
                             <input
                               type="checkbox"
@@ -326,9 +345,11 @@ export function CollabFoldersTab({
                               onChange={() => toggleGrant(item.subject_type, item.subject_id)}
                               className="size-4 rounded accent-accent"
                             />
-                            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-ink/[0.06] text-ink-secondary">
-                              {item.subject_type === "team" ? <Users size={13} aria-hidden="true" /> : <Shield size={13} aria-hidden="true" />}
-                            </span>
+                            {item.subject_type === "team" ? (
+                              <CollabTeamBadge name={item.label} size={28} />
+                            ) : (
+                              <CollabAvatar avatarUrl={item.avatarUrl} nickname={item.label} email={item.email} size={28} />
+                            )}
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[13px] font-medium text-ink">{item.label}</span>
                               <span className="block truncate text-[11px] text-ink-tertiary">{item.hint}</span>
@@ -344,7 +365,7 @@ export function CollabFoldersTab({
                                   className={cn(
                                     "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
                                     granted.access === level
-                                      ? "bg-surface text-ink shadow-xs ring-1 ring-ink/10"
+                                      ? "bg-composer text-ink shadow-xs ring-1 ring-ink/10"
                                       : "text-ink-secondary hover:text-ink",
                                   )}
                                 >
@@ -358,8 +379,8 @@ export function CollabFoldersTab({
                     })}
                   </div>
                 ) : (
-                  <p className="rounded-xl bg-app/50 px-3.5 py-3 text-[12px] text-ink-secondary ring-1 ring-inset ring-hairline/50">
-                    还没有可授权的好友或团队。你可以先保存文件夹，之后到「好友与团队」页添加好友或创建团队后再配置权限。
+                  <p className="rounded-xl bg-app/50 px-4 py-3 text-[12px] text-ink-secondary ring-1 ring-inset ring-ink/[0.07]">
+                    还没有可授权的好友或团队。你可以先保存文件夹，之后添加好友或创建团队后再回来勾选授权。
                   </p>
                 )}
               </div>
@@ -375,22 +396,22 @@ export function CollabFoldersTab({
           )}
 
           {overview.folders.owned.length > 0 ? (
-            <ul className="divide-y divide-hairline/40">
+            <ul className="divide-y divide-ink/[0.06]">
               {overview.folders.owned.map(folder => {
                 const local = localById.get(folder.id);
                 const isThisDevice = folder.installation_id === overview.identity.installation_id;
                 return (
-                  <li key={folder.id} className="flex flex-col gap-2.5 px-4 py-3.5">
+                  <li key={folder.id} className="flex flex-col gap-3 px-5 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-ink/[0.06] text-ink-secondary ring-1 ring-inset ring-ink/[0.08]">
-                          <FolderOpen size={15} aria-hidden="true" />
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#009957]/14 text-[#4CC98C] ring-1 ring-inset ring-[#009957]/24">
+                          <FolderOpen size={16} aria-hidden="true" />
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate text-[14px] font-medium text-ink">{folder.name}</span>
+                            <span className="truncate text-[14px] font-semibold text-ink">{folder.name}</span>
                             <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
                               folder.online
                                 ? "bg-success/12 text-success ring-success/25"
                                 : "bg-ink/[0.05] text-ink-tertiary ring-ink/10",
@@ -398,7 +419,7 @@ export function CollabFoldersTab({
                               <span className={cn("size-1.5 rounded-full", folder.online ? "bg-success" : "bg-ink-tertiary/50")} aria-hidden="true" />
                               {folder.online ? "在线" : folder.enabled ? "离线" : "已暂停"}
                             </span>
-                            <span className="text-[11px] text-ink-tertiary">
+                            <span className="text-[11.5px] text-ink-tertiary">
                               {folder.device_name}{isThisDevice ? "（本机）" : ""}
                             </span>
                           </div>
@@ -414,8 +435,8 @@ export function CollabFoldersTab({
                           aria-label={`启用共享文件夹 ${folder.name}`}
                           onClick={() => void toggleFolderEnabled(folder, !folder.enabled)}
                         />
-                        <button type="button" disabled={busy} onClick={() => openEditor(folder)} className={`${COLLAB_BUTTON} text-[12px]`}>
-                          <Pencil size={12} aria-hidden="true" />配置权限
+                        <button type="button" disabled={busy} onClick={() => openEditor(folder)} className={`${COLLAB_BUTTON} h-8 px-2.5 text-[12px]`}>
+                          <Pencil size={12} aria-hidden="true" />权限
                         </button>
                         <button
                           type="button"
@@ -430,7 +451,7 @@ export function CollabFoldersTab({
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 pl-10">
+                    <div className="flex flex-wrap items-center gap-1.5 pl-12">
                       {folder.grants.length > 0 ? folder.grants.map(g => (
                         <button
                           key={grantKey(g.subject_type, g.subject_id)}
@@ -447,7 +468,7 @@ export function CollabFoldersTab({
                           <span className="opacity-70">· {accessLabel(g.access)}</span>
                         </button>
                       )) : (
-                        <span className="text-[11px] text-ink-tertiary">尚未授权任何好友或团队，点击「配置权限」添加。</span>
+                        <span className="text-[11.5px] text-ink-tertiary">尚未授权任何好友或团队，点击「权限」添加。</span>
                       )}
                     </div>
                   </li>
@@ -455,31 +476,31 @@ export function CollabFoldersTab({
               })}
             </ul>
           ) : !draft && (
-            <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-ink/[0.06] text-ink-secondary ring-1 ring-inset ring-ink/[0.08]">
-                <FolderOpen size={18} aria-hidden="true" />
+            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-ink/[0.05] text-ink-tertiary">
+                <FolderOpen size={19} aria-hidden="true" />
               </div>
-              <p className="text-[13px] font-medium text-ink">还没有共享本机文件夹</p>
-              <p className="max-w-md text-[12px] leading-relaxed text-ink-secondary">
-                选择一个本机目录并指定哪些好友或团队只读/可编辑。对方和对方的本机 Bot 即可通过网关实时协作，无需云服务器。
+              <p className="text-[13.5px] font-medium text-ink">还没有共享本机文件夹</p>
+              <p className="max-w-md text-[12px] leading-relaxed text-ink-tertiary">
+                选择一个本机目录并指定哪些好友或团队只读/可编辑。对方和对方的本机 Bot 即可实时读写（支持最大 100 MB 文件）。
               </p>
             </div>
           )}
 
           {activity.length > 0 && (
-            <div className="px-4 py-2.5">
+            <div className="bg-inset/35 px-5 py-3">
               <button
                 type="button"
                 onClick={() => setShowActivity(v => !v)}
                 className="flex w-full items-center justify-between text-[12px] font-medium text-ink-secondary hover:text-ink"
               >
-                <span>最近远程访问记录（{activity.length}）</span>
+                <span>最近远程访问审计记录（{activity.length}）</span>
                 <ChevronDown size={14} aria-hidden="true" className={cn("transition-transform", showActivity && "rotate-180")} />
               </button>
               {showActivity && (
-                <ul className="mt-2 max-h-44 divide-y divide-hairline/30 overflow-y-auto rounded-lg bg-inset/70 ring-1 ring-inset ring-hairline/40">
+                <ul className="mt-2.5 max-h-48 divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/75 ring-1 ring-inset ring-ink/[0.07]">
                   {activity.slice(0, 30).map((entry, idx) => (
-                    <li key={`${entry.at}-${idx}`} className="flex items-center justify-between gap-3 px-3 py-1.5 text-[11px]">
+                    <li key={`${entry.at}-${idx}`} className="flex items-center justify-between gap-3 px-3.5 py-2 text-[11.5px]">
                       <div className="min-w-0 flex-1 truncate text-ink-secondary">
                         <span className="font-medium text-ink">{entry.callerEmail}</span>
                         {" · "}
@@ -496,30 +517,36 @@ export function CollabFoldersTab({
             </div>
           )}
         </div>
-      </SettingsGroup>
+      </section>
 
       {/* 2. Folders shared with me */}
-      <SettingsGroup
-        label={`共享给我的文件夹（${overview.folders.shared_with_me.length}）`}
-        footnote="你本机的任意 Bot 都可以直接发现并读写（按授权权限）下面在线的文件夹，在聊天里直接说出文件夹名即可调用。"
-      >
-        <div className={cn(SIMPLE_CARD, "flex flex-col divide-y divide-hairline/40 p-0")}>
+      <section className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-[13px] font-semibold text-ink">共享给我的文件夹（{overview.folders.shared_with_me.length}）</h3>
+          <span className="text-[11.5px] text-ink-tertiary">你的本机 Bot 也可直接访问</span>
+        </div>
+        <div className={cn(COLLAB_CARD, "overflow-hidden")}>
           {overview.folders.shared_with_me.length > 0 ? (
-            <ul className="divide-y divide-hairline/40">
+            <ul className="divide-y divide-ink/[0.06]">
               {overview.folders.shared_with_me.map(folder => {
                 const isOpen = browsing?.id === folder.id;
+                const ownerName = displayPersonName({
+                  remark: folder.owner_remark,
+                  nickname: folder.owner_nickname,
+                  email: folder.owner_email,
+                });
                 return (
-                  <li key={folder.id} className="flex flex-col gap-3 px-4 py-3.5">
+                  <li key={folder.id} className="flex flex-col gap-3.5 px-5 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-ink/[0.06] text-ink-secondary ring-1 ring-inset ring-ink/[0.08]">
-                          <Folder size={15} aria-hidden="true" />
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-ink/[0.06] text-ink-secondary ring-1 ring-inset ring-ink/[0.08]">
+                          <Folder size={16} aria-hidden="true" />
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate text-[14px] font-medium text-ink">{folder.name}</span>
+                            <span className="truncate text-[14px] font-semibold text-ink">{folder.name}</span>
                             <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
                               folder.online
                                 ? "bg-success/12 text-success ring-success/25"
                                 : "bg-ink/[0.05] text-ink-tertiary ring-ink/10",
@@ -528,7 +555,7 @@ export function CollabFoldersTab({
                               {folder.online ? "在线" : "对方离线"}
                             </span>
                             <span className={cn(
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
                               folder.access === "write"
                                 ? "bg-accent/14 text-accent-text ring-accent/25"
                                 : "bg-ink/[0.05] text-ink-secondary ring-ink/10",
@@ -536,10 +563,16 @@ export function CollabFoldersTab({
                               {accessLabel(folder.access)}
                             </span>
                           </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-secondary">
-                            <span>来自 {folder.owner_email}</span>
-                            <span className="text-ink-tertiary">· {folder.device_name}</span>
-                            <span className="text-ink-tertiary">· {sourceText(folder.sources)}</span>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-secondary">
+                            <CollabAvatar
+                              avatarUrl={folder.owner_avatar_url}
+                              remark={folder.owner_remark}
+                              nickname={folder.owner_nickname}
+                              email={folder.owner_email}
+                              size={18}
+                            />
+                            <span>{ownerName}</span>
+                            <span className="text-ink-tertiary">· {folder.device_name} · {sourceText(folder.sources)}</span>
                           </div>
                         </div>
                       </div>
@@ -547,7 +580,7 @@ export function CollabFoldersTab({
                         type="button"
                         disabled={!folder.online}
                         onClick={() => setBrowsing(isOpen ? null : folder)}
-                        className={`${COLLAB_BUTTON} text-[12px]`}
+                        className={cn(COLLAB_BUTTON, "text-[12px]", isOpen && "ui-button-primary")}
                       >
                         <Eye size={13} aria-hidden="true" />
                         {isOpen ? "收起浏览" : "浏览文件"}
@@ -560,12 +593,12 @@ export function CollabFoldersTab({
               })}
             </ul>
           ) : (
-            <div className="px-4 py-6 text-center text-[12px] text-ink-secondary">
-              还没有好友或队友向你共享文件夹。等对方在「远程协作 → 共享文件夹」里勾选你或你的团队后，这里会立刻显示。
+            <div className="px-6 py-10 text-center text-[12.5px] text-ink-tertiary">
+              还没有好友或队友向你共享文件夹。等对方在「共享文件夹」里勾选你或你的团队后，这里会立即显示。
             </div>
           )}
         </div>
-      </SettingsGroup>
+      </section>
     </div>
   );
 }

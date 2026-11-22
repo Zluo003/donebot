@@ -8,20 +8,22 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Shield,
+  ShieldCheck,
   Sparkles,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
 import { api } from "@/state/api";
-import { SettingsGroup, SIMPLE_CARD } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
 import type { DoneBotBotGrantInput, DoneBotOwnedSharedBot, DoneBotSharedBot } from "../../shared/donebot-collab";
+import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
 import {
   buildGrantCandidates,
   cleanError,
   COLLAB_BUTTON,
+  COLLAB_CARD,
+  COLLAB_HERO,
+  displayPersonName,
   initialGlyph,
   sourceText,
   type CollabOverview,
@@ -154,7 +156,7 @@ export function CollabBotsTab({
         body: "{}",
       });
       const createdName = res?.bots?.[0]?.name || item.name;
-      setInstalledNotice(`已在本机创建同能力 Bot「${createdName}」（已包含人设与技能，不含原主人记忆），可在左侧机器人列表中直接使用。`);
+      setInstalledNotice(`已在本机创建同能力 Bot「${createdName}」（已包含人设与技能，不含原主人记忆），切回左侧「机器人」即可对话。`);
     } catch (cause) {
       setError(cleanError(cause, "添加共享 Bot 失败，请重试。"));
     } finally {
@@ -165,45 +167,56 @@ export function CollabBotsTab({
   const selectedLocalBot = draft?.botId ? overview.local_bots.find(b => b.id === draft.botId) : null;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
+      {/* Hero Banner */}
+      <section className={cn(COLLAB_HERO, "flex flex-wrap items-center justify-between gap-4 p-5")}>
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-accent/15 text-accent-text ring-1 ring-inset ring-accent/25">
+            <Bot size={20} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-semibold text-ink">共享你的得力 Bot</h2>
+            <p className="mt-0.5 text-[12.5px] text-ink-secondary">
+              打包 SOUL.md 人设与 Skills 技能，强制剥离聊天记录、个人记忆和密钥；成员一键安装并各自运行。
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={busy || overview.local_bots.length === 0}
+          onClick={openNewShare}
+          className={`${COLLAB_BUTTON} ui-button-primary shrink-0 px-3.5 text-[12.5px]`}
+        >
+          <Plus size={14} aria-hidden="true" />共享我的 Bot
+        </button>
+      </section>
+
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger ring-1 ring-inset ring-danger/20">
-          <AlertCircle size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
+        <div role="alert" className="flex items-start gap-2.5 rounded-2xl bg-danger/10 px-4 py-3 text-[13px] text-danger ring-1 ring-inset ring-danger/20">
+          <AlertCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {installedNotice && (
-        <div role="status" className="flex items-start gap-2 rounded-xl bg-success/12 px-3.5 py-2.5 text-[13px] text-success ring-1 ring-inset ring-success/25">
-          <Check size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
+        <div role="status" className="flex items-start gap-2.5 rounded-2xl bg-success/12 px-4 py-3 text-[13px] text-success ring-1 ring-inset ring-success/25">
+          <Check size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{installedNotice}</span>
         </div>
       )}
 
       {/* 1. Owned shared bots */}
-      <SettingsGroup
-        label={`我共享的 Bot（${overview.bots.owned.length}）`}
-        actions={
-          <button
-            type="button"
-            disabled={busy || overview.local_bots.length === 0}
-            onClick={openNewShare}
-            className={`${COLLAB_BUTTON} ui-button-primary text-[12px]`}
-          >
-            <Plus size={13} aria-hidden="true" />共享我的 Bot
-          </button>
-        }
-        footnote="共享会自动打包该 Bot 的 SOUL.md 人设、Skills 技能与基础设定，强制剥离个人记忆、对话历史与密钥。"
-      >
-        <div className={cn(SIMPLE_CARD, "flex flex-col divide-y divide-hairline/40 p-0")}>
+      <section className="flex flex-col gap-2.5">
+        <h3 className="px-1 text-[13px] font-semibold text-ink">我共享的 Bot（{overview.bots.owned.length}）</h3>
+        <div className={cn(COLLAB_CARD, "overflow-hidden divide-y divide-ink/[0.06]")}>
           {draft && (
-            <div className="flex flex-col gap-3.5 bg-inset/70 p-4">
+            <div className="flex flex-col gap-4 bg-inset/65 p-5">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="text-[13px] font-medium text-ink">
+                  <div className="text-[14px] font-semibold text-ink">
                     {draft.id ? "编辑共享 Bot 授权" : "选择要共享的本机 Bot"}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-ink-secondary">
+                  <p className="mt-0.5 text-[12px] text-ink-secondary">
                     将完整带上 SOUL.md 人设和已安装的 Skills，不会包含任何聊天记录、个人记忆或 API 密钥。
                   </p>
                 </div>
@@ -213,7 +226,7 @@ export function CollabBotsTab({
               </div>
 
               {!draft.id && (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   {overview.local_bots.map(bot => {
                     const active = draft.botId === bot.id;
                     return (
@@ -222,19 +235,19 @@ export function CollabBotsTab({
                         type="button"
                         onClick={() => setDraft({ ...draft, botId: bot.id })}
                         className={cn(
-                          "flex items-start gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors",
+                          "flex items-start gap-3 rounded-xl px-3.5 py-3 text-left transition-colors",
                           active
-                            ? "bg-ink/[0.08] ring-1 ring-inset ring-ink/30"
-                            : "bg-app/70 ring-1 ring-inset ring-hairline/60 hover:bg-ink/[0.04]",
+                            ? "bg-accent/14 ring-1 ring-inset ring-accent/40"
+                            : "bg-app/75 ring-1 ring-inset ring-ink/[0.08] hover:bg-ink/[0.04]",
                         )}
                       >
-                        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/[0.07] text-[12px] font-semibold text-ink">
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-ink/[0.08] text-[13px] font-semibold text-ink">
                           {initialGlyph(bot.name)}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium text-ink">{bot.name}</span>
-                          {bot.title && <span className="block truncate text-[11px] text-ink-secondary">{bot.title}</span>}
-                          <span className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-ink-tertiary">
+                          <span className="block truncate text-[13.5px] font-semibold text-ink">{bot.name}</span>
+                          {bot.title && <span className="block truncate text-[11.5px] text-ink-secondary">{bot.title}</span>}
+                          <span className="mt-1 flex flex-wrap gap-1.5 text-[10.5px] text-ink-tertiary">
                             <span>{bot.has_soul ? "含 SOUL.md" : "无人设文件"}</span>
                             <span>· {bot.skill_count} 个技能</span>
                           </span>
@@ -246,11 +259,11 @@ export function CollabBotsTab({
               )}
 
               {selectedLocalBot && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-app/60 px-3 py-2 text-[11px] text-ink-secondary ring-1 ring-inset ring-hairline/50">
-                  <Sparkles size={13} className="shrink-0 text-accent-text" aria-hidden="true" />
+                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-app/75 px-3.5 py-2.5 text-[12px] text-ink-secondary ring-1 ring-inset ring-ink/[0.07]">
+                  <Sparkles size={14} className="shrink-0 text-accent-text" aria-hidden="true" />
                   <span>
                     已选中 <strong className="text-ink">{selectedLocalBot.name}</strong>：
-                    {selectedLocalBot.has_soul ? "包含 SOUL.md、" : ""}{selectedLocalBot.skill_count} 个技能（不含记忆）。
+                    {selectedLocalBot.has_soul ? "包含 SOUL.md、" : ""}{selectedLocalBot.skill_count} 个技能（自动剥离个人记忆）。
                   </span>
                 </div>
               )}
@@ -258,24 +271,26 @@ export function CollabBotsTab({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] font-medium text-ink-secondary">共享给哪些团队或好友</span>
-                  <span className="text-[11px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
+                  <span className="text-[11.5px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
                 </div>
                 {candidates.length > 0 ? (
-                  <div className="max-h-48 divide-y divide-hairline/40 overflow-y-auto rounded-xl bg-app/70 ring-1 ring-inset ring-hairline/60">
+                  <div className="max-h-52 divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/80 ring-1 ring-inset ring-ink/[0.08]">
                     {candidates.map(item => {
                       const key = grantKey(item.subject_type, item.subject_id);
                       const checked = draft.grants.has(key);
                       return (
-                        <label key={key} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-ink/[0.03]">
+                        <label key={key} className="flex cursor-pointer items-center gap-2.5 px-3.5 py-2.5 hover:bg-ink/[0.03]">
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => toggleGrant(item.subject_type, item.subject_id)}
                             className="size-4 rounded accent-accent"
                           />
-                          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-ink/[0.06] text-ink-secondary">
-                            {item.subject_type === "team" ? <Users size={13} aria-hidden="true" /> : <Shield size={13} aria-hidden="true" />}
-                          </span>
+                          {item.subject_type === "team" ? (
+                            <CollabTeamBadge name={item.label} size={28} />
+                          ) : (
+                            <CollabAvatar avatarUrl={item.avatarUrl} nickname={item.label} email={item.email} size={28} />
+                          )}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[13px] font-medium text-ink">{item.label}</span>
                             <span className="block truncate text-[11px] text-ink-tertiary">{item.hint}</span>
@@ -285,8 +300,8 @@ export function CollabBotsTab({
                     })}
                   </div>
                 ) : (
-                  <p className="rounded-xl bg-app/50 px-3.5 py-3 text-[12px] text-ink-secondary ring-1 ring-inset ring-hairline/50">
-                    请先到「好友与团队」添加好友或加入团队，再选择共享对象。
+                  <p className="rounded-xl bg-app/50 px-4 py-3 text-[12px] text-ink-secondary ring-1 ring-inset ring-ink/[0.07]">
+                    请先添加好友或创建团队，再选择共享对象。
                   </p>
                 )}
               </div>
@@ -302,27 +317,27 @@ export function CollabBotsTab({
           )}
 
           {overview.bots.owned.length > 0 ? (
-            <ul className="divide-y divide-hairline/40">
+            <ul className="divide-y divide-ink/[0.06]">
               {overview.bots.owned.map(item => {
                 const canSync = Boolean(item.source_bot_id && overview.local_bots.some(b => b.id === item.source_bot_id));
                 return (
-                  <li key={item.id} className="flex flex-col gap-2.5 px-4 py-3.5">
+                  <li key={item.id} className="flex flex-col gap-3 px-5 py-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-ink/[0.06] text-ink-secondary ring-1 ring-inset ring-ink/[0.08]">
-                          <Bot size={15} aria-hidden="true" />
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/14 text-accent-text ring-1 ring-inset ring-accent/24">
+                          <Bot size={16} aria-hidden="true" />
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate text-[14px] font-medium text-ink">{item.name}</span>
+                            <span className="truncate text-[14px] font-semibold text-ink">{item.name}</span>
                             {item.has_soul && (
-                              <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10px] font-medium text-ink-secondary ring-1 ring-inset ring-ink/10">SOUL.md</span>
+                              <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">SOUL.md</span>
                             )}
-                            <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10px] font-medium text-ink-secondary ring-1 ring-inset ring-ink/10">
+                            <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">
                               {item.skill_count} 个技能
                             </span>
-                            <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success ring-1 ring-inset ring-success/20">
-                              不含记忆
+                            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[10.5px] font-medium text-success ring-1 ring-inset ring-success/20">
+                              <ShieldCheck size={11} aria-hidden="true" />不含记忆
                             </span>
                           </div>
                           {(item.title || item.description) && (
@@ -332,11 +347,11 @@ export function CollabBotsTab({
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         {canSync && (
-                          <button type="button" disabled={busy} onClick={() => void syncLatestBot(item)} className={`${COLLAB_BUTTON} text-[12px]`} title="将本机最新的人设和技能同步给已授权成员">
-                            <RefreshCw size={12} aria-hidden="true" />同步更新
+                          <button type="button" disabled={busy} onClick={() => void syncLatestBot(item)} className={`${COLLAB_BUTTON} h-8 px-2.5 text-[12px]`} title="将本机最新的人设和技能同步给已授权成员">
+                            <RefreshCw size={12} aria-hidden="true" />同步
                           </button>
                         )}
-                        <button type="button" disabled={busy} onClick={() => openEditShare(item)} className={`${COLLAB_BUTTON} text-[12px]`}>
+                        <button type="button" disabled={busy} onClick={() => openEditShare(item)} className={`${COLLAB_BUTTON} h-8 px-2.5 text-[12px]`}>
                           <Pencil size={12} aria-hidden="true" />授权
                         </button>
                         <button
@@ -351,13 +366,13 @@ export function CollabBotsTab({
                         </button>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 pl-10">
+                    <div className="flex flex-wrap items-center gap-1.5 pl-12">
                       {item.grants.length > 0 ? item.grants.map(g => (
-                        <span key={grantKey(g.subject_type, g.subject_id)} className="inline-flex items-center rounded-full bg-ink/[0.05] px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary ring-1 ring-inset ring-ink/10">
+                        <span key={grantKey(g.subject_type, g.subject_id)} className="inline-flex items-center rounded-full bg-ink/[0.06] px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary">
                           {g.label || g.subject_id}
                         </span>
                       )) : (
-                        <span className="text-[11px] text-ink-tertiary">尚未指定共享对象，点击「授权」添加好友或团队。</span>
+                        <span className="text-[11.5px] text-ink-tertiary">尚未指定共享对象，点击「授权」添加好友或团队。</span>
                       )}
                     </div>
                   </li>
@@ -365,70 +380,82 @@ export function CollabBotsTab({
               })}
             </ul>
           ) : !draft && (
-            <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-ink/[0.06] text-ink-secondary ring-1 ring-inset ring-ink/[0.08]">
-                <Bot size={18} aria-hidden="true" />
+            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-ink/[0.05] text-ink-tertiary">
+                <Bot size={19} aria-hidden="true" />
               </div>
-              <p className="text-[13px] font-medium text-ink">还没有共享任何 Bot</p>
-              <p className="max-w-md text-[12px] leading-relaxed text-ink-secondary">
+              <p className="text-[13.5px] font-medium text-ink">还没有共享任何 Bot</p>
+              <p className="max-w-md text-[12px] leading-relaxed text-ink-tertiary">
                 把你调教好的得力 Bot（连同 SOUL.md 人设和 Skills 技能）共享给团队或好友，对方一键就能建出同样能力的全新 Bot。
               </p>
             </div>
           )}
         </div>
-      </SettingsGroup>
+      </section>
 
       {/* 2. Bots shared with me */}
-      <SettingsGroup
-        label={`共享给我的 Bot（${overview.bots.shared_with_me.length}）`}
-        footnote="点击「添加到我的电脑」会在本机新建一个完全独立、相同能力、不含对方记忆的 Bot。"
-      >
-        <div className={cn(SIMPLE_CARD, "flex flex-col divide-y divide-hairline/40 p-0")}>
+      <section className="flex flex-col gap-2.5">
+        <h3 className="px-1 text-[13px] font-semibold text-ink">共享给我的 Bot（{overview.bots.shared_with_me.length}）</h3>
+        <div className={cn(COLLAB_CARD, "overflow-hidden")}>
           {overview.bots.shared_with_me.length > 0 ? (
-            <ul className="divide-y divide-hairline/40">
-              {overview.bots.shared_with_me.map(item => (
-                <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
-                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/14 text-[13px] font-semibold text-accent-text ring-1 ring-inset ring-accent/25">
-                      {initialGlyph(item.name)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[14px] font-medium text-ink">{item.name}</span>
-                        {item.has_soul && (
-                          <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10px] font-medium text-ink-secondary ring-1 ring-inset ring-ink/10">SOUL.md</span>
+            <ul className="divide-y divide-ink/[0.06]">
+              {overview.bots.shared_with_me.map(item => {
+                const ownerName = displayPersonName({
+                  remark: item.owner_remark,
+                  nickname: item.owner_nickname,
+                  email: item.owner_email,
+                });
+                return (
+                  <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/14 text-[14px] font-semibold text-accent-text ring-1 ring-inset ring-accent/25">
+                        {initialGlyph(item.name)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-[14px] font-semibold text-ink">{item.name}</span>
+                          {item.has_soul && (
+                            <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">SOUL.md</span>
+                          )}
+                          <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">
+                            {item.skill_count} 个技能
+                          </span>
+                        </div>
+                        {(item.title || item.description) && (
+                          <p className="mt-0.5 line-clamp-2 text-[12px] text-ink-secondary">{item.title || item.description}</p>
                         )}
-                        <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10px] font-medium text-ink-secondary ring-1 ring-inset ring-ink/10">
-                          {item.skill_count} 个技能
-                        </span>
-                      </div>
-                      {(item.title || item.description) && (
-                        <p className="mt-0.5 line-clamp-2 text-[12px] text-ink-secondary">{item.title || item.description}</p>
-                      )}
-                      <div className="mt-1 text-[11px] text-ink-tertiary">
-                        来自 {item.owner_email} · {sourceText(item.sources)}
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-ink-tertiary">
+                          <CollabAvatar
+                            avatarUrl={item.owner_avatar_url}
+                            remark={item.owner_remark}
+                            nickname={item.owner_nickname}
+                            email={item.owner_email}
+                            size={16}
+                          />
+                          <span>来自 {ownerName} · {sourceText(item.sources)}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={installingId !== null}
-                    onClick={() => void installSharedBot(item)}
-                    className={`${COLLAB_BUTTON} ui-button-primary shrink-0 text-[12px]`}
-                  >
-                    {installingId === item.id ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Download size={13} aria-hidden="true" />}
-                    添加到我的电脑
-                  </button>
-                </li>
-              ))}
+                    <button
+                      type="button"
+                      disabled={installingId !== null}
+                      onClick={() => void installSharedBot(item)}
+                      className={`${COLLAB_BUTTON} ui-button-primary shrink-0 text-[12px]`}
+                    >
+                      {installingId === item.id ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Download size={13} aria-hidden="true" />}
+                      添加到我的电脑
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
-            <div className="px-4 py-6 text-center text-[12px] text-ink-secondary">
+            <div className="px-6 py-10 text-center text-[12.5px] text-ink-tertiary">
               还没有好友或队友向你共享 Bot。
             </div>
           )}
         </div>
-      </SettingsGroup>
+      </section>
     </div>
   );
 }

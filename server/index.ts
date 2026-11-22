@@ -11927,7 +11927,7 @@ function configStatus() {
     opencodeGo: { ...keyStatus(cfg.opencodeGo?.apiKey), providerKeys: Object.keys(openCodeProviderKeys(cfg)) },
     tts: tts.describeVoice(cfg),
     ...(DONEBOT_GATEWAY ? { donebot: donebotHost.state() } : {}),
-    decider: DONEBOT_GATEWAY ? { ...describeDecider(cfg), configured: donebotHost.authenticated() } : describeDecider(cfg), helpers: DONEBOT_GATEWAY ? { own: { jev: false, workersAi: false, openrouter: false }, extraction: { ready: donebotHost.authenticated() } } : describeHelpers(cfg),
+    decider: DONEBOT_GATEWAY ? donebotHost.describeDecider() : describeDecider(cfg), helpers: DONEBOT_GATEWAY ? { own: { jev: false, workersAi: false, openrouter: false }, extraction: { ready: donebotHost.authenticated() } } : describeHelpers(cfg),
     imageGen: avatarImageStatus(cfg), savedKeys: nestedKeyStatus(cfg),
     live: liveSettingsFor(cfg),
     profile: CLOUD_TEAM ? NOBODY_PROFILE : { name: cfg.profile?.name ?? "", email: cfg.profile?.email ?? "", aboutMe: cfg.profile?.aboutMe ?? "", ...(cfg.profile?.avatarUrl ? { avatarUrl: cfg.profile.avatarUrl } : {}) },
@@ -12509,7 +12509,7 @@ ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));
 ROUTES.push(createTeamFilesRoutes({ ...donebotTeamFiles, personName: person => teamHost.personName(person), botName: botId => store.bot(botId)?.name }));
-ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot }));
+ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot, syncLocalProfile: (p) => { saveConfig({ profile: { ...cfg.profile, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.avatarUrl !== undefined ? { avatarUrl: p.avatarUrl } : {}), ...(p.email ? { email: p.email } : {}) } }); Object.assign(cfg, loadConfig()); broadcast({ kind: "config", ...configStatus() }); }, currentLocalProfile: () => cfg.profile }));
 ROUTES.push(createTeamRoutes({
   store,
   cfg,

@@ -1,0 +1,53 @@
+dialog.donebot-collab-dialog {
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 2rem);
+  overflow: visible;
+}
+
+dialog.donebot-collab-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.donebot-collab-dialog::backdrop {
+  background: rgb(0 0 0 / 0.56);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.donebot-collab-tab {
+  position: relative;
+}
+
+.donebot-collab-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0.25rem 0;
+  border-block-end: 2px solid var(--color-accent);
+  border-radius: 9999px;
+}
+
+progress.donebot-upload-progress {
+  appearance: none;
+  height: 6px;
+  width: 100%;
+  border-radius: 9999px;
+  overflow: hidden;
+  accent-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-ink) 10%, transparent);
+}
+
+progress.donebot-upload-progress::-webkit-progress-bar {
+  background: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  border-radius: 9999px;
+}
+
+progress.donebot-upload-progress::-webkit-progress-value {
+  background: var(--color-accent);
+  border-radius: 9999px;
+}

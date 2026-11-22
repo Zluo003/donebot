@@ -14,6 +14,7 @@ import {
   type CollabToastItem,
 } from "./collab-store";
 import { COLLAB_BUTTON } from "./collab-types";
+import { CollabAvatar } from "./CollabAvatar";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -22,7 +23,7 @@ function supportsPopoverApi(): boolean {
 }
 
 export function CollabSyncHost() {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const eligible = isCollabEligible(state.config);
   const authenticated = state.config?.donebot?.authenticated === true;
   const accountId = authenticated ? (state.config?.donebot?.user?.id ?? null) : null;
@@ -31,6 +32,12 @@ export function CollabSyncHost() {
   useEffect(() => {
     setCollabUiContext({ activeView: state.activeView, modalOpen });
   }, [state.activeView, modalOpen]);
+
+  useEffect(() => {
+    if (!eligible && state.activeView === "collab") {
+      dispatch({ type: "showChat" });
+    }
+  }, [eligible, state.activeView, dispatch]);
 
   useEffect(() => {
     syncCollabAccount(eligible && authenticated ? accountId : null);
@@ -154,14 +161,24 @@ export function CollabToastHost() {
               className="flex flex-col gap-2.5 rounded-2xl border border-hairline/70 bg-menu/95 p-3.5 shadow-xl backdrop-blur-md motion-safe:transition-opacity"
             >
               <div className="flex items-start gap-2.5">
-                <span className={cn(
-                  "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-inset",
-                  toast.kind === "friend-request"
-                    ? "bg-danger/14 text-danger ring-danger/25"
-                    : "bg-accent/14 text-accent-text ring-accent/25",
-                )}>
-                  <Icon size={15} aria-hidden="true" />
-                </span>
+                {toast.avatarUrl || toast.displayName ? (
+                  <CollabAvatar
+                    avatarUrl={toast.avatarUrl}
+                    nickname={toast.displayName}
+                    email={toast.email}
+                    size={34}
+                    className="mt-0.5"
+                  />
+                ) : (
+                  <span className={cn(
+                    "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-inset",
+                    toast.kind === "friend-request"
+                      ? "bg-danger/14 text-danger ring-danger/25"
+                      : "bg-accent/14 text-accent-text ring-accent/25",
+                  )}>
+                    <Icon size={15} aria-hidden="true" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-semibold text-ink">{toast.title}</div>
                   <p className="mt-0.5 break-words text-[12px] leading-snug text-ink-secondary">{toast.body}</p>

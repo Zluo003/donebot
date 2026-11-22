@@ -32,6 +32,7 @@ vi.mock("@/components/DesktopCapabilities", () => ({
 const {
   COLLAB_DESKTOP_NOTIFY_BOT_ID,
   COLLAB_DESKTOP_NOTIFY_THREAD_ID,
+  isCollabEligible,
   refreshCollabOverview,
   resetCollabStore,
   useCollabStore,
@@ -268,5 +269,64 @@ describe("Collab sidebar switcher, workspace, and live notifications", () => {
     expect(fixture.api).toHaveBeenCalledWith(`/api/donebot/collab/friends/requests/${incomingReqId}/accept`, { method: "POST", body: "{}" });
     expect(container!.querySelector(`[data-collab-toast="friend-req:${incomingReqId}"]`)).toBeNull();
     expect(container!.querySelector("[data-collab-pending-badge]")).toBeNull();
+  });
+
+  it("hides 好友与团队 switch in Personal Cloud (remoteClient, cloudManaged, cloudHome)", async () => {
+    expect(isCollabEligible({ donebot: { enabled: true, authenticated: true, modelCount: 1, persistent: true } } as never)).toBe(true);
+    expect(isCollabEligible({ donebot: { enabled: true, authenticated: true, cloudManaged: true, modelCount: 1, persistent: true } } as never)).toBe(false);
+    expect(isCollabEligible({ cloudHome: true, donebot: { enabled: true, authenticated: true, modelCount: 1, persistent: true } } as never)).toBe(false);
+
+    (window as { ogb?: unknown }).ogb = { remoteClient: { active: true } };
+    expect(isCollabEligible({ donebot: { enabled: true, authenticated: true, modelCount: 1, persistent: true } } as never)).toBe(false);
+
+    await renderHarness();
+    expect(container!.querySelector("[data-collab-sidebar-switch]")).toBeNull();
+  });
+
+  it("displays friend remark > nickname > email and saves custom friend remarks", async () => {
+    fixture.dispatch.mockImplementation((action: { type: string }) => {
+      if (action.type === "showCollab") fixture.storeState.activeView = "collab";
+    });
+    const overview = makeOverview({ incomingFriend: false, incomingTeam: false });
+    overview.friends.friends[0] = {
+      ...overview.friends.friends[0]!,
+      nickname: "小博",
+      remark: "设计师老博",
+      avatar_url: "data:image/jpeg;base64,/9j/4AAQ",
+    };
+    fixture.api.mockImplementation(async (path) => {
+      if (path === "/api/donebot/collab/overview") return overview;
+      if (path === "/api/donebot/collab/friends/202/remark") return { user_id: 202, remark: "前端架构师" };
+      return { ok: true };
+    });
+
+    await renderHarness();
+    const collabOption = container!.querySelector<HTMLButtonElement>('[data-collab-switch-option="collab"]')!;
+    await act(async () => { collabOption.click(); });
+    await renderHarness();
+
+    const friendRow = container!.querySelector<HTMLButtonElement>('[data-collab-friend-row="202"]')!;
+    expect(friendRow.textContent).toContain("设计师老博");
+    expect(friendRow.querySelector("img")?.getAttribute("src")).toBe("data:image/jpeg;base64,/9j/4AAQ");
+
+    await act(async () => { friendRow.click(); });
+    await renderHarness();
+    expect(container!.querySelector("[data-collab-workspace] h1")?.textContent).toBe("设计师老博");
+    expect(container!.textContent).toContain("昵称 小博 · bob@example.invalid");
+
+    const editBtn = container!.querySelector<HTMLButtonElement>("[data-collab-edit-remark]")!;
+    await act(async () => { editBtn.click(); });
+    const input = container!.querySelector<HTMLInputElement>('input[name="friend_remark"]')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(input, "前端架构师");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const form = input.closest("form")!;
+    await act(async () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    expect(fixture.api).toHaveBeenCalledWith("/api/donebot/collab/friends/202/remark", {
+      method: "PUT",
+      body: JSON.stringify({ remark: "前端架构师" }),
+    });
   });
 });

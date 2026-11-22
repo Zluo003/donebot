@@ -74,11 +74,10 @@ import { SavedStepsRow } from "./SavedStepsRow";
 import { BrowserProfilesRow, ColorUserBubblesRow, AdvancedModeRow, ExperimentalFeaturesRow, LanguageRow, NewBotEffortRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, FollowUpRow, SendKeyRow, ShowThreadsRow, ToolCallsRow, UniversalPinsRow, UpdatesRow } from "./AppSettingsRows";
 import { DoneBotAccountSettings } from "@/donebot/Account";
 import { DoneBotCloudAccess } from "@/donebot/CloudAccess";
-import { RemoteCollab } from "@/donebot/RemoteCollab";
 import { DoneBotPayments } from "@/donebot/Payments";
 import { DoneBotModelPricing } from "@/donebot/ModelPricing";
 import { DoneBotDeviceName } from "@/donebot/DeviceName";
-import { doneBotCloudServerVisible, doneBotPurchaseVisible, doneBotTeamsVisible } from "@/donebot/services";
+import { doneBotCloudServerVisible, doneBotPurchaseVisible } from "@/donebot/services";
 import { SIMPLE_ADVANCED_ONLY, SIMPLE_MORE_LIMITS, SimpleAiPage, SimpleBillingPage, SimpleComputerPage, SimpleGeneralPage, SimpleLooksPage, SimpleMorePage, SimpleUpdatesPage, type Disclose, type SimpleDisclosureId } from "./SettingsSimplePages";
 
 // labelKey, not a label: t() reads the active pack when called, so a label resolved at module scope would freeze the
@@ -116,7 +115,6 @@ export const SECTIONS: Array<{
   { id: "organization", group: "account", labelKey: "settings.section.organization", icon: Building2, keywords: ["company", "organization", "organisation", "sign in", "enroll", "managed", "models", "disconnect"] },
   { id: "usage", group: "account", labelKey: "settings.section.usage", icon: Coins, keywords: ["tokens", "cost", "billing", "plan", "quota", "remaining", "weekly", "5-hour", "model", "used"] },
   { id: "cloudServer", group: "account", labelKey: "settings.section.cloudServer", icon: Cloud, keywords: ["云服务器", "云主机", "个人云", "Cloud", "DoneBot Cloud", "续费", "自动续费", "本机协作", "cloud server", "server"] },
-  { id: "teamCollaboration", group: "account", labelKey: "settings.section.teamCollaboration", icon: Users, keywords: ["远程协作", "协作", "好友", "团队", "共享文件夹", "共享 Bot", "邀请", "成员", "collab", "friend", "team", "shared folder", "shared bot"] },
   { id: "purchase", group: "account", labelKey: "settings.section.purchase", icon: Coins, keywords: ["购买", "算力", "充值", "支付", "支付宝", "微信", "purchase", "credits", "recharge", "payment", "alipay", "wechat"] },
   { id: "backups", group: "account", labelKey: "settings.section.backups", icon: Archive, keywords: ["export", "import", "restore", "full backup", "password", "recovery"] },
   { id: "import", group: "account", labelKey: "settings.section.import", icon: Download, keywords: ["import", "grok", "grok bot", "move", "cursor", "claude code", "codex", "gemini", "skills", "mcp", "tools", "bring"] },
@@ -141,7 +139,6 @@ export const SIMPLE_PAGES: SimpleSettingsPage[] = [
   { id: "botAccess", labelKey: "settings.section.botAccess", icon: Users, sections: ["botAccess"] },
   { id: "ai", labelKey: "settings.group.ai", icon: Sparkles, sections: ["engines", "connections"], keywords: ["new bots", "defaults", "effort"] },
   { id: "cloudServer", labelKey: "settings.section.cloudServer", icon: Cloud, sections: ["cloudServer"] },
-  { id: "teamCollaboration", labelKey: "settings.section.teamCollaboration", icon: Users, sections: ["teamCollaboration"] },
   { id: "modelPricing", labelKey: "settings.section.modelPricing", icon: Coins, sections: ["modelPricing"] },
   { id: "computer", labelKey: "settings.simple.page.computer", icon: Monitor, sections: ["companion", "desktopWorkspaces", "computer", "logins"] },
   { id: "billing", labelKey: "settings.simple.page.billing", icon: Gauge, sections: ["usage", "cloudAccount"], keywords: ["billing", "included", "allowance", "cloud hours", "voice"] },
@@ -213,8 +210,7 @@ function SettingsDialog() {
   const localDoneBotScope = { enabled: state.config?.donebot?.enabled, cloudHome: state.config?.cloudHome, team: Boolean(state.config?.team), remote: remoteActive, ownerOrAdmin };
   const purchaseAvailable = doneBotPurchaseVisible(localDoneBotScope);
   const cloudServerAvailable = doneBotCloudServerVisible(localDoneBotScope);
-  const teamsAvailable = doneBotTeamsVisible(localDoneBotScope);
-  const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) || (state.appSettingsSection === "purchase" && !purchaseAvailable) || (state.appSettingsSection === "cloudServer" && !cloudServerAvailable) || (state.appSettingsSection === "teamCollaboration" && !teamsAvailable) || (state.appSettingsSection === "modelPricing" && state.config?.donebot?.enabled !== true) ? "general" : state.appSettingsSection;
+  const requested = (!UPSTREAM_SERVICES.cloud && ["cloudAccount", "organization"].includes(state.appSettingsSection)) || !doneBotSettingsSectionVisible(state.appSettingsSection) || (state.appSettingsSection === "purchase" && !purchaseAvailable) || (state.appSettingsSection === "cloudServer" && !cloudServerAvailable) || state.appSettingsSection === "teamCollaboration" || (state.appSettingsSection === "modelPricing" && state.config?.donebot?.enabled !== true) ? "general" : state.appSettingsSection;
   const section: AppSettingsSection =
     advanced && requested === "remote" && window.ogb?.environments
       ? "desktopWorkspaces"
@@ -235,7 +231,6 @@ function SettingsDialog() {
   const baseSections = sectionsHere.filter((entry) => doneBotSettingsSectionVisible(entry.id))
     .filter((entry) => entry.id !== "modelPricing" || state.config?.donebot?.enabled === true)
     .filter((entry) => entry.id !== "cloudServer" || cloudServerAvailable)
-    .filter((entry) => entry.id !== "teamCollaboration" || teamsAvailable)
     .filter((entry) => entry.id !== "purchase" || purchaseAvailable)
     .filter((entry) => !remoteActive || entry.id === "modelPricing" || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
     .filter((entry) => entry.id !== "desktopWorkspaces" || Boolean(window.ogb?.environments))
@@ -372,7 +367,6 @@ function SettingsDialog() {
     switch (id) {
       case "modelPricing": return <DoneBotModelPricing />;
       case "cloudServer": return cloudServerAvailable ? <DoneBotCloudAccess key={state.config?.donebot?.user?.id} heading={false} /> : null;
-      case "teamCollaboration": return teamsAvailable ? <RemoteCollab key={state.config?.donebot?.user?.id} standalone /> : null;
       case "purchase": return purchaseAvailable ? <DoneBotPayments key={state.config?.donebot?.user?.id} /> : null;
       case "desktopWorkspaces":
         return <><ConnectedWorkspacesSettings />{remoteAccess.client}</>;
@@ -496,7 +490,6 @@ function SettingsDialog() {
       case "computer": return <SimpleComputerPage has={has} remoteAccess={remoteAccess} servers={<ConnectedWorkspacesSettings />} disclose={disclose} />;
       case "billing": return <SimpleBillingPage has={has} disclose={disclose} cloudAccount={renderSection("cloudAccount")} />;
       case "cloudServer": return renderSection("cloudServer");
-      case "teamCollaboration": return renderSection("teamCollaboration");
       case "purchase": return renderSection("purchase");
       case "updates": return <SimpleUpdatesPage remoteActive={remoteActive} />;
       default:

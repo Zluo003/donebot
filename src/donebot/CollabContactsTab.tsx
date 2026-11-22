@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   AlertCircle,
-  Bell,
   Check,
   KeyRound,
   LogOut,
@@ -9,17 +8,20 @@ import {
   Plus,
   Trash2,
   UserPlus,
-  Users,
   X,
 } from "lucide-react";
 import { api } from "@/state/api";
-import { CommandLine, SETTINGS_INPUT, SettingsGroup, SIMPLE_CARD } from "@/components/SettingsPrimitives";
+import { CommandLine } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
 import type { DoneBotTeamCommand, DoneBotTeamInvitation } from "../../shared/donebot-teams";
+import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
 import {
   cleanError,
   COLLAB_BUTTON,
-  initialGlyph,
+  COLLAB_CARD,
+  COLLAB_INPUT,
+  displayPersonName,
+  personSecondaryLabel,
   TEAM_ROLE_PILL,
   TEAM_ROLES,
   type CollabOverview,
@@ -105,7 +107,7 @@ export function CollabContactsTab({
         body: JSON.stringify({ email: friendEmail.trim(), note: friendNote.trim() }),
       });
       setFriendEmail(""); setFriendNote("");
-      setNotice(res?.status === "accepted" ? "对方也向你发送了申请，你们已成为好友！" : "好友申请已发送，对方在「远程协作」中即可一键同意。");
+      setNotice(res?.status === "accepted" ? "对方也向你发送了申请，你们已成为好友！" : "好友申请已发送，对方客户端会收到实时提醒。");
       await onReload();
     });
   };
@@ -116,7 +118,7 @@ export function CollabContactsTab({
       if (command.action === "invite") {
         setLatestInvite(result as DoneBotTeamInvitation);
         setInviteEmail("");
-        setNotice("团队邀请已发送，对方在「远程协作」中直接点同意即可加入，也可复制下方邀请码。");
+        setNotice("团队邀请已发送，对方客户端会收到实时提醒，也可复制下方邀请码。");
         if (team) await loadTeamInvitations(team.id, team.role);
         return;
       }
@@ -135,72 +137,71 @@ export function CollabContactsTab({
   const pendingCount = overview.friends.incoming_requests.length + overview.incoming_team_invitations.length;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger ring-1 ring-inset ring-danger/20">
-          <AlertCircle size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
+        <div role="alert" className="flex items-start gap-2.5 rounded-2xl bg-danger/10 px-4 py-3 text-[13px] text-danger ring-1 ring-inset ring-danger/20">
+          <AlertCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {notice && (
-        <div role="status" className="flex items-start gap-2 rounded-xl bg-success/12 px-3.5 py-2.5 text-[13px] text-success ring-1 ring-inset ring-success/25">
-          <Check size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
+        <div role="status" className="flex items-start gap-2.5 rounded-2xl bg-success/12 px-4 py-3 text-[13px] text-success ring-1 ring-inset ring-success/25">
+          <Check size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{notice}</span>
         </div>
       )}
 
-      {/* Pending requests & team invitations */}
       {pendingCount > 0 && (
-        <SettingsGroup label={`待处理的申请与邀请（${pendingCount}）`}>
-          <div className={cn(SIMPLE_CARD, "divide-y divide-hairline/40 p-0")}>
-            {overview.friends.incoming_requests.map(req => (
-              <div key={req.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/14 text-accent-text ring-1 ring-inset ring-accent/25">
-                    <Bell size={14} aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-medium text-ink">
-                      {req.requester_email} <span className="font-normal text-ink-secondary">请求添加你为好友</span>
+        <section className="flex flex-col gap-2.5">
+          <h3 className="px-1 text-[13px] font-semibold text-ink">待处理的申请与邀请（{pendingCount}）</h3>
+          <div className={cn(COLLAB_CARD, "overflow-hidden divide-y divide-ink/[0.06]")}>
+            {overview.friends.incoming_requests.map(req => {
+              const sender = displayPersonName({ nickname: req.requester_nickname, email: req.requester_email });
+              return (
+                <div key={req.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <CollabAvatar avatarUrl={req.requester_avatar_url} nickname={req.requester_nickname} email={req.requester_email} size={36} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-medium text-ink">
+                        {sender} <span className="font-normal text-ink-secondary">请求添加你为好友</span>
+                      </div>
+                      {req.note && <p className="mt-0.5 text-[12px] text-ink-secondary">附言：{req.note}</p>}
                     </div>
-                    {req.note && <p className="mt-0.5 text-[12px] text-ink-secondary">附言：{req.note}</p>}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className={`${COLLAB_BUTTON} text-[12px]`}
+                      onClick={() => void runAction(async () => {
+                        await api(`/api/donebot/collab/friends/requests/${req.id}/reject`, { method: "POST", body: "{}" });
+                        await onReload();
+                      })}
+                    >
+                      拒绝
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className={`${COLLAB_BUTTON} ui-button-primary text-[12px]`}
+                      onClick={() => void runAction(async () => {
+                        await api(`/api/donebot/collab/friends/requests/${req.id}/accept`, { method: "POST", body: "{}" });
+                        setNotice(`已添加 ${sender} 为好友。`);
+                        await onReload();
+                      })}
+                    >
+                      同意
+                    </button>
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className={`${COLLAB_BUTTON} text-[12px]`}
-                    onClick={() => void runAction(async () => {
-                      await api(`/api/donebot/collab/friends/requests/${req.id}/reject`, { method: "POST", body: "{}" });
-                      await onReload();
-                    })}
-                  >
-                    拒绝
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className={`${COLLAB_BUTTON} ui-button-primary text-[12px]`}
-                    onClick={() => void runAction(async () => {
-                      await api(`/api/donebot/collab/friends/requests/${req.id}/accept`, { method: "POST", body: "{}" });
-                      setNotice(`已添加 ${req.requester_email} 为好友。`);
-                      await onReload();
-                    })}
-                  >
-                    同意
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             {overview.incoming_team_invitations.map(inv => (
-              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/14 text-accent-text ring-1 ring-inset ring-accent/25">
-                    <Users size={14} aria-hidden="true" />
-                  </span>
+              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <CollabTeamBadge name={inv.team_name} size={36} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-medium text-ink">
                       受邀加入团队「{inv.team_name}」
@@ -209,7 +210,7 @@ export function CollabContactsTab({
                       </span>
                     </div>
                     <p className="mt-0.5 text-[12px] text-ink-secondary">
-                      邀请人：{inv.invited_by_email} · 有效期至 {new Date(inv.expires_at).toLocaleDateString()}
+                      邀请人：{inv.invited_by_nickname || inv.invited_by_email} · 有效期至 {new Date(inv.expires_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
@@ -241,120 +242,19 @@ export function CollabContactsTab({
               </div>
             ))}
           </div>
-        </SettingsGroup>
+        </section>
       )}
 
-      {/* Friends */}
-      <SettingsGroup
-        label={`我的好友（${overview.friends.friends.length}）`}
-        footnote="非团队成员也可以通过好友关系互相共享文件夹和 Bot；删除好友后，基于好友关系的直接共享权限会立即失效。"
-      >
-        <div className={cn(SIMPLE_CARD, "divide-y divide-hairline/40 p-0")}>
-          <form onSubmit={sendFriend} className="flex flex-col gap-2.5 p-4">
-            <label htmlFor={friendInputId} className="flex items-center gap-1.5 text-[12px] font-medium text-ink-secondary">
-              <UserPlus size={13} aria-hidden="true" />添加好友
-            </label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                ref={friendInputRef}
-                id={friendInputId}
-                type="email"
-                autoComplete="email"
-                required
-                maxLength={254}
-                placeholder="输入对方 DoneBot 账号邮箱"
-                value={friendEmail}
-                onChange={e => setFriendEmail(e.target.value)}
-                className={cn(SETTINGS_INPUT, "flex-1")}
-                disabled={busy}
-              />
-              <input
-                type="text"
-                maxLength={200}
-                placeholder="附言（选填）"
-                value={friendNote}
-                onChange={e => setFriendNote(e.target.value)}
-                className={cn(SETTINGS_INPUT, "sm:w-44")}
-                disabled={busy}
-              />
-              <button type="submit" disabled={busy || !friendEmail.trim()} className={`${COLLAB_BUTTON} ui-button-primary shrink-0`}>
-                发送申请
-              </button>
-            </div>
-          </form>
-
-          {overview.friends.friends.length > 0 ? (
-            <ul className="divide-y divide-hairline/40">
-              {overview.friends.friends.map(friend => (
-                <li key={friend.user_id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink/[0.06] text-[12px] font-medium text-ink ring-1 ring-inset ring-ink/[0.08]">
-                      {initialGlyph(friend.email)}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-medium text-ink">{friend.email}</div>
-                      <div className="text-[11px] text-ink-tertiary">好友</div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      if (!window.confirm(`删除好友 ${friend.email}？基于好友关系的共享文件夹和共享 Bot 权限将立即收回。`)) return;
-                      void runAction(async () => {
-                        await api(`/api/donebot/collab/friends/${friend.user_id}`, { method: "DELETE" });
-                        await onReload();
-                      });
-                    }}
-                    className={`${COLLAB_BUTTON} text-[12px]`}
-                  >
-                    删除好友
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-4 py-4 text-[12px] text-ink-secondary">
-              还没有添加好友，输入对方 DoneBot 邮箱发送申请即可开始远程协作。
-            </p>
-          )}
-
-          {overview.friends.outgoing_requests.length > 0 && (
-            <div className="flex flex-col gap-2 bg-inset/50 px-4 py-3">
-              <div className="text-[11px] font-medium text-ink-tertiary">等待对方确认的好友申请</div>
-              <ul className="flex flex-col gap-1.5">
-                {overview.friends.outgoing_requests.map(req => (
-                  <li key={req.id} className="flex items-center justify-between gap-2 text-[12px]">
-                    <span className="truncate text-ink-secondary">{req.recipient_email}</span>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void runAction(async () => {
-                        await api(`/api/donebot/collab/friends/requests/${req.id}/reject`, { method: "POST", body: "{}" });
-                        await onReload();
-                      })}
-                      className="text-[11px] text-ink-tertiary hover:text-danger"
-                    >
-                      撤回
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </SettingsGroup>
-
-      {/* Teams (lightweight, zero Team Cloud) */}
-      <SettingsGroup
-        label={`我的团队（${overview.teams.length}）`}
-        actions={
+      {/* Teams */}
+      <section className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <h3 className="text-[13px] font-semibold text-ink">我的团队（{overview.teams.length}）</h3>
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               disabled={busy}
               onClick={() => { setError(""); setTeamPanel(c => c === "create" ? null : "create"); }}
-              className={`${COLLAB_BUTTON} text-[12px]`}
+              className={`${COLLAB_BUTTON} ui-button-primary h-8 px-3 text-[12px]`}
             >
               <Plus size={13} aria-hidden="true" />新建团队
             </button>
@@ -362,63 +262,16 @@ export function CollabContactsTab({
               type="button"
               disabled={busy}
               onClick={() => { setError(""); setTeamPanel(c => c === "accept" ? null : "accept"); }}
-              className={`${COLLAB_BUTTON} text-[12px]`}
+              className={`${COLLAB_BUTTON} h-8 px-3 text-[12px]`}
             >
               <KeyRound size={13} aria-hidden="true" />邀请码加入
             </button>
           </div>
-        }
-        footnote="团队用于批量管理协作成员和文件夹/Bot 授权，无需开通任何团队云服务器。"
-      >
-        <div className={cn(SIMPLE_CARD, "flex flex-col gap-3 p-4")}>
-          {overview.teams.length > 0 ? (
-            <div role="group" aria-label="已加入的团队" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {overview.teams.map(item => {
-                const active = item.id === selectedTeamId;
-                const count = overview.team_members[item.id]?.length;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    data-team-item={item.id}
-                    aria-pressed={active}
-                    onClick={() => { setSelectedTeamId(item.id); setTeamPanel(null); }}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-3 rounded-xl px-3.5 py-3 text-left transition-colors",
-                      active
-                        ? "bg-ink/[0.08] ring-1 ring-inset ring-ink/30"
-                        : "bg-inset/70 ring-1 ring-inset ring-ink/[0.07] hover:bg-ink/[0.05]",
-                    )}
-                  >
-                    <span aria-hidden="true" className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-xl text-[14px] font-semibold ring-1 ring-inset",
-                      active ? "bg-ink text-app ring-transparent" : "bg-ink/[0.06] text-ink ring-ink/[0.08]",
-                    )}>
-                      {initialGlyph(item.name)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] font-medium text-ink">{item.name}</span>
-                      <span className="mt-1 flex items-center gap-1.5">
-                        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL[item.role])}>
-                          {TEAM_ROLES[item.role]}
-                        </span>
-                        {count ? <span className="text-[11px] text-ink-tertiary">{count} 人</span> : null}
-                      </span>
-                    </span>
-                    {active && <Check size={15} aria-hidden="true" className="shrink-0 text-ink" />}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-xl bg-inset/60 px-4 py-5 text-center text-[12px] text-ink-secondary">
-              还没有创建或加入团队。点击右上角「新建团队」，即可按团队批量授权共享文件夹和 Bot。
-            </div>
-          )}
-
+        </div>
+        <div className={cn(COLLAB_CARD, "flex flex-col gap-4 p-5")}>
           {teamPanel === "create" && (
             <form
-              className="flex flex-col gap-3 rounded-xl bg-inset p-3.5 ring-1 ring-inset ring-hairline/70"
+              className="flex flex-col gap-3 rounded-xl bg-inset/80 p-4 ring-1 ring-inset ring-ink/[0.08]"
               onSubmit={e => {
                 e.preventDefault();
                 const clean = teamName.trim();
@@ -426,11 +279,13 @@ export function CollabContactsTab({
                 void mutateTeam({ action: "create", account_id: overview.identity.account_id, name: clean, key: createKey.current.key });
               }}
             >
-              <label htmlFor={teamCreateId} className="text-[13px] font-medium text-ink">新建团队</label>
+              <label htmlFor={teamCreateId} className="text-[13px] font-semibold text-ink">新建团队</label>
               <input
                 id={teamCreateId}
+                name="team_name"
+                autoFocus
                 placeholder="输入团队名称，例如：产品研发组"
-                className={SETTINGS_INPUT}
+                className={COLLAB_INPUT}
                 value={teamName}
                 onChange={e => setTeamName(e.target.value)}
                 maxLength={100}
@@ -446,17 +301,22 @@ export function CollabContactsTab({
 
           {teamPanel === "accept" && (
             <form
-              className="flex flex-col gap-3 rounded-xl bg-inset p-3.5 ring-1 ring-inset ring-hairline/70"
+              className="flex flex-col gap-3 rounded-xl bg-inset/80 p-4 ring-1 ring-inset ring-ink/[0.08]"
               onSubmit={e => {
                 e.preventDefault();
                 void mutateTeam({ action: "accept", account_id: overview.identity.account_id, token: acceptToken.trim() });
               }}
             >
-              <label htmlFor={teamAcceptId} className="text-[13px] font-medium text-ink">通过邀请码加入团队</label>
+              <label htmlFor={teamAcceptId} className="text-[13px] font-semibold text-ink">通过邀请码加入团队</label>
               <input
                 id={teamAcceptId}
+                name="accept_token"
+                autoFocus
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 placeholder="粘贴 43 位团队邀请码"
-                className={`${SETTINGS_INPUT} font-mono`}
+                className={`${COLLAB_INPUT} font-mono`}
                 value={acceptToken}
                 onChange={e => setAcceptToken(e.target.value)}
                 maxLength={43}
@@ -471,12 +331,52 @@ export function CollabContactsTab({
             </form>
           )}
 
+          {overview.teams.length > 0 ? (
+            <div role="group" aria-label="已加入的团队" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {overview.teams.map(item => {
+                const active = item.id === selectedTeamId;
+                const count = overview.team_members[item.id]?.length;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-team-item={item.id}
+                    aria-pressed={active}
+                    onClick={() => { setSelectedTeamId(item.id); setTeamPanel(null); }}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-xl px-3.5 py-3 text-left transition-colors",
+                      active
+                        ? "bg-accent/12 ring-1 ring-inset ring-accent/35"
+                        : "bg-inset/60 ring-1 ring-inset ring-ink/[0.07] hover:bg-ink/[0.05]",
+                    )}
+                  >
+                    <CollabTeamBadge name={item.name} size={38} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-semibold text-ink">{item.name}</span>
+                      <span className="mt-1 flex items-center gap-1.5">
+                        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL[item.role])}>
+                          {TEAM_ROLES[item.role]}
+                        </span>
+                        {count ? <span className="text-[11px] text-ink-tertiary">{count} 人</span> : null}
+                      </span>
+                    </span>
+                    {active && <Check size={15} aria-hidden="true" className="shrink-0 text-accent-text" />}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl bg-inset/50 px-4 py-6 text-center text-[12.5px] text-ink-tertiary">
+              还没有创建或加入团队。点击右上角「新建团队」，即可按团队批量授权共享文件夹和 Bot。
+            </div>
+          )}
+
           {team && (
-            <div className="flex flex-col divide-y divide-hairline/40 rounded-xl bg-inset/50 ring-1 ring-inset ring-hairline/60">
-              <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5">
+            <div className="flex flex-col divide-y divide-ink/[0.06] overflow-hidden rounded-xl bg-inset/45 ring-1 ring-inset ring-ink/[0.07]">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-medium text-ink">{team.name}</span>
-                  <span className="text-[11px] text-ink-tertiary">成员（{members.length}）</span>
+                  <span className="text-[13.5px] font-semibold text-ink">{team.name}</span>
+                  <span className="text-[11.5px] text-ink-tertiary">成员（{members.length}）</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {team.role !== "member" && (
@@ -484,7 +384,7 @@ export function CollabContactsTab({
                       type="button"
                       disabled={busy}
                       onClick={() => { setTeamName(team.name); setTeamPanel(c => c === "rename" ? null : "rename"); }}
-                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11px]`}
+                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11.5px]`}
                     >
                       <Pencil size={11} aria-hidden="true" />改名
                     </button>
@@ -500,7 +400,7 @@ export function CollabContactsTab({
                           await onReload();
                         });
                       }}
-                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11px]`}
+                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11.5px] hover:text-danger`}
                     >
                       <LogOut size={11} aria-hidden="true" />退出团队
                     </button>
@@ -510,18 +410,19 @@ export function CollabContactsTab({
 
               {teamPanel === "rename" && (
                 <form
-                  className="flex items-center gap-2 px-3.5 py-2.5"
+                  className="flex items-center gap-2 px-4 py-3"
                   onSubmit={e => {
                     e.preventDefault();
                     void mutateTeam({ action: "rename", account_id: overview.identity.account_id, team_id: team.id, name: teamName.trim() });
                   }}
                 >
                   <input
+                    aria-label="新团队名称"
                     value={teamName}
                     onChange={e => setTeamName(e.target.value)}
                     maxLength={100}
                     required
-                    className={cn(SETTINGS_INPUT, "flex-1")}
+                    className={cn(COLLAB_INPUT, "flex-1")}
                     disabled={busy}
                   />
                   <button type="submit" disabled={busy || !teamName.trim()} className={`${COLLAB_BUTTON} ui-button-primary text-[12px]`}>保存</button>
@@ -529,19 +430,24 @@ export function CollabContactsTab({
                 </form>
               )}
 
-              <ul className="divide-y divide-hairline/40">
+              <ul className="divide-y divide-ink/[0.05]">
                 {members.map(member => {
                   const manageable = member.role !== "owner" && (team.role === "owner" || (team.role === "admin" && member.role === "member"));
+                  const name = displayPersonName(member);
+                  const sub = personSecondaryLabel(member);
                   return (
-                    <li key={member.user_id} className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5">
+                    <li key={member.user_id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-ink/[0.06] text-[11px] font-medium text-ink">
-                          {initialGlyph(member.email)}
-                        </span>
-                        <span className="truncate text-[13px] text-ink">{member.email}</span>
-                        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL[member.role])}>
-                          {TEAM_ROLES[member.role]}
-                        </span>
+                        <CollabAvatar avatarUrl={member.avatar_url} remark={member.remark} nickname={member.nickname} email={member.email} size={30} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-[13px] font-medium text-ink">{name}</span>
+                            <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL[member.role])}>
+                              {TEAM_ROLES[member.role]}
+                            </span>
+                          </div>
+                          {sub && <div className="truncate text-[11px] text-ink-tertiary">{sub}</div>}
+                        </div>
                       </div>
                       {manageable && (
                         <div className="flex shrink-0 gap-1.5">
@@ -564,9 +470,9 @@ export function CollabContactsTab({
                           <button
                             type="button"
                             disabled={busy}
-                            className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11px]`}
+                            className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11px] hover:text-danger`}
                             onClick={() => {
-                              if (!window.confirm(`移除 ${member.email}？对方将立即失去此团队所有共享文件夹访问权限。`)) return;
+                              if (!window.confirm(`移除 ${name}？对方将立即失去此团队所有共享文件夹访问权限。`)) return;
                               void mutateTeam({ action: "remove-member", account_id: overview.identity.account_id, team_id: team.id, user_id: member.user_id });
                             }}
                           >
@@ -580,7 +486,7 @@ export function CollabContactsTab({
               </ul>
 
               {team.role !== "member" && (
-                <div className="flex flex-col gap-3 px-3.5 py-3">
+                <div className="flex flex-col gap-3 px-4 py-3.5">
                   <form
                     className="flex flex-col gap-2 sm:flex-row sm:items-end"
                     onSubmit={e => {
@@ -595,17 +501,20 @@ export function CollabContactsTab({
                     }}
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
-                      <label htmlFor={teamInviteId} className="text-[11px] font-medium text-ink-secondary">邀请成员加入「{team.name}」</label>
+                      <label htmlFor={teamInviteId} className="text-[11.5px] font-medium text-ink-secondary">邀请成员加入「{team.name}」</label>
                       <input
                         id={teamInviteId}
                         type="email"
                         autoComplete="email"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         required
                         maxLength={254}
                         placeholder="输入对方 DoneBot 账号邮箱"
                         value={inviteEmail}
                         onChange={e => setInviteEmail(e.target.value)}
-                        className={SETTINGS_INPUT}
+                        className={COLLAB_INPUT}
                         disabled={busy}
                       />
                     </div>
@@ -614,22 +523,22 @@ export function CollabContactsTab({
                         aria-label="邀请角色"
                         value={inviteRole}
                         onChange={e => setInviteRole(e.target.value === "admin" ? "admin" : "member")}
-                        className={cn(SETTINGS_INPUT, "sm:w-28")}
+                        className={cn(COLLAB_INPUT, "sm:w-28")}
                         disabled={busy}
                       >
                         <option value="member">成员</option>
                         <option value="admin">管理员</option>
                       </select>
                     )}
-                    <button type="submit" disabled={busy || !inviteEmail.trim()} className={`${COLLAB_BUTTON} ui-button-primary shrink-0`}>
+                    <button type="submit" disabled={busy || !inviteEmail.trim()} className={`${COLLAB_BUTTON} ui-button-primary h-[38px] shrink-0 px-3.5`}>
                       发送邀请
                     </button>
                   </form>
 
                   {latestInvite && (
-                    <div className="flex flex-col gap-2 rounded-lg bg-app/70 p-3 ring-1 ring-inset ring-hairline/60">
-                      <p className="text-[11px] text-ink-secondary">
-                        对方登录 <strong className="text-ink">{latestInvite.email}</strong> 后可在「远程协作」直接点同意，或粘贴以下备用邀请码：
+                    <div className="flex flex-col gap-2 rounded-xl bg-app/75 p-3 ring-1 ring-inset ring-ink/[0.07]">
+                      <p className="text-[11.5px] text-ink-secondary">
+                        对方登录 <strong className="text-ink">{latestInvite.email}</strong> 后会立即收到通知，也可粘贴以下备用邀请码：
                       </p>
                       <CommandLine command={latestInvite.token} copyLabel="复制邀请码" />
                     </div>
@@ -638,11 +547,11 @@ export function CollabContactsTab({
                   {teamInvitations.length > 0 && (
                     <div className="flex flex-col gap-1.5">
                       <div className="text-[11px] font-medium text-ink-tertiary">待接受邀请（{teamInvitations.length}）</div>
-                      <ul className="divide-y divide-hairline/30 rounded-lg bg-app/60 ring-1 ring-inset ring-hairline/50">
+                      <ul className="divide-y divide-ink/[0.05] rounded-xl bg-app/65 ring-1 ring-inset ring-ink/[0.07]">
                         {teamInvitations.map(inv => (
                           <li key={inv.id} className="flex items-center justify-between gap-2 px-3 py-2 text-[12px]">
                             <span className="truncate text-ink-secondary">
-                              <span className="text-ink">{inv.email}</span> · {TEAM_ROLES[inv.role]}
+                              <span className="font-medium text-ink">{inv.email}</span> · {TEAM_ROLES[inv.role]}
                             </span>
                             <button
                               type="button"
@@ -662,7 +571,88 @@ export function CollabContactsTab({
             </div>
           )}
         </div>
-      </SettingsGroup>
+      </section>
+
+      {/* Friends quick add & list */}
+      <section className="flex flex-col gap-2.5">
+        <h3 className="px-1 text-[13px] font-semibold text-ink">我的好友（{overview.friends.friends.length}）</h3>
+        <div className={cn(COLLAB_CARD, "overflow-hidden divide-y divide-ink/[0.06]")}>
+          <form onSubmit={sendFriend} className="flex flex-col gap-2.5 p-5">
+            <label htmlFor={friendInputId} className="flex items-center gap-1.5 text-[12px] font-medium text-ink-secondary">
+              <UserPlus size={13} aria-hidden="true" />添加好友
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                ref={friendInputRef}
+                id={friendInputId}
+                type="email"
+                autoComplete="email"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                maxLength={254}
+                placeholder="输入对方 DoneBot 账号邮箱"
+                value={friendEmail}
+                onChange={e => setFriendEmail(e.target.value)}
+                className={cn(COLLAB_INPUT, "flex-1")}
+                disabled={busy}
+              />
+              <input
+                type="text"
+                maxLength={200}
+                placeholder="附言（选填）"
+                aria-label="好友申请附言"
+                value={friendNote}
+                onChange={e => setFriendNote(e.target.value)}
+                className={cn(COLLAB_INPUT, "sm:w-44")}
+                disabled={busy}
+              />
+              <button type="submit" disabled={busy || !friendEmail.trim()} className={`${COLLAB_BUTTON} ui-button-primary shrink-0 px-4`}>
+                发送申请
+              </button>
+            </div>
+          </form>
+
+          {overview.friends.friends.length > 0 ? (
+            <ul className="divide-y divide-ink/[0.06]">
+              {overview.friends.friends.map(friend => {
+                const name = displayPersonName(friend);
+                const sub = personSecondaryLabel(friend);
+                return (
+                  <li key={friend.user_id} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <CollabAvatar avatarUrl={friend.avatar_url} remark={friend.remark} nickname={friend.nickname} email={friend.email} size={36} />
+                      <div className="min-w-0">
+                        <div className="truncate text-[13.5px] font-medium text-ink">{name}</div>
+                        <div className="truncate text-[11.5px] text-ink-tertiary">{sub || "好友"}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (!window.confirm(`删除好友 ${name}？基于好友关系的共享文件夹和共享 Bot 权限将立即收回。`)) return;
+                        void runAction(async () => {
+                          await api(`/api/donebot/collab/friends/${friend.user_id}`, { method: "DELETE" });
+                          await onReload();
+                        });
+                      }}
+                      className={`${COLLAB_BUTTON} text-[12px] hover:text-danger`}
+                    >
+                      删除好友
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="px-5 py-6 text-center text-[12.5px] text-ink-tertiary">
+              还没有添加好友，输入对方 DoneBot 邮箱发送申请即可开始远程协作。
+            </p>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

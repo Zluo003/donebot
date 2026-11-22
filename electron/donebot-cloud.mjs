@@ -4,11 +4,13 @@ import { createDoneBotCloudKeepalive } from "./donebot-cloud-keepalive.mjs";
 import { createDoneBotCloudLoading } from "./donebot-cloud-loading.mjs";
 
 const instanceId = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const teamRoles = new Set(["owner", "admin", "member"]);
 
 export const doneBotCloudEntry = environments.doneBotCloudEntry;
+export const doneBotPersonalCloudEntry = environments.doneBotPersonalCloudEntry;
 
 export async function hasDoneBotCloud(request, state) {
-  if (state.environments.some(doneBotCloudEntry)) return true;
+  if (state.environments.some(doneBotPersonalCloudEntry)) return true;
   try {
     const response = await request("/api/donebot/cloud", { signal: AbortSignal.timeout(3_000) });
     return response.ok && Boolean((await response.json()).instance?.paid_until);
@@ -36,29 +38,44 @@ export function createDoneBotCloudConnection({ request, fetch: cookieFetch, save
       return response.ok && response.headers.get("x-donebot-cloud") === "1";
     } catch { return false; }
   }
-  async function prepare(id, owner, entry, renew) {
+  function resolveTeam(team, entry) {
+    const teamId = team?.id ?? entry?.team?.id ?? entry?.donebotCloud?.teamId;
+    if (!teamId) return null;
+    if (!instanceId.test(teamId)) throw new Error("无效的团队标识。");
+    const role = teamRoles.has(team?.role) ? team.role : teamRoles.has(entry?.team?.role) ? entry.team.role : "member";
+    const name = String(team?.name ?? entry?.name ?? "").trim().slice(0, 100) || "团队 Cloud";
+    return { id: teamId, role, name };
+  }
+  async function prepare(id, owner, entry, renew, team) {
     let origin = entry?.origin;
-    if (!renew && origin && entry.donebotCloud?.accountId === owner && await connected(origin)) return { origin, id, accountId: owner };
-    const launch = await local("/api/donebot/cloud/connect", { id, account_id: owner });
+    const resolvedTeam = resolveTeam(team, entry);
+    if (!renew && origin && entry?.donebotCloud?.accountId === owner && await connected(origin)) {
+      return { origin, id, accountId: owner, ...(resolvedTeam ? { team: resolvedTeam, name: resolvedTeam.name } : {}) };
+    }
+    const launch = resolvedTeam
+      ? await local(`/api/donebot/teams/${resolvedTeam.id}/cloud/connect`, { instance_id: id, account_id: owner })
+      : await local("/api/donebot/cloud/connect", { id, account_id: owner });
     const link = new URL(launch.url), target = new URL(link.searchParams.get("address"));
     const token = link.searchParams.get("token");
     if (link.protocol !== "donebot:" || link.hostname !== "pair" || target.protocol !== "https:" ||
         !target.hostname.startsWith(id + ".") || target.href !== target.origin + "/" || !/^omb_pair_[A-Za-z0-9_-]{43}$/.test(token ?? "") ||
         origin && target.origin !== origin) throw new Error("Cloud 连接地址无法验证。");
     origin = target.origin;
+    const resolvedName = resolvedTeam ? (String(link.searchParams.get("name") ?? "").trim().slice(0, 100) || resolvedTeam.name) : undefined;
     await account(owner);
     const paired = await cookieFetch(origin + "/api/auth/pair", { method: "POST", redirect: "error", credentials: "include",
       headers: { "content-type": "application/json", origin }, body: JSON.stringify({ code: token }), signal: AbortSignal.timeout(10_000) });
     await paired.body?.cancel();
     if (!paired.ok) throw new Error("Cloud 自动连接未完成，请重试。");
     await account(owner);
-    return { origin, id, accountId: owner };
+    return { origin, id, accountId: owner, ...(resolvedTeam ? { team: { id: resolvedTeam.id, role: resolvedTeam.role }, name: resolvedName } : {}) };
   }
-  async function target(id, owner, entry, renew = false) {
-    const key = JSON.stringify([id, owner, renew]);
+  async function target(id, owner, entry, renew = false, team = null) {
+    const resolvedTeam = resolveTeam(team, entry);
+    const key = JSON.stringify([id, owner, renew, resolvedTeam?.id ?? null]);
     let flight = flights.get(key);
     if (!flight) {
-      flight = prepare(id, owner, entry ?? saved().environments.find(candidate => candidate.donebotCloud?.id === id && candidate.donebotCloud.accountId === owner), renew);
+      flight = prepare(id, owner, entry ?? saved().environments.find(candidate => candidate.donebotCloud?.id === id && candidate.donebotCloud.accountId === owner && (candidate.team?.id ?? candidate.donebotCloud?.teamId ?? null) === (resolvedTeam?.id ?? null)), renew, resolvedTeam);
       flights.set(key, flight);
       void flight.finally(() => { if (flights.get(key) === flight) flights.delete(key); }).catch(() => {});
     }
@@ -75,25 +92,25 @@ export function createDoneBotCloudConnection({ request, fetch: cookieFetch, save
       await account(owner);
       if (still()) remember(renewed);
     },
-    async ensure({ id, accountId, entry, still = () => true }) {
+    async ensure({ id, accountId, entry, team, still = () => true }) {
       id ??= entry?.donebotCloud?.id ?? new URL(entry.origin).hostname.split(".")[0];
       if (!instanceId.test(id ?? "")) throw new Error("无效的 Cloud 实例。");
       const owner = await account(accountId ?? entry?.donebotCloud?.accountId);
       if (!still()) return null;
-      const destination = await target(id, owner, entry);
+      const destination = await target(id, owner, entry, false, team);
       await account(owner);
       if (!still()) return null;
       remember(destination);
       return destination;
     },
-    async open({ id, accountId, entry, still = () => true, progress = () => {} }) {
+    async open({ id, accountId, entry, team, still = () => true, progress = () => {} }) {
       const mine = ++turn;
       id ??= entry?.donebotCloud?.id ?? new URL(entry.origin).hostname.split(".")[0];
       if (!instanceId.test(id ?? "")) throw new Error("无效的 Cloud 实例。");
       const owner = await account(accountId ?? entry?.donebotCloud?.accountId);
       if (mine !== turn || !still()) return { outcome: "cancelled" };
       progress("connecting");
-      const destination = await target(id, owner, entry);
+      const destination = await target(id, owner, entry, false, team);
       await account(owner);
       if (mine !== turn || !still()) return { outcome: "cancelled" };
       remember(destination);
@@ -109,9 +126,14 @@ export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, reque
   const { withEnvironment, withActive, activeEnvironment } = environments;
   const connection = createDoneBotCloudConnection({ request, fetch, saved,
     remember: target => {
-      const name = saved().environments.find(entry => entry.origin === target.origin)?.name ?? "DoneBot Cloud";
+      const name = target.team ? (target.name ?? saved().environments.find(entry => entry.origin === target.origin)?.name ?? "团队 Cloud")
+        : (saved().environments.find(entry => entry.origin === target.origin)?.name ?? "DoneBot Cloud");
       const next = withEnvironment(saved(), { origin: target.origin, name }, randomUUID);
-      persist({ ...next, environments: next.environments.map(entry => entry.origin === target.origin ? { ...entry, donebotCloud: { id: target.id, accountId: target.accountId } } : entry) });
+      persist({ ...next, environments: next.environments.map(entry => entry.origin === target.origin ? {
+        ...entry,
+        ...(target.team ? { team: { id: target.team.id, role: target.team.role } } : {}),
+        donebotCloud: { id: target.id, accountId: target.accountId, ...(target.team ? { teamId: target.team.id } : {}) },
+      } : entry) });
     },
     activate: async origin => {
       const state = saved(), entry = state.environments.find(candidate => candidate.origin === origin);
@@ -133,6 +155,8 @@ export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, reque
     } catch (error) { screen?.fail(); throw error; }
   };
   ipcMain.handle("donebot-cloud:open", guardLocal("donebot-cloud:open", (_event, id, accountId) => open({ id, accountId })));
+  ipcMain.handle("donebot-cloud:open-team", guardLocal("donebot-cloud:open-team", (_event, teamId, instanceIdArg, accountId, teamName, role) =>
+    open({ id: instanceIdArg, accountId, team: { id: teamId, name: teamName, role } })));
   ipcMain.handle("donebot-cloud:reconnect", guardWorkspace(event => {
     const entry = activeEnvironment(saved());
     if (!doneBotCloudEntry(entry) || new URL(event.senderFrame.url).origin !== entry.origin) throw new Error("此页面不能重新连接 Cloud。");

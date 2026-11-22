@@ -9,7 +9,8 @@ function doneBotCloudEntry(entry) {
   try { return entry?.name === "DoneBot Cloud" && cloudInstanceId.test(new URL(entry.origin).hostname.split(".")[0]); }
   catch { return false; }
 }
-const workspaceName = (entry, t = englishText.t) => doneBotCloudEntry(entry) ? t("native.donebotCloud.name") : entry.name;
+const doneBotPersonalCloudEntry = (entry) => doneBotCloudEntry(entry) && !entry?.team && !entry?.donebotCloud?.teamId;
+const workspaceName = (entry, t = englishText.t) => doneBotPersonalCloudEntry(entry) ? t("native.donebotCloud.name") : entry.name;
 /** A saved server's colour: one of these names, never a value a page could style with. The renderer maps each to its skin's tone. */
 const ENTRY_COLORS = Object.freeze(["blue", "teal", "purple", "orange", "red", "yellow"]);
 const cleanColor = (value) => (ENTRY_COLORS.includes(value) ? value : null);
@@ -95,15 +96,16 @@ function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddClou
     ...own,
     ...[...state.environments].sort((a, b) => listedPlace(b) - listedPlace(a)).map((entry) => {
       const icon = iconFor && cleanColor(entry.color) ? iconFor(entry.color) : null;
-      const status = doneBotCloudEntry(entry) ? null : Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
+      const personalCloud = doneBotPersonalCloudEntry(entry);
+      const status = personalCloud ? null : Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
       return {
         id: `workspace-${entry.id}`, label: foldSublabels && status ? `${workspaceName(entry, t)} · ${status}` : workspaceName(entry, t),
-        ...(!doneBotCloudEntry(entry) ? { sublabel: status ?? (entry.kind === "local" ? entry.dataDir : new URL(entry.origin).host) } : {}),
+        ...(!personalCloud ? { sublabel: status ?? (entry.kind === "local" ? entry.dataDir : new URL(entry.origin).host) } : {}),
         ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
       };
     }),
     ...(copyToCloud ? [{ id: "workspace-copy-to-cloud", label: copyToCloud.label, click: copyToCloud.click }] : []),
-    ...(onAddCloud && !state.environments.some(doneBotCloudEntry) ? [{ id: "workspace-add-cloud", label: t("native.menu.addCloud"), sublabel: t("native.switcher.addCloudSub"), click: onAddCloud }] : []),
+    ...(onAddCloud && !state.environments.some(doneBotPersonalCloudEntry) ? [{ id: "workspace-add-cloud", label: t("native.menu.addCloud"), sublabel: t("native.switcher.addCloudSub"), click: onAddCloud }] : []),
     { type: "separator", visible: fresh.length > 0 },
     ...fresh,
     { id: "workspace-connect", label: t("native.menu.connect"), visible: false, click: onConnect },
@@ -122,10 +124,11 @@ function homeMenuTemplate(state, { onSwitch, onForget, sublabels, iconFor, foldS
     ...own,
     ...places.map((entry) => {
       const icon = iconFor && cleanColor(entry.color) ? iconFor(entry.color) : null;
-      const status = doneBotCloudEntry(entry) ? null : Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
+      const personalCloud = doneBotPersonalCloudEntry(entry);
+      const status = personalCloud ? null : Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
       return {
         id: `workspace-${entry.id}`, label: foldSublabels && status ? `${workspaceName(entry, t)} · ${status}` : workspaceName(entry, t),
-        ...(!doneBotCloudEntry(entry) ? { sublabel: status ?? new URL(entry.origin).host } : {}),
+        ...(!personalCloud ? { sublabel: status ?? new URL(entry.origin).host } : {}),
         ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId && !shown, click: () => onSwitch(entry.id),
       };
     }),
@@ -334,8 +337,8 @@ function parseEnvironments(raw) {
     const cloud = entry?.home === true || team ? null : cleanCloud(entry?.cloud);
     environments.push({ id, kind: "remote", name: cleanName(entry?.name, nameFromOrigin(origin)), origin, ...(entry?.microphone === true ? { microphone: true } : {}),
       ...(color ? { color } : {}), ...(entry?.home === true ? { home: true } : {}), ...(team ? { team } : {}), ...(cloud ? { cloud } : {}),
-      ...(entry?.donebotCloud && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(entry.donebotCloud.id) && /^[1-9][0-9]{0,19}$/.test(entry.donebotCloud.accountId)
-        ? { donebotCloud: { id: entry.donebotCloud.id, accountId: entry.donebotCloud.accountId } } : {}) });
+      ...(entry?.donebotCloud && cloudInstanceId.test(entry.donebotCloud.id) && /^[1-9][0-9]{0,19}$/.test(entry.donebotCloud.accountId)
+        ? { donebotCloud: { id: entry.donebotCloud.id, accountId: entry.donebotCloud.accountId, ...(cloudInstanceId.test(entry.donebotCloud.teamId ?? "") ? { teamId: entry.donebotCloud.teamId } : {}) } } : {}) });
   }
   const activeId = typeof value?.activeId === "string" && environments.some((e) => e.id === value.activeId) ? value.activeId : LOCAL_ID;
   const localColor = cleanColor(value?.localColor);
@@ -507,4 +510,5 @@ module.exports = {
   workspaceWindowTitle,
   workspaceName,
   doneBotCloudEntry,
+  doneBotPersonalCloudEntry,
 };

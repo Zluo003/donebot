@@ -81,3 +81,25 @@ HTTP流程证明无Linux隔离时拒绝执行，不证明团队端到端成功�
 网关迁移 278 在请求路径保存不可变扣费命令及无凭据用量快照。恢复复用首次定价，在单事务内提交扣账、专用 Key/上游账号用量、结算回执和真实日志；缓存刷新失败保留恢复记录。团队台账独立于 Owner 个人平台额度，余额、专用 Key 和资源保护仍生效。
 
 真实 HTTP/PostgreSQL/race 覆盖保存后中断、事务回滚、提交后子进程突然退出及八路并发恢复，均只扣一次且不再调用模型；最新客户端四文件 104 项通过。证据与尚未覆盖的退出窗口见 [模型验证](../../verification/donebot-team-models.md)。该切片不证明供应商侧未回传用量可恢复、其它原生协议、媒体或真实 Linux 团队执行已验收，团队能力继续关闭。
+
+## 团队 Cloud 子域浏览器/桌面接入、网页控制台与客户端工作空间切换（2026-11-22）
+
+打通团队协作最后接入链路，保持默认关闭（需网关 `DONEBOT_TEAMS_ENABLED=1`、Cloud 节点 `CLOUD_TEAMS_ENABLED=1` 及客户端能力协商共同开启）：
+
+- **网关（donebot-api）**：
+  - 新增 `POST /api/v1/donebot/teams/:team/browser-launch` 与 `POST /api/v1/donebot/teams/:team/desktop-launch`，校验活跃成员与团队节点协议后签发一次性子域 Launch / `donebot://pair` 链接，复用 `donebot_cloud_browser_sessions` 且与个人 Launch 严格隔离。
+  - 扩展 `ServeBrowser` 与 `exchangeLaunch`：团队实例走 `teamProxy` 实时成员验权与 10 秒 Ed25519 `X-Donebot-Team-Grant`，每 3 秒复查撤权并切断长连接，明确拒绝个人 `/api/bot-link/*`。
+  - `GET /api/v1/donebot/teams/:team/cloud` 补充返回 `operations`、`connection_available`、`purge_locked` 与已购套餐名（不暴露个人余额或敏感快照字段）；`GET /api/v1/donebot/workspaces` 按配置协商返回 `identity`、`local_execution`、`shared_files` 及 `cloud_access`。
+  - 修复 `mobilehub` 个人工作空间查询缺失 `c.team_id IS NULL` 的边界，防止 Owner 个人手机列表误显示团队 Cloud。
+  - 用户端 `/cloud` 新增 `TeamCloudSection.vue`，支持创建团队、接受邀请、管理成员/邀请、Owner 选套餐购买/启停/续费管理，以及所有成员打开团队网页实例或在桌面端打开；团队关闭时完全隐藏。
+- **桌面端（DoneBot）**：
+  - 复用原版 `electron/environments.cjs` 的 `entry.team = { id, role }` 与菜单角色展示，区分 `doneBotPersonalCloudEntry` 与 `doneBotCloudEntry`，新增 `donebot-cloud:open-team` IPC 及 `openTeamCloud` 桥接，实现个人 Cloud 与多团队 Cloud 并行切换与 Cookie 自动续期；`donebot-bot-link.mjs` 严格限定仅绑定个人 Cloud。
+  - 本地服务代理 `/api/donebot/teams/plans`、`cloud`、`cloud/connect` 与 `devices`，并接入显式启用后的本机设备低频心跳（登出/停用即清除）。
+  - `src/donebot/Teams.tsx` 接入 `TeamCloudCard.tsx`（团队 Cloud 开通/连接）与 `TeamDevicesCard.tsx`（本机参与授权与撤销）。
+
+2026-11-22 验证：
+- `donebot-api` 全量 Go 单元测试 + 一次性 PostgreSQL 集成 `-race` 测试（含 `TestPostgresTeamBrowserAndDesktopAccessLifecycle`、`TestPostgresTeamSubdomainBrowserWithRealDoneBot`、`TestPostgresTeamFileProxyCancelsRevokedUploads`、`TestPostgresTeamTemplateProxyUsesActualRoleAndFencesRevokedPublication`、`TestTeamCoordinatorHTTPPostgres`、`TestTeamDevicesHTTPPostgres`、`TestTeamModelDispatchHTTPPostgres` 与 `mobilehub`）全部通过。
+- `donebot-api` 前端 Vitest 10/10（`CloudView.spec.ts`、`TeamCloudSection.spec.ts`）与 `vue-tsc --noEmit` 通过。
+- `DoneBot` Electron 47/47（`donebot-cloud.node-test.mjs`、`donebot-bot-link.node-test.mjs`、`environments.node-test.mjs`）、服务端与 DOM 团队测试、`pnpm typecheck`、`pnpm lint`（0 warning/0 error）、`pnpm i18n:check`、`file-size-ratchet.test.ts` 全部通过。
+
+未完成项：真实 Linux 宿主机下的 `bot-box` 团队容器验收与真机验证仍须在发布前于对应平台完成；网关及节点团队总开关保持默认关闭。

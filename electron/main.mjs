@@ -117,7 +117,7 @@ import { createWindowStateFile } from "./window-state-file.mjs";
 import { createEnvironmentsFile, ENVIRONMENTS_SAVE_FAILED } from "./environments-file.mjs";
 import { createWorkspaceSettings, createClipboardServerConnect } from "./workspace-settings.mjs";
 import { createWorkspaceNavigation } from "./workspace-navigation.mjs";
-import { installDoneBotCloud, doneBotCloudEntry, hasDoneBotCloud } from "./donebot-cloud.mjs";
+import { installDoneBotCloud, doneBotCloudEntry, doneBotPersonalCloudEntry, hasDoneBotCloud } from "./donebot-cloud.mjs";
 import { installDoneBotBotLink } from "./donebot-bot-link.mjs";
 import { installDoneBotCloudFrontend } from "./donebot-cloud-frontend.mjs";
 import { createOrgLibrary } from "./org-library.mjs";
@@ -861,7 +861,7 @@ function cloudMenuSublabels() {
   return entry && line ? { [entry.id]: line } : {};
 }
 const cloudColorDot = colorDotIcons(nativeImage);
-function cloudMenuOptions(source = "app_menu", hasCloud = environmentsState.environments.some(doneBotCloudEntry)) {
+function cloudMenuOptions(source = "app_menu", hasCloud = environmentsState.environments.some(doneBotPersonalCloudEntry)) {
   return { sublabels: cloudMenuSublabels(), iconFor: cloudColorDot, ...(!desktopRemoteAccess && !hasCloud ? { onAddCloud: () => void workspaceMenuAction(() => openCloudAdd(source)) } : {}) };
 }
 let cloudMenuKey = "";

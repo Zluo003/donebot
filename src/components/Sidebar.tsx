@@ -1173,13 +1173,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
             <FolderPlus size={16} className="text-ink-secondary" /> {t("team.create")}
           </button>}
           {!remoteClient && <>
-          {DONEBOT_TEMPLATES_ENABLED && teamSettingsAllowed !== false && <button
+          {(DONEBOT_TEMPLATES_ENABLED && teamSettingsAllowed !== false || state.config?.team?.sharedTemplates === true) && <button
             onClick={() => { setPlusOpen(false); setTeamLibraryOpen(true); }}
             role="menuitem"
             className={plusItem}
           >
             <LayoutTemplate size={16} className="text-ink-secondary" />
-            {t("sidebar.teamLibrary")}
+            {state.config?.team?.sharedTemplates === true && !DONEBOT_TEMPLATES_ENABLED ? t("teamTemplates.tab") : t("sidebar.teamLibrary")}
           </button>}
           {advanced && archivedBots.length > 0 && (
             <button
@@ -1607,7 +1607,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onRestored={(message) => setTeamFeedback({ error: false, text: message })}
         />
       )}
-      {DONEBOT_TEMPLATES_ENABLED && !remoteClient && teamLibraryOpen && (
+      {(DONEBOT_TEMPLATES_ENABLED || state.config?.team?.sharedTemplates === true) && !remoteClient && teamLibraryOpen && (
         <TeamLibraryPanel
           returnFocusRef={importReturnRef}
           initialUrl={teamInstallUrl ?? undefined}

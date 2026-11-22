@@ -131,3 +131,50 @@ test("native IPC saves a reusable Cloud entry and refuses renewal from another p
   assert.equal(state.activeId, state.environments[0].id);
   assert.equal(state.environments.length, 1);
 });
+
+test("team Cloud entries preserve real team name and role separately from personal Cloud", async () => {
+  const teamId = "22861a47-7240-4f99-bf19-bd01d411596f";
+  const teamInstanceId = "33861a47-7240-4f99-bf19-bd01d411596f";
+  const teamOrigin = `https://${teamInstanceId}.cloud.donebot.cn`;
+  let state = environments.parseEnvironments({ version: 2, activeId: "local", environments: [] });
+  const handlers = new Map(), calls = [], navigated = [];
+  const connection = installDoneBotCloud({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    guardLocal: (_name, handler) => handler, guardWorkspace: handler => handler,
+    saved: () => state, persist: value => { state = value; }, cancelHome: () => {},
+    navigate: async target => { navigated.push(target); return true; },
+    local: () => { state = environments.withActive(state, "local"); },
+    request: async (path, init) => {
+      calls.push({ path, body: init?.body ? JSON.parse(init.body) : null });
+      if (path === "/api/donebot/state") return Response.json({ authenticated: true, user: { id: "101" } });
+      assert.equal(path, `/api/donebot/teams/${teamId}/cloud/connect`);
+      assert.deepEqual(JSON.parse(init.body), { instance_id: teamInstanceId, account_id: "101" });
+      return Response.json({ url: `donebot://pair?address=${encodeURIComponent(teamOrigin)}&token=omb_pair_${"c".repeat(43)}&name=Design+Studio` });
+    },
+    fetch: async () => new Response("{}", { headers: { "x-donebot-cloud": "1" } }),
+  });
+
+  await handlers.get("donebot-cloud:open-team")({}, teamId, teamInstanceId, "101", "Design Studio", "admin");
+  const restored = environments.parseEnvironments(state);
+  const entry = restored.environments[0];
+  assert.equal(entry.name, "Design Studio");
+  assert.deepEqual(entry.team, { id: teamId, role: "admin" });
+  assert.deepEqual(entry.donebotCloud, { id: teamInstanceId, accountId: "101", teamId });
+  assert.equal(doneBotCloudEntry(entry), true);
+  assert.equal(environments.doneBotPersonalCloudEntry(entry), false);
+  assert.equal(environments.workspaceName(entry), "Design Studio");
+  assert.equal(environments.workspaceWindowTitle(restored, null), "DoneBot — Design Studio");
+  assert.equal(environments.workspaceSummary(restored).role, "Admin");
+
+  // Menu keeps "Add Cloud" for personal Cloud while listing the team entry with its role sublabel.
+  const menu = environments.workspaceMenuTemplate(restored, { onSwitch: () => {}, onConnect: () => {}, onForget: () => {}, onAddCloud: () => {} });
+  assert.ok(menu.some(item => item.id === "workspace-add-cloud"));
+  const teamMenuItem = menu.find(item => item.id === `workspace-${entry.id}`);
+  assert.equal(teamMenuItem.label, "Design Studio");
+  assert.equal(teamMenuItem.sublabel, "Admin");
+
+  // Reconnecting from the team Cloud uses the team connect endpoint, never personal Cloud.
+  await connection.renew(entry);
+  assert.equal(calls.filter(c => c.path === `/api/donebot/teams/${teamId}/cloud/connect`).length, 2);
+  assert.deepEqual(navigated, [teamOrigin]);
+});

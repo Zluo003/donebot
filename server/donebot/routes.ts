@@ -4,7 +4,7 @@ import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import type { DoneBotCloudMutation } from "../../shared/donebot-cloud.ts";
 import { createPaymentOrder, paymentOrder, paymentSnapshot } from "./payments.ts";
 import type { DoneBotPaymentInput } from "../../shared/donebot-payments.ts";
-import { teamCommand } from "./teams.ts";
+import { parseTeamCloudMutation, parseTeamDeviceCommand, teamCommand } from "./teams.ts";
 
 const proofKeys = ["turnstile_token", "captcha_token", "captcha_ticket", "captcha_randstr", "captcha_verify_param", "tencent_ticket", "tencent_randstr", "tencent_captcha_ticket", "tencent_captcha_randstr", "aliyun_captcha_verify_param"];
 function text(body: Record<string, unknown>, key: string, max = 1000): string {
@@ -29,8 +29,13 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
       if (method === "GET" && path === "/api/donebot/catalog") return json(res, 200, await gateway.refreshCatalog());
       if (method === "GET" && path === "/api/donebot/cloud") return json(res, 200, await gateway.cloudSnapshot());
       if (method === "GET" && path === "/api/donebot/workspaces") return json(res, 200, await gateway.workspaceSnapshot());
+      if (method === "GET" && path === "/api/donebot/teams/plans") return json(res, 200, await gateway.teamPlans());
       const members = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/members$/);
       if (method === "GET" && members) return json(res, 200, await gateway.teamMembers(members[1]!));
+      const teamCloudGet = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/cloud$/);
+      if (method === "GET" && teamCloudGet) return json(res, 200, await gateway.teamCloud(teamCloudGet[1]!));
+      const teamDevicesGet = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/devices$/);
+      if (method === "GET" && teamDevicesGet) return json(res, 200, await gateway.teamDevices(teamDevicesGet[1]!));
       if (method === "GET" && path === "/api/donebot/payments") return json(res, 200, await paymentSnapshot(gateway));
       if (method !== "POST") return PASS;
       if (process.env.DONEBOT_CLOUD_CREDENTIAL_FILE) return json(res, 403, { error: "请在 DoneBot Cloud 控制台管理此账号。" });
@@ -40,6 +45,23 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
         const parsed = teamCommand.safeParse(body);
         if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的团队操作。");
         return json(res, 200, await gateway.teamMutate(parsed.data));
+      }
+      const teamCloudPost = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/cloud$/);
+      if (teamCloudPost) {
+        let parsed;
+        try { parsed = parseTeamCloudMutation(body); } catch { throw new DoneBotGatewayError(400, "invalid_input", "无效的团队 Cloud 操作。"); }
+        return json(res, 202, await gateway.teamCloudMutate(teamCloudPost[1]!, parsed));
+      }
+      const teamCloudConnect = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/cloud\/connect$/);
+      if (teamCloudConnect) {
+        if (Object.keys(body).some(key => !["instance_id", "account_id"].includes(key))) throw new DoneBotGatewayError(400, "invalid_input", "无效的团队 Cloud 连接字段。");
+        return json(res, 200, await gateway.teamCloudConnect(teamCloudConnect[1]!, text(body, "instance_id", 36), text(body, "account_id", 200)));
+      }
+      const teamDevicesPost = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/devices$/);
+      if (teamDevicesPost) {
+        let parsed;
+        try { parsed = parseTeamDeviceCommand(body); } catch { throw new DoneBotGatewayError(400, "invalid_input", "无效的团队设备操作。"); }
+        return json(res, 200, await gateway.teamDeviceMutate(teamDevicesPost[1]!, parsed));
       }
       if (path === "/api/donebot/payments/orders") {
         if (Object.keys(body).some(key => !["account_id", "amount", "payment_type"].includes(key)) || typeof body.amount !== "number") throw new DoneBotGatewayError(400, "payment_input", "无效的充值订单。");

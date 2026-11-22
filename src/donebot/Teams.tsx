@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/SettingsPrimitives";
 import { api } from "@/state/api";
 import { DONEBOT_TEAMS_PROTOCOL, type DoneBotTeamCommand, type DoneBotTeamInvitation, type DoneBotTeamMember, type DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams";
+import { TeamCloudCard } from "./TeamCloudCard";
+import { TeamDevicesCard } from "./TeamDevicesCard";
 
 const button = "ui-button disabled:opacity-50";
 const field = "w-full rounded-lg border border-line bg-app px-3 py-2 text-sm text-ink";
@@ -58,7 +60,10 @@ export function DoneBotTeams() {
       <div className="flex flex-wrap gap-2"><button type="button" className={button} disabled={busy} onClick={() => void refresh().catch(cause => { if (mounted.current) setError(problem(cause)); })}>刷新团队</button></div>
       {snapshot.workspaces.length > 0 && <label className="flex flex-col gap-2">团队工作空间<select aria-label="团队工作空间" value={selected} disabled={busy} className={field} onChange={event => { setSelected(event.target.value); setError(""); }}><option value="">选择团队</option>{snapshot.workspaces.map(item => <option key={item.id} value={item.id}>{item.name} · {roles[item.role]}</option>)}</select></label>}
       {team && <div className="flex flex-col gap-3">
-        <p className="text-ink-secondary">协作运行服务尚未就绪，当前可管理团队和成员。</p>
+        {snapshot.capabilities.includes("cloud_access")
+          ? <TeamCloudCard key={`cloud-${team.id}`} accountId={snapshot.account_id} team={team} />
+          : <p className="text-ink-secondary">协作运行服务尚未就绪，当前可管理团队和成员。</p>}
+        {snapshot.capabilities.includes("local_execution") && <TeamDevicesCard key={`devices-${team.id}`} accountId={snapshot.account_id} team={team} />}
         <ul className="divide-y divide-line">{members.map(member => <li key={member.user_id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className="break-all">{member.email} · {roles[member.role]}</span>{member.role !== "owner" && (team.role === "owner" || team.role === "admin" && member.role === "member") && <div className="flex gap-2">
           {team.role === "owner" && <button type="button" disabled={busy} className={button} onClick={() => void mutate({ action: "member-role", account_id: snapshot.account_id, team_id: team.id, user_id: member.user_id, role: member.role === "admin" ? "member" : "admin" })}>{member.role === "admin" ? "设为成员" : "设为管理员"}</button>}
           <button type="button" disabled={busy} className={button} onClick={() => { if (window.confirm(`移除 ${member.email}？后续团队访问将停止，共享成果保留，已下载的文件无法远程收回。`)) void mutate({ action: "remove-member", account_id: snapshot.account_id, team_id: team.id, user_id: member.user_id }); }}>移除成员</button>

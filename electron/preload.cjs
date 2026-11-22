@@ -161,6 +161,8 @@ const bridge = {
       ? ipcRenderer.invoke("workspaces:add", String(choice), ...(typeof link === "string" ? [link, ...(typeof code === "string" ? [code] : [])] : [])) : Promise.reject(new Error("Choose what to add.")),
     probe: (address, code) => ipcRenderer.invoke("workspaces:probe", String(address ?? ""), String(code ?? "")),
     openCloud: (id, accountId) => ipcRenderer.invoke("donebot-cloud:open", String(id), String(accountId)),
+    openTeamCloud: (teamId, instanceId, accountId, teamName, role) =>
+      ipcRenderer.invoke("donebot-cloud:open-team", String(teamId), String(instanceId), String(accountId), String(teamName), String(role)),
     reconnectCloud: () => ipcRenderer.invoke("donebot-cloud:reconnect"),
     botLink: {
       state: () => ipcRenderer.invoke("donebot-bot-link:state"),

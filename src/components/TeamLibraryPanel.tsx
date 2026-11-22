@@ -19,6 +19,7 @@ import { OrgLibraryTab } from "./TeamLibraryPanelOrg";
 import { MAX_TEAM_BACKUP_BYTES } from "../../shared/team-backup";
 import { takeImportName } from "../../shared/import-name";
 import { readTemplateFolder } from "@/lib/template-folder";
+import { DONEBOT_TEMPLATES_ENABLED } from "@/donebot/services";
 import { TeamTemplatesTab, type TeamTemplatePublishTarget } from "./TeamTemplatesTab";
 const COMMUNITY_TEAMS_REPOSITORY = "https://github.com/milind-soni/openmausbot-teams";
 
@@ -101,7 +102,7 @@ export function TeamLibraryPanel({
   const dialogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
-  const [tab, setTab] = useState<TeamTab>("explore");
+  const [tab, setTab] = useState<TeamTab>(DONEBOT_TEMPLATES_ENABLED ? "explore" : "team-templates");
   const [catalog, setCatalog] = useState<TeamCatalog | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
@@ -158,9 +159,7 @@ export function TeamLibraryPanel({
     }
   }, []);
 
-  useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
+  useEffect(() => { if (DONEBOT_TEMPLATES_ENABLED) void loadCatalog(); }, [loadCatalog]);
 
   const loadOrgLibrary = useCallback(async () => {
     try {
@@ -173,13 +172,9 @@ export function TeamLibraryPanel({
     }
   }, []);
 
-  useEffect(() => {
-    void loadOrgLibrary();
-  }, [loadOrgLibrary]);
+  useEffect(() => { if (DONEBOT_TEMPLATES_ENABLED) void loadOrgLibrary(); }, [loadOrgLibrary]);
 
-  useEffect(() => {
-    if (tab === "team-templates" && state.config?.team?.sharedTemplates !== true) setTab("explore");
-  }, [state.config?.team?.sharedTemplates, tab]);
+  useEffect(() => { if (tab === "team-templates" && state.config?.team?.sharedTemplates !== true) setTab("explore"); }, [state.config?.team?.sharedTemplates, tab]);
 
   useEffect(() => {
     dialogRef.current?.focus();
@@ -520,7 +515,7 @@ export function TeamLibraryPanel({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {!pending && tab !== "team-templates" && (
+            {!pending && DONEBOT_TEMPLATES_ENABLED && tab !== "team-templates" && (
               <button
                 onClick={() => void openExternal(catalog?.repositoryUrl ?? COMMUNITY_TEAMS_REPOSITORY)}
                 className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
@@ -626,6 +621,7 @@ export function TeamLibraryPanel({
                     {t("teamTemplates.tab")}
                   </button>
                 )}
+                {DONEBOT_TEMPLATES_ENABLED && <>
                 <button
                   role="tab"
                   aria-selected={tab === "explore"}
@@ -686,8 +682,9 @@ export function TeamLibraryPanel({
                 >
                   {t("teamLibrary.shareTab")}
                 </button>
+                </>}
               </div>
-              {tab === "explore" && (
+              {DONEBOT_TEMPLATES_ENABLED && tab === "explore" && (
                 <label className="flex h-11 w-full items-center gap-2.5 rounded-xl bg-raised/70 px-3.5 sm:w-[320px]">
                   <Search size={17} className="shrink-0 text-ink-secondary" />
                   <input
@@ -726,7 +723,7 @@ export function TeamLibraryPanel({
                   }}
                 />
               )}
-              {tab === "explore" && (
+              {DONEBOT_TEMPLATES_ENABLED && tab === "explore" && (
                 <div>
                   <ReadyBotGallery search={search} onDialog={setNestedDialog} onAdded={onClose} />
                   <div className="mb-3 text-[12px] font-medium text-ink-secondary">

@@ -57,3 +57,37 @@ it("hides member management for members and ignores a stale selected-team respon
   expect(host.textContent).not.toContain("移除成员");
   expect(host.textContent).not.toContain("生成邀请");
 });
+
+it("renders team Cloud purchase/connect and explicit local device controls when capabilities are negotiated", async () => {
+  const teamId = snapshot.workspaces[0]!.id;
+  const instanceId = "44444444-4444-4444-8444-444444444444";
+  const planId = "55555555-5555-4555-8555-555555555555";
+  const deviceId = "66666666-6666-4666-8666-666666666666";
+  const openTeamCloud = vi.fn(async () => ({ outcome: "connected" as const }));
+  (window as unknown as { ogb?: unknown }).ogb = { workspaces: { openTeamCloud } };
+
+  snapshot.capabilities = ["identity", "cloud_access", "local_execution", "shared_files"];
+  fixture.api.mockImplementation(async (path, init) => {
+    if (path === "/api/donebot/workspaces") return structuredClone(snapshot);
+    if (path === `/api/donebot/teams/${teamId}/members`) return [{ user_id: 1, email: "owner@example.invalid", role: "owner", version: 1 }];
+    if (path === "/api/donebot/teams/plans") return [{ id: planId, name: "Studio 团队版", enabled: true, monthly_price: "49", retention_days: 7, runtime: { cpu_millis: 2000, memory_mib: 4096, storage_gib: 10, pids: 256 }, desktop: { cpu_millis: 1000, memory_mib: 2048, storage_gib: 10, pids: 512 }, shared_quota_bytes: 5 * 1024 ** 3, max_file_bytes: 100 * 1024 ** 2 }];
+    if (path === `/api/donebot/teams/${teamId}/cloud` && !init?.method) {
+      return { account_id: "1", instance: { instance_id: instanceId, desired: "running", actual: "running", generation: 1, error: "", paid_until: new Date(Date.now() + 86400000).toISOString(), subscription_state: "active", purge_locked: false, auto_renew: true, plan_id: planId, plan_name: "Studio 团队版" }, operations: [], connection_available: true };
+    }
+    if (path === `/api/donebot/teams/${teamId}/devices` && !init?.method) {
+      return { account_id: "1", installation_id: "77777777-7777-4777-8777-777777777777", devices: [{ id: deviceId, team_id: teamId, user_id: 1, email: "owner@example.invalid", role: "owner", installation_id: "77777777-7777-4777-8777-777777777777", name: "MacBook", enabled: false, version: 1, member_version: 1, online: false, last_seen: null }] };
+    }
+    return { ok: true };
+  });
+
+  await mount(); await select();
+  expect(host.textContent).toContain("团队 Cloud · 运行中");
+  expect(host.textContent).toContain("Studio 团队版");
+  expect(host.textContent).toContain("团队本机执行设备");
+  await act(async () => [...host.querySelectorAll("button")].find(b => b.textContent === "进入团队工作空间")!.click());
+  expect(openTeamCloud).toHaveBeenCalledExactlyOnceWith(teamId, instanceId, "1", "Fixture Studio", "owner");
+
+  await act(async () => [...host.querySelectorAll("button")].find(b => b.textContent === "在此团队启用本机")!.click());
+  const deviceWrites = fixture.api.mock.calls.filter(([path, init]) => path === `/api/donebot/teams/${teamId}/devices` && init?.method === "POST");
+  expect(JSON.parse(deviceWrites[0]![1].body)).toEqual({ action: "set", account_id: "1", enabled: true });
+});

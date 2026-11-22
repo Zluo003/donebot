@@ -15,4 +15,10 @@ describe("TeamLibraryPanel", () => {
     expect(source).toMatch(/state\.config\?\.team\?\.sharedTemplates === true && \(\s*<TeamTemplatesTab/);
     expect(source).toContain("if (tab === \"team-templates\" && state.config?.team?.sharedTemplates !== true) setTab(\"explore\")");
   });
+
+  it("opens directly to team templates without loading upstream marketplace when DONEBOT_TEMPLATES_ENABLED is false", () => {
+    expect(source).toContain('useState<TeamTab>(DONEBOT_TEMPLATES_ENABLED ? "explore" : "team-templates")');
+    expect(source).toContain("if (DONEBOT_TEMPLATES_ENABLED) void loadCatalog()");
+    expect(source).toContain("if (DONEBOT_TEMPLATES_ENABLED) void loadOrgLibrary()");
+  });
 });

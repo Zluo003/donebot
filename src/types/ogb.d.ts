@@ -164,6 +164,8 @@ const __APP_VERSION__: string;
       workspaces?: {
         /** Opens this account's verified DoneBot Cloud, renewing its browser session when necessary. */
         openCloud?: (id: string, accountId: string) => Promise<{ outcome: "connected" | "cancelled" }>;
+        /** Opens a verified team Cloud workspace under the current DoneBot account without exposing owner credentials. */
+        openTeamCloud?: (teamId: string, instanceId: string, accountId: string, teamName: string, role: "owner" | "admin" | "member") => Promise<{ outcome: "connected" | "cancelled" }>;
         /** Renews only the DoneBot Cloud currently displayed in the main window. */
         reconnectCloud?: () => Promise<{ outcome: "connected" | "cancelled" }>;
         /** Returns the main window to this computer without contacting Cloud or forgetting its saved entry. */

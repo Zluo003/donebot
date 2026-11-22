@@ -13,6 +13,68 @@ export interface DoneBotTeamIdentity {
 }
 export interface DoneBotTeamMember { user_id: number; email: string; role: DoneBotTeamRole; version: number }
 export interface DoneBotTeamInvitation { id: string; email: string; role: "admin" | "member"; expires_at: string; token: string }
+export interface DoneBotTeamResources { cpu_millis: number; memory_mib: number; storage_gib: number; pids: number }
+export interface DoneBotTeamPlan {
+  id: string;
+  name: string;
+  enabled: boolean;
+  monthly_price: string;
+  retention_days: number;
+  runtime: DoneBotTeamResources;
+  desktop: DoneBotTeamResources;
+  shared_quota_bytes: number;
+  max_file_bytes: number;
+}
+export interface DoneBotTeamCloudState {
+  instance_id: string;
+  desired: string;
+  actual: string;
+  generation: number;
+  error: string;
+  paid_until: string | null;
+  subscription_state: string;
+  purge_locked: boolean;
+  auto_renew: boolean;
+  plan_id?: string;
+  plan_name?: string;
+}
+export interface DoneBotTeamCloudOperation { id: string; instance_id?: string; action: string; generation?: number; state: string; error: string }
+export interface DoneBotTeamCloudSnapshot {
+  account_id: string;
+  instance: DoneBotTeamCloudState | null;
+  operations: DoneBotTeamCloudOperation[];
+  connection_available: boolean;
+}
+export type DoneBotTeamCloudAction = "start" | "stop" | "cancel" | "keep";
+export interface DoneBotTeamCloudMutation {
+  account_id: string;
+  action: DoneBotTeamCloudAction;
+  key: string;
+  plan_id?: string;
+}
+export interface DoneBotTeamDevice {
+  id: string;
+  team_id: string;
+  user_id: number;
+  email: string;
+  role: DoneBotTeamRole;
+  installation_id: string;
+  name: string;
+  enabled: boolean;
+  version: number;
+  member_version: number;
+  online: boolean;
+  last_seen: string | null;
+}
+export interface DoneBotTeamDevicesSnapshot {
+  account_id: string;
+  installation_id: string;
+  devices: DoneBotTeamDevice[];
+}
+export type DoneBotTeamDeviceCommand = { account_id: string } & (
+  | { action: "set"; enabled: boolean }
+  | { action: "revoke"; device_id: string }
+);
 export interface DoneBotWorkspaceSnapshot {
   account_id: string;
   protocol: typeof DONEBOT_TEAMS_PROTOCOL;

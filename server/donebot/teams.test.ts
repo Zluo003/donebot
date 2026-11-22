@@ -32,18 +32,42 @@ it("requires every participant to advertise the same protocol and feature", () =
   expect(negotiatedTeamCapabilities(snapshot, { protocol: DONEBOT_TEAMS_PROTOCOL, capabilities: ["identity"] })).toEqual(["identity"]);
 });
 it("sanitizes workspace snapshots and disables unsupported execution", () => {
-  expect(workspaceSnapshot({ ...snapshot, secret: "private" }, "1")).toEqual({ ...snapshot, account_id: "1", capabilities: ["identity"] });
+  expect(workspaceSnapshot({ ...snapshot, capabilities: ["identity", "cloud_access", "local_execution", "shared_files", "delegation", "unknown"], secret: "private" }, "1")).toEqual({
+    ...snapshot, account_id: "1", capabilities: ["identity", "cloud_access", "local_execution", "shared_files"],
+  });
   expect(() => workspaceSnapshot({ ...snapshot, workspaces: [{ ...team, role: "root" }] }, "1")).toThrow();
   expect(workspaceSnapshot({ ...snapshot, capabilities: [] }, "1").workspaces).toEqual([]);
 });
 it("sends login JWTs and only explicit command fields, never payer or owner credentials", async () => {
   const { gateway, requests } = await fixture();
-  expect(await gateway.workspaceSnapshot()).toMatchObject({ account_id: "1", capabilities: ["identity"] });
+  expect(await gateway.workspaceSnapshot()).toMatchObject({ account_id: "1", capabilities: ["identity", "local_execution"] });
   expect(await gateway.teamMutate({ action: "create", account_id: "1", name: "Fixture Studio", key })).toEqual(team);
   const request = requests.at(-1)!; expect(request.path).toBe("/api/v1/donebot/teams");
   const headers = new Headers(request.init?.headers); expect(headers.get("authorization")).toBe("Bearer synthetic-jwt"); expect(headers.get("idempotency-key")).toBe(key);
   expect(JSON.parse(String(request.init?.body))).toEqual({ name: "Fixture Studio" });
   await expect(gateway.teamMutate({ action: "create", account_id: "2", name: "Other", key })).rejects.toMatchObject({ code: "account_changed" });
+});
+it("validates team Cloud plans, mutations, desktop launch links, and local device consent", async () => {
+  const instanceId = randomUUID(), planId = randomUUID(), deviceId = randomUUID(), pairToken = `omb_pair_${"b".repeat(43)}`;
+  const { gateway, requests } = await fixture(path => {
+    if (path.endsWith("/teams/plans")) return json([{ id: planId, name: "Studio", enabled: true, monthly_price: "49", retention_days: 7, runtime: { cpu_millis: 2000, memory_mib: 4096, storage_gib: 10, pids: 256 }, desktop: { cpu_millis: 1000, memory_mib: 2048, storage_gib: 10, pids: 512 }, shared_quota_bytes: 5 * 1024 ** 3, max_file_bytes: 100 * 1024 ** 2 }]);
+    if (path.endsWith(`/teams/${id}/cloud`)) return json({ instance: { instance_id: instanceId, desired: "running", actual: "running", generation: 1, error: "", paid_until: "2026-12-20T00:00:00Z", subscription_state: "active", purge_locked: false, auto_renew: true, plan_id: planId, plan_name: "Studio" }, operations: [], connection_available: true });
+    if (path.endsWith(`/teams/${id}/cloud/start`)) return json({ instance: { instance_id: instanceId, desired: "running", actual: "pending", generation: 1, error: "", paid_until: "2026-12-20T00:00:00Z", subscription_state: "pending", purge_locked: false, auto_renew: true }, operation: { id: randomUUID(), action: "start", state: "pending", error: "" } });
+    if (path.endsWith(`/teams/${id}/desktop-launch`)) return json({ url: `donebot://pair?address=${encodeURIComponent(`https://${instanceId}.cloud.donebot.cn`)}&token=${pairToken}&name=Fixture+Studio` });
+    if (path.endsWith(`/teams/${id}/devices`)) return json({ id: deviceId, team_id: id, user_id: 1, email: "owner@example.invalid", role: "owner", installation_id: key, name: "DoneBot", enabled: true, version: 1, member_version: 1, online: true, last_seen: "2026-11-22T00:00:00Z" });
+    if (path.endsWith(`/devices/${deviceId}/heartbeat`)) return json({ ok: true });
+    if (path.endsWith(`/devices/${deviceId}`)) return json({ ok: true });
+    return undefined;
+  });
+  expect((await gateway.teamPlans())[0]?.name).toBe("Studio");
+  expect((await gateway.teamCloud(id)).instance?.instance_id).toBe(instanceId);
+  expect((await gateway.teamCloudMutate(id, { account_id: "1", action: "start", key, plan_id: planId })).operation.action).toBe("start");
+  expect((await gateway.teamCloudConnect(id, instanceId, "1")).url).toContain(pairToken);
+  await expect(gateway.teamCloudConnect(id, randomUUID(), "1")).rejects.toMatchObject({ code: "cloud_connection_invalid" });
+  const device = await gateway.teamDeviceMutate(id, { action: "set", account_id: "1", enabled: true });
+  expect(device).toMatchObject({ id: deviceId, enabled: true });
+  await gateway.teamDeviceMutate(id, { action: "revoke", account_id: "1", device_id: deviceId });
+  expect(requests.some(item => item.path === `/api/v1/donebot/teams/${id}/devices/${deviceId}`)).toBe(true);
 });
 it("does not give runtime installation credentials account or membership management authority", async () => {
   const { gateway, requests } = await fixture(undefined, true);

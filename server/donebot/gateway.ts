@@ -4,8 +4,8 @@ import { boundedResponseText } from "./bounded-response.ts";
 import { DEFAULT_DONEBOT_MEDIA_PREFERENCES, type DoneBotAccountState, type DoneBotCatalog, type DoneBotMediaPreferences } from "../../shared/donebot.ts";
 import type { DoneBotAuthSettings, DoneBotEmailDelivery } from "../../shared/donebot-auth.ts";
 import type { DoneBotCloudInstance, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudOperation, DoneBotCloudPlan, DoneBotCloudSnapshot } from "../../shared/donebot-cloud.ts";
-import { DONEBOT_TEAMS_PROTOCOL, type DoneBotTeamCommand, type DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams.ts";
-import { teamCommandRequest, teamIdentity, teamInvitation, teamMembers, workspaceSnapshot } from "./teams.ts";
+import { DONEBOT_TEAMS_PROTOCOL, type DoneBotTeamCloudMutation, type DoneBotTeamCloudSnapshot, type DoneBotTeamCommand, type DoneBotTeamDeviceCommand, type DoneBotTeamDevicesSnapshot, type DoneBotTeamPlan, type DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams.ts";
+import { parseTeamCloudMutation, parseTeamDeviceCommand, teamCloudOperationSchema, teamCloudResponseSchema, teamCloudStateSchema, teamCommandRequest, teamDeviceSchema, teamDevicesSchema, teamIdentity, teamInvitation, teamMembers, teamPlansSchema, workspaceSnapshot } from "./teams.ts";
 
 export const DONEBOT_ORIGIN = "https://donebot.cn";
 export const DONEBOT_INSTANCE_ID = "donebot";
@@ -303,6 +303,7 @@ export class DoneBotGateway {
   private invalidate(): void {
     this.epoch++;
     this.refreshFlight = null;
+    this.clearTeamHeartbeats();
     for (const controller of this.controllers) controller.abort(new Error("DoneBot account changed."));
     this.controllers.clear();
     this.currentCatalog = null;
@@ -566,6 +567,121 @@ export class DoneBotGateway {
     if (input.action === "invite") return teamInvitation.parse(value);
     if (["create", "accept", "rename"].includes(input.action)) return teamIdentity.parse(value);
     return { ok: true };
+  }
+
+  async teamPlans(): Promise<DoneBotTeamPlan[]> {
+    return teamPlansSchema.parse(await this.teamRequest("teams/plans", "GET"));
+  }
+
+  async teamCloud(teamId: string): Promise<DoneBotTeamCloudSnapshot> {
+    teamIdentity.shape.id.parse(teamId);
+    const epoch = this.epoch;
+    const value = await this.teamRequest(`teams/${teamId}/cloud`, "GET");
+    this.checkEpoch(epoch);
+    const parsed = teamCloudResponseSchema.parse(value);
+    return { account_id: this.session!.user.id, ...parsed };
+  }
+
+  async teamCloudMutate(teamId: string, input: DoneBotTeamCloudMutation) {
+    teamIdentity.shape.id.parse(teamId);
+    const clean = parseTeamCloudMutation(input);
+    const body = clean.plan_id ? { plan_id: clean.plan_id } : {};
+    const value = await this.teamRequest(`teams/${teamId}/cloud/${clean.action}`, "POST", clean.account_id, body, clean.key) as { instance?: unknown; operation?: unknown };
+    return {
+      instance: value?.instance ? teamCloudStateSchema.parse(value.instance) : null,
+      operation: teamCloudOperationSchema.parse(value?.operation),
+    };
+  }
+
+  async teamCloudConnect(teamId: string, instanceId: string, accountId: string): Promise<{ url: string }> {
+    teamIdentity.shape.id.parse(teamId);
+    if (!cloudInputText(instanceId, cloudID) || !cloudInputText(accountId, /^.{1,200}$/)) throw new DoneBotGatewayError(400, "team_cloud_invalid", "无效的团队 Cloud 连接请求。");
+    const value = await this.teamRequest(`teams/${teamId}/desktop-launch`, "POST", accountId, {}) as { url?: string };
+    let valid = false;
+    try {
+      const url = new URL(value.url ?? ""), address = new URL(url.searchParams.get("address") ?? "");
+      valid = url.protocol === "donebot:" && url.hostname === "pair" && !url.port && !url.pathname && !url.username && !url.password && !url.hash &&
+        [...url.searchParams.keys()].every(key => ["address", "token", "name"].includes(key) && url.searchParams.getAll(key).length === 1) &&
+        address.protocol === "https:" && address.hostname.startsWith(instanceId + ".") && address.pathname === "/" && !address.username && !address.password && !address.search && !address.hash &&
+        /^omb_pair_[A-Za-z0-9_-]{43}$/.test(url.searchParams.get("token") ?? "");
+    } catch { /* Malformed pairing replies fail closed. */ }
+    if (!valid) throw new DoneBotGatewayError(502, "cloud_connection_invalid", "团队 Cloud 连接地址无法验证，请刷新后重试。");
+    return { url: value.url! };
+  }
+
+  async teamDevices(teamId: string): Promise<DoneBotTeamDevicesSnapshot> {
+    teamIdentity.shape.id.parse(teamId);
+    const epoch = this.epoch;
+    const devices = teamDevicesSchema.parse(await this.teamRequest(`teams/${teamId}/devices`, "GET"));
+    this.checkEpoch(epoch);
+    const session = this.session!;
+    const local = devices.find(device => device.installation_id === session.installationId && String(device.user_id) === session.user.id && device.enabled);
+    if (local) this.trackTeamDevice(teamId, local.id, local.version, session.user.id, session.installationId);
+    else this.untrackTeamDevice(teamId);
+    return { account_id: session.user.id, installation_id: session.installationId, devices };
+  }
+
+  async teamDeviceMutate(teamId: string, input: DoneBotTeamDeviceCommand) {
+    teamIdentity.shape.id.parse(teamId);
+    const clean = parseTeamDeviceCommand(input);
+    if (clean.action === "revoke") {
+      await this.teamRequest(`teams/${teamId}/devices/${clean.device_id}`, "DELETE", clean.account_id);
+      if (this.teamHeartbeats.get(teamId)?.deviceId === clean.device_id) this.untrackTeamDevice(teamId);
+      return { ok: true };
+    }
+    const epoch = this.epoch, session = await this.validSession();
+    this.checkEpoch(epoch);
+    if (clean.account_id !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重试。");
+    const device = teamDeviceSchema.parse(await this.teamRequest(`teams/${teamId}/devices`, "PUT", clean.account_id, {
+      installation_id: session.installationId,
+      name: this.installationName().slice(0, 100) || "DoneBot",
+      enabled: clean.enabled,
+    }));
+    if (device.enabled) {
+      this.trackTeamDevice(teamId, device.id, device.version, session.user.id, session.installationId);
+      void this.sendTeamDeviceHeartbeat(teamId);
+    } else {
+      this.untrackTeamDevice(teamId);
+    }
+    return device;
+  }
+
+  private readonly teamHeartbeats = new Map<string, { deviceId: string; version: number; accountId: string; installationId: string; timer: ReturnType<typeof setInterval> }>();
+
+  private trackTeamDevice(teamId: string, deviceId: string, version: number, accountId: string, installationId: string) {
+    const existing = this.teamHeartbeats.get(teamId);
+    if (existing && existing.deviceId === deviceId && existing.version === version && existing.accountId === accountId && existing.installationId === installationId) return;
+    this.untrackTeamDevice(teamId);
+    const timer = setInterval(() => { void this.sendTeamDeviceHeartbeat(teamId); }, 30_000);
+    timer.unref?.();
+    this.teamHeartbeats.set(teamId, { deviceId, version, accountId, installationId, timer });
+  }
+
+  private untrackTeamDevice(teamId: string) {
+    const existing = this.teamHeartbeats.get(teamId);
+    if (existing) { clearInterval(existing.timer); this.teamHeartbeats.delete(teamId); }
+  }
+
+  private clearTeamHeartbeats() {
+    for (const id of this.teamHeartbeats.keys()) this.untrackTeamDevice(id);
+  }
+
+  private async sendTeamDeviceHeartbeat(teamId: string) {
+    const entry = this.teamHeartbeats.get(teamId);
+    const session = this.session;
+    if (!entry || !session?.credential || session.user.id !== entry.accountId || session.installationId !== entry.installationId) {
+      this.untrackTeamDevice(teamId);
+      return;
+    }
+    try {
+      const response = await this.fetcher(`${this.origin}/v1/donebot/runtime/teams/${teamId}/devices/${entry.deviceId}/heartbeat`, {
+        method: "POST", redirect: "error", credentials: "omit",
+        headers: { authorization: `Bearer ${session.credential}`, "X-DoneBot-Installation": session.installationId, "content-type": "application/json" },
+        body: JSON.stringify({ version: entry.version }), signal: AbortSignal.timeout(10_000),
+      });
+      await response.body?.cancel();
+      if (response.status === 401 || response.status === 403 || response.status === 404) this.untrackTeamDevice(teamId);
+    } catch { /* Best-effort heartbeat; retries on next interval. */ }
   }
 
   async cloudSnapshot(): Promise<DoneBotCloudSnapshot> {

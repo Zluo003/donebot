@@ -37,3 +37,10 @@
 2026-11-22：`GET /api/config` 仅在签名团队运行环境与文件/模板各自的显式服务端开关同时启用时，声明 `team.sharedFiles` / `team.sharedTemplates`；未启用时明确为 `false`。团队共享文件页接入独立 App 视图、桌面工具栏、手机工具菜单和简洁模式工具菜单。reducer 拒绝未获能力声明的导航，个人 Files 继续使用既有 Cloud bridge。
 
 17 个客户端/服务端测试文件、496 项相关回归通过，覆盖文件存储、签名路由、撤权、备份边界、能力开关组合、页面入口与无权限导航。客户端/服务端类型检查、定向 lint、16 语言目录校验及生产构建通过。Cloud worker 未配置开关，团队共享文件和模板仍保持关闭；模板虽有签名 API，尚无客户端管理/安装工作流。真实 Cloud worker、手机浏览器及 Linux 隔离验收未完成。
+
+## 容器开关透传、团队模板前端闭环与手机端团队工作空间（2026-11-22）
+
+- **Cloud 节点（DoneBot-Cloud）**：在 `src/team-runtime.mjs` 的 `teamEnvironment(value)` 中随团队配额透传 `DONEBOT_TEAM_FILES_ENABLED=1`、`DONEBOT_TEAM_TEMPLATES_ENABLED=1`、`DONEBOT_TEAM_EXECUTION_ENABLED=1`（仍受宿主机 `CLOUD_TEAMS_ENABLED=1` 门控，默认关闭）。`DoneBot-Cloud` 52/52 测试通过。
+- **客户端模板入口（DoneBot）**：复用原版 `TeamLibraryPanel.tsx` + `TeamTemplatesTab.tsx` + `ShareTeamDialog.tsx` 全套发布/预览/安装/删除工作流；在 `Sidebar.tsx` 允许 `state.config?.team?.sharedTemplates === true` 时打开面板（含普通成员只读查看与安装），在 `TeamLibraryPanel.tsx` 于 `DONEBOT_TEMPLATES_ENABLED === false` 时直接进入 `team-templates` 标签且屏蔽原版社区商店与外部目录请求。
+- **手机端（DoneBot-Mobile）**：`contracts.ts` / `api.ts` 扩展支持 `kind: "team"` 工作空间发现（网关关闭团队时完全静默兼容个人列表），新增 `src/core/team-proxy.ts` 通过网关 `TeamProxy` 直连团队工作空间（支持 JSON、附件上传、Range 断点下载、401 刷新与撤权立即关闭），`WorkspacePanels.tsx` 展示团队图标与角色标签。`DoneBot-Mobile` `tsc -b` 与 17 文件 142/142 测试全部通过。
+- **跨三端真实集成验证**：通过 `TestPostgresTeamSubdomainBrowserWithRealDoneBot` 在一次性 PostgreSQL + 真实 Go `ServeBrowser` 子域代理 + 真实隔离 DoneBot 团队服务端上完成 Owner 网页 Launch / Member 桌面配对、共享文件配额、团队模板角色分离（Owner `admin:true` / Member `admin:false`）及移除成员后 Cookie 立即撤权验证。真实 Linux `bot-box` 容器验收与 iOS 真机验证留待对应环境执行。

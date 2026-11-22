@@ -22,7 +22,7 @@ export function createDoneBotBotLink({ request, fetch: cookieFetch, saved, pref,
   const write = payload => local(STATE, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
   function findSavedEntry(id, owner) {
     if (!CLOUD_ID.test(id ?? "") || !owner) return { entry: null, tampered: false };
-    const matched = saved().environments.filter(candidate => candidate.donebotCloud?.id === id && candidate.donebotCloud.accountId === owner);
+    const matched = saved().environments.filter(candidate => candidate.donebotCloud?.id === id && candidate.donebotCloud.accountId === owner && !candidate.team && !candidate.donebotCloud?.teamId);
     const valid = matched.find(candidate => validCloudOrigin(candidate.origin, id)) ?? null;
     return { entry: valid, tampered: !valid && matched.length > 0 };
   }

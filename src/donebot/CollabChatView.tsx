@@ -59,17 +59,22 @@ import {
 import {
   ARCHIVE_EXTS,
   AUDIO_EXTS,
+  classifyChatMediaKind,
   CODE_EXTS,
   detectMentionQuery,
   extOf,
   formatMessageStamp,
   IMAGE_EXTS,
-  INLINE_IMAGE_MIMES,
   shouldShowTimestamp,
   triggerFileDownload,
   uploadChatFile,
   VIDEO_EXTS,
 } from "./collab-chat-helpers";
+import {
+  CollabMediaBubble,
+  CollabMediaPreviewDialog,
+  type CollabMediaPreviewTarget,
+} from "./CollabMediaPreview";
 
 const POLL_MS = 3_000;
 const FAST_POLL_MS = 1_500;
@@ -116,6 +121,7 @@ export function CollabChatView({
   const [awaitingBotReply, setAwaitingBotReply] = useState(false);
   const [uploading, setUploading] = useState<{ name: string; percent: number } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<CollabMediaPreviewTarget | null>(null);
   const [draggingOver, setDraggingOver] = useState(false);
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
@@ -606,9 +612,9 @@ export function CollabChatView({
                   nickname: msg.sender_nickname,
                   email: msg.sender_email,
                 });
-              const isInlineImage = msg.kind === "file"
-                && Boolean(msg.file_id)
-                && INLINE_IMAGE_MIMES.has((msg.file_mime ?? "").toLowerCase().split(";")[0] ?? "");
+              const mediaKind = msg.kind === "file" && msg.file_id
+                ? classifyChatMediaKind(msg.file_mime, msg.file_name)
+                : "file";
               const fileSrc = msg.file_id ? `/api/donebot/collab/chats/files/${encodeURIComponent(msg.file_id)}?inline=1` : "";
 
               const botMeta = isBot && msg.sender_bot_id ? chatBotById.get(msg.sender_bot_id) : undefined;
@@ -656,7 +662,16 @@ export function CollabChatView({
                         <span data-collab-msg-sender="" className="px-1 text-[11.5px] text-ink-tertiary">{senderLabel}</span>
                       ) : null}
 
-                      {msg.kind === "file" && msg.file_id ? (
+                      {msg.kind === "file" && msg.file_id && mediaKind !== "file" ? (
+                        <CollabMediaBubble
+                          msg={msg}
+                          mediaKind={mediaKind}
+                          fileSrc={fileSrc}
+                          mine={mine}
+                          bodyNode={msg.body && isGroupLike ? renderMentionHighlightedText(msg.body, mine) : undefined}
+                          onPreview={setPreviewMedia}
+                        />
+                      ) : msg.kind === "file" && msg.file_id ? (
                         <div
                           className={cn(
                             "flex w-full max-w-[360px] flex-col gap-2 overflow-hidden rounded-[18px] p-2.5",
@@ -665,21 +680,6 @@ export function CollabChatView({
                               : "rounded-bl-[6px] bg-card text-ink ring-1 ring-inset ring-ink/[0.07]",
                           )}
                         >
-                          {isInlineImage && (
-                            <button
-                              type="button"
-                              onClick={() => void handleDownload(msg.file_id!, msg.file_name || "image")}
-                              className="group relative flex w-full justify-center overflow-hidden rounded-xl bg-inset/45"
-                              title="点击下载原图"
-                            >
-                              <img
-                                src={fileSrc}
-                                alt={msg.file_name || "图片"}
-                                loading="lazy"
-                                className="max-h-72 w-full rounded-xl object-contain"
-                              />
-                            </button>
-                          )}
                           <div className="flex items-center gap-2.5 px-1 py-0.5">
                             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-ink/[0.08]">
                               <ChatFileIcon name={msg.file_name || ""} />
@@ -885,6 +885,12 @@ export function CollabChatView({
           </div>
         </div>
       </div>
+      <CollabMediaPreviewDialog
+        preview={previewMedia}
+        downloading={downloadingId !== null}
+        onClose={() => setPreviewMedia(null)}
+        onDownload={(fileId, fileName) => void handleDownload(fileId, fileName)}
+      />
     </section>
   );
 }

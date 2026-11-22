@@ -141,7 +141,7 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
             try {
               const handle = await openMediaArtifact(file, join(deps.dataDir, "donebot", "artifacts"));
               try {
-                const params = new URLSearchParams({ name: file.name, body: `[${collabMeta.botName} 生成的图片]` });
+                const params = new URLSearchParams({ name: file.name });
                 const stream = Readable.toWeb(handle.createReadStream({ autoClose: false })) as unknown as ReadableStream<Uint8Array>;
                 await donebot.collabSendChatFile(collabMeta.scopeType, collabMeta.targetId, params.toString(), stream, {
                   "content-type": file.mime || "application/octet-stream",

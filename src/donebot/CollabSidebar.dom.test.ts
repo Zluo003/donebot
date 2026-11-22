@@ -421,6 +421,51 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
             body: "已整理好要点",
             created_at: "2026-11-23T00:11:00Z",
           },
+          {
+            id: 24,
+            scope_type: "group",
+            target_id: groupId,
+            sender_id: 202,
+            sender_email: "bob@example.invalid",
+            sender_nickname: "小罗",
+            kind: "file",
+            body: "",
+            file_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+            file_name: "donkey.png",
+            file_mime: "image/png",
+            file_size: 204800,
+            created_at: "2026-11-23T00:11:10Z",
+          },
+          {
+            id: 25,
+            scope_type: "group",
+            target_id: groupId,
+            sender_id: 202,
+            sender_email: "bob@example.invalid",
+            sender_nickname: "小罗",
+            kind: "file",
+            body: "",
+            file_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+            file_name: "demo.mp4",
+            file_mime: "video/mp4",
+            file_size: 4096000,
+            created_at: "2026-11-23T00:11:20Z",
+          },
+          {
+            id: 26,
+            scope_type: "group",
+            target_id: groupId,
+            sender_id: 202,
+            sender_email: "bob@example.invalid",
+            sender_nickname: "小罗",
+            kind: "file",
+            body: "",
+            file_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+            file_name: "theme.mp3",
+            file_mime: "audio/mpeg",
+            file_size: 1024000,
+            created_at: "2026-11-23T00:11:30Z",
+          },
         ];
       }
       if (path === `/api/donebot/collab/chats/group/${groupId}/messages` && init?.method === "POST") {
@@ -508,6 +553,26 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
       method: "POST",
       body: JSON.stringify({ body: "@写作助手 写一段公告", mention_bot_ids: [chatBot1Id] }),
     });
+
+    // Frameless image, video, and music messages open preview Lightbox on click instead of downloading.
+    const imgBubble = container!.querySelector<HTMLButtonElement>('[data-collab-msg="24"] [data-collab-media-bubble="image"]')!;
+    expect(imgBubble).not.toBeNull();
+    expect(container!.querySelector('[data-collab-msg="24"]')?.textContent).not.toContain("donkey.png");
+    await act(async () => { imgBubble.click(); });
+    expect(container!.querySelector('[data-collab-media-preview="image"] img')).not.toBeNull();
+    await act(async () => { container!.querySelector<HTMLButtonElement>('button[aria-label="关闭预览"]')!.click(); });
+
+    const videoBubble = container!.querySelector<HTMLButtonElement>('[data-collab-msg="25"] [data-collab-media-bubble="video"]')!;
+    expect(videoBubble).not.toBeNull();
+    await act(async () => { videoBubble.click(); });
+    expect(container!.querySelector('[data-collab-media-preview="video"] video')).not.toBeNull();
+    await act(async () => { container!.querySelector<HTMLButtonElement>('button[aria-label="关闭预览"]')!.click(); });
+
+    const audioBubble = container!.querySelector<HTMLButtonElement>('[data-collab-msg="26"] [data-collab-media-bubble="audio"]')!;
+    expect(audioBubble).not.toBeNull();
+    await act(async () => { audioBubble.click(); });
+    expect(container!.querySelector('[data-collab-media-preview="audio"] audio')).not.toBeNull();
+    await act(async () => { container!.querySelector<HTMLButtonElement>('button[aria-label="关闭预览"]')!.click(); });
 
     // Right panel「Bot」tab shows group bots and owner authorization button.
     const botsTab = container!.querySelector<HTMLButtonElement>('[data-collab-right-tab="bots"]')!;

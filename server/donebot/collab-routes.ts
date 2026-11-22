@@ -252,13 +252,14 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
       const chatFileDownload = reqPath.match(/^\/api\/donebot\/collab\/chats\/files\/([0-9a-f-]{36})$/);
       if (chatFileDownload && method === "GET") {
         const inline = url.searchParams.get("inline") === "1";
+        const range = typeof req.headers.range === "string" ? req.headers.range : undefined;
         const abort = new AbortController();
         const onClose = () => abort.abort();
         res.once("close", onClose);
         try {
-          const upstream = await gateway.collabDownloadChatFile(chatFileDownload[1]!, inline, abort.signal);
+          const upstream = await gateway.collabDownloadChatFile(chatFileDownload[1]!, inline, abort.signal, range);
           await pipeUpstreamStream(upstream, res, json, "下载聊天文件失败。", [
-            "Content-Type", "Content-Disposition", "Content-Length", "X-File-Sha256",
+            "Content-Type", "Content-Disposition", "Content-Length", "Accept-Ranges", "Content-Range", "X-File-Sha256",
           ]);
         } finally {
           res.off("close", onClose);

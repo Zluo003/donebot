@@ -2,15 +2,26 @@ import type { CollabChatScopeType, DoneBotChatMessage } from "../../shared/doneb
 
 const MENTION_PATTERN = /(?:^|[\s([{"'，。！？、])@([^\s@]{0,40})$/;
 
-export const INLINE_IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-export const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
-export const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi"]);
-export const AUDIO_EXTS = new Set([".mp3", ".wav", ".m4a", ".flac", ".ogg"]);
+export const INLINE_IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
+export const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"]);
+export const VIDEO_EXTS = new Set([".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"]);
+export const AUDIO_EXTS = new Set([".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".opus"]);
 export const ARCHIVE_EXTS = new Set([".zip", ".tar", ".gz", ".7z", ".rar", ".dmg"]);
 export const CODE_EXTS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".json", ".py", ".go", ".rs",
   ".java", ".css", ".html", ".sh", ".sql", ".yml", ".yaml",
 ]);
+
+export type ChatMediaKind = "image" | "video" | "audio" | "file";
+
+export function classifyChatMediaKind(mime?: string | null, fileName?: string | null): ChatMediaKind {
+  const baseMime = (mime ?? "").toLowerCase().split(";")[0]?.trim() ?? "";
+  const ext = extOf(fileName ?? "");
+  if (INLINE_IMAGE_MIMES.has(baseMime) || IMAGE_EXTS.has(ext)) return "image";
+  if (baseMime.startsWith("video/") || VIDEO_EXTS.has(ext)) return "video";
+  if (baseMime.startsWith("audio/") || AUDIO_EXTS.has(ext)) return "audio";
+  return "file";
+}
 
 export function detectMentionQuery(text: string, caret: number): { start: number; query: string } | null {
   const before = text.slice(0, caret);

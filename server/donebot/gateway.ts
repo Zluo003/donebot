@@ -623,8 +623,8 @@ export class DoneBotGateway {
   collabSendChatFile(scopeType: string, targetId: string, query: string, body: ReadableStream<Uint8Array> | Buffer, headers: Record<string, string>, signal?: AbortSignal): Promise<Response> {
     return collabStreamCall(this.collabCtx(), "auto", () => `/api/v1/donebot/collab/chats/${scopeType}/${targetId}/files${query ? `?${query}` : ""}`, { method: "POST", body, headers, signal });
   }
-  collabDownloadChatFile(fileId: string, inline: boolean, signal?: AbortSignal): Promise<Response> {
-    return collabStreamCall(this.collabCtx(), "auto", () => `/api/v1/donebot/collab/chats/files/${fileId}${inline ? "?inline=1" : ""}`, { method: "GET", signal });
+  collabDownloadChatFile(fileId: string, inline: boolean, signal?: AbortSignal, range?: string): Promise<Response> {
+    return collabStreamCall(this.collabCtx(), "auto", () => `/api/v1/donebot/collab/chats/files/${fileId}${inline ? "?inline=1" : ""}`, { method: "GET", headers: range ? { range } : undefined, signal });
   }
 
   private async teamRequest(path: string, method: string, accountId?: string, body?: unknown, key?: string): Promise<unknown> {

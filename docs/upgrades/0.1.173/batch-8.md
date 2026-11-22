@@ -4,6 +4,15 @@
 
 2026-11-21 的团队结算切片通过 PostgreSQL/HTTP/race、生产转发和用量记录定向回归、全部 Go 包编译，以及客户端四文件 104 项、类型和 lint。证据见 [模型验证](../../verification/donebot-team-models.md)。最新持久待结算恢复的中断与并发验证已通过；该夹具没有完整生产调度或真实 Linux 团队执行，不能代替本批验收。
 
+## Linux 最小权限团队镜像隔离通过（2026-11-22）
+
+在一次性真实 Linux 环境（Ubuntu 24.04 x64 GitHub Hosted Runner，内核 `7.0.0-1017-azure`，Docker `28.0.4`，AppArmor 4.x）上，由 [DoneBot-Cloud run 45006096648](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45006096648) 对 `e117b44e74eb67b610f8b4b8268294658e717a43` 构建的 `cloud-service` 镜像（GHCR `ghcr.io/zluo003/donebot-cloud-service@sha256:3c4983ead3ba11154fc2c0a2bb537aa2c6630a472eae966363e822503ccf6e47`）执行两轮 `scripts/verify-team-linux.mjs`（严格保留 `--user 1001:1001 --read-only --cap-drop ALL --security-opt no-new-privileges --network none`）：
+
+1. **Docker 默认配置**：退出码 `2`，`probe: { box: "off", reason: "userns-refused" }`、`readiness.ready=false`、执行请求返回 `503`，验证默认安全拦截仍成立；
+2. **最小权限团队安全配置**（`DoneBot-Cloud/deploy/security/team-seccomp.json` + `deploy/security/install-team-apparmor.sh` 加载 `donebot-team-container (enforce)` 在内核 LSM 层接管全部 `/proc`、`/sys` `MaskedPaths`/`ReadonlyPaths` 防护 + AppArmor 补偿的 `systempaths`，个人容器保持 Docker 默认配置零改动）：**退出码 `0`**、`probeExit=0`、`box="bwrap"`、`bridge="socat"`、**32/32 对抗隔离探针全部通过**（`failed=[]`，含 `keyring-denied: Operation not permitted`、`other-pid-hidden`、`server-pid-hidden`、`engine-runs`、`engine-read-only: EROFS`、`harness-*`、`egress-*`、`broker-*`、`durationMs=133`）、`readiness: { app: "donebot", team_protocol: "donebot.teams.v1", ready: true }`、`authenticatedReads="passed"`、`foreignTeam="refused"`、`acceptance="isolation-only"`。
+
+详细证据记录于相邻 `DoneBot-Cloud/docs/verification/images-2026-11-22-teams-box-amd64.json`。限制边界：上述通过证据产生于 Ubuntu 24.04（AppArmor 4.x）；目标生产 Debian 12 节点（AppArmor 3.0.x）启用 `CLOUD_TEAMS_ENABLED=1` 前仍须在目标主机运行 `install-team-apparmor.sh` 与 `verify-team-linux.mjs` 复测返回 `0`。Windows、物理手机、跨成员本机、生产供应商用量链、压力恢复及旧版在线升级仍待完整验收。
+
 ## Linux 实际镜像隔离（2026-11-21）
 
 从提交 `e91d40d6e4d6d9f97770c923dde728fd6cd314b1` 的 `git archive` 构建 `Dockerfile` 的 `cloud-service`、`linux/arm64` 目标，未使用工作目录中单独保留的 0.1.3 版本修改或用户资料。镜像本地 digest 为 `sha256:90dc85500b02d012bf3a319bf525e16a51b3ed6c93914097a463e6d57bcafe54`；这是隔离验证镜像，不是已发布的生产镜像。

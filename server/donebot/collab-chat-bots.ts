@@ -7,6 +7,11 @@ import type {
 import type { DoneBotTeamMember } from "../../shared/donebot-teams.ts";
 import type { Message, Store } from "../store.ts";
 import {
+  COLLAB_CHAT_THREAD_TITLE_PREFIX,
+  registerCollabChatThread,
+  runWithCollabChatTurn,
+} from "./collab-chat-policy.ts";
+import {
   collabClaimBotInvocation,
   collabListChatBots,
   collabListGroups,
@@ -221,6 +226,7 @@ export function formatChatPrompt(
     `你在 DoneBot ${kindLabel}「${chatTitle}」中被${callerIsOwner ? "你的主人" : "已获主人授权的群成员"} ${triggerSender} 通过 @${inv.bot_name} 调用。`,
     ownerName ? `你的主人（Bot 所有者）是：${ownerName}。` : "",
     "你正在主人本机 DoneBot 中处理群聊任务，请结合群成员名单和最近群聊上下文直接回复，回答清晰、实用、简洁，不要泄露本机隐私路径或凭据。",
+    "能力边界（强制）：你在群聊中只允许进行文本对话（LLM）和画图（图片生成），严禁调用视频模型、音乐/音频模型或任何第三方视频/音乐工具。如果群成员要求生成视频或音乐，请直接礼貌拒绝并说明群聊机器人仅支持文字对话与画图。",
     ...(rosterLines.length > 0
       ? [
         "",
@@ -256,12 +262,18 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
       threadId = undefined;
     }
     if (!threadId) {
-      const title = `[群聊] ${inv.chat_name?.trim() || "协作群聊"}`.slice(0, 80);
+      const title = `${COLLAB_CHAT_THREAD_TITLE_PREFIX}${inv.chat_name?.trim() || "协作群聊"}`.slice(0, 80);
       const task = store.createTask(inv.local_bot_id, title, false, undefined, undefined, "ask");
       if (!task) return "";
       threadId = task.threadId;
       threadByChat.set(key, threadId);
     }
+    registerCollabChatThread(threadId, {
+      scopeType: inv.scope_type,
+      targetId: inv.target_id,
+      chatBotId: inv.chat_bot_id,
+      botName: inv.bot_name,
+    });
     if (threadBusy?.(inv.local_bot_id, threadId)) {
       return "";
     }
@@ -280,14 +292,14 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
 
     let settled: CollabBotTurnOutcome | undefined;
     let dispatchError: string | undefined;
-    await startTurn(inv.local_bot_id, full, {
-      threadId,
+    await runWithCollabChatTurn(threadId, () => startTurn(inv.local_bot_id, full, {
+      threadId: threadId!,
       automationSource: "api",
       unattended: true,
       userMessage,
       onSettled: outcome => { settled = outcome; },
       onDispatchError: msg => { dispatchError = msg; },
-    });
+    }));
 
     const deadline = Date.now() + TURN_WAIT_MS;
     while (Date.now() < deadline) {

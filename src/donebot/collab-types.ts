@@ -19,6 +19,10 @@ export interface LocalBotSummary {
   title: string;
   description: string;
   color?: string;
+  avatar_url?: string;
+  avatar_crop?: string;
+  mascot_body?: string;
+  mascot_face_color?: string;
   has_soul: boolean;
   skill_count: number;
 }

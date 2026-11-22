@@ -1,9 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { AlertCircle, Bot, Camera, Check, Loader2, Trash2, X } from "lucide-react";
+import { AlertCircle, Camera, Check, Loader2, Trash2, X } from "lucide-react";
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
-import { CHROME_EYES, MAUS_COLORS, type MausColor } from "@/lib/mascot";
+import { MausAvatar } from "@/components/Avatar";
+import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
 import { cn } from "@/lib/cn";
+import type { BotBodyId } from "../../shared/bot-body";
+import type { MascotFaceColor } from "../../shared/bot-avatar";
 import {
   cleanError,
   COLLAB_BUTTON,
@@ -145,12 +148,16 @@ export function CollabBotBadge({
   name,
   color,
   avatarUrl,
+  bodyId,
+  faceColor,
   size = 30,
   className,
 }: {
   name: string;
   color?: string | null;
   avatarUrl?: string | null;
+  bodyId?: string | null;
+  faceColor?: string | null;
   size?: number;
   className?: string;
 }) {
@@ -158,30 +165,20 @@ export function CollabBotBadge({
   const src = avatarUrl?.trim() || "";
   useEffect(() => { setImgFailed(false); }, [src]);
 
-  const key = (color ?? "").trim().toLowerCase() as MausColor;
-  const hex = (key && key in MAUS_COLORS ? MAUS_COLORS[key] : null) ?? MAUS_COLORS.blue;
-  const isLightMetallic = key === "chrome" || key === "silver";
-  const iconSize = Math.max(13, Math.round(size * 0.52));
+  const rawColor = (color ?? "").trim().toLowerCase();
+  const resolvedColor: MausColor = rawColor && rawColor in MAUS_COLORS ? (rawColor as MausColor) : "blue";
+  const resolvedFace: MascotFaceColor | null = faceColor === "white" || faceColor === "black" ? faceColor : null;
 
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full ring-1 ring-inset ring-white/18",
-        className,
-      )}
-      style={{
-        width: size,
-        height: size,
-        ...(src && !imgFailed
-          ? {}
-          : {
-            background: `radial-gradient(circle at 32% 28%, color-mix(in srgb, ${hex} 65%, white), ${hex} 72%, color-mix(in srgb, ${hex} 68%, black))`,
-            color: isLightMetallic ? CHROME_EYES : "#ffffff",
-          }),
-      }}
-      title={name}
-    >
-      {src && !imgFailed ? (
+  if (src && !imgFailed) {
+    return (
+      <span
+        className={cn(
+          "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-raised ring-1 ring-inset ring-ink/12",
+          className,
+        )}
+        style={{ width: size, height: size }}
+        title={name}
+      >
         <img
           src={src}
           alt={name}
@@ -189,9 +186,25 @@ export function CollabBotBadge({
           loading="lazy"
           onError={() => setImgFailed(true)}
         />
-      ) : (
-        <Bot size={iconSize} strokeWidth={2} aria-hidden="true" />
-      )}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn("inline-flex shrink-0 select-none items-center justify-center", className)}
+      style={{ width: size, height: size }}
+      title={name}
+    >
+      <MausAvatar
+        color={resolvedColor}
+        bodyId={(bodyId || undefined) as BotBodyId | undefined}
+        faceColor={resolvedFace}
+        size={size}
+        label={name}
+        animated={false}
+        trackPointer={false}
+      />
     </span>
   );
 }

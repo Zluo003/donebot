@@ -2,6 +2,7 @@ import { UNIFIED_MEDIA_PROTOCOL, unifiedOperation } from "./unified-media.ts";
 import { z } from "zod";
 import type { HelperToolContext } from "../routes/helper-tools.ts";
 import { PASS } from "../routes/table.ts";
+import { COLLAB_CHAT_MEDIA_BLOCK_MESSAGE, isCollabChatThread } from "./collab-chat-policy.ts";
 import { mediaKindSchema, type MediaJob } from "./media-store.ts";
 import type { DoneBotMediaService, MediaContext } from "./media.ts";
 import { DONEBOT_MEDIA_MODELS } from "./media-registry.ts";
@@ -43,10 +44,17 @@ export function createDoneBotMediaRoutes(service: DoneBotMediaService, contextFo
       const body = await ctx.readBody();
       if (!context.active()) return ctx.json(ctx.res, 403, { error: "This turn ended before the media request was read." });
       if (action === "capabilities") {
-        return ctx.json(ctx.res, 200, { models: await service.capabilities(capabilitySchema.parse(body)), reference_rule: "For unified images/videos, use references:[{type:'image',role:'reference',url:{local_path:'/allowed/file'}}]. DoneBot uploads local files; raw URLs and asset:// references are unavailable." });
+        const capQuery = capabilitySchema.parse(body);
+        if (isCollabChatThread(context.threadId) && (capQuery.kind === "video" || capQuery.kind === "music")) {
+          return ctx.json(ctx.res, 403, { error: COLLAB_CHAT_MEDIA_BLOCK_MESSAGE });
+        }
+        return ctx.json(ctx.res, 200, { models: await service.capabilities(capQuery), reference_rule: "For unified images/videos, use references:[{type:'image',role:'reference',url:{local_path:'/allowed/file'}}]. DoneBot uploads local files; raw URLs and asset:// references are unavailable." });
       }
       if (action === "generate") {
         const input = submitSchema.parse(body);
+        if (isCollabChatThread(context.threadId) && (input.kind === "video" || input.kind === "music")) {
+          return ctx.json(ctx.res, 403, { error: COLLAB_CHAT_MEDIA_BLOCK_MESSAGE });
+        }
         const selected = modelsFor?.(input.kind) ?? { primary: input.model ?? DONEBOT_MEDIA_MODELS[input.kind], fallback: "" };
         if (!selected.primary || input.model && input.model !== selected.primary) return ctx.json(ctx.res, 409, { error: "Media defaults changed or are unavailable. Use the current generation tool schema." });
         if (input.fallback_model !== undefined && input.fallback_model !== selected.fallback || typeof input.parameters.mode !== "string" && (input.fallback_model ?? "") !== selected.fallback) return ctx.json(ctx.res, 409, { error: "The configured fallback changed. Use the current generation tool schema." });

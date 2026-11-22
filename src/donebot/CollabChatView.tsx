@@ -48,30 +48,23 @@ import {
   type CollabOverview,
 } from "./collab-types";
 import { CollabAvatar, CollabBotBadge, CollabTeamBadge } from "./CollabAvatar";
+import {
+  ARCHIVE_EXTS,
+  AUDIO_EXTS,
+  CODE_EXTS,
+  detectMentionQuery,
+  extOf,
+  formatMessageStamp,
+  IMAGE_EXTS,
+  INLINE_IMAGE_MIMES,
+  shouldShowTimestamp,
+  triggerFileDownload,
+  uploadChatFile,
+  VIDEO_EXTS,
+} from "./collab-chat-helpers";
 
 const POLL_MS = 3_000;
 const FAST_POLL_MS = 1_500;
-const MENTION_PATTERN = /(?:^|[\s([{"'，。！？、])@([^\s@]{0,40})$/;
-
-function detectMentionQuery(text: string, caret: number): { start: number; query: string } | null {
-  const before = text.slice(0, caret);
-  const match = before.match(MENTION_PATTERN);
-  if (!match) return null;
-  const query = match[1] ?? "";
-  const start = caret - query.length - 1;
-  return start >= 0 ? { start, query } : null;
-}
-const INLINE_IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
-const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi"]);
-const AUDIO_EXTS = new Set([".mp3", ".wav", ".m4a", ".flac", ".ogg"]);
-const ARCHIVE_EXTS = new Set([".zip", ".tar", ".gz", ".7z", ".rar", ".dmg"]);
-const CODE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".json", ".py", ".go", ".rs", ".java", ".css", ".html", ".sh", ".sql", ".yml", ".yaml"]);
-
-function extOf(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot >= 0 ? name.slice(dot).toLowerCase() : "";
-}
 
 function ChatFileIcon({ name }: { name: string }) {
   const ext = extOf(name);
@@ -81,91 +74,6 @@ function ChatFileIcon({ name }: { name: string }) {
   if (ARCHIVE_EXTS.has(ext)) return <FileArchive size={18} className="shrink-0 text-[#D8A729]" aria-hidden="true" />;
   if (CODE_EXTS.has(ext)) return <FileCode2 size={18} className="shrink-0 text-[#5FA0FF]" aria-hidden="true" />;
   return <FileText size={18} className="shrink-0 text-ink-secondary" aria-hidden="true" />;
-}
-
-function formatMessageStamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const now = new Date();
-  const hhmm = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  const sameDay = date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate();
-  if (sameDay) return `今天 ${hhmm}`;
-  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
-  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${hhmm}`;
-}
-
-function shouldShowTimestamp(prev: DoneBotChatMessage | undefined, curr: DoneBotChatMessage): boolean {
-  if (!prev) return true;
-  const a = Date.parse(prev.created_at);
-  const b = Date.parse(curr.created_at);
-  if (Number.isNaN(a) || Number.isNaN(b)) return false;
-  return b - a >= 5 * 60_000;
-}
-
-function uploadChatFile(
-  scopeType: CollabChatScopeType,
-  targetId: string,
-  file: File,
-  caption: string,
-  onProgress: (pct: number) => void,
-): Promise<DoneBotChatMessage> {
-  const params = new URLSearchParams({ name: file.name });
-  if (caption.trim()) params.set("body", caption.trim());
-  const url = `/api/donebot/collab/chats/${scopeType}/${encodeURIComponent(targetId)}/files?${params.toString()}`;
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", url, true);
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-    xhr.upload.onprogress = evt => {
-      if (evt.lengthComputable && evt.total > 0) {
-        onProgress(Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        onProgress(100);
-        try {
-          resolve(JSON.parse(xhr.responseText) as DoneBotChatMessage);
-        } catch {
-          reject(new Error("服务器返回了无效的文件消息。"));
-        }
-        return;
-      }
-      let message = `发送文件失败（HTTP ${xhr.status}）。`;
-      try {
-        const parsed = JSON.parse(xhr.responseText) as { error?: string; message?: string };
-        if (parsed?.error) message = parsed.error;
-        else if (parsed?.message) message = parsed.message;
-      } catch { /* fallback */ }
-      reject(new Error(message));
-    };
-    xhr.onerror = () => reject(new Error("网络中断，发送文件失败。"));
-    xhr.ontimeout = () => reject(new Error("发送文件超时，请稍后重试。"));
-    xhr.send(file);
-  });
-}
-
-async function triggerFileDownload(fileId: string, fileName: string) {
-  const res = await fetch(`/api/donebot/collab/chats/files/${encodeURIComponent(fileId)}`, { credentials: "same-origin" });
-  if (!res.ok) {
-    let msg = `下载失败（HTTP ${res.status}）。`;
-    try {
-      const payload = await res.json() as { error?: string };
-      if (payload?.error) msg = payload.error;
-    } catch { /* ignore */ }
-    throw new Error(msg);
-  }
-  const blob = await res.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = fileName || "file";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
 
 export function CollabChatView({
@@ -213,6 +121,14 @@ export function CollabChatView({
   const fileInputId = useId();
 
   const myUserId = Number(overview.identity.account_id);
+  const localBotById = useMemo(
+    () => new Map(overview.local_bots.map(b => [b.id, b])),
+    [overview.local_bots],
+  );
+  const chatBotById = useMemo(
+    () => new Map(chatBots.map(b => [b.id, b])),
+    [chatBots],
+  );
   const myDisplayName = displayPersonName({
     nickname: overview.identity.nickname,
     email: overview.identity.email,
@@ -661,11 +577,15 @@ export function CollabChatView({
                 && INLINE_IMAGE_MIMES.has((msg.file_mime ?? "").toLowerCase().split(";")[0] ?? "");
               const fileSrc = msg.file_id ? `/api/donebot/collab/chats/files/${encodeURIComponent(msg.file_id)}?inline=1` : "";
 
+              const botMeta = isBot && msg.sender_bot_id ? chatBotById.get(msg.sender_bot_id) : undefined;
+              const localBotMeta = botMeta && botMeta.owner_user_id === myUserId ? localBotById.get(botMeta.local_bot_id) : undefined;
               const avatarNode = isBot ? (
                 <CollabBotBadge
                   name={msg.sender_bot_name || "机器人"}
-                  color={msg.sender_bot_color}
-                  avatarUrl={msg.sender_bot_avatar_url}
+                  color={msg.sender_bot_color || botMeta?.bot_color || localBotMeta?.color}
+                  avatarUrl={msg.sender_bot_avatar_url || botMeta?.bot_avatar_url || localBotMeta?.avatar_url}
+                  bodyId={localBotMeta?.mascot_body}
+                  faceColor={localBotMeta?.mascot_face_color}
                   size={30}
                   className="mb-0.5"
                 />
@@ -857,7 +777,14 @@ export function CollabChatView({
                           !bot.can_invoke && "cursor-not-allowed opacity-55",
                         )}
                       >
-                        <CollabBotBadge name={bot.bot_name} color={bot.bot_color} avatarUrl={bot.bot_avatar_url} size={28} />
+                        <CollabBotBadge
+                          name={bot.bot_name}
+                          color={bot.bot_color}
+                          avatarUrl={bot.bot_avatar_url || (bot.owner_user_id === myUserId ? localBotById.get(bot.local_bot_id)?.avatar_url : undefined)}
+                          bodyId={bot.owner_user_id === myUserId ? localBotById.get(bot.local_bot_id)?.mascot_body : undefined}
+                          faceColor={bot.owner_user_id === myUserId ? localBotById.get(bot.local_bot_id)?.mascot_face_color : undefined}
+                          size={28}
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px] font-medium text-ink">@{bot.bot_name}</div>
                           <div className="truncate text-[11px] text-ink-tertiary">

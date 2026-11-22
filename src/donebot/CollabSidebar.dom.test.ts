@@ -466,6 +466,8 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
     expect(botMsg.textContent).toContain("写作助手");
     expect(botMsg.textContent).toContain("机器人");
     expect(botMsg.textContent).toContain("已整理好要点");
+    // Renders DoneBot's native MausAvatar SVG for the Bot reply rather than a blank icon fallback.
+    expect(botMsg.querySelector("svg")).not.toBeNull();
 
     // Group icon is clickable for avatar replacement and shows current custom group avatar.
     expect(container!.querySelector("[data-collab-avatar-edit] img")?.getAttribute("src")).toBe("data:image/jpeg;base64,GROUPICON");

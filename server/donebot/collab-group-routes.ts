@@ -1,7 +1,9 @@
 import type { ServerResponse } from "node:http";
 import { z } from "zod";
+import { botAvatarProfile } from "../../shared/bot-avatar.ts";
+import { readAttachment } from "../attachments.ts";
 import { PASS } from "../routes/table.ts";
-import type { Store } from "../store.ts";
+import type { BotRecord, Store } from "../store.ts";
 import {
   collabAddChatBot,
   collabAddGroupMembers,
@@ -45,6 +47,25 @@ const updateChatBotGrantsSchema = z.object({
 
 function validGroupOrTeamTarget(scopeType: string, targetId: string): boolean {
   return (scopeType === "team" || scopeType === "group") && uuidV4.safeParse(targetId).success;
+}
+
+const ALLOWED_INLINE_AVATAR_MIMES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+function inlineBotAvatarDataUrl(bot: BotRecord): string {
+  const profile = botAvatarProfile(bot);
+  if (!profile.avatarUrl || profile.avatarCrop === "mascot") return "";
+  const match = profile.avatarUrl.match(/^\/api\/attachments\/([A-Za-z0-9-]+\.(?:png|jpg|webp))$/);
+  if (!match?.[1]) return "";
+  try {
+    const file = readAttachment(match[1]);
+    if (!file || file.bytes.length === 0 || file.bytes.length > 500_000) return "";
+    const mime = file.mime === "image/jpg" ? "image/jpeg" : file.mime;
+    if (!ALLOWED_INLINE_AVATAR_MIMES.has(mime)) return "";
+    const dataUrl = `data:${mime};base64,${file.bytes.toString("base64")}`;
+    return dataUrl.length <= 720_000 ? dataUrl : "";
+  } catch {
+    return "";
+  }
 }
 
 export async function handleCollabGroupReadOrDelete(opts: {
@@ -169,7 +190,7 @@ export async function handleCollabGroupWrite(opts: {
       local_bot_id: bot.id,
       bot_name: bot.name.slice(0, 120),
       bot_color: bot.color || "blue",
-      bot_avatar_url: "",
+      bot_avatar_url: inlineBotAvatarDataUrl(bot),
       bot_title: (bot.title ?? "").slice(0, 200),
       allow_all_members: parsed.data.allow_all_members,
       allowed_user_ids: parsed.data.allowed_user_ids,

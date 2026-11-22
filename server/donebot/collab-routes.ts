@@ -6,7 +6,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
-import { botAvatarUrlFromStoredPath } from "../../shared/bot-avatar.ts";
+import { botAvatarProfile, botAvatarUrlFromStoredPath } from "../../shared/bot-avatar.ts";
 import { DONEBOT_COLLAB_MAX_FILE_BYTES } from "../../shared/donebot-collab.ts";
 import { saveImage } from "../attachments.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
@@ -511,12 +511,17 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           .map(bot => {
             const collected = deps.collectTeamSkills([bot], "all");
             const skillCount = collected.ok ? (collected.skillsByBot.get(bot.id)?.length ?? 0) : 0;
+            const avatar = botAvatarProfile(bot);
             return {
               id: bot.id,
               name: bot.name,
               title: bot.title ?? "",
               description: bot.description ?? "",
               color: bot.color,
+              avatar_url: avatar.avatarCrop !== "mascot" ? avatar.avatarUrl : undefined,
+              avatar_crop: avatar.avatarCrop,
+              mascot_body: bot.mascotBody ?? undefined,
+              mascot_face_color: bot.mascotFaceColor ?? undefined,
               has_soul: Boolean(bot.soul && bot.soul.trim()),
               skill_count: skillCount,
             };

@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { parseAudioRange } from "../attachments.ts";
 import { bindDoneBotAvatar } from "../avatar-image.ts";
@@ -9,6 +10,11 @@ import type { RequestAuth } from "../request-auth.ts";
 import { allowsTool } from "../../shared/tool-scope.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import type { Store } from "../store.ts";
+import {
+  COLLAB_CHAT_MEDIA_BLOCK_MESSAGE,
+  getCollabChatThread,
+  isCollabChatThread,
+} from "./collab-chat-policy.ts";
 import { doneBotClientMediaCatalog } from "./media-registry.ts";
 import { modelCapabilities } from "./capabilities.ts";
 import { doneBotMediaModel, doneBotModelCapabilities } from "./catalog.ts";
@@ -51,9 +57,14 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
     capabilities: async query => doneBotModelCapabilities(doneBotClientMediaCatalog(donebot.models()), query),
     authorize: (context, input) => {
       if (context.turnId.startsWith("avatar:")) return Promise.resolve();
+      const collabThread = isCollabChatThread(context.threadId, store.taskByThread(context.botId, context.threadId)?.title);
+      if (collabThread && (input.kind === "video" || input.kind === "music")) {
+        throw Object.assign(new Error(COLLAB_CHAT_MEDIA_BLOCK_MESSAGE), { status: 403 });
+      }
       const bot = store.bot(context.botId);
       const kind = input.kind === "music" ? "audio" : input.kind;
       if (!bot || !allowsTool(bot.toolScope, { kind: "mcp", server: "agents", name: `generate_${kind}` })) throw Object.assign(new Error("This media operation is outside the bot's tool selection."), { status: 403 });
+      if (collabThread && input.kind === "image") return Promise.resolve();
       return donebotMediaApproval.authorize(context, input);
     },
     async reviewFallback(job) {
@@ -123,6 +134,32 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       if (group) store.patchGroup(group.id, { unread: true });
       else store.patchTask(bot.id, job.threadId, { unread: true });
       deps.wrote(bot, job.threadId);
+      const collabMeta = getCollabChatThread(job.threadId);
+      if (collabMeta && job.kind === "image") {
+        if (job.status === "completed" && job.artifacts.length > 0) {
+          for (const file of job.artifacts) {
+            try {
+              const handle = await openMediaArtifact(file, join(deps.dataDir, "donebot", "artifacts"));
+              try {
+                const params = new URLSearchParams({ name: file.name, body: `[${collabMeta.botName} 生成的图片]` });
+                const stream = Readable.toWeb(handle.createReadStream({ autoClose: false })) as unknown as ReadableStream<Uint8Array>;
+                await donebot.collabSendChatFile(collabMeta.scopeType, collabMeta.targetId, params.toString(), stream, {
+                  "content-type": file.mime || "application/octet-stream",
+                  "content-length": String(file.bytes),
+                });
+              } finally {
+                await handle.close();
+              }
+            } catch { /* Best-effort group chat image delivery */ }
+          }
+        } else if (job.status === "failed") {
+          void donebot.collabSendChatMessage(
+            collabMeta.scopeType,
+            collabMeta.targetId,
+            `[${collabMeta.botName}] 图片生成失败：${job.error || "请稍后重试。"}`,
+          ).catch(() => {});
+        }
+      }
     },
   });
   function fallbackContext(job: MediaJob): MediaContext {

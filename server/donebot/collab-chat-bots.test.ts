@@ -1,8 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ServerResponse } from "node:http";
 import type { DoneBotClaimedBotInvocation } from "../../shared/donebot-collab.ts";
 import type { BotRecord, Message } from "../store.ts";
 import { collectReplyText, createCollabChatBotWorker, formatChatPrompt } from "./collab-chat-bots.ts";
+import {
+  COLLAB_CHAT_MEDIA_BLOCK_MESSAGE,
+  registerCollabChatThread,
+  resetCollabChatThreadsForTests,
+  runWithCollabChatTurn,
+} from "./collab-chat-policy.ts";
+import { guideDoneBotMedia } from "./media-guidance.ts";
+import { createDoneBotMediaRoutes } from "./media-routes.ts";
+import { DONEBOT_MEDIA_TOOL_DEFINITIONS } from "./media-tools.ts";
+import type { DoneBotMediaService } from "./media.ts";
 import type { DoneBotGateway } from "./gateway.ts";
+
+afterEach(() => {
+  resetCollabChatThreadsForTests();
+});
 
 describe("Collab chat bot worker context and reply extraction", () => {
   it("injects full group member list (including silent members) and group bots into the prompt", async () => {
@@ -178,5 +193,90 @@ describe("Collab chat bot worker context and reply extraction", () => {
       { id: "4", role: "bot", kind: "burst", text: "" },
     ] as unknown as Message[];
     expect(collectReplyText(lines)).toBe("群里目前有老罗和小罗两位成员，大家好！");
+  });
+
+  it("strips video and music tools inside collab chat turns while keeping image generation", () => {
+    const catalog = {
+      gateway_contract_version: 4 as const,
+      catalog_scope_id: "test",
+      catalog_version: "1",
+      defaults: { image: "seedream-5-5", video: "seedance-2-5", music: "suno" },
+      models: [
+        { id: "seedream-5-5", display_name: "Seedream", media_types: ["image" as const], interfaces: ["openai.images"], platforms: [] },
+        { id: "seedance-2-5", display_name: "Seedance", media_types: ["video" as const], interfaces: ["openai.videos"], platforms: [] },
+        { id: "suno", display_name: "Suno", media_types: ["music" as const], interfaces: ["openai.music"], platforms: [] },
+      ],
+    };
+    const tools = [
+      ...DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => ({
+        type: "function" as const,
+        function: { name: `agents_${tool.name}`, description: tool.description, parameters: tool.inputSchema },
+      })),
+      { type: "function" as const, function: { name: "studio_generate_video", description: "ext video", parameters: { type: "object", properties: {} } } },
+      { type: "function" as const, function: { name: "studio_generate_music", description: "ext music", parameters: { type: "object", properties: {} } } },
+      { type: "function" as const, function: { name: "workspace_read", description: "read", parameters: { type: "object", properties: {} } } },
+    ];
+    const guided = runWithCollabChatTurn("thread-group-1", () =>
+      guideDoneBotMedia({
+        model: "gpt-5",
+        messages: [{ role: "user", content: "hi" }],
+        tools,
+        stream: false,
+        signal: new AbortController().signal,
+        replay: () => {},
+        onBytes: () => {},
+      } as never, catalog),
+    );
+    const names = guided.tools.map(t => t.function.name);
+    expect(names).toContain("agents_generate_image");
+    expect(names).toContain("workspace_read");
+    expect(names).not.toContain("agents_generate_video");
+    expect(names).not.toContain("agents_generate_audio");
+    expect(names).not.toContain("studio_generate_video");
+    expect(names).not.toContain("studio_generate_music");
+  });
+
+  it("hard-blocks video and music media route calls on collab chat threads while allowing image", async () => {
+    const threadId = "thread-collab-99";
+    registerCollabChatThread(threadId, {
+      scopeType: "group",
+      targetId: "11111111-1111-4111-8111-111111111111",
+      chatBotId: "22222222-2222-4222-8222-222222222222",
+      botName: "多宝",
+    });
+    const submit = vi.fn().mockResolvedValue({ id: "job-1", kind: "image", model: "seedream-5-5", status: "queued", artifacts: [] });
+    const route = createDoneBotMediaRoutes(
+      { submit } as unknown as DoneBotMediaService,
+      () => ({ botId: "bot-duobao", threadId, turnId: "t1", active: () => true }),
+      kind => ({ primary: kind === "image" ? "seedream-5-5" : kind === "video" ? "seedance-2-5" : "suno", fallback: "" }),
+    );
+
+    const callRoute = async (body: Record<string, unknown>) => {
+      let status = 0;
+      let payload: unknown;
+      await route({
+        method: "POST",
+        path: "/api/internal/donebot/media/generate",
+        res: {} as ServerResponse,
+        botId: "bot-duobao",
+        threadId,
+        json: (_res: ServerResponse, code: number, val: unknown) => { status = code; payload = val; },
+        readBody: async () => body,
+      } as never);
+      return { status, payload };
+    };
+
+    const videoRes = await callRoute({ kind: "video", model: "seedance-2-5", parameters: { mode: "text", prompt: "cat" } });
+    expect(videoRes.status).toBe(403);
+    expect(videoRes.payload).toEqual({ error: COLLAB_CHAT_MEDIA_BLOCK_MESSAGE });
+
+    const musicRes = await callRoute({ kind: "music", model: "suno", parameters: { prompt: "jazz" } });
+    expect(musicRes.status).toBe(403);
+    expect(musicRes.payload).toEqual({ error: COLLAB_CHAT_MEDIA_BLOCK_MESSAGE });
+    expect(submit).not.toHaveBeenCalled();
+
+    const imageRes = await callRoute({ kind: "image", model: "seedream-5-5", parameters: { mode: "text", prompt: "cute dog" } });
+    expect(imageRes.status).toBe(202);
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });

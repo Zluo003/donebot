@@ -301,7 +301,7 @@ describe("DoneBot collab routes and bot tools", () => {
       checkEpoch: () => {},
       validSession: async () => ({ mode: "jwt", accessToken: "tok", user: { id: "101", email: "alice@example.invalid" } }),
       readGatewayJson: async (res: Response) => res.json(),
-      fetcher: vi.fn().mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      fetcher: vi.fn().mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
         const reqUrl = new URL(String(input));
         const method = init?.method ?? "GET";
         const body = typeof init?.body === "string" && init.body ? JSON.parse(init.body) : undefined;

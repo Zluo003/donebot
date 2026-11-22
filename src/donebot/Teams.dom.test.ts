@@ -75,7 +75,7 @@ it("renders team Cloud purchase/connect and explicit local device controls when 
       return { account_id: "1", instance: { instance_id: instanceId, desired: "running", actual: "running", generation: 1, error: "", paid_until: new Date(Date.now() + 86400000).toISOString(), subscription_state: "active", purge_locked: false, auto_renew: true, plan_id: planId, plan_name: "Studio 团队版" }, operations: [], connection_available: true };
     }
     if (path === `/api/donebot/teams/${teamId}/devices` && !init?.method) {
-      return { account_id: "1", installation_id: "77777777-7777-4777-8777-777777777777", devices: [{ id: deviceId, team_id: teamId, user_id: 1, email: "owner@example.invalid", role: "owner", installation_id: "77777777-7777-4777-8777-777777777777", name: "MacBook", enabled: false, version: 1, member_version: 1, online: false, last_seen: null }] };
+      return { account_id: "1", installation_id: "77777777-7777-4777-8777-777777777777", local_device_id: deviceId, devices: [{ id: deviceId, user_id: 1, email: "owner@example.invalid", name: "MacBook", enabled: false, version: 1, online: false, last_seen: null, revoked_at: null }] };
     }
     return { ok: true };
   });
@@ -84,10 +84,52 @@ it("renders team Cloud purchase/connect and explicit local device controls when 
   expect(host.textContent).toContain("团队 Cloud · 运行中");
   expect(host.textContent).toContain("Studio 团队版");
   expect(host.textContent).toContain("团队本机执行设备");
+  expect(host.textContent).toContain("MacBook（本机）");
   await act(async () => [...host.querySelectorAll("button")].find(b => b.textContent === "进入团队工作空间")!.click());
   expect(openTeamCloud).toHaveBeenCalledExactlyOnceWith(teamId, instanceId, "1", "Fixture Studio", "owner");
 
   await act(async () => [...host.querySelectorAll("button")].find(b => b.textContent === "在此团队启用本机")!.click());
   const deviceWrites = fixture.api.mock.calls.filter(([path, init]) => path === `/api/donebot/teams/${teamId}/devices` && init?.method === "POST");
   expect(JSON.parse(deviceWrites[0]![1].body)).toEqual({ action: "set", account_id: "1", enabled: true });
+});
+
+it("resolves admin device revocation permissions from team members when device payload omits role", async () => {
+  const teamId = snapshot.workspaces[0]!.id;
+  const adminDeviceId = "66666666-6666-4666-8666-666666666661";
+  const ownerDeviceId = "66666666-6666-4666-8666-666666666662";
+  const memberDeviceId = "66666666-6666-4666-8666-666666666663";
+  snapshot.account_id = "2";
+  snapshot.capabilities = ["identity", "local_execution"];
+  snapshot.workspaces[0]!.role = "admin";
+  fixture.api.mockImplementation(async (path, init) => {
+    if (path === "/api/donebot/workspaces") return structuredClone(snapshot);
+    if (path === `/api/donebot/teams/${teamId}/members`) {
+      return [
+        { user_id: 1, email: "owner@example.invalid", role: "owner", version: 1 },
+        { user_id: 2, email: "admin@example.invalid", role: "admin", version: 1 },
+        { user_id: 3, email: "member@example.invalid", role: "member", version: 1 },
+      ];
+    }
+    if (path === `/api/donebot/teams/${teamId}/devices` && !init?.method) {
+      return {
+        account_id: "2",
+        installation_id: "77777777-7777-4777-8777-777777777777",
+        local_device_id: adminDeviceId,
+        devices: [
+          { id: ownerDeviceId, user_id: 1, email: "owner@example.invalid", name: "Owner Mac", enabled: true, version: 1, online: true, last_seen: "2026-11-22T00:00:00Z", revoked_at: null },
+          { id: adminDeviceId, user_id: 2, email: "admin@example.invalid", name: "Admin Mac", enabled: true, version: 1, online: true, last_seen: "2026-11-22T00:00:00Z", revoked_at: null },
+          { id: memberDeviceId, user_id: 3, email: "member@example.invalid", name: "Member Mac", enabled: true, version: 1, online: true, last_seen: "2026-11-22T00:00:00Z", revoked_at: null },
+        ],
+      };
+    }
+    return { ok: true };
+  });
+
+  await mount(); await select();
+  const card = host.querySelector("[data-team-devices-card]")!;
+  expect(card.textContent).toContain("停用本机参与");
+  const items = [...card.querySelectorAll("li")];
+  expect(items.find(item => item.textContent?.includes("Owner Mac"))?.querySelector("button")).toBeNull();
+  expect(items.find(item => item.textContent?.includes("Admin Mac（本机）"))?.querySelector("button")?.textContent).toBe("撤销设备");
+  expect(items.find(item => item.textContent?.includes("Member Mac"))?.querySelector("button")?.textContent).toBe("撤销设备");
 });

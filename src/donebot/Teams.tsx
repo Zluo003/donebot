@@ -63,7 +63,7 @@ export function DoneBotTeams() {
         {snapshot.capabilities.includes("cloud_access")
           ? <TeamCloudCard key={`cloud-${team.id}`} accountId={snapshot.account_id} team={team} />
           : <p className="text-ink-secondary">协作运行服务尚未就绪，当前可管理团队和成员。</p>}
-        {snapshot.capabilities.includes("local_execution") && <TeamDevicesCard key={`devices-${team.id}`} accountId={snapshot.account_id} team={team} />}
+        {snapshot.capabilities.includes("local_execution") && <TeamDevicesCard key={`devices-${team.id}`} accountId={snapshot.account_id} team={team} members={members} />}
         <ul className="divide-y divide-line">{members.map(member => <li key={member.user_id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className="break-all">{member.email} · {roles[member.role]}</span>{member.role !== "owner" && (team.role === "owner" || team.role === "admin" && member.role === "member") && <div className="flex gap-2">
           {team.role === "owner" && <button type="button" disabled={busy} className={button} onClick={() => void mutate({ action: "member-role", account_id: snapshot.account_id, team_id: team.id, user_id: member.user_id, role: member.role === "admin" ? "member" : "admin" })}>{member.role === "admin" ? "设为成员" : "设为管理员"}</button>}
           <button type="button" disabled={busy} className={button} onClick={() => { if (window.confirm(`移除 ${member.email}？后续团队访问将停止，共享成果保留，已下载的文件无法远程收回。`)) void mutate({ action: "remove-member", account_id: snapshot.account_id, team_id: team.id, user_id: member.user_id }); }}>移除成员</button>

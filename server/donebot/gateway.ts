@@ -5,7 +5,7 @@ import { DEFAULT_DONEBOT_MEDIA_PREFERENCES, type DoneBotAccountState, type DoneB
 import type { DoneBotAuthSettings, DoneBotEmailDelivery } from "../../shared/donebot-auth.ts";
 import type { DoneBotCloudInstance, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudOperation, DoneBotCloudPlan, DoneBotCloudSnapshot } from "../../shared/donebot-cloud.ts";
 import { DONEBOT_TEAMS_PROTOCOL, type DoneBotTeamCloudMutation, type DoneBotTeamCloudSnapshot, type DoneBotTeamCommand, type DoneBotTeamDeviceCommand, type DoneBotTeamDevicesSnapshot, type DoneBotTeamPlan, type DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams.ts";
-import { parseTeamCloudMutation, parseTeamDeviceCommand, teamCloudOperationSchema, teamCloudResponseSchema, teamCloudStateSchema, teamCommandRequest, teamDeviceSchema, teamDevicesSchema, teamIdentity, teamInvitation, teamMembers, teamPlansSchema, workspaceSnapshot } from "./teams.ts";
+import { LocalTeamDeviceStore, parseTeamCloudMutation, parseTeamDeviceCommand, sanitizeTeamDeviceName, teamCloudOperationSchema, teamCloudResponseSchema, teamCloudStateSchema, teamCommandRequest, teamDeviceSchema, teamDevicesSchema, teamIdentity, teamInvitation, teamMembers, teamPlansSchema, workspaceSnapshot } from "./teams.ts";
 
 export const DONEBOT_ORIGIN = "https://donebot.cn";
 export const DONEBOT_INSTANCE_ID = "donebot";
@@ -130,15 +130,18 @@ export class DoneBotGateway {
   private readonly installationResolver?: (accountId: string, previousId?: string) => string | Promise<string>;
   private readonly installations = new Map<string, string>();
   private readonly installationName: () => string;
+  private readonly localTeamDevices: LocalTeamDeviceStore;
   private writes: Promise<void> = Promise.resolve();
 
   constructor(store: DoneBotCredentialStore, options: { fetch?: typeof fetch; testOrigin?: string;
-    resolveInstallation?: (accountId: string, previousId?: string) => string | Promise<string>; installationName?: () => string } = {}) {
+    resolveInstallation?: (accountId: string, previousId?: string) => string | Promise<string>; installationName?: () => string;
+    teamDevicesFile?: string } = {}) {
     this.store = store;
     this.fetcher = options.fetch ?? fetch;
     this.origin = options.testOrigin ?? DONEBOT_ORIGIN;
     this.installationResolver = options.resolveInstallation;
     this.installationName = options.installationName ?? (() => "DoneBot");
+    this.localTeamDevices = new LocalTeamDeviceStore(options.teamDevicesFile);
     if (options.testOrigin && !/^http:\/\/127\.0\.0\.1:\d+$/.test(options.testOrigin)) throw new Error("Fixture origin must be IPv4 loopback.");
   }
 
@@ -178,6 +181,7 @@ export class DoneBotGateway {
       catch { this.checkEpoch(epoch); this.currentCatalog = null; }
     }
     this.changed();
+    if (saved && saved.mode !== "installation") void this.resumeTeamDevices(epoch);
   }
 
   onChange(fn: () => void): () => void { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -615,10 +619,21 @@ export class DoneBotGateway {
     const devices = teamDevicesSchema.parse(await this.teamRequest(`teams/${teamId}/devices`, "GET"));
     this.checkEpoch(epoch);
     const session = this.session!;
-    const local = devices.find(device => device.installation_id === session.installationId && String(device.user_id) === session.user.id && device.enabled);
-    if (local) this.trackTeamDevice(teamId, local.id, local.version, session.user.id, session.installationId);
-    else this.untrackTeamDevice(teamId);
-    return { account_id: session.user.id, installation_id: session.installationId, devices };
+    const savedDeviceId = this.localTeamDevices.get(session.user.id, session.installationId, teamId);
+    const local = devices.find(device =>
+      String(device.user_id) === session.user.id &&
+      (savedDeviceId ? device.id === savedDeviceId : device.installation_id === session.installationId),
+    ) ?? null;
+    if (local?.enabled) {
+      this.trackTeamDevice(teamId, local.id, local.version, session.user.id, session.installationId);
+      if (!local.online && await this.sendTeamDeviceHeartbeat(teamId)) {
+        this.checkEpoch(epoch);
+        local.online = true;
+      }
+    } else {
+      this.untrackTeamDevice(teamId);
+    }
+    return { account_id: session.user.id, installation_id: session.installationId, local_device_id: local?.id ?? null, devices };
   }
 
   async teamDeviceMutate(teamId: string, input: DoneBotTeamDeviceCommand) {
@@ -634,12 +649,17 @@ export class DoneBotGateway {
     if (clean.account_id !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重试。");
     const device = teamDeviceSchema.parse(await this.teamRequest(`teams/${teamId}/devices`, "PUT", clean.account_id, {
       installation_id: session.installationId,
-      name: this.installationName().slice(0, 100) || "DoneBot",
+      name: sanitizeTeamDeviceName(this.installationName()),
       enabled: clean.enabled,
     }));
+    this.checkEpoch(epoch);
+    this.localTeamDevices.set(session.user.id, session.installationId, teamId, device.id);
     if (device.enabled) {
       this.trackTeamDevice(teamId, device.id, device.version, session.user.id, session.installationId);
-      void this.sendTeamDeviceHeartbeat(teamId);
+      if (await this.sendTeamDeviceHeartbeat(teamId)) {
+        this.checkEpoch(epoch);
+        device.online = true;
+      }
     } else {
       this.untrackTeamDevice(teamId);
     }
@@ -648,11 +668,21 @@ export class DoneBotGateway {
 
   private readonly teamHeartbeats = new Map<string, { deviceId: string; version: number; accountId: string; installationId: string; timer: ReturnType<typeof setInterval> }>();
 
+  private async resumeTeamDevices(epoch: number) {
+    const session = this.session;
+    if (!session || session.mode === "installation" || epoch !== this.epoch) return;
+    for (const teamId of this.localTeamDevices.teamIds(session.user.id, session.installationId)) {
+      if (epoch !== this.epoch) return;
+      try { await this.teamDevices(teamId); } catch { /* Best-effort restore for previously opted-in teams. */ }
+    }
+  }
+
   private trackTeamDevice(teamId: string, deviceId: string, version: number, accountId: string, installationId: string) {
     const existing = this.teamHeartbeats.get(teamId);
     if (existing && existing.deviceId === deviceId && existing.version === version && existing.accountId === accountId && existing.installationId === installationId) return;
     this.untrackTeamDevice(teamId);
-    const timer = setInterval(() => { void this.sendTeamDeviceHeartbeat(teamId); }, 30_000);
+    // Gateway marks a device online while last_seen is within 30s.
+    const timer = setInterval(() => { void this.sendTeamDeviceHeartbeat(teamId); }, 20_000);
     timer.unref?.();
     this.teamHeartbeats.set(teamId, { deviceId, version, accountId, installationId, timer });
   }
@@ -666,12 +696,12 @@ export class DoneBotGateway {
     for (const id of this.teamHeartbeats.keys()) this.untrackTeamDevice(id);
   }
 
-  private async sendTeamDeviceHeartbeat(teamId: string) {
+  private async sendTeamDeviceHeartbeat(teamId: string): Promise<boolean> {
     const entry = this.teamHeartbeats.get(teamId);
     const session = this.session;
     if (!entry || !session?.credential || session.user.id !== entry.accountId || session.installationId !== entry.installationId) {
       this.untrackTeamDevice(teamId);
-      return;
+      return false;
     }
     try {
       const response = await this.fetcher(`${this.origin}/v1/donebot/runtime/teams/${teamId}/devices/${entry.deviceId}/heartbeat`, {
@@ -681,7 +711,10 @@ export class DoneBotGateway {
       });
       await response.body?.cancel();
       if (response.status === 401 || response.status === 403 || response.status === 404) this.untrackTeamDevice(teamId);
-    } catch { /* Best-effort heartbeat; retries on next interval. */ }
+      return response.ok;
+    } catch { /* Best-effort heartbeat; retries on next interval. */
+      return false;
+    }
   }
 
   async cloudSnapshot(): Promise<DoneBotCloudSnapshot> {

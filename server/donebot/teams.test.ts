@@ -1,28 +1,39 @@
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, it } from "vitest";
 import { DONEBOT_TEAMS_PROTOCOL, negotiatedTeamCapabilities, type DoneBotTeamCommand } from "../../shared/donebot-teams.ts";
 import { DoneBotGateway, type DoneBotCredential, type DoneBotCredentialStore } from "./gateway.ts";
-import { teamCommandRequest, workspaceSnapshot } from "./teams.ts";
+import { sanitizeTeamDeviceName, teamCommandRequest, workspaceSnapshot } from "./teams.ts";
 import { FAKE_DONEBOT_CATALOG } from "../testing/fake-donebot-gateway.ts";
 
 const id = randomUUID(), key = randomUUID();
 const team = { id, name: "Fixture Studio", role: "member", member_version: 2, created_at: "2026-11-20T01:00:00Z" };
 const snapshot = { protocol: DONEBOT_TEAMS_PROTOCOL, capabilities: ["identity", "local_execution"], workspaces: [team] };
 const json = (data: unknown, status = 200) => new Response(JSON.stringify({ code: 0, data }), { status, headers: { "content-type": "application/json" } });
-async function fixture(custom?: (path: string, init?: RequestInit) => Response | Promise<Response> | undefined, installation = false) {
-  const vault: DoneBotCredentialStore & { value: DoneBotCredential | null } = { persistent: false, value: installation ? { mode: "installation", accessToken: "", credential: "synthetic-key", expiresAt: Number.MAX_SAFE_INTEGER, user: { id: "1", email: "owner@example.invalid" }, installationId: key } : null,
+async function fixture(
+  custom?: (path: string, init?: RequestInit) => Response | Promise<Response> | undefined,
+  installation = false,
+  options?: { teamDevicesFile?: string; installationName?: () => string; vault?: DoneBotCredentialStore & { value: DoneBotCredential | null } },
+) {
+  const vault: DoneBotCredentialStore & { value: DoneBotCredential | null } = options?.vault ?? { persistent: false, value: installation ? { mode: "installation", accessToken: "", credential: "synthetic-key", expiresAt: Number.MAX_SAFE_INTEGER, user: { id: "1", email: "owner@example.invalid" }, installationId: key } : null,
     async load() { return this.value; }, async save(value) { this.value = value; } };
   const requests: { path: string; init?: RequestInit }[] = [];
-  const gateway = new DoneBotGateway(vault, { fetch: (async (url, init) => {
-    const path = new URL(String(url)).pathname; requests.push({ path, init }); const override = custom?.(path, init); if (override) return override;
-    if (path.endsWith("/auth/login")) return json({ access_token: "synthetic-jwt", refresh_token: "synthetic-refresh", expires_in: 3600, user: { id: "1", email: "owner@example.invalid" } });
-    if (path.endsWith("/installations/claim")) return json({ credential: "synthetic-key" });
-    if (path.endsWith("/models")) return new Response(JSON.stringify(FAKE_DONEBOT_CATALOG), { headers: { "content-type": "application/json" } });
-    if (path.endsWith("/workspaces")) return json(snapshot);
-    return json({ ...team, owner_key: "do-not-render", personal_balance: 999 });
-  }) as typeof fetch });
-  if (installation) await gateway.restore(); else await gateway.login("owner@example.invalid", "synthetic-password");
-  requests.length = 0; return { gateway, requests };
+  const gateway = new DoneBotGateway(vault, {
+    teamDevicesFile: options?.teamDevicesFile,
+    installationName: options?.installationName,
+    fetch: (async (url, init) => {
+      const path = new URL(String(url)).pathname; requests.push({ path, init }); const override = custom?.(path, init); if (override) return override;
+      if (path.endsWith("/auth/login")) return json({ access_token: "synthetic-jwt", refresh_token: "synthetic-refresh", expires_in: 3600, user: { id: "1", email: "owner@example.invalid" } });
+      if (path.endsWith("/installations/claim")) return json({ credential: "synthetic-key" });
+      if (path.endsWith("/models")) return new Response(JSON.stringify(FAKE_DONEBOT_CATALOG), { headers: { "content-type": "application/json" } });
+      if (path.endsWith("/workspaces")) return json(snapshot);
+      return json({ ...team, owner_key: "do-not-render", personal_balance: 999 });
+    }) as typeof fetch,
+  });
+  if (installation || options?.vault?.value) await gateway.restore(); else await gateway.login("owner@example.invalid", "synthetic-password");
+  requests.length = 0; return { gateway, requests, vault };
 }
 
 it("requires every participant to advertise the same protocol and feature", () => {
@@ -54,7 +65,7 @@ it("validates team Cloud plans, mutations, desktop launch links, and local devic
     if (path.endsWith(`/teams/${id}/cloud`)) return json({ instance: { instance_id: instanceId, desired: "running", actual: "running", generation: 1, error: "", paid_until: "2026-12-20T00:00:00Z", subscription_state: "active", purge_locked: false, auto_renew: true, plan_id: planId, plan_name: "Studio" }, operations: [], connection_available: true });
     if (path.endsWith(`/teams/${id}/cloud/start`)) return json({ instance: { instance_id: instanceId, desired: "running", actual: "pending", generation: 1, error: "", paid_until: "2026-12-20T00:00:00Z", subscription_state: "pending", purge_locked: false, auto_renew: true }, operation: { id: randomUUID(), action: "start", state: "pending", error: "" } });
     if (path.endsWith(`/teams/${id}/desktop-launch`)) return json({ url: `donebot://pair?address=${encodeURIComponent(`https://${instanceId}.cloud.donebot.cn`)}&token=${pairToken}&name=Fixture+Studio` });
-    if (path.endsWith(`/teams/${id}/devices`)) return json({ id: deviceId, team_id: id, user_id: 1, email: "owner@example.invalid", role: "owner", installation_id: key, name: "DoneBot", enabled: true, version: 1, member_version: 1, online: true, last_seen: "2026-11-22T00:00:00Z" });
+    if (path.endsWith(`/teams/${id}/devices`)) return json({ id: deviceId, user_id: 1, email: "owner@example.invalid", name: "DoneBot", enabled: true, online: false, version: 1, last_seen: null, revoked_at: null });
     if (path.endsWith(`/devices/${deviceId}/heartbeat`)) return json({ ok: true });
     if (path.endsWith(`/devices/${deviceId}`)) return json({ ok: true });
     return undefined;
@@ -65,9 +76,54 @@ it("validates team Cloud plans, mutations, desktop launch links, and local devic
   expect((await gateway.teamCloudConnect(id, instanceId, "1")).url).toContain(pairToken);
   await expect(gateway.teamCloudConnect(id, randomUUID(), "1")).rejects.toMatchObject({ code: "cloud_connection_invalid" });
   const device = await gateway.teamDeviceMutate(id, { action: "set", account_id: "1", enabled: true });
-  expect(device).toMatchObject({ id: deviceId, enabled: true });
+  expect(device).toMatchObject({ id: deviceId, enabled: true, online: true });
+  expect(requests.some(item => item.path === `/v1/donebot/runtime/teams/${id}/devices/${deviceId}/heartbeat`)).toBe(true);
   await gateway.teamDeviceMutate(id, { action: "revoke", account_id: "1", device_id: deviceId });
   expect(requests.some(item => item.path === `/api/v1/donebot/teams/${id}/devices/${deviceId}`)).toBe(true);
+});
+it("tracks local team device ID across restarts when gateway omits installation_id", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "donebot-team-devices-"));
+  const devicesFile = join(dir, "team-devices.json");
+  const localId = randomUUID(), otherId = randomUUID();
+  let heartbeats = 0;
+  let enabled = false;
+  const server = (path: string, init?: RequestInit) => {
+    if (path.endsWith(`/teams/${id}/devices`) && init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as { installation_id: string; name: string; enabled: boolean };
+      enabled = body.enabled;
+      return json({ id: localId, user_id: 1, email: "owner@example.invalid", name: body.name, enabled, online: false, version: 1, last_seen: null, revoked_at: null });
+    }
+    if (path.endsWith(`/teams/${id}/devices`) && init?.method === "GET") {
+      return json([
+        { id: otherId, user_id: 1, email: "owner@example.invalid", name: "Other Mac", enabled: true, online: false, version: 1, last_seen: null, revoked_at: null },
+        { id: localId, user_id: 1, email: "owner@example.invalid", name: "My Mac", enabled, online: false, version: 1, last_seen: null, revoked_at: null },
+      ]);
+    }
+    if (path.endsWith(`/devices/${localId}/heartbeat`)) { heartbeats += 1; return json({ ok: true }); }
+    return undefined;
+  };
+  try {
+    expect(sanitizeTeamDeviceName("  My\u0007\nMac  ")).toBe("My Mac");
+    expect(sanitizeTeamDeviceName("\u0000\t")).toBe("DoneBot");
+    const first = await fixture(server, false, { teamDevicesFile: devicesFile, installationName: () => "My\u0000Mac" });
+    const updated = await first.gateway.teamDeviceMutate(id, { action: "set", account_id: "1", enabled: true });
+    expect(updated).toMatchObject({ id: localId, name: "My Mac", enabled: true, online: true });
+    expect(heartbeats).toBe(1);
+
+    const listed = await first.gateway.teamDevices(id);
+    expect(listed.local_device_id).toBe(localId);
+
+    const second = await fixture(server, false, { teamDevicesFile: devicesFile, vault: first.vault });
+    const restored = await second.gateway.teamDevices(id);
+    expect(restored.local_device_id).toBe(localId);
+    expect(restored.devices.find(item => item.id === localId)?.online).toBe(true);
+    expect(restored.devices.find(item => item.id === otherId)?.online).toBe(false);
+    expect(heartbeats).toBeGreaterThanOrEqual(2);
+    await first.gateway.logout();
+    await second.gateway.logout();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 it("does not give runtime installation credentials account or membership management authority", async () => {
   const { gateway, requests } = await fixture(undefined, true);

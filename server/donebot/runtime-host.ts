@@ -39,6 +39,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
       return identity.resolve(accountId, local ?? restored);
     },
     installationName: () => doneBotDeviceName(config().computerName),
+    teamDevicesFile: join(dataDir, "donebot", "team-devices.json"),
     ...(fixtureOrigin ? { testOrigin: fixtureOrigin } : {}),
   });
   const team = teamRuntime ? new DoneBotTeamModelGateway(dataDir, teamRuntime, {

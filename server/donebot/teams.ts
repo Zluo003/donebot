@@ -1,4 +1,7 @@
+import { mkdirSync, readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { z } from "zod";
+import { writeFileAtomic } from "../atomic.ts";
 import { DONEBOT_TEAMS_PROTOCOL, negotiatedTeamCapabilities, type DoneBotTeamCloudMutation, type DoneBotTeamCommand, type DoneBotTeamDeviceCommand, type DoneBotWorkspaceSnapshot } from "../../shared/donebot-teams.ts";
 
 const id = z.uuid().refine(value => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value));
@@ -35,10 +38,19 @@ export const teamCloudMutationSchema = z.object({
   key: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/), plan_id: id.optional(),
 }).strict();
 export const teamDeviceSchema = z.object({
-  id, team_id: id, user_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), email: z.email().max(254), role,
-  installation_id: id, name: z.string().max(100), enabled: z.boolean(),
-  version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), member_version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  online: z.boolean(), last_seen: z.string().nullable(),
+  id,
+  team_id: id.optional(),
+  user_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  email: z.email().max(254),
+  role: role.optional(),
+  installation_id: id.optional(),
+  name: z.string().max(100),
+  enabled: z.boolean(),
+  version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  member_version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  online: z.boolean(),
+  last_seen: z.string().nullable(),
+  revoked_at: z.string().nullable().optional(),
 });
 export const teamDevicesSchema = z.array(teamDeviceSchema).max(500);
 export const teamDeviceCommandSchema = z.discriminatedUnion("action", [
@@ -82,4 +94,70 @@ export function workspaceSnapshot(value: unknown, accountId: string): DoneBotWor
   const snapshot = z.object({ protocol: z.literal(DONEBOT_TEAMS_PROTOCOL), capabilities: z.array(z.string()).max(50), workspaces: z.array(teamIdentity).max(1000) }).parse(value);
   const capabilities = negotiatedTeamCapabilities({ protocol: DONEBOT_TEAMS_PROTOCOL, capabilities: DONEBOT_CLIENT_TEAM_CAPABILITIES }, snapshot);
   return { account_id: accountId, protocol: DONEBOT_TEAMS_PROTOCOL, capabilities, workspaces: capabilities.includes("identity") ? snapshot.workspaces : [] };
+}
+
+export function sanitizeTeamDeviceName(raw: string): string {
+  const clean = raw.replace(/\p{Cc}+/gu, " ").trim();
+  return Array.from(clean).slice(0, 100).join("").trim() || "DoneBot";
+}
+
+const localTeamDevicesFileSchema = z.object({
+  version: z.literal(1),
+  devices: z.array(z.object({
+    teamId: id,
+    accountId: account_id,
+    installationId: z.uuid(),
+    deviceId: id,
+  }).strict()).max(1000),
+}).strict();
+
+type LocalTeamDeviceEntry = z.infer<typeof localTeamDevicesFileSchema>["devices"][number];
+
+/** Tracks which gateway device IDs belong to this installation, because the gateway omits installation_id from device responses. */
+export class LocalTeamDeviceStore {
+  private readonly path?: string;
+  private readonly entries = new Map<string, LocalTeamDeviceEntry>();
+
+  constructor(path?: string) {
+    this.path = path;
+    if (!path) return;
+    try {
+      const source = readFileSync(path, "utf8");
+      if (source.length > 512 * 1024) return;
+      const saved = localTeamDevicesFileSchema.parse(JSON.parse(source));
+      for (const entry of saved.devices) this.entries.set(this.key(entry.accountId, entry.installationId, entry.teamId), entry);
+    } catch { /* Missing or corrupted index recovers when the user re-enables the local device. */ }
+  }
+
+  private key(accountId: string, installationId: string, teamId: string): string {
+    return `${accountId}\0${installationId}\0${teamId}`;
+  }
+
+  get(accountId: string, installationId: string, teamId: string): string | undefined {
+    return this.entries.get(this.key(accountId, installationId, teamId))?.deviceId;
+  }
+
+  teamIds(accountId: string, installationId: string): string[] {
+    const out: string[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.accountId === accountId && entry.installationId === installationId) out.push(entry.teamId);
+    }
+    return out;
+  }
+
+  set(accountId: string, installationId: string, teamId: string, deviceId: string): void {
+    const entry = { accountId, installationId, teamId, deviceId };
+    const k = this.key(accountId, installationId, teamId);
+    if (this.entries.get(k)?.deviceId === deviceId) return;
+    if (!this.entries.has(k) && this.entries.size >= 1000) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest !== undefined) this.entries.delete(oldest);
+    }
+    this.entries.set(k, entry);
+    if (!this.path) return;
+    try {
+      mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
+      writeFileAtomic(this.path, JSON.stringify({ version: 1, devices: [...this.entries.values()] }) + "\n", { mode: 0o600 });
+    } catch { /* In-memory state stays authoritative even if the cache write fails. */ }
+  }
 }

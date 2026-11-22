@@ -54,21 +54,23 @@ export interface DoneBotTeamCloudMutation {
 }
 export interface DoneBotTeamDevice {
   id: string;
-  team_id: string;
+  team_id?: string;
   user_id: number;
   email: string;
-  role: DoneBotTeamRole;
-  installation_id: string;
+  role?: DoneBotTeamRole;
+  installation_id?: string;
   name: string;
   enabled: boolean;
   version: number;
-  member_version: number;
+  member_version?: number;
   online: boolean;
   last_seen: string | null;
+  revoked_at?: string | null;
 }
 export interface DoneBotTeamDevicesSnapshot {
   account_id: string;
   installation_id: string;
+  local_device_id?: string | null;
   devices: DoneBotTeamDevice[];
 }
 export type DoneBotTeamDeviceCommand = { account_id: string } & (

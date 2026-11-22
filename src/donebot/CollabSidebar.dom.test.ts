@@ -472,20 +472,30 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
     // Group icon is clickable for avatar replacement and shows current custom group avatar.
     expect(container!.querySelector("[data-collab-avatar-edit] img")?.getAttribute("src")).toBe("data:image/jpeg;base64,GROUPICON");
 
-    // Click @ button -> mention picker lists authorized bot (enabled) and unauthorized bot (disabled).
+    // Click @ button -> mention picker lists BOTH group members AND bots (authorized enabled, unauthorized disabled).
     const atBtn = container!.querySelector<HTMLButtonElement>("[data-collab-chat-at-btn]")!;
     await act(async () => { atBtn.click(); });
     const menu = container!.querySelector("[data-collab-mention-menu]")!;
     expect(menu).not.toBeNull();
+    const memberBtn = menu.querySelector<HTMLButtonElement>('[data-collab-mention-member="202"]')!;
+    expect(memberBtn).not.toBeNull();
+    expect(memberBtn.textContent).toContain("@小罗");
     const allowedBtn = menu.querySelector<HTMLButtonElement>(`[data-collab-mention-item="${chatBot1Id}"]`)!;
     const deniedBtn = menu.querySelector<HTMLButtonElement>(`[data-collab-mention-item="${chatBot2Id}"]`)!;
     expect(allowedBtn.disabled).toBe(false);
     expect(deniedBtn.disabled).toBe(true);
     expect(deniedBtn.textContent).toContain("需所有者授权");
 
-    // Select authorized bot and send -> sends mention_bot_ids.
-    await act(async () => { allowedBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); });
+    // Clicking a group member inserts @小罗 into the composer cleanly.
+    await act(async () => { memberBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); });
     const chatInput = container!.querySelector<HTMLTextAreaElement>("[data-collab-chat-input]")!;
+    expect(chatInput.value).toBe("@小罗 ");
+
+    // Re-open @ picker, select authorized bot and send -> sends mention_bot_ids.
+    await act(async () => { atBtn.click(); });
+    const menu2 = container!.querySelector("[data-collab-mention-menu]")!;
+    const allowedBtn2 = menu2.querySelector<HTMLButtonElement>(`[data-collab-mention-item="${chatBot1Id}"]`)!;
+    await act(async () => { allowedBtn2.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); });
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
       setter.call(chatInput, "@写作助手 写一段公告");

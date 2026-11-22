@@ -45,9 +45,17 @@ import {
   cleanError,
   displayPersonName,
   formatFileSize,
+  TEAM_ROLES,
   type CollabOverview,
 } from "./collab-types";
 import { CollabAvatar, CollabBotBadge, CollabTeamBadge } from "./CollabAvatar";
+import {
+  buildCollabMentionItems,
+  CollabMentionMenu,
+  renderMentionHighlightedText,
+  type CollabMentionItem,
+  type MentionableMember,
+} from "./CollabMentionMenu";
 import {
   ARCHIVE_EXTS,
   AUDIO_EXTS,
@@ -144,30 +152,54 @@ export function CollabChatView({
         ? `${group.members.length} 位成员`
         : "";
 
+  const mentionableMembers = useMemo<MentionableMember[]>(() => {
+    if (team) {
+      return (overview.team_members[team.id] ?? [])
+        .filter(m => m.user_id !== myUserId)
+        .map(m => ({
+          user_id: m.user_id,
+          email: m.email,
+          nickname: m.nickname,
+          remark: m.remark,
+          avatar_url: m.avatar_url,
+          roleLabel: TEAM_ROLES[m.role],
+        }));
+    }
+    if (group) {
+      return group.members
+        .filter(m => m.user_id !== myUserId)
+        .map(m => ({
+          user_id: m.user_id,
+          email: m.email,
+          nickname: m.nickname,
+          remark: m.remark,
+          avatar_url: m.avatar_url,
+          roleLabel: m.user_id === group.creator_id ? "群主" : undefined,
+        }));
+    }
+    return [];
+  }, [team, group, overview.team_members, myUserId]);
+
+  const hasMentionTargets = isGroupLike && (chatBots.length > 0 || mentionableMembers.length > 0);
+
   const mentionMatch = useMemo(
-    () => (isGroupLike && chatBots.length > 0 && !mentionDismissed ? detectMentionQuery(draft, caretPos) : null),
-    [isGroupLike, chatBots.length, mentionDismissed, draft, caretPos],
+    () => (hasMentionTargets && !mentionDismissed ? detectMentionQuery(draft, caretPos) : null),
+    [hasMentionTargets, mentionDismissed, draft, caretPos],
   );
 
-  const mentionCandidates = useMemo(() => {
-    if (!mentionMatch) return [];
-    const q = mentionMatch.query.trim().toLowerCase();
-    return chatBots.filter(bot =>
-      !q
-      || bot.bot_name.toLowerCase().includes(q)
-      || (bot.owner_nickname ?? "").toLowerCase().includes(q)
-      || (bot.bot_title ?? "").toLowerCase().includes(q),
-    );
-  }, [mentionMatch, chatBots]);
+  const mentionItems = useMemo(
+    () => (mentionMatch ? buildCollabMentionItems({ query: mentionMatch.query, members: mentionableMembers, chatBots }) : []),
+    [mentionMatch, mentionableMembers, chatBots],
+  );
 
-  const invocableCandidates = useMemo(
-    () => mentionCandidates.filter(bot => bot.can_invoke),
-    [mentionCandidates],
+  const selectableMentionItems = useMemo(
+    () => mentionItems.filter(item => !item.disabled),
+    [mentionItems],
   );
 
   useEffect(() => {
     setMentionIdx(0);
-  }, [mentionMatch?.query, mentionCandidates.length]);
+  }, [mentionMatch?.query, mentionItems.length]);
 
   const clearBotWait = useCallback(() => {
     setAwaitingBotReply(false);
@@ -270,19 +302,21 @@ export function CollabChatView({
     };
   }, [scopeType, targetId, markRead, scrollToBottom, onChatFileSent, awaitingBotReply, clearBotWait]);
 
-  const insertBotMention = (bot: DoneBotCollabChatBot) => {
-    if (!bot.can_invoke) return;
+  const insertMentionItem = (item: CollabMentionItem) => {
+    if (item.disabled) return;
     const ta = textareaRef.current;
     const start = mentionMatch ? mentionMatch.start : caretPos;
     const before = draft.slice(0, start);
     const after = draft.slice(caretPos);
-    const token = `@${bot.bot_name} `;
+    const token = `@${item.insertName} `;
     const nextDraft = `${before}${token}${after}`;
     const nextCaret = before.length + token.length;
     setDraft(nextDraft);
     setCaretPos(nextCaret);
     setMentionDismissed(false);
-    setMentionedBotIds(prev => (prev.includes(bot.id) ? prev : [...prev, bot.id]));
+    if (item.kind === "bot") {
+      setMentionedBotIds(prev => (prev.includes(item.bot.id) ? prev : [...prev, item.bot.id]));
+    }
     queueMicrotask(() => {
       if (ta) {
         ta.focus();
@@ -686,7 +720,7 @@ export function CollabChatView({
                                 : "rounded-bl-[6px] bg-card text-ink ring-1 ring-inset ring-ink/[0.07]",
                           )}
                         >
-                          {msg.body}
+                          {isGroupLike ? renderMentionHighlightedText(msg.body, mine) : msg.body}
                         </div>
                       )}
                     </div>
@@ -743,70 +777,15 @@ export function CollabChatView({
             </div>
           )}
 
-          {/* @Bot mention picker */}
-          {mentionMatch && mentionCandidates.length > 0 && (
-            <div
-              data-collab-mention-menu=""
-              role="listbox"
-              aria-label="选择要 @ 调用的群内机器人"
-              className="overflow-hidden rounded-2xl bg-menu p-1.5 shadow-xl ring-1 ring-ink/12"
-            >
-              <div className="px-2.5 py-1 text-[11px] font-medium text-ink-tertiary">
-                选择要调用的群内机器人（在 Bot 所在本机处理）
-              </div>
-              <ul className="flex max-h-52 flex-col gap-0.5 overflow-y-auto">
-                {mentionCandidates.map(bot => {
-                  const invocableIndex = invocableCandidates.findIndex(item => item.id === bot.id);
-                  const active = bot.can_invoke && invocableIndex === mentionIdx;
-                  const ownerName = bot.owner_user_id === myUserId
-                    ? "我"
-                    : displayPersonName({ remark: bot.owner_remark, nickname: bot.owner_nickname, email: bot.owner_email });
-                  return (
-                    <li key={bot.id} role="option" aria-selected={active} aria-disabled={!bot.can_invoke}>
-                      <button
-                        type="button"
-                        data-collab-mention-item={bot.id}
-                        disabled={!bot.can_invoke}
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          insertBotMention(bot);
-                        }}
-                        className={cn(
-                          "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors",
-                          active ? "bg-raised text-ink" : "text-ink enabled:hover:bg-raised/60",
-                          !bot.can_invoke && "cursor-not-allowed opacity-55",
-                        )}
-                      >
-                        <CollabBotBadge
-                          name={bot.bot_name}
-                          color={bot.bot_color}
-                          avatarUrl={bot.bot_avatar_url || (bot.owner_user_id === myUserId ? localBotById.get(bot.local_bot_id)?.avatar_url : undefined)}
-                          bodyId={bot.owner_user_id === myUserId ? localBotById.get(bot.local_bot_id)?.mascot_body : undefined}
-                          faceColor={bot.owner_user_id === myUserId ? localBotById.get(bot.local_bot_id)?.mascot_face_color : undefined}
-                          size={28}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-medium text-ink">@{bot.bot_name}</div>
-                          <div className="truncate text-[11px] text-ink-tertiary">
-                            {ownerName} 的本机 Bot{bot.bot_title ? ` · ${bot.bot_title}` : ""}
-                          </div>
-                        </div>
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
-                            bot.can_invoke
-                              ? "bg-success/12 text-success ring-success/25"
-                              : "bg-ink/[0.05] text-ink-tertiary ring-ink/10",
-                          )}
-                        >
-                          {bot.can_invoke ? "可调用" : "需所有者授权"}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+          {/* @ member & bot mention picker */}
+          {mentionMatch && mentionItems.length > 0 && (
+            <CollabMentionMenu
+              items={mentionItems}
+              activeKey={selectableMentionItems[mentionIdx]?.key ?? null}
+              myUserId={myUserId}
+              localBotById={localBotById}
+              onSelect={insertMentionItem}
+            />
           )}
 
           <div className="flex items-end gap-2 rounded-[24px] bg-composer px-2.5 py-2 shadow-[0_1px_4px_rgb(0_0_0/0.12)] ring-1 ring-inset ring-ink/[0.08] focus-within:ring-ink/[0.18]">
@@ -838,26 +817,26 @@ export function CollabChatView({
               rows={1}
               data-collab-chat-input=""
               aria-label={`给 ${title} 发消息`}
-              placeholder={isGroupLike && chatBots.length > 0 ? `给 ${title} 发消息，输入 @ 可调用机器人` : `给 ${title} 发消息`}
+              placeholder={hasMentionTargets ? `给 ${title} 发消息，输入 @ 可提及成员或机器人` : `给 ${title} 发消息`}
               value={draft}
               onChange={e => handleComposerChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
               onClick={e => setCaretPos(e.currentTarget.selectionStart ?? draft.length)}
               onKeyUp={e => setCaretPos(e.currentTarget.selectionStart ?? draft.length)}
               onKeyDown={e => {
-                if (mentionMatch && mentionCandidates.length > 0 && !imeComposing(e.nativeEvent)) {
-                  if (e.key === "ArrowDown" && invocableCandidates.length > 0) {
+                if (mentionMatch && mentionItems.length > 0 && !imeComposing(e.nativeEvent)) {
+                  if (e.key === "ArrowDown" && selectableMentionItems.length > 0) {
                     e.preventDefault();
-                    setMentionIdx(prev => (prev + 1) % invocableCandidates.length);
+                    setMentionIdx(prev => (prev + 1) % selectableMentionItems.length);
                     return;
                   }
-                  if (e.key === "ArrowUp" && invocableCandidates.length > 0) {
+                  if (e.key === "ArrowUp" && selectableMentionItems.length > 0) {
                     e.preventDefault();
-                    setMentionIdx(prev => (prev - 1 + invocableCandidates.length) % invocableCandidates.length);
+                    setMentionIdx(prev => (prev - 1 + selectableMentionItems.length) % selectableMentionItems.length);
                     return;
                   }
-                  if ((e.key === "Enter" || e.key === "Tab") && invocableCandidates[mentionIdx]) {
+                  if ((e.key === "Enter" || e.key === "Tab") && selectableMentionItems[mentionIdx]) {
                     e.preventDefault();
-                    insertBotMention(invocableCandidates[mentionIdx]!);
+                    insertMentionItem(selectableMentionItems[mentionIdx]!);
                     return;
                   }
                   if (e.key === "Escape") {
@@ -875,12 +854,12 @@ export function CollabChatView({
               className="max-h-40 min-h-[32px] flex-1 resize-none bg-transparent py-1.5 text-[14px] leading-5 text-ink outline-none placeholder:text-ink-tertiary"
             />
 
-            {isGroupLike && chatBots.length > 0 && (
+            {hasMentionTargets && (
               <button
                 type="button"
                 data-collab-chat-at-btn=""
-                aria-label="提及群内机器人"
-                title="输入 @ 调用群内机器人"
+                aria-label="提及群成员或机器人"
+                title="输入 @ 提及群成员或机器人"
                 onClick={triggerAtPicker}
                 className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary transition-colors hover:bg-ink/[0.08] hover:text-ink"
               >

@@ -2,10 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { z } from "zod";
-import { MARKET_INSTALL_HEADER, type MarketInstalledBotInfo } from "../../shared/donebot-market.ts";
+import { MARKET_BOT_ID_HEADER, MARKET_INSTALL_HEADER, type MarketInstalledBotInfo } from "../../shared/donebot-market.ts";
 import { writeFileAtomic } from "../atomic.ts";
 
-export { MARKET_INSTALL_HEADER };
+export { MARKET_BOT_ID_HEADER, MARKET_INSTALL_HEADER };
 
 export interface MarketInstallRecord {
   botId: string;
@@ -47,10 +47,22 @@ export function currentMarketBotId(): string | undefined {
 }
 
 export function attachMarketInstallHeader(init: RequestInit, token: string | undefined): RequestInit {
-  if (!token) return init;
+  return attachMarketHeaders(init, { installToken: token });
+}
+
+export function attachMarketHeaders(
+  init: RequestInit,
+  opts: { installToken?: string; botId?: string },
+): RequestInit {
+  const token = opts.installToken?.trim();
+  const botId = opts.botId?.trim();
+  if (!token && !botId) return init;
   const headers = new Headers(init.headers);
-  if (!headers.has(MARKET_INSTALL_HEADER)) {
+  if (token && !headers.has(MARKET_INSTALL_HEADER)) {
     headers.set(MARKET_INSTALL_HEADER, token);
+  }
+  if (botId && !headers.has(MARKET_BOT_ID_HEADER)) {
+    headers.set(MARKET_BOT_ID_HEADER, botId);
   }
   return { ...init, headers };
 }
@@ -114,6 +126,15 @@ export class DoneBotMarketInstallStore {
     this.persist();
   }
 
+  setMany(records: readonly MarketInstallRecord[]): void {
+    if (records.length === 0) return;
+    this.ensureLoaded();
+    for (const record of records) {
+      this.records.set(record.botId, record);
+    }
+    this.persist();
+  }
+
   delete(botId: string): void {
     this.ensureLoaded();
     if (this.records.delete(botId)) this.persist();
@@ -133,8 +154,12 @@ export class DoneBotMarketInstallStore {
   publicByListing(existingBotIds: ReadonlySet<string>): Record<string, MarketInstalledBotInfo> {
     this.ensureLoaded();
     const out: Record<string, MarketInstalledBotInfo> = {};
+    const idsByListing = new Map<string, string[]>();
     for (const rec of this.records.values()) {
       if (!existingBotIds.has(rec.botId)) continue;
+      const list = idsByListing.get(rec.listingId) ?? [];
+      list.push(rec.botId);
+      idsByListing.set(rec.listingId, list);
       const prev = out[rec.listingId];
       if (!prev || rec.installedAt > prev.installed_at) {
         out[rec.listingId] = {
@@ -146,6 +171,11 @@ export class DoneBotMarketInstallStore {
           expires_at: rec.expiresAt,
           installed_at: rec.installedAt,
         };
+      }
+    }
+    for (const [listingId, botIds] of idsByListing.entries()) {
+      if (out[listingId] && botIds.length > 1) {
+        out[listingId]!.bot_ids = botIds;
       }
     }
     return out;

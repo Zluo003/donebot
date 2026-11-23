@@ -1,10 +1,13 @@
 import type {
+  MarketBotSpendSummary,
   MarketCategory,
   MarketCreatorWallet,
   MarketListingDetail,
   MarketListingSummary,
+  MarketListingType,
   MarketRewardLedgerEntry,
   MarketSkillDoc,
+  MarketStudioBotSummary,
   MarketTransferResult,
   MarketWithdrawalRecord,
 } from "../../shared/donebot-market.ts";
@@ -14,6 +17,9 @@ import { DoneBotGatewayError } from "./gateway.ts";
 export interface GatewayMarketInstallPayload {
   install_id: string;
   listing_id: string;
+  listing_type?: MarketListingType;
+  bot_count?: number;
+  bots_summary?: MarketStudioBotSummary[];
   release_id: string;
   version: number;
   name: string;
@@ -133,6 +139,10 @@ export function createDoneBotMarketClient(ctx: () => CollabGatewayTransport) {
     },
     async requestWithdrawal(payload: { amount: number; alipay_account: string; alipay_real_name: string }): Promise<MarketWithdrawalRecord> {
       return marketJsonCall(ctx(), "/creator/withdrawals", "POST", payload, 20_000, { requireUserLogin: true });
+    },
+    async getSpendSummary(days = 30): Promise<MarketBotSpendSummary> {
+      const clamped = Math.max(1, Math.min(365, Math.round(days)));
+      return marketJsonCall(ctx(), `/spend-summary?days=${clamped}`, "GET");
     },
   };
 }

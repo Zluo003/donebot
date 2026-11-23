@@ -1,10 +1,12 @@
 import type {
   MarketCategory,
+  MarketCostTier,
   MarketCreatorWallet,
   MarketInstalledBotInfo,
   MarketListResponse,
   MarketListingDetail,
   MarketListingSummary,
+  MarketListingType,
   MarketLocalBotOption,
   MarketPublishPayload,
   MarketRewardLedgerEntry,
@@ -28,7 +30,9 @@ export interface MarketDetailResponse extends MarketListingDetail {
 
 export interface MarketInstallActionResponse {
   ok: boolean;
+  listing_type?: MarketListingType;
   bot_id: string;
+  bot_ids?: string[];
   enabled_skills: string[];
   install: MarketInstalledBotInfo;
 }
@@ -46,6 +50,7 @@ export const marketApi = {
 
   async listBots(params: {
     category_id?: number;
+    listing_type?: MarketListingType;
     q?: string;
     sort?: string;
     page?: number;
@@ -53,6 +58,7 @@ export const marketApi = {
   } = {}): Promise<MarketListResponse> {
     const qs = new URLSearchParams();
     if (params.category_id) qs.set("category_id", String(params.category_id));
+    if (params.listing_type) qs.set("listing_type", params.listing_type);
     if (params.q?.trim()) qs.set("q", params.q.trim());
     if (params.sort) qs.set("sort", params.sort);
     if (params.page) qs.set("page", String(params.page));
@@ -179,4 +185,12 @@ export function marketCategoryLabel(cat: string): string {
 export function formatCny(value: number | undefined | null): string {
   const n = typeof value === "number" && Number.isFinite(value) ? value : 0;
   return `¥${n.toFixed(2)}`;
+}
+
+export function costTierLabel(tier?: MarketCostTier | string): string {
+  switch (tier) {
+    case "light": return "省流";
+    case "heavy": return "高算力";
+    default: return "标准算力";
+  }
 }

@@ -15,8 +15,19 @@ import type { DoneBotMarketInstallStore } from "./market-installs.ts";
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 
+const evalSampleSchema = z.object({
+  title: z.string().trim().max(80).optional(),
+  prompt: z.string().trim().min(1).max(400),
+  output_preview: z.string().trim().min(1).max(1200),
+  model: z.string().trim().max(80).optional(),
+  latency_ms: z.number().int().nonnegative().optional(),
+  verified_at: z.string().trim().max(40).optional(),
+}).strict();
+
 const publishSchema = z.object({
-  bot_id: z.string().trim().min(1).max(128),
+  listing_type: z.enum(["bot", "studio"]).default("bot"),
+  bot_id: z.string().trim().min(1).max(128).optional(),
+  bot_ids: z.array(z.string().trim().min(1).max(128)).min(2).max(8).optional(),
   listing_id: uuidV4.optional(),
   category_id: z.number().int().positive(),
   name: z.string().trim().min(2).max(60),
@@ -24,7 +35,10 @@ const publishSchema = z.object({
   description: z.string().trim().max(4000).default(""),
   tags: z.array(z.string().trim().min(1).max(24)).max(6).default([]),
   sample_prompts: z.array(z.string().trim().min(1).max(300)).max(3).default([]),
-  skill_names: z.array(z.string().trim().min(1).max(128)).max(30).optional(),
+  skill_names: z.array(z.string().trim().min(1).max(128)).max(90).optional(),
+  cost_tier: z.enum(["light", "standard", "heavy"]).default("standard"),
+  eval_verified: z.boolean().default(false),
+  eval_samples: z.array(evalSampleSchema).max(5).default([]),
   changelog: z.string().trim().max(1000).default(""),
 }).strict();
 
@@ -130,7 +144,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
 
       if (method === "GET" && reqPath === "/api/donebot/market/bots") {
         const params = new URLSearchParams();
-        for (const key of ["category_id", "q", "sort", "page", "page_size"]) {
+        for (const key of ["category_id", "listing_type", "q", "sort", "page", "page_size"]) {
           const val = url.searchParams.get(key);
           if (val && val.trim()) params.set(key, val.trim());
         }
@@ -193,15 +207,29 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
       if (method === "POST" && reqPath === "/api/donebot/market/publish") {
         const parsed = publishSchema.safeParse(body);
         if (!parsed.success) {
-          return json(res, 400, { error: "请完整填写 Bot 名称、简介和分类（名称 2–60 字，简介 4–160 字）。" });
+          return json(res, 400, { error: "请完整填写名称、简介和分类（名称 2–60 字，简介 4–160 字）。" });
         }
         const input = parsed.data;
-        const bot = deps.store.bot(input.bot_id);
-        if (!bot || bot.hidden) return json(res, 404, { error: "未找到要分享的本地 Bot。" });
-        if (isExternalCodingAgentBot(bot)) return json(res, 403, { error: EXTERNAL_CODING_AGENT_SHARE_REFUSAL });
-        const soulText = (bot.soul ?? "").trim();
-        if (Array.from(soulText).length < 20) {
-          return json(res, 400, { error: "该 Bot 的 SOUL.md 内容不足 20 字，请先完善人设与能力设定再发布。" });
+        const isStudio = input.listing_type === "studio";
+        const targetIds = isStudio
+          ? Array.from(new Set(input.bot_ids ?? []))
+          : input.bot_id ? [input.bot_id] : [];
+        if (isStudio && targetIds.length < 2) {
+          return json(res, 400, { error: "AI 工作室整包至少需要选择 2 位本地 Bot 员工。" });
+        }
+        if (!isStudio && targetIds.length !== 1) {
+          return json(res, 400, { error: "请选择要分享的本地 Bot。" });
+        }
+
+        const bots: BotRecord[] = [];
+        for (const id of targetIds) {
+          const bot = deps.store.bot(id);
+          if (!bot || bot.hidden) return json(res, 404, { error: "未找到要分享的本地 Bot。" });
+          if (isExternalCodingAgentBot(bot)) return json(res, 403, { error: EXTERNAL_CODING_AGENT_SHARE_REFUSAL });
+          if (Array.from((bot.soul ?? "").trim()).length < 20) {
+            return json(res, 400, { error: `「${bot.name}」的 SOUL.md 内容不足 20 字，请先完善人设与能力设定再发布。` });
+          }
+          bots.push(bot);
         }
 
         const selection = input.skill_names === undefined
@@ -209,24 +237,45 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           : input.skill_names.length === 0
             ? []
             : input.skill_names;
-        const collected = deps.collectTeamSkills([bot], selection);
+        const collected = deps.collectTeamSkills(bots, selection);
         if (!collected.ok) return json(res, collected.status ?? 400, { error: collected.error });
 
-        const botExportClone: BotRecord = {
-          ...bot,
-          section: "",
-          name: input.name,
-          title: input.tagline,
-          description: input.description || input.tagline,
-          soul: soulText,
-        };
+        const primaryBot = bots[0]!;
+        const exportedBots: BotRecord[] = isStudio
+          ? bots.map(bot => ({
+            ...bot,
+            section: input.name,
+            soul: (bot.soul ?? "").trim(),
+          }))
+          : [{
+            ...primaryBot,
+            section: "",
+            name: input.name,
+            title: input.tagline,
+            description: input.description || input.tagline,
+            soul: (primaryBot.soul ?? "").trim(),
+          }];
+
+        const soulText = isStudio
+          ? exportedBots.map((bot, idx) => `## 员工 ${idx + 1}：${bot.name}${bot.title ? `（${bot.title}）` : ""}\n${bot.soul}`).join("\n\n")
+          : exportedBots[0]!.soul ?? "";
+
+        const botsSummary = isStudio
+          ? exportedBots.map(bot => ({
+            name: bot.name,
+            role: (bot.title || bot.description || "").trim().slice(0, 120),
+            color: bot.color,
+            skill_count: (collected.skillsByBot.get(bot.id) ?? []).length,
+          }))
+          : [];
+
         const identity = await deps.gateway.collabIdentity();
         const exported = createTeamPackageExport({
-          team: "",
+          team: isStudio ? input.name : "",
           name: input.name,
           summary: input.tagline,
           authorName: identity.email || undefined,
-          bots: [botExportClone],
+          bots: exportedBots,
           groups: [],
           routines: [],
           skillsByBot: collected.skillsByBot,
@@ -246,15 +295,16 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
         }));
 
         const appearance = {
-          color: bot.color,
-          ...(bot.mascotBody ? { mascot_body: bot.mascotBody } : {}),
-          ...(bot.mascotFaceColor ? { mascot_face_color: bot.mascotFaceColor } : {}),
-          ...(bot.mascotExpression ? { mascot_expression: bot.mascotExpression } : {}),
+          color: primaryBot.color,
+          ...(primaryBot.mascotBody ? { mascot_body: primaryBot.mascotBody } : {}),
+          ...(primaryBot.mascotFaceColor ? { mascot_face_color: primaryBot.mascotFaceColor } : {}),
+          ...(primaryBot.mascotExpression ? { mascot_expression: primaryBot.mascotExpression } : {}),
         };
 
         const result = await client.publish({
           ...(input.listing_id ? { listing_id: input.listing_id } : {}),
-          source_bot_id: bot.id,
+          listing_type: input.listing_type,
+          source_bot_id: primaryBot.id,
           category_id: input.category_id,
           name: input.name,
           tagline: input.tagline,
@@ -262,6 +312,10 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           tags: input.tags,
           sample_prompts: input.sample_prompts,
           appearance,
+          ...(isStudio ? { bots_summary: botsSummary } : {}),
+          cost_tier: input.cost_tier,
+          eval_verified: input.eval_verified && input.eval_samples.length > 0,
+          eval_samples: input.eval_samples,
           soul_text: soulText,
           skills: skillsPayload,
           package: exported.document,
@@ -288,32 +342,47 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
         }
         const created = imported.bots[0]!;
         const skillNames = (parsedDoc.package.skills?.entries ?? []).map(s => s.name);
-        const enabledSkills = enableInstalledSkills(importDeps, created.id, skillNames);
+        const enabledSkillsSet = new Set<string>();
+        const installedAt = Date.now();
+        // Bind every bot in a studio pack to the install token so creator rebates track actual consumption per bot.
+        const installRecords = imported.bots.map(bot => {
+          for (const enabledName of enableInstalledSkills(importDeps, bot.id, skillNames)) {
+            enabledSkillsSet.add(enabledName);
+          }
+          return {
+            botId: bot.id,
+            installId: fetched.install_id,
+            listingId: fetched.listing_id,
+            releaseId: fetched.release_id,
+            version: fetched.version,
+            installToken: fetched.install_token,
+            expiresAt: fetched.expires_at,
+            installedAt,
+          };
+        });
+        deps.marketInstalls.setMany(installRecords);
+        const installRecord = installRecords[0]!;
+        const enabledSkills = [...enabledSkillsSet];
 
-        const installRecord = {
-          botId: created.id,
-          installId: fetched.install_id,
-          listingId: fetched.listing_id,
-          releaseId: fetched.release_id,
-          version: fetched.version,
-          installToken: fetched.install_token,
-          expiresAt: fetched.expires_at,
-          installedAt: Date.now(),
-        };
-        deps.marketInstalls.set(installRecord);
-
+        const publicBots: unknown[] = [];
         for (const bot of imported.bots) {
-          const full = deps.store.bot(bot.id);
-          if (full) deps.broadcast({ kind: "bot", bot: deps.publicBot(full) });
+          const full = deps.store.bot(bot.id) ?? bot;
+          const pub = deps.publicBot(full);
+          publicBots.push(pub);
+          deps.broadcast({ kind: "bot", bot: pub });
         }
         const fullCreated = deps.store.bot(created.id) ?? created;
         return json(res, 200, {
           ok: true,
+          listing_type: fetched.listing_type ?? (imported.bots.length > 1 ? "studio" : "bot"),
           bot: deps.publicBot(fullCreated),
           bot_id: created.id,
+          bots: publicBots,
+          bot_ids: imported.bots.map(b => b.id),
           enabled_skills: enabledSkills,
           install: {
             bot_id: installRecord.botId,
+            ...(imported.bots.length > 1 ? { bot_ids: imported.bots.map(b => b.id) } : {}),
             install_id: installRecord.installId,
             listing_id: installRecord.listingId,
             release_id: installRecord.releaseId,

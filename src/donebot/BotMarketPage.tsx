@@ -10,20 +10,23 @@ import {
   PackagePlus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   Store,
   Upload,
+  Users,
 } from "lucide-react";
 import type {
   MarketCategory,
   MarketInstalledBotInfo,
   MarketListingSummary,
+  MarketListingType,
 } from "../../shared/donebot-market";
 import { BotAvatar } from "@/components/Avatar";
 import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/state/store";
-import { formatCny, marketApi, marketStatusMeta, safeMarketColor } from "./market-api";
+import { costTierLabel, formatCny, marketApi, marketStatusMeta, safeMarketColor } from "./market-api";
 import { BotMarketCreatorPanel } from "./BotMarketCreatorPanel";
 import { BotMarketDetailModal } from "./BotMarketDetailModal";
 import { BotMarketPublishModal } from "./BotMarketPublishModal";
@@ -36,6 +39,7 @@ export function BotMarketPage() {
   const [tab, setTab] = useState<MarketTab>("browse");
   const [categories, setCategories] = useState<MarketCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
+  const [listingTypeFilter, setListingTypeFilter] = useState<"all" | MarketListingType>("all");
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"installs" | "newest">("installs");
@@ -77,6 +81,7 @@ export function BotMarketPage() {
     try {
       const res = await marketApi.listBots({
         category_id: selectedCategoryId || undefined,
+        listing_type: listingTypeFilter === "all" ? undefined : listingTypeFilter,
         q: query || undefined,
         sort,
         page: 1,
@@ -89,7 +94,7 @@ export function BotMarketPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategoryId, query, sort]);
+  }, [selectedCategoryId, listingTypeFilter, query, sort]);
 
   const loadMine = useCallback(async () => {
     setLoading(true);
@@ -122,8 +127,10 @@ export function BotMarketPage() {
       const res = await marketApi.install(item.id);
       setInstalledMap(prev => ({ ...prev, [item.id]: res.install }));
       setListings(prev => prev.map(x => (x.id === item.id ? { ...x, install_count: x.install_count + 1 } : x)));
-      const skillsMsg = res.enabled_skills.length > 0 ? `并默认启用 ${res.enabled_skills.length} 个 Skill` : "";
-      showToast(`已安装「${item.name}」${skillsMsg}`);
+      const isStudio = item.listing_type === "studio" || (res.bot_ids?.length ?? 0) > 1;
+      const countMsg = isStudio ? `（已入职 ${res.bot_ids?.length ?? item.bot_count ?? 2} 位 AI 员工）` : "";
+      const skillsMsg = res.enabled_skills.length > 0 ? `，启用 ${res.enabled_skills.length} 个 Skill` : "";
+      showToast(`已雇佣「${item.name}」${countMsg}${skillsMsg}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "安装失败，请稍后重试。");
     } finally {
@@ -158,7 +165,7 @@ export function BotMarketPage() {
           <Store size={18} className="text-accent" />
           <h1 className="text-[15.5px] font-semibold">Bot 广场</h1>
           <span className="hidden text-[12px] text-ink-secondary sm:inline">
-            发现高水平 Bot · 分享你调教的专家并赚取算力分润
+            一键雇佣整套 AI 工作室或专家员工 · 分享作品持续赚取算力分润
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -229,30 +236,51 @@ export function BotMarketPage() {
           {tab === "browse" && (
             <>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategoryId(0)}
-                    className={cn(
-                      "rounded-full px-3 py-1 text-[12.5px] transition-colors",
-                      selectedCategoryId === 0 ? "bg-accent text-white" : "bg-card text-ink-secondary hover:bg-raised hover:text-ink",
-                    )}
-                  >
-                    全部
-                  </button>
-                  {categories.map(cat => (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div role="group" aria-label="类型筛选" className="inline-flex items-center rounded-xl bg-card p-0.5 ring-[0.5px] ring-hairline/70">
+                    {([
+                      { key: "all", label: "全部" },
+                      { key: "studio", label: "AI 工作室" },
+                      { key: "bot", label: "专家 Bot" },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setListingTypeFilter(opt.key)}
+                        className={cn(
+                          "rounded-lg px-2.5 py-1 text-[12px] font-medium transition-colors",
+                          listingTypeFilter === opt.key ? "bg-raised text-ink shadow-xs" : "text-ink-secondary hover:text-ink",
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
-                      key={cat.id}
                       type="button"
-                      onClick={() => setSelectedCategoryId(cat.id)}
+                      onClick={() => setSelectedCategoryId(0)}
                       className={cn(
-                        "rounded-full px-3 py-1 text-[12.5px] transition-colors",
-                        selectedCategoryId === cat.id ? "bg-accent text-white" : "bg-card text-ink-secondary hover:bg-raised hover:text-ink",
+                        "rounded-full px-3 py-1 text-[12px] transition-colors",
+                        selectedCategoryId === 0 ? "bg-accent text-white" : "bg-card text-ink-secondary hover:bg-raised hover:text-ink",
                       )}
                     >
-                      {cat.name}
+                      全部分类
                     </button>
-                  ))}
+                    {categories.map(cat => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedCategoryId(cat.id)}
+                        className={cn(
+                          "rounded-full px-3 py-1 text-[12px] transition-colors",
+                          selectedCategoryId === cat.id ? "bg-accent text-white" : "bg-card text-ink-secondary hover:bg-raised hover:text-ink",
+                        )}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -305,23 +333,38 @@ export function BotMarketPage() {
                   {listings.map(item => {
                     const installed = installedMap[item.id];
                     const hasUpdate = Boolean(installed && item.published_version > installed.version);
+                    const isStudio = item.listing_type === "studio" && (item.bot_count ?? 1) > 1;
+                    const studioMembers = item.bots_summary ?? [];
                     return (
                       <article
                         key={item.id}
-                        className="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 transition-colors hover:border-accent/40"
+                        className="flex flex-col justify-between rounded-2xl border border-hairline/70 bg-card p-4 transition-colors hover:border-accent/45"
                       >
                         <div className="space-y-3">
                           <div className="flex items-start gap-3">
-                            <BotAvatar
-                              bot={{
-                                name: item.name,
-                                color: safeMarketColor(item.appearance?.color),
-                                mascotBody: item.appearance?.mascot_body as never,
-                                mascotFaceColor: item.appearance?.mascot_face_color as never,
-                              }}
-                              expression={item.appearance?.mascot_expression as never}
-                              size={42}
-                            />
+                            {isStudio && studioMembers.length > 0 ? (
+                              <div className="flex shrink-0 items-center -space-x-2.5 pt-0.5">
+                                {studioMembers.slice(0, 3).map((member, mIdx) => (
+                                  <div key={mIdx} className="rounded-full ring-2 ring-card">
+                                    <BotAvatar
+                                      bot={{ name: member.name, color: safeMarketColor(member.color) }}
+                                      size={30}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <BotAvatar
+                                bot={{
+                                  name: item.name,
+                                  color: safeMarketColor(item.appearance?.color),
+                                  mascotBody: item.appearance?.mascot_body as never,
+                                  mascotFaceColor: item.appearance?.mascot_face_color as never,
+                                }}
+                                expression={item.appearance?.mascot_expression as never}
+                                size={40}
+                              />
+                            )}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">
                                 <button
@@ -332,14 +375,24 @@ export function BotMarketPage() {
                                   {item.name}
                                 </button>
                                 {item.featured && (
-                                  <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-500">
+                                  <span className="shrink-0 rounded bg-amber-500/12 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-600 dark:text-amber-400">
                                     精选
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-secondary">
-                                <span className="rounded bg-raised px-1.5 py-0.5">{item.category_name}</span>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-tertiary">
+                                {isStudio && (
+                                  <span className="inline-flex items-center gap-1 font-medium text-accent">
+                                    <Users size={11} /> AI 工作室 · {item.bot_count} 位员工
+                                  </span>
+                                )}
+                                {!isStudio && <span>{item.category_name}</span>}
                                 <span>· {item.author_name || "DoneBot 用户"}</span>
+                                {item.eval_verified && (
+                                  <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400" title="已附带能力实验室实测样例">
+                                    <ShieldCheck size={11} /> 已实测
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -348,26 +401,25 @@ export function BotMarketPage() {
                             {item.tagline}
                           </p>
 
-                          <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-secondary">
-                            <span className="inline-flex items-center gap-1 rounded-md bg-app px-2 py-0.5">
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11.5px] tabular-nums text-ink-tertiary">
+                            <span className="inline-flex items-center gap-1 text-ink-secondary">
                               <Sparkles size={11} className="text-accent" />
-                              SOUL + {item.skill_count} Skill
+                              SOUL + {item.skill_count} 技能
                             </span>
-                            <span className="rounded-md bg-app px-2 py-0.5">
-                              {item.install_count} 次安装
-                            </span>
+                            <span>{costTierLabel(item.cost_tier)}</span>
+                            <span>{item.install_count} 次雇佣</span>
                             {installed && (
                               <span className={cn(
-                                "rounded-md px-2 py-0.5 font-medium",
-                                hasUpdate ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500",
+                                "font-medium",
+                                hasUpdate ? "text-amber-500" : "text-emerald-500",
                               )}>
-                                {hasUpdate ? `可更新至 v${item.published_version}` : "已安装"}
+                                {hasUpdate ? `可更新 v${item.published_version}` : "已入职"}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        <div className="mt-4 flex items-center justify-between gap-2 border-t border-hairline pt-3">
+                        <div className="mt-4 flex items-center justify-between gap-2 border-t border-hairline/50 pt-3">
                           <button
                             type="button"
                             onClick={() => setDetailId(item.id)}
@@ -391,7 +443,7 @@ export function BotMarketPage() {
                               className="inline-flex items-center gap-1 rounded-xl bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90 disabled:opacity-50"
                             >
                               {busyId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                              安装
+                              {isStudio ? "雇佣工作室" : "安装"}
                             </button>
                           )}
                         </div>

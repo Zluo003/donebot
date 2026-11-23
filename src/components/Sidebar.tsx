@@ -1,6 +1,6 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
 import { DONEBOT_TEMPLATES_ENABLED } from "@/donebot/services";
-import { isCollabEligible, useCollabStore } from "@/donebot/collab-store";
+import { isHumanTeamCollabVisible, useCollabStore } from "@/donebot/collab-store";
 import { CollabSidebarList, CollabSidebarSwitch } from "@/donebot/CollabSidebar"; import { CodingAgentsDialog } from "@/donebot/CodingAgentsDialog";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
@@ -1057,7 +1057,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
 
   const q = query.trim().toLowerCase();
   const collabTab = useCollabStore().sidebarTab;
-  const collabActive = isCollabEligible(state.config) && collabTab === "collab";
+  const collabActive = isHumanTeamCollabVisible(state.config) && collabTab === "collab";
   const sections = useSidebarSections({ simple, rail, density, query: q, label: sectionLabel, sidebarRef });
   const botDrag = useSidebarBotDrag({ dispatch, announce: sections.announce, onNamed: sections.focusHeader, onRenamed: sections.renamed,
     onError: (text) => setTeamFeedback({ error: true, text }), onCancelled: () => sidebarRef.current?.focus() });

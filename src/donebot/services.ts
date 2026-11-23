@@ -3,6 +3,7 @@ import type { RailAddChoices } from "../../electron/cloud-rail.mjs";
 export const DONEBOT_CLOUD_URL = "https://donebot.cn/cloud";
 export const DONEBOT_PRIVATE_DESKTOP_ENABLED = false;
 export const DONEBOT_CLOUD_DESKTOP_ENABLED = false;
+export const DONEBOT_HUMAN_TEAM_COLLAB_ENABLED = false;
 export const DONEBOT_TEMPLATES_ENABLED = false;
 
 export const UPSTREAM_SETTINGS = {

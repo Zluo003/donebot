@@ -1,0 +1,186 @@
+import type {
+  OpcArtifactItem,
+  OpcArtifactReviewStatus,
+  OpcBossOverview,
+  OpcBotEvalState,
+  OpcConfigSnapshot,
+  OpcEvalRun,
+  OpcHeartbeatConfig,
+  OpcProjectGoal,
+  OpcSpendResponse,
+} from "../../shared/donebot-opc";
+import type { MarketEvalSample } from "../../shared/donebot-market";
+import { api } from "@/state/api";
+
+export const opcApi = {
+  getOverview(days = 30): Promise<OpcBossOverview> {
+    return api<OpcBossOverview>(`/api/donebot/opc/overview?days=${days}`);
+  },
+
+  getSpend(days = 30): Promise<OpcSpendResponse> {
+    return api<OpcSpendResponse>(`/api/donebot/opc/spend?days=${days}`);
+  },
+
+  async listGoals(botId?: string): Promise<OpcProjectGoal[]> {
+    const qs = botId ? `?botId=${encodeURIComponent(botId)}` : "";
+    const res = await api<{ goals?: OpcProjectGoal[] }>(`/api/donebot/opc/goals${qs}`);
+    return Array.isArray(res?.goals) ? res.goals : [];
+  },
+
+  async saveGoal(input: {
+    id?: string;
+    botId: string;
+    title: string;
+    objective: string;
+    redlines: string[];
+    deliverables: Array<{ id?: string; title: string; done: boolean; artifactId?: string }>;
+    status?: "active" | "completed" | "archived";
+  }): Promise<OpcProjectGoal> {
+    const res = await api<{ goal: OpcProjectGoal }>("/api/donebot/opc/goals", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+    return res.goal;
+  },
+
+  async toggleDeliverable(goalId: string, deliverableId: string, done: boolean): Promise<OpcProjectGoal> {
+    const res = await api<{ goal: OpcProjectGoal }>(
+      `/api/donebot/opc/goals/${encodeURIComponent(goalId)}/deliverables/${encodeURIComponent(deliverableId)}`,
+      { method: "PATCH", body: JSON.stringify({ done }) },
+    );
+    return res.goal;
+  },
+
+  deleteGoal(goalId: string): Promise<{ ok: boolean }> {
+    return api<{ ok: boolean }>(`/api/donebot/opc/goals/${encodeURIComponent(goalId)}`, { method: "DELETE" });
+  },
+
+  async listArtifacts(params: { botId?: string; status?: OpcArtifactReviewStatus } = {}): Promise<OpcArtifactItem[]> {
+    const qs = new URLSearchParams();
+    if (params.botId) qs.set("botId", params.botId);
+    if (params.status) qs.set("status", params.status);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    const res = await api<{ items?: OpcArtifactItem[] }>(`/api/donebot/opc/artifacts${suffix}`);
+    return Array.isArray(res?.items) ? res.items : [];
+  },
+
+  reviewArtifact(
+    artifactId: string,
+    payload: {
+      botId: string;
+      status: OpcArtifactReviewStatus;
+      note?: string;
+      deliverableId?: string;
+      threadId?: string;
+      artifactTitle?: string;
+      dispatchRevision?: boolean;
+    },
+  ): Promise<{ ok: boolean; dispatched: boolean }> {
+    return api<{ ok: boolean; dispatched: boolean }>(
+      `/api/donebot/opc/artifacts/${encodeURIComponent(artifactId)}/review`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  async listSnapshots(botId: string): Promise<OpcConfigSnapshot[]> {
+    const res = await api<{ snapshots?: OpcConfigSnapshot[] }>(
+      `/api/donebot/opc/bots/${encodeURIComponent(botId)}/snapshots`,
+    );
+    return Array.isArray(res?.snapshots) ? res.snapshots : [];
+  },
+
+  async createSnapshot(botId: string, label?: string): Promise<OpcConfigSnapshot> {
+    const res = await api<{ snapshot: OpcConfigSnapshot }>(
+      `/api/donebot/opc/bots/${encodeURIComponent(botId)}/snapshots`,
+      { method: "POST", body: JSON.stringify(label ? { label } : {}) },
+    );
+    return res.snapshot;
+  },
+
+  restoreSnapshot(botId: string, snapshotId: string): Promise<{ ok: boolean; backup: OpcConfigSnapshot }> {
+    return api<{ ok: boolean; backup: OpcConfigSnapshot }>(
+      `/api/donebot/opc/bots/${encodeURIComponent(botId)}/snapshots/${encodeURIComponent(snapshotId)}/restore`,
+      { method: "POST", body: JSON.stringify({}) },
+    );
+  },
+
+  deleteSnapshot(botId: string, snapshotId: string): Promise<{ ok: boolean }> {
+    return api<{ ok: boolean }>(
+      `/api/donebot/opc/bots/${encodeURIComponent(botId)}/snapshots/${encodeURIComponent(snapshotId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  getEvals(botId: string): Promise<OpcBotEvalState> {
+    return api<OpcBotEvalState>(`/api/donebot/opc/bots/${encodeURIComponent(botId)}/evals`);
+  },
+
+  async saveEvalCases(
+    botId: string,
+    cases: Array<{ id?: string; title: string; prompt: string; expectation?: string }>,
+  ) {
+    const res = await api<{ cases: OpcBotEvalState["cases"] }>(
+      `/api/donebot/opc/bots/${encodeURIComponent(botId)}/evals/cases`,
+      { method: "PUT", body: JSON.stringify({ cases }) },
+    );
+    return res.cases;
+  },
+
+  runEvals(botId: string, snapshotLabel?: string): Promise<{ run: OpcEvalRun; verifiedSamples: MarketEvalSample[] }> {
+    return api<{ run: OpcEvalRun; verifiedSamples: MarketEvalSample[] }>(
+      `/api/donebot/opc/bots/${encodeURIComponent(botId)}/evals/run`,
+      { method: "POST", body: JSON.stringify(snapshotLabel ? { snapshotLabel } : {}), timeoutMs: 180_000 },
+    );
+  },
+
+  async listHeartbeats(botId?: string): Promise<OpcHeartbeatConfig[]> {
+    const qs = botId ? `?botId=${encodeURIComponent(botId)}` : "";
+    const res = await api<{ heartbeats?: OpcHeartbeatConfig[] }>(`/api/donebot/opc/heartbeats${qs}`);
+    return Array.isArray(res?.heartbeats) ? res.heartbeats : [];
+  },
+
+  async createHeartbeat(input: {
+    botId: string;
+    name: string;
+    prompt: string;
+    intervalMinutes: number;
+    silentWhenOk?: boolean;
+    enabled?: boolean;
+    maxConsecutiveFailures?: number;
+  }): Promise<OpcHeartbeatConfig> {
+    const res = await api<{ heartbeat: OpcHeartbeatConfig }>("/api/donebot/opc/heartbeats", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return res.heartbeat;
+  },
+
+  async updateHeartbeat(
+    id: string,
+    patch: Partial<Pick<OpcHeartbeatConfig, "name" | "prompt" | "intervalMinutes" | "silentWhenOk" | "enabled" | "maxConsecutiveFailures">>,
+  ): Promise<OpcHeartbeatConfig> {
+    const res = await api<{ heartbeat: OpcHeartbeatConfig }>(`/api/donebot/opc/heartbeats/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    return res.heartbeat;
+  },
+
+  deleteHeartbeat(id: string): Promise<{ ok: boolean }> {
+    return api<{ ok: boolean }>(`/api/donebot/opc/heartbeats/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  runHeartbeatNow(id: string): Promise<{ ok: boolean; heartbeat: OpcHeartbeatConfig; error?: string }> {
+    return api<{ ok: boolean; heartbeat: OpcHeartbeatConfig; error?: string }>(
+      `/api/donebot/opc/heartbeats/${encodeURIComponent(id)}/run`,
+      { method: "POST", body: JSON.stringify({}), timeoutMs: 120_000 },
+    );
+  },
+
+  resetCircuitBreaker(id: string, reenable = true): Promise<{ heartbeat: OpcHeartbeatConfig }> {
+    return api<{ heartbeat: OpcHeartbeatConfig }>(
+      `/api/donebot/opc/heartbeats/${encodeURIComponent(id)}/reset-breaker`,
+      { method: "POST", body: JSON.stringify({ reenable }) },
+    );
+  },
+};

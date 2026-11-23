@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, ShieldCheck, Sparkles, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, FlaskConical, Loader2, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import type {
   MarketCategory,
+  MarketCostTier,
+  MarketEvalSample,
   MarketListingDetail,
   MarketListingSummary,
+  MarketListingType,
   MarketLocalBotOption,
 } from "../../shared/donebot-market";
 import { BotAvatar } from "@/components/Avatar";
 import { cn } from "@/lib/cn";
 import { marketApi, marketStatusMeta, safeMarketColor } from "./market-api";
+import { opcApi } from "./opc-api";
 
 export function BotMarketPublishModal({
   categories,
@@ -25,7 +29,12 @@ export function BotMarketPublishModal({
 }) {
   const [localBots, setLocalBots] = useState<MarketLocalBotOption[]>([]);
   const [loadingBots, setLoadingBots] = useState(true);
+  const [listingType, setListingType] = useState<MarketListingType>(updatingListing?.listing_type === "studio" ? "studio" : "bot");
   const [selectedBotId, setSelectedBotId] = useState(initialBotId || updatingListing?.source_bot_id || "");
+  const [selectedStudioBotIds, setSelectedStudioBotIds] = useState<string[]>([]);
+  const [costTier, setCostTier] = useState<MarketCostTier>(updatingListing?.cost_tier ?? "standard");
+  const [evalSamples, setEvalSamples] = useState<MarketEvalSample[]>([]);
+  const [attachEvalSamples, setAttachEvalSamples] = useState(true);
   const [categoryId, setCategoryId] = useState<number>(updatingListing?.category_id || categories[0]?.id || 0);
   const [name, setName] = useState(updatingListing?.name || "");
   const [tagline, setTagline] = useState(updatingListing?.tagline || "");
@@ -76,6 +85,32 @@ export function BotMarketPublishModal({
     [localBots, selectedBotId],
   );
 
+  const selectedStudioBots = useMemo(
+    () => localBots.filter(b => selectedStudioBotIds.includes(b.id)),
+    [localBots, selectedStudioBotIds],
+  );
+
+  const primaryEvalBotId = listingType === "studio" ? selectedStudioBots[0]?.id : currentBot?.id;
+  useEffect(() => {
+    if (!primaryEvalBotId) {
+      setEvalSamples([]);
+      return;
+    }
+    let alive = true;
+    opcApi.getEvals(primaryEvalBotId)
+      .then(res => { if (alive) setEvalSamples(res.verifiedSamples ?? []); })
+      .catch(() => { if (alive) setEvalSamples([]); });
+    return () => { alive = false; };
+  }, [primaryEvalBotId]);
+
+  const toggleStudioBot = (botId: string) => {
+    setSelectedStudioBotIds(prev => {
+      if (prev.includes(botId)) return prev.filter(id => id !== botId);
+      if (prev.length >= 8) return prev;
+      return [...prev, botId];
+    });
+  };
+
   const handleSelectBot = (botId: string) => {
     setSelectedBotId(botId);
     const bot = localBots.find(b => b.id === botId);
@@ -97,13 +132,26 @@ export function BotMarketPublishModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!currentBot) { setError("请先选择一个本地 Bot。"); return; }
-    if (currentBot.soul_length < 20) {
-      setError("该 Bot 的 SOUL.md 内容不足 20 字，请先在 Bot 设置中完善人设与能力规则后再分享。");
-      return;
+    const isStudio = listingType === "studio";
+    if (isStudio) {
+      if (selectedStudioBots.length < 2) {
+        setError("AI 工作室整包至少需要勾选 2 位本地 Bot 员工。");
+        return;
+      }
+      const weak = selectedStudioBots.find(b => b.soul_length < 20);
+      if (weak) {
+        setError(`「${weak.name}」的 SOUL.md 不足 20 字，请先完善人设后再打包发布。`);
+        return;
+      }
+    } else {
+      if (!currentBot) { setError("请先选择一个本地 Bot。"); return; }
+      if (currentBot.soul_length < 20) {
+        setError("该 Bot 的 SOUL.md 内容不足 20 字，请先在 Bot 设置中完善人设与能力规则后再分享。");
+        return;
+      }
     }
     if (!categoryId) { setError("请选择分类。"); return; }
-    if (name.trim().length < 2) { setError("Bot 名称至少需要 2 个字。"); return; }
+    if (name.trim().length < 2) { setError("名称至少需要 2 个字。"); return; }
     if (tagline.trim().length < 4) { setError("一句话简介至少需要 4 个字。"); return; }
 
     const tags = tagsText
@@ -117,10 +165,13 @@ export function BotMarketPublishModal({
       .filter(Boolean)
       .slice(0, 3);
 
+    const includedSamples = attachEvalSamples && evalSamples.length > 0 ? evalSamples : [];
+
     setSubmitting(true);
     try {
       const detail = await marketApi.publish({
-        bot_id: currentBot.id,
+        listing_type: listingType,
+        ...(isStudio ? { bot_ids: selectedStudioBots.map(b => b.id) } : { bot_id: currentBot!.id }),
         ...(updatingListing ? { listing_id: updatingListing.id } : {}),
         category_id: categoryId,
         name: name.trim(),
@@ -128,7 +179,10 @@ export function BotMarketPublishModal({
         description: description.trim(),
         tags,
         sample_prompts: samplePrompts,
-        skill_names: selectedSkills,
+        ...(!isStudio ? { skill_names: selectedSkills } : {}),
+        cost_tier: costTier,
+        eval_verified: includedSamples.length > 0,
+        eval_samples: includedSamples,
         ...(changelog.trim() ? { changelog: changelog.trim() } : {}),
       });
       setResult(detail);
@@ -239,8 +293,42 @@ export function BotMarketPublishModal({
                 </div>
               )}
 
+              {!updatingListing && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[12.5px] font-medium text-ink">发布形态</span>
+                  <div className="inline-flex rounded-xl bg-card p-0.5 ring-[0.5px] ring-hairline/70">
+                    {([
+                      { key: "bot", label: "单个专家 Bot" },
+                      { key: "studio", label: "AI 工作室整包（2–8 位员工）" },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          setListingType(opt.key);
+                          if (opt.key === "studio" && selectedStudioBotIds.length === 0) {
+                            const eligible = localBots.filter(b => b.soul_length >= 20).slice(0, 3).map(b => b.id);
+                            setSelectedStudioBotIds(eligible);
+                          }
+                        }}
+                        className={cn(
+                          "rounded-lg px-3 py-1 text-[12px] font-medium transition-colors",
+                          listingType === opt.key ? "bg-raised text-ink" : "text-ink-secondary hover:text-ink",
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="mb-1.5 block text-[12.5px] font-medium text-ink">选择要分享的本地 Bot</label>
+                <label className="mb-1.5 block text-[12.5px] font-medium text-ink">
+                  {listingType === "studio"
+                    ? `勾选工作室成员（已选 ${selectedStudioBotIds.length}/8，至少 2 位）`
+                    : "选择要分享的本地 Bot"}
+                </label>
                 {loadingBots ? (
                   <div className="flex items-center gap-2 text-[12.5px] text-ink-secondary">
                     <Loader2 size={14} className="animate-spin" /> 正在读取本地 Bot…
@@ -252,12 +340,14 @@ export function BotMarketPublishModal({
                 ) : (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {localBots.map(bot => {
-                      const active = bot.id === selectedBotId;
+                      const active = listingType === "studio"
+                        ? selectedStudioBotIds.includes(bot.id)
+                        : bot.id === selectedBotId;
                       return (
                         <button
                           key={bot.id}
                           type="button"
-                          onClick={() => handleSelectBot(bot.id)}
+                          onClick={() => listingType === "studio" ? toggleStudioBot(bot.id) : handleSelectBot(bot.id)}
                           className={cn(
                             "flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-colors",
                             active ? "border-accent bg-accent/10" : "border-hairline bg-card hover:bg-raised/60",
@@ -286,7 +376,23 @@ export function BotMarketPublishModal({
                 )}
               </div>
 
-              {currentBot && (
+              {listingType === "studio" && selectedStudioBots.length > 0 && (
+                <div className="rounded-xl border border-hairline bg-card p-3 text-[12px] text-ink-secondary space-y-1">
+                  <div className="flex items-center gap-1.5 font-medium text-ink">
+                    <Users size={13} className="text-accent" />
+                    工作室编制预览（{selectedStudioBots.length} 位 AI 员工 · 按实际消耗自动归因分润）
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedStudioBots.map(b => (
+                      <span key={b.id} className="rounded-md bg-app px-2 py-0.5 text-[11.5px] text-ink">
+                        {b.name} · {b.skills.length} 技能
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {listingType === "bot" && currentBot && (
                 <div className="rounded-xl border border-hairline bg-card p-3 space-y-2.5">
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="font-medium text-ink">将打包的 SOUL.md</span>
@@ -416,6 +522,35 @@ export function BotMarketPublishModal({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[12.5px] font-medium text-ink">预估算力档位</label>
+                  <select
+                    value={costTier}
+                    onChange={e => setCostTier(e.target.value as MarketCostTier)}
+                    className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                  >
+                    <option value="light">省流（轻量文本为主）</option>
+                    <option value="standard">标准算力（常规多步任务）</option>
+                    <option value="heavy">高算力（重度生图 / 视频 / 深度调研）</option>
+                  </select>
+                </div>
+                {evalSamples.length > 0 && (
+                  <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[12px]">
+                    <input
+                      type="checkbox"
+                      checked={attachEvalSamples}
+                      onChange={e => setAttachEvalSamples(e.target.checked)}
+                      className="accent-accent"
+                    />
+                    <FlaskConical size={14} className="shrink-0 text-emerald-500" />
+                    <span className="text-ink">
+                      附带能力实验室实测样例（{evalSamples.length} 条，上架获「已实测」标识）
+                    </span>
+                  </label>
+                )}
+              </div>
+
               {updatingListing && (
                 <div>
                   <label className="mb-1 block text-[12.5px] font-medium text-ink">版本更新日志</label>
@@ -445,7 +580,13 @@ export function BotMarketPublishModal({
             <button
               type="submit"
               form="market-publish-form"
-              disabled={submitting || !currentBot || currentBot.soul_length < 20 || categories.length === 0}
+              disabled={
+                submitting
+                || categories.length === 0
+                || (listingType === "studio"
+                  ? selectedStudioBots.length < 2 || selectedStudioBots.some(b => b.soul_length < 20)
+                  : !currentBot || currentBot.soul_length < 20)
+              }
               className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting && <Loader2 size={14} className="animate-spin" />}

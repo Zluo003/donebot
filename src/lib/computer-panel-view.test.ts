@@ -52,8 +52,8 @@ describe("computer panel view availability", () => {
   });
 
   it("shows Simple the Android tab, after Computer, only while a device is connected", () => {
-    expect(computerPanelTabs({ advanced: false, androidConnected: true })).toEqual(["computer", "android", "browser", "data", "files"]);
-    expect(computerPanelTabs({ advanced: false, androidConnected: false })).toEqual(["computer", "browser", "data", "files"]);
+    expect(computerPanelTabs({ advanced: false, androidConnected: true })).toEqual(["computer", "artifacts", "android", "browser", "data", "files"]);
+    expect(computerPanelTabs({ advanced: false, androidConnected: false })).toEqual(["computer", "artifacts", "browser", "data", "files"]);
     expect(resolveComputerPanelView("android", { advanced: false, androidConnected: true })).toBe("android");
     expect(resolveComputerPanelView("android", { advanced: false, androidConnected: false })).toBe("computer");
   });

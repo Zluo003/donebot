@@ -293,7 +293,7 @@ export class DoneBotMediaService {
       const adapterId = job.adapter;
       if (!adapterId) throw new Error("The queued media adapter is unavailable.");
       const marketToken = this.deps.marketInstallToken?.(job.botId);
-      const response = await this.deps.fetchGateway(path, { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": job.dispatchKey ?? job.operationKey, ...(marketToken ? { "X-DoneBot-Market-Install": marketToken } : {}) },
+      const response = await this.deps.fetchGateway(path, { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": job.dispatchKey ?? job.operationKey, ...(job.botId ? { "X-DoneBot-Bot-Id": job.botId } : {}), ...(marketToken ? { "X-DoneBot-Market-Install": marketToken } : {}) },
         body: JSON.stringify(parameters), signal: AbortSignal.timeout(120_000) }, job.scope);
       job = this.save(job, { receiptId: response.headers.get("X-DoneBot-Receipt-ID") ?? undefined });
       const body = await responseJson(response);

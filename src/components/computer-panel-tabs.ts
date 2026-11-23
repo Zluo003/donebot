@@ -1,11 +1,12 @@
 import { useEffect, type KeyboardEvent, type WheelEvent } from "react";
-import { CalendarClock, Database, FolderOpen, Globe, Monitor, Smartphone, type LucideIcon } from "lucide-react";
+import { CalendarClock, Database, FolderOpen, Globe, Layers, Monitor, Smartphone, type LucideIcon } from "lucide-react";
 import { readComputerPanelView, writeComputerPanelView, type ComputerPanelView } from "@/lib/computer-panel-view";
 import type { AndroidUsbDevicesStatus } from "./AndroidDevicePanel";
 import type { LocaleKey } from "@/locales";
 
 export const PANEL_TABS: Record<ComputerPanelView, { Icon: LucideIcon; label: LocaleKey; tour?: string }> = {
   computer: { Icon: Monitor, label: "computer.tab.computer" },
+  artifacts: { Icon: Layers, label: "botPanel.tab.artifacts" },
   routines: { Icon: CalendarClock, label: "computer.tab.routines" },
   android: { Icon: Smartphone, label: "computer.tab.android" },
   browser: { Icon: Globe, label: "computer.tab.browser", tour: "computer-browser" },

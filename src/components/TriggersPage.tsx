@@ -22,6 +22,7 @@ import { Select } from "./Select";
 import { Switch } from "./SettingsPrimitives";
 import { WebhookEditor } from "./WebhookTrigger";
 import { schedulableBots, useTeamPeople } from "@/state/team-people";
+import { OpcHeartbeatPanel } from "@/donebot/OpcHeartbeatPanel";
 
 /** The bot filter earns its place only on a long list shared by several bots. */
 const FILTER_FROM = 9;
@@ -113,6 +114,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
         {view === "calendar" ? <AutomationsCalendar botFilter={botFilter} department={activeDepartment} selectedAutomationId={openId} onOpenAutomation={setOpenId} onOpenRoom={onOpenRoom} /> : (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
+              <OpcHeartbeatPanel bots={visibleBots} />
               <LimitWarnings botFilter={showFilter ? botFilter : "all"} />
               {state.config?.routinesUnreadable && <div role="alert" className="mb-4 rounded-lg bg-danger/10 p-3 text-[12px] leading-relaxed text-danger" data-routines-unreadable="">{t("routines.unreadable")}</div>}
               {all.length === 0 && !state.config?.routinesUnreadable && state.routinesLoadState !== "loading" && state.hydrated ? (

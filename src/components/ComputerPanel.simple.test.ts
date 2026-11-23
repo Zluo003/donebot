@@ -231,19 +231,19 @@ describe("Computer panel tabs", () => {
     }
   });
 
-  it("shows Screen, Browser, Data and Files in Simple mode, and Android after Screen while a phone is connected", () => {
-    expect(tabs(render(makeBot()))).toEqual(["Screen", "Browser", "Data", "Files"]);
+  it("shows Screen, Artifacts, Browser, Data and Files in Simple mode, and Android after Artifacts while a phone is connected", () => {
+    expect(tabs(render(makeBot()))).toEqual(["Screen", "Artifacts", "Browser", "Data", "Files"]);
     fixture.android = true;
-    expect(tabs(render(makeBot()))).toEqual(["Screen", "Android", "Browser", "Data", "Files"]);
+    expect(tabs(render(makeBot()))).toEqual(["Screen", "Artifacts", "Android", "Browser", "Data", "Files"]);
   });
 
-  it("keeps the Advanced tabs unchanged", () => {
+  it("includes Artifacts alongside the Advanced tabs", () => {
     fixture.advanced = true;
     fixture.android = true;
-    expect(tabs(render(makeBot()))).toEqual(["Screen", "Routines", "Android", "Browser", "Data"]);
+    expect(tabs(render(makeBot()))).toEqual(["Screen", "Artifacts", "Routines", "Android", "Browser", "Data"]);
     fixture.config = {};
     fixture.android = false;
-    expect(tabs(render(makeBot()))).toEqual(["Screen", "Routines", "Browser", "Data"]);
+    expect(tabs(render(makeBot()))).toEqual(["Screen", "Artifacts", "Routines", "Browser", "Data"]);
   });
 
   it("reads a Routines view stored by Advanced as the Computer tab in Simple", () => {

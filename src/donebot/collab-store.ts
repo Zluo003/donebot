@@ -10,7 +10,7 @@ import type {
   DoneBotTeamTaskCounts,
 } from "../../shared/donebot-collab";
 import { cleanError, displayPersonName, type CollabOverview } from "./collab-types";
-import { isDoneBotCloudBrowser } from "./services";
+import { DONEBOT_HUMAN_TEAM_COLLAB_ENABLED, isDoneBotCloudBrowser } from "./services";
 
 export type CollabSidebarTab = "bots" | "collab";
 export type TeamWorkspaceView = "channels" | "tasks";
@@ -135,6 +135,10 @@ export function isCollabEligible(config?: AppState["config"] | null): boolean {
     && config?.donebot?.cloudManaged !== true
     && !config?.cloudHome
     && !config?.team;
+}
+
+export function isHumanTeamCollabVisible(config?: AppState["config"] | null): boolean {
+  return DONEBOT_HUMAN_TEAM_COLLAB_ENABLED && isCollabEligible(config);
 }
 
 export function collabPendingCount(overview: CollabOverview | null): number {

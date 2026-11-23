@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Download, Flag, Loader2, MessageSquare, RefreshCw, Sparkles, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Download, Flag, FlaskConical, Loader2, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import type { MarketInstalledBotInfo } from "../../shared/donebot-market";
 import { BotAvatar } from "@/components/Avatar";
 import { cn } from "@/lib/cn";
-import { marketApi, safeMarketColor, type MarketDetailResponse } from "./market-api";
+import { costTierLabel, marketApi, safeMarketColor, type MarketDetailResponse } from "./market-api";
 
 const REPORT_REASONS = [
   { value: "token_abuse", label: "恶意刷 Token / 过度消耗算力" },
@@ -131,8 +131,16 @@ export function BotMarketDetailModal({
                 )}
               </div>
               {detail && (
-                <div className="text-[12px] text-ink-secondary">
-                  创作者：{detail.author_name || "DoneBot 用户"} · v{detail.published_version || detail.latest_version} · {detail.install_count} 次安装
+                <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-secondary">
+                  <span>创作者：{detail.author_name || "DoneBot 用户"}</span>
+                  <span>· v{detail.published_version || detail.latest_version}</span>
+                  <span>· {costTierLabel(detail.cost_tier)}</span>
+                  <span>· {detail.install_count} 次雇佣</span>
+                  {detail.eval_verified && (
+                    <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                      · <ShieldCheck size={12} /> 已实测认证
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -189,6 +197,60 @@ export function BotMarketDetailModal({
                   </div>
                 )}
               </div>
+
+              {detail.listing_type === "studio" && (detail.bots_summary?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between text-[12.5px]">
+                    <span className="flex items-center gap-1.5 font-medium text-ink">
+                      <Users size={14} className="text-accent" />
+                      AI 工作室成员编制（{detail.bot_count ?? detail.bots_summary?.length} 位员工）
+                    </span>
+                    <span className="text-[11.5px] text-ink-tertiary">一键入职，按实际算力消耗计费</span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {detail.bots_summary?.map((member, idx) => (
+                      <div key={idx} className="flex items-center gap-2.5 rounded-lg bg-app/75 px-3 py-2">
+                        <BotAvatar bot={{ name: member.name, color: safeMarketColor(member.color) }} size={28} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[12.5px] font-medium text-ink">{member.name}</div>
+                          <div className="truncate text-[11px] text-ink-secondary">
+                            {member.role || "专业 AI 员工"}{member.skill_count ? ` · ${member.skill_count} 技能` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {detail.eval_verified && (detail.eval_samples?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-[12.5px]">
+                    <span className="flex items-center gap-1.5 font-medium text-ink">
+                      <FlaskConical size={14} className="text-emerald-500" />
+                      能力实验室实测认证样例（{detail.eval_samples?.length}）
+                    </span>
+                    <span className="text-[11px] text-ink-tertiary">真实跑通交付参考</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {detail.eval_samples?.map((sample, idx) => (
+                      <details key={idx} className="rounded-lg bg-app/70 px-3 py-2">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[12px] font-medium text-ink [&::-webkit-details-marker]:hidden">
+                          <span className="truncate">{sample.title || `实测样例 ${idx + 1}`}：{sample.prompt}</span>
+                          {sample.model && (
+                            <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-ink-tertiary">
+                              {sample.model}{sample.latency_ms ? ` · ${(sample.latency_ms / 1000).toFixed(1)}s` : ""}
+                            </span>
+                          )}
+                        </summary>
+                        <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-words border-t border-hairline/40 pt-2 font-sans text-[12px] leading-relaxed text-ink-secondary">
+                          {sample.output_preview}
+                        </pre>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {detail.sample_prompts?.length > 0 && (
                 <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2">
@@ -340,7 +402,11 @@ export function BotMarketDetailModal({
                   )}
                 >
                   {busyAction === "install" ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                  {installed ? "再安装一个副本" : "一键安装"}
+                  {installed
+                    ? "再安装一个副本"
+                    : detail.listing_type === "studio"
+                      ? `一键雇佣整套工作室（${detail.bot_count ?? 2} 位员工）`
+                      : "一键安装"}
                 </button>
               )}
             </div>

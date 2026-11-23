@@ -1,4 +1,46 @@
 export const MARKET_INSTALL_HEADER = "X-DoneBot-Market-Install";
+export const MARKET_BOT_ID_HEADER = "X-DoneBot-Bot-Id";
+
+export type MarketListingType = "bot" | "studio";
+export type MarketCostTier = "light" | "standard" | "heavy";
+
+export interface MarketStudioBotSummary {
+  name: string;
+  role?: string;
+  avatar?: string;
+  color?: string;
+  skill_count?: number;
+}
+
+export interface MarketEvalSample {
+  title?: string;
+  prompt: string;
+  output_preview: string;
+  model?: string;
+  latency_ms?: number;
+  verified_at?: string;
+}
+
+export interface MarketBotSpendRow {
+  bot_id: string;
+  total_cost: number;
+  llm_cost: number;
+  image_cost: number;
+  video_cost: number;
+  music_cost: number;
+  event_count: number;
+  last_used_at: string;
+}
+
+export interface MarketBotSpendSummary {
+  days: number;
+  total_cost: number;
+  llm_cost: number;
+  image_cost: number;
+  video_cost: number;
+  music_cost: number;
+  bots: MarketBotSpendRow[];
+}
 
 export interface MarketCategory {
   id: number;
@@ -63,6 +105,12 @@ export interface MarketBotAppearance {
 
 export interface MarketListingSummary {
   id: string;
+  listing_type?: MarketListingType;
+  bot_count?: number;
+  bots_summary?: MarketStudioBotSummary[];
+  eval_verified?: boolean;
+  eval_samples?: MarketEvalSample[];
+  cost_tier?: MarketCostTier;
   author_user_id: number;
   author_name: string;
   author_avatar_url?: string;
@@ -103,6 +151,7 @@ export interface MarketListingDetail extends MarketListingSummary {
 
 export interface MarketInstalledBotInfo {
   bot_id: string;
+  bot_ids?: string[];
   install_id: string;
   listing_id: string;
   release_id: string;
@@ -141,7 +190,9 @@ export interface MarketLocalBotOption {
 }
 
 export interface MarketPublishPayload {
-  bot_id: string;
+  bot_id?: string;
+  bot_ids?: string[];
+  listing_type?: MarketListingType;
   listing_id?: string;
   category_id: number;
   name: string;
@@ -150,6 +201,9 @@ export interface MarketPublishPayload {
   tags?: string[];
   sample_prompts?: string[];
   skill_names?: string[];
+  cost_tier?: MarketCostTier;
+  eval_verified?: boolean;
+  eval_samples?: MarketEvalSample[];
   changelog?: string;
 }
 

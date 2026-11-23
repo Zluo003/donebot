@@ -11,6 +11,7 @@ import { api, ApiError, currentTaskBot, useStore, type Bot, type ConfigStatus } 
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
 import { DONEBOT_PRIVATE_DESKTOP_ENABLED } from "@/donebot/services";
+import { OpcArtifactsPane } from "@/donebot/OpcArtifactsPane";
 import { ComputerFilesPane } from "./ComputerFilesPane";
 import { effectivePlace, isComputerPlace, personPin, placeLabelKey, placeOffered } from "@/lib/place";
 import type { CloudBackend } from "../../shared/wire";
@@ -1239,7 +1240,11 @@ export function ComputerPanel({
         </div>
       </div>
 
-      {panelView === "routines" ? (
+      {panelView === "artifacts" ? (
+        <div {...tabPanelProps("artifacts")} className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", TAB_PANEL_FOCUS)}>
+          <OpcArtifactsPane key={bot.id} bot={bot} />
+        </div>
+      ) : panelView === "routines" ? (
         <div {...tabPanelProps("routines")} className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4", TAB_PANEL_FOCUS)}>
           <RoutinesSection key={bot.id} bot={bot} routines={botRoutines} runs={state.routineRuns} defaultRunOn={cloudRoutineReady ? "cloud" : "maus"} />
         </div>

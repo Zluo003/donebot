@@ -7,7 +7,7 @@ import {
   collabPendingCount,
   collabTotalBadgeCount,
   findChatSummary,
-  isCollabEligible,
+  isHumanTeamCollabVisible,
   openCollabDestination,
   openCollabDialog,
   refreshCollabOverview,
@@ -71,7 +71,7 @@ export function CollabSidebarSwitch({ compact, listOnly = false }: { compact: bo
   const { state, dispatch } = useStore();
   const collab = useCollabStore();
 
-  if (!isCollabEligible(state.config)) return null;
+  if (!isHumanTeamCollabVisible(state.config)) return null;
 
   const totalBadge = collabTotalBadgeCount(collab.overview);
   const badgeText = totalBadge > 99 ? "99+" : String(totalBadge);

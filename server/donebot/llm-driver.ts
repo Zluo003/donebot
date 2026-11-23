@@ -7,7 +7,7 @@ import { createDoneBotCompletion, type DoneBotLlmProtocol, type DoneBotLlmReques
 import { guideDoneBotMedia } from "./media-guidance.ts";
 import { createWorkspaceTools } from "./workspace-tools.ts";
 import { createDoneBotImageContext } from "./image-context.ts";
-import { runWithMarketBot } from "./market-installs.ts";
+import { currentMarketBotId, runWithMarketBot } from "./market-installs.ts";
 
 const MEDIA_CAPABILITY_TOOL = "mcp:agents:media_model_capabilities";
 const MEDIA_GENERATION_TOOLS = ["generate_image", "generate_video", "generate_audio"] as const;
@@ -30,6 +30,7 @@ export interface DoneBotLlmDependencies {
   catalog?(): DoneBotCatalog | null;
   mediaPreferences?(): DoneBotMediaPreferences;
   toolUse?(model: string): boolean;
+  goalContext?(botId: string): string | undefined;
 }
 
 export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDriver<Record<string, never>> {
@@ -47,7 +48,12 @@ export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDr
         return deps.protocol(model);
       });
       const runtime = createOpenAIChatRuntime({ input, driverKind: "donebot", apiKey: "", apiUrl: "https://donebot.cn/v1", authenticated: deps.authenticated,
-        models: deps.models, completionTransport: turn => complete(guideDoneBotMedia(turn, deps.catalog?.() ?? null, deps.mediaPreferences?.())),
+        models: deps.models, completionTransport: turn => {
+          const guided = guideDoneBotMedia(turn, deps.catalog?.() ?? null, deps.mediaPreferences?.());
+          const botId = currentMarketBotId();
+          const goalPrompt = botId ? deps.goalContext?.(botId)?.trim() : undefined;
+          return complete(goalPrompt ? { ...guided, messages: [{ role: "system", content: goalPrompt }, ...guided.messages] } : guided);
+        },
         imageContext: (turn, signal) => {
           const context = createDoneBotImageContext(turn, deps.imageCacheDir, signal);
           contexts.set(turn, context);

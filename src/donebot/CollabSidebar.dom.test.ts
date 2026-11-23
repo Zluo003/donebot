@@ -29,6 +29,10 @@ vi.mock("@/state/store", () => ({
 vi.mock("@/components/DesktopCapabilities", () => ({
   useCaptionChrome: () => ({ dragProps: {} }),
 }));
+vi.mock("./services", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./services")>();
+  return { ...actual, DONEBOT_HUMAN_TEAM_COLLAB_ENABLED: true };
+});
 
 const {
   COLLAB_DESKTOP_NOTIFY_BOT_ID,

@@ -5,7 +5,7 @@ import { useStore } from "@/state/store";
 import { cn } from "@/lib/cn";
 import {
   dismissCollabToast,
-  isCollabEligible,
+  isHumanTeamCollabVisible,
   openCollabDestination,
   refreshCollabOverview,
   setCollabUiContext,
@@ -25,7 +25,7 @@ function supportsPopoverApi(): boolean {
 
 export function CollabSyncHost() {
   const { state, dispatch } = useStore();
-  const eligible = isCollabEligible(state.config);
+  const eligible = isHumanTeamCollabVisible(state.config);
   const authenticated = state.config?.donebot?.authenticated === true;
   const accountId = authenticated ? (state.config?.donebot?.user?.id ?? null) : null;
   const modalOpen = state.appSettingsOpen || state.pluginsOpen || state.shortcutsOpen;
@@ -79,7 +79,7 @@ export function CollabToastHost() {
   const priorFocusRef = useRef<HTMLElement | null>(null);
   const nativePopover = supportsPopoverApi();
   const modalOpen = storeModalOpen || state.appSettingsOpen || state.pluginsOpen || state.shortcutsOpen;
-  const visible = isCollabEligible(state.config) && !modalOpen && toasts.length > 0;
+  const visible = isHumanTeamCollabVisible(state.config) && !modalOpen && toasts.length > 0;
 
   useEffect(() => {
     const el = regionRef.current as (HTMLDivElement & { showPopover?: () => void; hidePopover?: () => void }) | null;

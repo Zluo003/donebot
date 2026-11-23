@@ -18,6 +18,8 @@ import { instanceSupportsLocalComputer, localComputerSelectable } from "@/lib/lo
 import { personPin, placeLabelKey } from "@/lib/place";
 import { placeManagedBy, worksOnChoices, worksOnSelected } from "@/components/WorksOnGrid";
 import { approvalModeFor } from "../../shared/approval-mode";
+import { PANEL_TABS } from "@/components/computer-panel-tabs";
+import { OpcArtifactsPane } from "./OpcArtifactsPane";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
@@ -98,12 +100,12 @@ export function DoneBotDesktopPanel({ bot }: { bot: Bot }) {
       onKeyDown={resize.onSeparatorKeyDown} onPointerDown={resize.onResizeStart} onPointerMove={resize.onResizeMove} onPointerUp={resize.onResizeEnd} onPointerCancel={resize.onResizeEnd} className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize hover:bg-accent/40 max-md:hidden" />
     <header {...dragProps} className="flex items-center justify-center gap-1 p-3 pl-5">
       <div role="tablist" aria-label={t("computer.tabsAria")} className="flex rounded-full bg-inset p-1">
-        {tabs.map(id => <button key={id} role="tab" aria-selected={tab === id} onClick={() => selectTab(id)} className={cn("rounded-full px-3 py-1 text-[13px]", tab === id ? "bg-raised text-ink shadow-sm" : "text-ink-secondary")}>{t(`computer.tab.${id}`)}</button>)}
+        {tabs.map(id => <button key={id} role="tab" aria-selected={tab === id} onClick={() => selectTab(id)} className={cn("rounded-full px-3 py-1 text-[13px]", tab === id ? "bg-raised text-ink shadow-sm" : "text-ink-secondary")}>{t(PANEL_TABS[id].label)}</button>)}
       </div>
       <button data-computer-panel-close aria-label={t("computer.close")} onClick={() => { releaseComputerPanelFocus(panelRef.current, bot.id); dispatch({ type: "toggleComputer", open: false }); }} className="ml-auto rounded p-1 text-ink-secondary hover:bg-control"><X size={18} /></button>
     </header>
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4" role="tabpanel">
-      {tab === "browser" ? <BrowserPanel bot={bot} signIn={signInRequest} page={pageRequest} /> : tab === "data" ? <Suspense fallback={<Loader2 className="animate-spin" />}><DataPanel bot={bot} requestedCard={dataRequest} /></Suspense> : tab === "files" ? <ComputerFilesPane bot={bot} /> : tab === "android" ? <AndroidDevicePanel status={android} /> : tab === "routines" ? <RoutinesSection bot={bot} routines={state.routines.filter(routine => routine.botId === bot.id)} runs={state.routineRuns} /> : <>
+      {tab === "artifacts" ? <OpcArtifactsPane bot={bot} /> : tab === "browser" ? <BrowserPanel bot={bot} signIn={signInRequest} page={pageRequest} /> : tab === "data" ? <Suspense fallback={<Loader2 className="animate-spin" />}><DataPanel bot={bot} requestedCard={dataRequest} /></Suspense> : tab === "files" ? <ComputerFilesPane bot={bot} /> : tab === "android" ? <AndroidDevicePanel status={android} /> : tab === "routines" ? <RoutinesSection bot={bot} routines={state.routines.filter(routine => routine.botId === bot.id)} runs={state.routineRuns} /> : <>
         <div className="mb-3 text-[13px] text-ink-secondary">{bot.name} · DoneBot 云端桌面</div>
         <div className="relative flex min-h-64 flex-1 items-center justify-center overflow-hidden rounded-xl bg-inset">
           {viewer ? <Suspense fallback={<Loader2 className="animate-spin" />}><LiveDesktop target="donebot/shared" threadId={bot.threadId} name={bot.name} poster={frame} expanded={expanded} onExpandedChange={setExpanded} onHandBack={() => setViewer(false)} handingBack={false} onUnreachable={() => { setViewer(false); setError("桌面暂不可接管；请确认其他任务已交还操作权。 "); }} /></Suspense>

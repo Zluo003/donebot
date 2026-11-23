@@ -58,7 +58,7 @@ import {
   uploadTaskFile,
 } from "./CollabTeamTaskSections";
 
-const DETAIL_AUTO_REFRESH_MS = 3_500;
+const DETAIL_AUTO_REFRESH_MS = 5_000;
 const MAX_SUBMIT_FILES = 10;
 
 export function CollabTeamTaskDetailPanel({

@@ -14,7 +14,8 @@ export interface CollabTaskWorkerDeps {
   threadBusy?: (botId: string, threadId: string) => boolean;
 }
 
-const POLL_MS = 4_000;
+const POLL_MS = 8_000;
+const RATE_LIMIT_BACKOFF_MS = 30_000;
 const TURN_WAIT_MS = 180_000;
 const TURN_CHECK_MS = 300;
 const BUSY_WAIT_MS = 15_000;
@@ -156,6 +157,7 @@ export function buildTaskEventPrompt(
 export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
   let active = false;
   let polling = false;
+  let backoffUntil = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
   const runningEvents = new Set<string>();
 
@@ -278,7 +280,7 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
   }
 
   async function tick(): Promise<void> {
-    if (polling || runningEvents.size >= 2) return;
+    if (polling || runningEvents.size >= 2 || Date.now() < backoffUntil) return;
     polling = true;
     try {
       const res = await collabClaimTaskBotEvent(deps.gateway.collabCtx()) as {
@@ -288,8 +290,12 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
         void processEvent(res.event);
       }
     } catch (error) {
-      if (error instanceof DoneBotGatewayError && (error.status === 401 || error.status === 403 || error.status === 404)) {
-        setActive(false);
+      if (error instanceof DoneBotGatewayError) {
+        if (error.status === 429) {
+          backoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+        } else if (error.status === 401 || error.status === 403 || error.status === 404) {
+          setActive(false);
+        }
       }
     } finally {
       polling = false;

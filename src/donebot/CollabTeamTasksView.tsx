@@ -22,7 +22,7 @@ import type {
   DoneBotTeamTaskStatus,
 } from "../../shared/donebot-collab";
 import type { DoneBotTeamIdentity, DoneBotTeamMember } from "../../shared/donebot-teams";
-import { refreshCollabOverview, teamTaskCountsFor } from "./collab-store";
+import { refreshCollabTaskCounts, teamTaskCountsFor } from "./collab-store";
 import {
   cleanError,
   COLLAB_BUTTON,
@@ -45,7 +45,7 @@ type TaskScopeFilter = "all" | "mine" | "review" | "created";
 type TaskStatusFilter = "all" | "open" | "review_queue" | DoneBotTeamTaskStatus;
 type TaskLayoutMode = "list" | "board";
 
-const AUTO_REFRESH_MS = 3_500;
+const AUTO_REFRESH_MS = 5_000;
 
 const BOARD_COLUMNS: ReadonlyArray<{
   id: string;
@@ -157,15 +157,17 @@ export function CollabTeamTasksView({
   }, [loadTasks, refreshKey]);
 
   useEffect(() => {
+    let ticks = 0;
     const timer = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      ticks += 1;
       void loadTasks({ silent: true });
-      void refreshCollabOverview({ silent: true });
+      if (ticks % 3 === 0) void refreshCollabTaskCounts();
     }, AUTO_REFRESH_MS);
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         void loadTasks({ silent: true });
-        void refreshCollabOverview({ silent: true });
+        void refreshCollabTaskCounts();
       }
     };
     document.addEventListener("visibilitychange", onVisible);

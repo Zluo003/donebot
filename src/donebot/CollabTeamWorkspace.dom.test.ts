@@ -452,13 +452,16 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
       await act(async () => { await Promise.resolve(); });
       expect(requestedTaskUrls.some(u => u.includes("status=ready_for_review"))).toBe(true);
 
-      // Simulate backend Bot finishing first-pass review -> auto-refresh picks up ready_for_review!
+      // Simulate backend Bot finishing first-pass review -> auto-refresh picks up ready_for_review without hammering /overview!
+      const overviewCallsBefore = fixture.api.mock.calls.filter(([p]) => p === "/api/donebot/collab/overview").length;
       currentDetail = makeTaskDetail("ready_for_review");
       currentTasks = [currentDetail.task];
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(3_600);
+        await vi.advanceTimersByTimeAsync(5_100);
       });
       expect(host!.textContent).toContain("初审通过，待你拍板");
+      const overviewCallsAfter = fixture.api.mock.calls.filter(([p]) => p === "/api/donebot/collab/overview").length;
+      expect(overviewCallsAfter).toBe(overviewCallsBefore);
 
       // Open task detail -> shows Bot review opinion card and allows human approve.
       const card = host!.querySelector<HTMLButtonElement>(`[data-collab-task-card="${taskId1}"]`);

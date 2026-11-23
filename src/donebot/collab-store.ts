@@ -100,9 +100,13 @@ let currentAccountKey: string | null = null;
 let uiActiveView: AppState["activeView"] = "chat";
 let inFlight: Promise<CollabOverview | null> | null = null;
 let requestGeneration = 0;
+let lastOverviewSuccessAt = 0;
+let silentBackoffUntil = 0;
 let notifiedAccount = "";
 let notifiedIds = new Set<string>();
 const listeners = new Set<() => void>();
+
+const RATE_LIMIT_BACKOFF_MS = 25_000;
 
 function emit() {
   for (const listener of listeners) listener();
@@ -355,6 +359,8 @@ export function syncCollabAccount(accountKey: string | null) {
   currentAccountKey = accountKey;
   requestGeneration++;
   inFlight = null;
+  lastOverviewSuccessAt = 0;
+  silentBackoffUntil = 0;
   notifiedAccount = "";
   notifiedIds = new Set();
   state = { ...initialState(), modalOpen: state.modalOpen };
@@ -479,8 +485,28 @@ export function dismissCollabToast(id: string) {
   }
 }
 
-export async function refreshCollabOverview(opts: { silent?: boolean } = {}): Promise<CollabOverview | null> {
+export async function refreshCollabTaskCounts(): Promise<void> {
+  if (!state.overview) return;
+  if (Date.now() < silentBackoffUntil) return;
+  try {
+    const counts = await api<DoneBotTeamTaskCounts[]>("/api/donebot/collab/tasks/counts");
+    if (!Array.isArray(counts) || !state.overview) return;
+    setState({ overview: { ...state.overview, team_task_counts: counts } });
+  } catch (cause) {
+    const msg = cleanError(cause, "");
+    if (msg.includes("Too many requests") || msg.includes("过于频繁") || msg.includes("429")) {
+      silentBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+    }
+  }
+}
+
+export async function refreshCollabOverview(opts: { silent?: boolean; minGapMs?: number } = {}): Promise<CollabOverview | null> {
   if (inFlight) return inFlight;
+  const now = Date.now();
+  if (opts.silent && opts.minGapMs && state.overview) {
+    if (now < silentBackoffUntil) return state.overview;
+    if (now - lastOverviewSuccessAt < opts.minGapMs) return state.overview;
+  }
   const mine = ++requestGeneration;
   if (!opts.silent) {
     setState({ refreshing: true });
@@ -490,6 +516,8 @@ export async function refreshCollabOverview(opts: { silent?: boolean } = {}): Pr
     try {
       const next = await api<CollabOverview>("/api/donebot/collab/overview");
       if (requestGeneration !== mine) return null;
+      lastOverviewSuccessAt = Date.now();
+      silentBackoffUntil = 0;
       const patch: Partial<CollabStoreState> = {
         overview: next,
         loaded: true,
@@ -540,10 +568,14 @@ export async function refreshCollabOverview(opts: { silent?: boolean } = {}): Pr
       return next;
     } catch (cause) {
       if (requestGeneration !== mine) return null;
+      const errMsg = cleanError(cause, "无法加载远程协作数据，请确认已登录并升级网关。");
+      if (errMsg.includes("Too many requests") || errMsg.includes("过于频繁") || errMsg.includes("429")) {
+        silentBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+      }
       setState({
         loaded: true,
         refreshing: false,
-        ...(opts.silent && state.overview ? {} : { error: cleanError(cause, "无法加载远程协作数据，请确认已登录并升级网关。") }),
+        ...(opts.silent && state.overview ? {} : { error: errMsg }),
       });
       return null;
     } finally {
@@ -576,6 +608,8 @@ export function useCollabPendingCount(): number {
 export function resetCollabStore() {
   requestGeneration++;
   inFlight = null;
+  lastOverviewSuccessAt = 0;
+  silentBackoffUntil = 0;
   currentAccountKey = null;
   uiActiveView = "chat";
   notifiedAccount = "";

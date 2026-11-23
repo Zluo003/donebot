@@ -6,7 +6,7 @@ import { dispatchRoutes } from "../routes/table.ts";
 import { createDoneBotAccountRoutes } from "./routes.ts";
 import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./collab-routes.ts";
 import { teamIdentity, teamMembers } from "./teams.ts";
-import type { DoneBotGateway } from "./gateway.ts";
+import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import type { BotRecord } from "../store.ts";
 
 function fakeRes() {
@@ -455,5 +455,44 @@ describe("DoneBot collab routes and bot tools", () => {
       remark: "设计师小罗",
       avatar_url: "data:image/jpeg;base64,/9j/4AAQ",
     }));
+  });
+
+  it("propagates HTTP 429 on workspaceSnapshot instead of silently wiping teams to []", async () => {
+    const gateway = {
+      collabIdentity: vi.fn(async () => ({ account_id: "101", installation_id: "inst-1", device_name: "Mac", email: "owner@example.invalid" })),
+      collabUserProfile: vi.fn(async () => ({ username: "老罗", avatar_url: "" })),
+      collabFriends: vi.fn(async () => ({ friends: [], incoming_requests: [], outgoing_requests: [] })),
+      collabFolders: vi.fn(async () => ({ owned: [], shared_with_me: [] })),
+      collabBots: vi.fn(async () => ({ owned: [], shared_with_me: [] })),
+      workspaceSnapshot: vi.fn(async () => {
+        throw new DoneBotGatewayError(429, "collab_request_failed", "请求过于频繁，请稍候几秒再试。");
+      }),
+      collabIncomingTeamInvitations: vi.fn(async () => []),
+      collabChatSummaries: vi.fn(async () => []),
+    } as unknown as DoneBotGateway;
+
+    const handler = createDoneBotCollabRoutes({
+      gateway,
+      store: { bots: [], bot: () => null },
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+      defaultSelection: async () => ({ provider: "donebot", model: "test" } as never),
+      packageImportDeps: () => ({} as never),
+      broadcast: () => {},
+      publicBot: bot => bot,
+    });
+
+    const out = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: out.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/overview"),
+      path: "/api/donebot/collab/overview",
+      method: "GET",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: out.json,
+      readBody: async () => ({}),
+    });
+
+    expect(out.status).toBe(429);
   });
 });

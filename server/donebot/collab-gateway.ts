@@ -13,6 +13,7 @@ export interface CollabGatewayTransport {
 export const COLLAB_TRANSFER_TIMEOUT_MS = 15 * 60_000;
 
 function extractGatewayError(value: unknown, status: number, fallback: string): string {
+  if (status === 429) return "请求过于频繁，请稍候几秒再试。";
   if (value && typeof value === "object") {
     const rec = value as { message?: unknown; error?: unknown };
     if (typeof rec.message === "string" && rec.message.trim()) return rec.message.trim();

@@ -44,7 +44,9 @@ export interface CollabChatBotWorkerDeps {
   generateBotText?: (botId: string, prompt: string, signal?: AbortSignal) => Promise<string | undefined>;
 }
 
-const POLL_MS = 3_000;
+const POLL_MS = 5_000;
+const RATE_LIMIT_BACKOFF_MS = 30_000;
+const IDENTITY_CACHE_TTL_MS = 5 * 60_000;
 const TURN_WAIT_MS = 120_000;
 const TURN_CHECK_MS = 250;
 
@@ -256,6 +258,8 @@ export function formatChatPrompt(
 export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
   let active = false;
   let polling = false;
+  let backoffUntil = 0;
+  let cachedIdentity: { account_id: string; installation_id: string; email: string; fetchedAt: number } | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
   const runningInvocations = new Set<string>();
   const syncedAppearanceSigs = new Map<string, string>();
@@ -391,10 +395,16 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
   }
 
   async function tick(): Promise<void> {
-    if (polling || runningInvocations.size >= 3) return;
+    if (polling || runningInvocations.size >= 3 || Date.now() < backoffUntil) return;
     polling = true;
     try {
-      const identity = await deps.gateway.collabIdentity();
+      const now = Date.now();
+      const identity = cachedIdentity && now - cachedIdentity.fetchedAt < IDENTITY_CACHE_TTL_MS
+        ? cachedIdentity
+        : await deps.gateway.collabIdentity().then(id => {
+          cachedIdentity = { ...id, fetchedAt: Date.now() };
+          return cachedIdentity;
+        });
       const res = await collabClaimBotInvocation(deps.gateway.collabCtx(), identity.installation_id) as {
         invocation?: DoneBotClaimedBotInvocation | null;
       };
@@ -402,8 +412,13 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
         void processInvocation(res.invocation, identity);
       }
     } catch (error) {
-      if (error instanceof DoneBotGatewayError && (error.status === 401 || error.status === 403 || error.status === 404)) {
-        setActive(false);
+      if (error instanceof DoneBotGatewayError) {
+        if (error.status === 429) {
+          backoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+        } else if (error.status === 401 || error.status === 403 || error.status === 404) {
+          cachedIdentity = null;
+          setActive(false);
+        }
       }
     } finally {
       polling = false;

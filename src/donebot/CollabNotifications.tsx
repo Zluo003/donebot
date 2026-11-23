@@ -17,7 +17,7 @@ import { COLLAB_BUTTON } from "./collab-types";
 import { CollabAvatar } from "./CollabAvatar";
 import { CollabDialogsHost } from "./CollabDialogs";
 
-const POLL_INTERVAL_MS = 10_000;
+const POLL_INTERVAL_MS = 30_000;
 
 function supportsPopoverApi(): boolean {
   return typeof HTMLElement !== "undefined" && Object.hasOwn(HTMLElement.prototype, "popover");
@@ -49,11 +49,12 @@ export function CollabSyncHost() {
     void refreshCollabOverview({ silent: true });
 
     const poll = () => {
-      void refreshCollabOverview({ silent: true });
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void refreshCollabOverview({ silent: true, minGapMs: 8_000 });
     };
     const refreshOnVisible = () => {
       if (typeof document === "undefined" || document.visibilityState === "visible") {
-        void refreshCollabOverview({ silent: true });
+        void refreshCollabOverview({ silent: true, minGapMs: 8_000 });
       }
     };
 

@@ -228,6 +228,21 @@ function buildBotSharePayload(deps: DoneBotCollabRouteDeps, bot: BotRecord, auth
   };
 }
 
+function allowUnsupportedOnly<T>(fallback: T) {
+  return (error: unknown): T => {
+    if (error instanceof DoneBotGatewayError && (error.status === 404 || error.status === 501)) {
+      return fallback;
+    }
+    throw error;
+  };
+}
+
+function rethrowIfRateLimited(error: unknown): void {
+  if (error instanceof DoneBotGatewayError && (error.status === 429 || error.status >= 500)) {
+    throw error;
+  }
+}
+
 export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHandler {
   const { gateway } = deps;
   const botWorker = createCollabChatBotWorker({
@@ -462,15 +477,15 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         const ctx = typeof gateway.collabCtx === "function" ? gateway.collabCtx() : null;
         const [identity, profile, friends, folders, bots, workspaces, incomingInvitations, chatSummaries, groups, taskCounts] = await Promise.all([
           gateway.collabIdentity(),
-          gateway.collabUserProfile?.().catch(() => null) ?? Promise.resolve(null),
+          gateway.collabUserProfile?.().catch(err => { rethrowIfRateLimited(err); return null; }) ?? Promise.resolve(null),
           gateway.collabFriends(),
           gateway.collabFolders(),
           gateway.collabBots(),
-          gateway.workspaceSnapshot().catch(() => ({ account_id: "", protocol: "donebot.teams.v1", capabilities: [], workspaces: [] })),
-          gateway.collabIncomingTeamInvitations().catch(() => []),
-          gateway.collabChatSummaries?.().catch(() => []) ?? Promise.resolve([]),
-          ctx ? collabListGroups(ctx).catch(() => []) : Promise.resolve([]),
-          ctx ? collabTeamTaskCounts(ctx).catch(() => []) : Promise.resolve([]),
+          gateway.workspaceSnapshot().catch(allowUnsupportedOnly({ account_id: "", protocol: "donebot.teams.v1", capabilities: [], workspaces: [] })),
+          gateway.collabIncomingTeamInvitations().catch(allowUnsupportedOnly([])),
+          gateway.collabChatSummaries?.().catch(allowUnsupportedOnly([])) ?? Promise.resolve([]),
+          ctx ? collabListGroups(ctx).catch(allowUnsupportedOnly([])) : Promise.resolve([]),
+          ctx ? collabTeamTaskCounts(ctx).catch(allowUnsupportedOnly([])) : Promise.resolve([]),
         ]);
         const nickname = typeof profile?.username === "string" ? profile.username.trim() : "";
         const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
@@ -505,7 +520,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           ...teamList.map(async team => {
             try {
               teamMembers[team.id] = await gateway.teamMembers(team.id);
-            } catch {
+            } catch (err) {
+              rethrowIfRateLimited(err);
               teamMembers[team.id] = [];
             }
             if (ctx) {
@@ -515,7 +531,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
                     const list = await collabListChatBots(ctx, "team", team.id) as Array<{ owner_user_id?: number }>;
                     chatBots[`team:${team.id}`] = Array.isArray(list) ? list : [];
                     if (Array.isArray(list) && list.some(b => b.owner_user_id === myId)) hasOwnedChatBots = true;
-                  } catch {
+                  } catch (err) {
+                    rethrowIfRateLimited(err);
                     chatBots[`team:${team.id}`] = [];
                   }
                 })(),
@@ -523,7 +540,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
                   try {
                     const list = await collabListTeamChannels(ctx, team.id, false);
                     teamChannels[team.id] = Array.isArray(list) ? list : [];
-                  } catch {
+                  } catch (err) {
+                    rethrowIfRateLimited(err);
                     teamChannels[team.id] = [];
                   }
                 })(),
@@ -531,7 +549,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
                   try {
                     const list = await collabListTeamMemberProfiles(ctx, team.id);
                     teamMemberProfiles[team.id] = Array.isArray(list) ? list : [];
-                  } catch {
+                  } catch (err) {
+                    rethrowIfRateLimited(err);
                     teamMemberProfiles[team.id] = [];
                   }
                 })(),
@@ -544,7 +563,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
                 const list = await collabListChatBots(ctx, "group", group.id) as Array<{ owner_user_id?: number }>;
                 chatBots[`group:${group.id}`] = Array.isArray(list) ? list : [];
                 if (Array.isArray(list) && list.some(b => b.owner_user_id === myId)) hasOwnedChatBots = true;
-              } catch {
+              } catch (err) {
+                rethrowIfRateLimited(err);
                 chatBots[`group:${group.id}`] = [];
               }
             }

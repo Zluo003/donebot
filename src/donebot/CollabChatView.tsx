@@ -78,8 +78,8 @@ import {
   type CollabMediaPreviewTarget,
 } from "./CollabMediaPreview";
 
-const POLL_MS = 3_000;
-const FAST_POLL_MS = 1_500;
+const POLL_MS = 4_000;
+const FAST_POLL_MS = 2_000;
 
 function ChatFileIcon({ name }: { name: string }) {
   const ext = extOf(name);

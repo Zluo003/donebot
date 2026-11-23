@@ -22,6 +22,7 @@ import {
   collabUploadTeamTaskFile,
 } from "./collab-gateway.ts";
 import { listTaskBindings, removeTaskBinding, saveTaskBinding } from "./collab-task-bindings.ts";
+import type { CollabTaskDispatchInput, CollabTaskDispatchResult } from "./collab-task-dispatch.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -140,6 +141,12 @@ const saveBindingSchema = z.object({
   taskTitle: z.string().max(160).default(""),
   botId: z.string().trim().min(1).max(128),
   threadId: z.string().trim().min(1).max(128),
+}).strict();
+
+const dispatchViaBotSchema = z.object({
+  prompt: z.string().trim().min(1).max(4000),
+  channel_id: z.string().max(64).optional(),
+  source_quote: z.string().max(1000).optional(),
 }).strict();
 
 export interface CollabStreamHelpers {
@@ -333,8 +340,20 @@ export async function handleCollabWorkspaceWrite(opts: {
   res: ServerResponse;
   json: (res: ServerResponse, status: number, value: unknown) => void;
   kickTaskWorker?: () => void;
+  dispatchViaChiefBot?: (teamId: string, input: CollabTaskDispatchInput) => Promise<CollabTaskDispatchResult>;
 }): Promise<typeof PASS | undefined> {
-  const { method, reqPath, body, gateway, res, json, kickTaskWorker } = opts;
+  const { method, reqPath, body, gateway, res, json, kickTaskWorker, dispatchViaChiefBot } = opts;
+
+  const taskDispatchPost = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/tasks\/dispatch-via-bot$/);
+  if (method === "POST" && taskDispatchPost) {
+    if (!dispatchViaChiefBot) {
+      throw new DoneBotGatewayError(503, "dispatch_unavailable", "本机主协调助手调度未就绪。");
+    }
+    const parsed = dispatchViaBotSchema.safeParse(body);
+    if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "请输入 1-4000 字的任务派发需求。");
+    json(res, 200, await dispatchViaChiefBot(taskDispatchPost[1]!, parsed.data));
+    return undefined;
+  }
 
   if (method === "POST" && reqPath === "/api/donebot/collab/task-bindings") {
     const parsed = saveBindingSchema.safeParse(body);

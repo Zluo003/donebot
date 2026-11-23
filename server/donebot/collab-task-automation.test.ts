@@ -11,6 +11,7 @@ import {
   saveTaskBinding,
 } from "./collab-task-bindings.ts";
 import { handleDoneBotCollabTaskInternal, registerCollabTaskRuntimeHooks } from "./collab-task-internal.ts";
+import { dispatchTeamTaskViaChiefBot } from "./collab-task-dispatch.ts";
 import { buildTaskEventPrompt, createCollabTaskWorker } from "./collab-task-worker.ts";
 import type { DoneBotGateway } from "./gateway.ts";
 import type { BotRecord, Message } from "../store.ts";
@@ -310,5 +311,58 @@ describe("team task bot automation", () => {
     expect(startTurn.mock.calls[0]![2]).toMatchObject({ threadId: "thread-art-99", unattended: true });
     expect(completed).toHaveLength(1);
     expect(completed[0]!.body).toContain('"status":"done"');
+  });
+
+  it("dispatches natural-language team task request directly through the Chief Bot", async () => {
+    const chiefBot = { id: "bot-chief", name: "多宝", threadId: "t-chief", chiefOfStaff: true, hidden: false } as BotRecord;
+    const helperBot = { id: "bot-art", name: "美术助手", threadId: "t-art", chiefOfStaff: false, hidden: false } as BotRecord;
+    const messages = new Map<string, Message[]>();
+    const kicked = vi.fn();
+    const startTurn = vi.fn(async (_botId, _text, opts) => {
+      opts.onSettled?.({ ok: true, text: "已为小王创建任务「第3集定妆图」并设置 3 条验收清单。" });
+    });
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/channels")) return mockJsonResponse([{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", name: "分镜组", is_private: false }]);
+      if (url.endsWith("/member-profiles")) return mockJsonResponse([{ user_id: 202, job_title: "分镜美术" }]);
+      return mockJsonResponse({});
+    }) as unknown as typeof fetch;
+
+    const gateway = makeGateway(fetchMock);
+    (gateway as unknown as { collabIdentity: () => Promise<{ account_id: string; email: string }> }).collabIdentity = async () => ({
+      account_id: "101",
+      email: "boss@example.invalid",
+    });
+
+    const result = await dispatchTeamTaskViaChiefBot(
+      {
+        gateway,
+        store: {
+          bots: [helperBot, chiefBot],
+          bot: id => [helperBot, chiefBot].find(b => b.id === id) ?? null,
+          appendMessage: (tid, msg) => {
+            const entry = { ...msg, id: `m-${Date.now()}`, at: Date.now() } as Message;
+            messages.set(tid, [...(messages.get(tid) ?? []), entry]);
+            return entry;
+          },
+          messagesFor: tid => messages.get(tid) ?? [],
+        },
+        startTurn,
+        threadBusy: () => false,
+        kickTaskWorker: kicked,
+      },
+      teamId,
+      { prompt: "让小王明天前做 3 张女主定妆图" },
+    );
+
+    expect(result.bot_id).toBe("bot-chief");
+    expect(result.bot_name).toBe("多宝");
+    expect(result.reply).toContain("已为小王创建任务");
+    expect(startTurn).toHaveBeenCalledTimes(1);
+    expect(startTurn.mock.calls[0]![0]).toBe("bot-chief");
+    expect(startTurn.mock.calls[0]![1]).toContain("分镜美术");
+    expect(startTurn.mock.calls[0]![1]).toContain("collab_create_team_task");
+    expect(kicked).toHaveBeenCalledTimes(1);
   });
 });

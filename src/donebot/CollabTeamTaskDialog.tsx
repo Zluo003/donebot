@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, Bot, Check, Loader2, Quote, X } from "lucide-react";
+import { AlertCircle, Bot, Check, FileEdit, Loader2, Quote, Sparkles, X } from "lucide-react";
 import { api } from "@/state/api";
 import { cn } from "@/lib/cn";
 import type {
@@ -18,6 +18,7 @@ import {
   toDateInputValue,
 } from "./collab-types";
 import { CollabSelect, type CollabSelectOption } from "./CollabSelect";
+import { CollabTeamTaskDispatchBar } from "./CollabTeamTaskDispatchBar";
 
 export interface TaskFromMessageSeed {
   channelId: string;
@@ -39,6 +40,7 @@ const MAX_REVISIONS_OPTIONS: readonly CollabSelectOption[] = [
 
 export function CollabTeamTaskDialog({
   teamId,
+  teamName = "",
   myUserId,
   channels,
   members,
@@ -48,8 +50,10 @@ export function CollabTeamTaskDialog({
   seedFromMessage,
   onClose,
   onSaved,
+  onAiDispatched,
 }: {
   teamId: string;
+  teamName?: string;
   myUserId: number;
   channels: DoneBotTeamChannel[];
   members: DoneBotTeamMember[];
@@ -59,8 +63,10 @@ export function CollabTeamTaskDialog({
   seedFromMessage?: TaskFromMessageSeed | null;
   onClose: () => void;
   onSaved: (task: DoneBotTeamTask) => Promise<void> | void;
+  onAiDispatched?: () => Promise<void> | void;
 }) {
   const activeChannels = useMemo(() => channels.filter(c => !c.archived_at), [channels]);
+  const [createMode, setCreateMode] = useState<"ai" | "manual">(editingTask || seedFromMessage ? "manual" : "ai");
   const [title, setTitle] = useState(editingTask?.title ?? seedFromMessage?.defaultTitle ?? "");
   const [description, setDescription] = useState(editingTask?.description ?? "");
   const [criteriaText, setCriteriaText] = useState((editingTask?.acceptance_criteria ?? []).join("\n"));
@@ -203,27 +209,81 @@ export function CollabTeamTaskDialog({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={editingTask ? "编辑团队任务" : "新建团队任务"}
+      aria-label={editingTask ? "编辑团队任务" : "派发团队任务"}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
       onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}
     >
-      <form
-        onSubmit={e => void submit(e)}
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-menu text-ink shadow-2xl ring-1 ring-ink/12"
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-ink/[0.07] px-5 py-3.5">
-          <h2 className="text-[15.5px] font-semibold text-ink">
-            {editingTask ? "编辑任务" : seedFromMessage ? "从聊天消息转为团队任务" : "新建团队任务"}
-          </h2>
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-menu text-ink shadow-2xl ring-1 ring-ink/12">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-ink/[0.07] px-5 py-3.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h2 className="shrink-0 text-[15.5px] font-semibold text-ink">
+              {editingTask ? "编辑任务" : seedFromMessage ? "从聊天消息转为任务" : "派发团队任务"}
+            </h2>
+            {!editingTask && (
+              <div
+                role="tablist"
+                aria-label="派发方式"
+                className="flex items-center rounded-full bg-ink/[0.06] p-0.5 ring-1 ring-inset ring-ink/[0.08]"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={createMode === "ai"}
+                  data-collab-task-mode="ai"
+                  onClick={() => setCreateMode("ai")}
+                  className={cn(
+                    "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11.5px] font-medium transition-colors",
+                    createMode === "ai"
+                      ? "bg-composer text-accent-text shadow-xs"
+                      : "text-ink-secondary hover:text-ink",
+                  )}
+                >
+                  <Sparkles size={11.5} aria-hidden="true" />
+                  <span>主协调助手派发</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={createMode === "manual"}
+                  data-collab-task-mode="manual"
+                  onClick={() => setCreateMode("manual")}
+                  className={cn(
+                    "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11.5px] font-medium transition-colors",
+                    createMode === "manual"
+                      ? "bg-composer text-ink shadow-xs"
+                      : "text-ink-secondary hover:text-ink",
+                  )}
+                >
+                  <FileEdit size={11} aria-hidden="true" />
+                  <span>手动填表</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             aria-label="关闭"
             onClick={onClose}
-            className="flex size-7 items-center justify-center rounded-full text-ink-secondary hover:bg-ink/[0.08] hover:text-ink"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-ink/[0.08] hover:text-ink"
           >
             <X size={15} aria-hidden="true" />
           </button>
         </div>
+
+        {!editingTask && createMode === "ai" ? (
+          <CollabTeamTaskDispatchBar
+            teamId={teamId}
+            teamName={teamName}
+            channelId={channelId || undefined}
+            members={members}
+            jobTitles={jobTitles}
+            sourceQuote={seedFromMessage?.quote}
+            mode="dialog"
+            onDispatched={async () => { await onAiDispatched?.(); }}
+            onCloseDialog={onClose}
+          />
+        ) : (
+          <form onSubmit={e => void submit(e)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
 
         <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
           {error && (
@@ -448,7 +508,9 @@ export function CollabTeamTaskDialog({
             {editingTask ? "保存修改" : "创建任务"}
           </button>
         </div>
-      </form>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

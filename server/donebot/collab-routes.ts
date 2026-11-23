@@ -16,6 +16,7 @@ import type { BotRecord, Store } from "../store.ts";
 import { boundedResponseText } from "./bounded-response.ts";
 import { buildCollabChatBotAppearance, chatBotNeedsSync, type CollabChatBotAppearance } from "./collab-bot-avatar.ts";
 import { createCollabChatBotWorker, type CollabBotTurnOptions } from "./collab-chat-bots.ts";
+import { dispatchTeamTaskViaChiefBot } from "./collab-task-dispatch.ts";
 import { registerCollabTaskRuntimeHooks } from "./collab-task-internal.ts";
 import { createCollabTaskWorker } from "./collab-task-worker.ts";
 import {
@@ -769,6 +770,11 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         res,
         json,
         kickTaskWorker: () => taskWorker.kick(),
+        dispatchViaChiefBot: (teamId, input) => dispatchTeamTaskViaChiefBot(
+          { gateway, store: deps.store, startTurn: deps.startTurn, threadBusy: deps.threadBusy, kickTaskWorker: () => taskWorker.kick() },
+          teamId,
+          input,
+        ),
       });
       if (wsWriteHandled !== PASS) return wsWriteHandled;
 

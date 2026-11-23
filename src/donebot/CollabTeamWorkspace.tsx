@@ -250,6 +250,7 @@ export function CollabTeamWorkspace({
       {taskDialog.open && (
         <CollabTeamTaskDialog
           teamId={team.id}
+          teamName={team.name}
           myUserId={myUserId}
           channels={channels}
           members={members}
@@ -258,6 +259,10 @@ export function CollabTeamWorkspace({
           defaultChannelId={taskDialog.defaultChannelId ?? activeChannel?.id ?? ""}
           seedFromMessage={taskDialog.seed}
           onClose={() => setTaskDialog({ open: false })}
+          onAiDispatched={async () => {
+            setTasksRefreshKey(k => k + 1);
+            await onReload();
+          }}
           onSaved={async saved => {
             setTasksRefreshKey(k => k + 1);
             await onReload();

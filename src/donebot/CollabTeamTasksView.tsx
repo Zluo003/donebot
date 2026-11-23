@@ -11,8 +11,8 @@ import {
   Loader2,
   MessageSquare,
   Paperclip,
-  Plus,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { api } from "@/state/api";
 import { cn } from "@/lib/cn";
@@ -39,6 +39,7 @@ import {
 import { CollabAvatar } from "./CollabAvatar";
 import { CollabSelect, type CollabSelectOption } from "./CollabSelect";
 import { CollabTeamTaskDetailPanel } from "./CollabTeamTaskDetail";
+import { CollabTeamTaskDispatchBar } from "./CollabTeamTaskDispatchBar";
 
 type TaskScopeFilter = "all" | "mine" | "review" | "created";
 type TaskStatusFilter = "all" | "open" | "review_queue" | DoneBotTeamTaskStatus;
@@ -411,10 +412,21 @@ export function CollabTeamTasksView({
               onClick={() => onOpenCreate(channelFilter || undefined)}
               className={`${COLLAB_BUTTON} ui-button-primary h-7 px-3 text-[12px]`}
             >
-              <Plus size={13} aria-hidden="true" />新建任务
+              <Sparkles size={12.5} aria-hidden="true" />派发任务
             </button>
           </div>
         </div>
+
+        {/* One-line Chief Bot quick task dispatch bar */}
+        <CollabTeamTaskDispatchBar
+          teamId={team.id}
+          teamName={team.name}
+          channelId={channelFilter || undefined}
+          members={members}
+          jobTitles={jobTitles}
+          mode="inline"
+          onDispatched={handleMutated}
+        />
 
         {/* Main list / board */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -438,7 +450,7 @@ export function CollabTeamTasksView({
               <div>
                 <h3 className="text-[15px] font-semibold text-ink">当前视图暂无任务</h3>
                 <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-ink-tertiary">
-                  新建任务并指派给真人负责人与验收人；也可以在频道聊天里把任意一条消息一键「转为任务」。
+                  直接在上方用一句话告诉主协调助手自动派发任务，也可以在频道聊天里把任意一条消息一键「转为任务」。
                 </p>
               </div>
               <button
@@ -446,7 +458,7 @@ export function CollabTeamTasksView({
                 onClick={() => onOpenCreate(channelFilter || undefined)}
                 className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[12.5px]`}
               >
-                <Plus size={13.5} aria-hidden="true" />新建第一个任务
+                <Sparkles size={13.5} aria-hidden="true" />让助手派发第一个任务
               </button>
             </div>
           ) : layout === "list" ? (

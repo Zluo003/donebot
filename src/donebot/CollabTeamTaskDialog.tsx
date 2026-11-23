@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, Check, Loader2, Quote, X } from "lucide-react";
+import { AlertCircle, Bot, Check, Loader2, Quote, X } from "lucide-react";
 import { api } from "@/state/api";
 import { cn } from "@/lib/cn";
 import type {
@@ -13,9 +13,11 @@ import {
   COLLAB_BUTTON,
   COLLAB_INPUT,
   displayPersonName,
+  TASK_PRIORITY_DOT,
   TASK_PRIORITY_LABEL,
   toDateInputValue,
 } from "./collab-types";
+import { CollabSelect, type CollabSelectOption } from "./CollabSelect";
 
 export interface TaskFromMessageSeed {
   channelId: string;
@@ -27,6 +29,13 @@ export interface TaskFromMessageSeed {
 }
 
 const PRIORITIES: DoneBotTeamTaskPriority[] = ["low", "normal", "high", "urgent"];
+
+const MAX_REVISIONS_OPTIONS: readonly CollabSelectOption[] = [
+  { value: "2", label: "最多自动驳回 2 轮（推荐）" },
+  { value: "1", label: "最多自动驳回 1 轮" },
+  { value: "3", label: "最多自动驳回 3 轮" },
+  { value: "0", label: "仅附审阅意见，不自动驳回" },
+];
 
 export function CollabTeamTaskDialog({
   teamId,
@@ -54,6 +63,7 @@ export function CollabTeamTaskDialog({
   const activeChannels = useMemo(() => channels.filter(c => !c.archived_at), [channels]);
   const [title, setTitle] = useState(editingTask?.title ?? seedFromMessage?.defaultTitle ?? "");
   const [description, setDescription] = useState(editingTask?.description ?? "");
+  const [criteriaText, setCriteriaText] = useState((editingTask?.acceptance_criteria ?? []).join("\n"));
   const [channelId, setChannelId] = useState(editingTask?.channel_id ?? seedFromMessage?.channelId ?? defaultChannelId);
   const [priority, setPriority] = useState<DoneBotTeamTaskPriority>(editingTask?.priority ?? "normal");
   const [assigneeId, setAssigneeId] = useState<string>(editingTask?.assignee_id ? String(editingTask.assignee_id) : "");
@@ -64,6 +74,9 @@ export function CollabTeamTaskDialog({
   );
   const [collaboratorIds, setCollaboratorIds] = useState<number[]>(editingTask?.collaborator_ids ?? []);
   const [dueDate, setDueDate] = useState<string>(toDateInputValue(editingTask?.due_at));
+  const [autoReviewEnabled, setAutoReviewEnabled] = useState(editingTask?.auto_review_enabled ?? true);
+  const [maxAutoRevisions, setMaxAutoRevisions] = useState<string>(String(editingTask?.max_auto_revisions ?? 2));
+  const [assigneeAutoResubmit, setAssigneeAutoResubmit] = useState(editingTask?.assignee_auto_resubmit ?? true);
   const [notifyChannel, setNotifyChannel] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -78,11 +91,37 @@ export function CollabTeamTaskDialog({
     return members.filter(m => allowed.has(m.user_id));
   }, [members, selectedChannel]);
 
-  const memberOptionLabel = (m: DoneBotTeamMember) => {
-    const name = displayPersonName(m);
-    const role = jobTitles[m.user_id];
-    return role ? `${name}（${role}）` : name;
-  };
+  const assigneeOptions = useMemo<CollabSelectOption[]>(() => [
+    { value: "", label: "暂不指定（待认领）" },
+    ...eligibleMembers.map(m => ({
+      value: String(m.user_id),
+      label: displayPersonName(m),
+      hint: jobTitles[m.user_id],
+    })),
+  ], [eligibleMembers, jobTitles]);
+
+  const reviewerOptions = useMemo<CollabSelectOption[]>(() => [
+    { value: "", label: "团队任意管理员可验收" },
+    ...eligibleMembers.map(m => ({
+      value: String(m.user_id),
+      label: displayPersonName(m),
+      hint: jobTitles[m.user_id],
+    })),
+  ], [eligibleMembers, jobTitles]);
+
+  const channelOptions = useMemo<CollabSelectOption[]>(() => [
+    { value: "", label: "团队通用" },
+    ...activeChannels.map(ch => ({
+      value: ch.id,
+      label: ch.is_private ? `🔒 ${ch.name}` : `#${ch.name}`,
+    })),
+  ], [activeChannels]);
+
+  const priorityOptions = useMemo<CollabSelectOption[]>(() => PRIORITIES.map(p => ({
+    value: p,
+    label: TASK_PRIORITY_LABEL[p],
+    dotClass: TASK_PRIORITY_DOT[p],
+  })), []);
 
   const toggleCollaborator = (uid: number) => {
     setCollaboratorIds(prev => (prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]));
@@ -101,6 +140,12 @@ export function CollabTeamTaskDialog({
       const cleanCollaborators = collaboratorIds.filter(
         uid => eligibleIds.has(uid) && uid !== nextAssignee,
       );
+      const acceptanceCriteria = criteriaText
+        .split(/\r?\n/)
+        .map(line => line.replace(/^[-*•\d.)、\s]+/, "").trim())
+        .filter(Boolean)
+        .slice(0, 12);
+      const parsedMaxRevisions = Math.max(0, Math.min(5, Number(maxAutoRevisions) || 0));
 
       let saved: DoneBotTeamTask;
       if (editingTask) {
@@ -110,11 +155,15 @@ export function CollabTeamTaskDialog({
             channel_id: channelId,
             title: cleanTitle,
             description: description.trim(),
+            acceptance_criteria: acceptanceCriteria,
             priority,
             ...(nextAssignee ? { assignee_id: nextAssignee } : { clear_assignee: true }),
             ...(nextReviewer ? { reviewer_id: nextReviewer } : { clear_reviewer: true }),
             collaborator_ids: cleanCollaborators,
             ...(dueDate ? { due_at: dueDate } : { clear_due_at: true }),
+            auto_review_enabled: autoReviewEnabled,
+            max_auto_revisions: parsedMaxRevisions,
+            assignee_auto_resubmit: assigneeAutoResubmit,
           }),
         });
       } else {
@@ -124,11 +173,15 @@ export function CollabTeamTaskDialog({
             channel_id: channelId,
             title: cleanTitle,
             description: description.trim(),
+            acceptance_criteria: acceptanceCriteria,
             priority,
             assignee_id: nextAssignee,
             reviewer_id: nextReviewer,
             collaborator_ids: cleanCollaborators,
             due_at: dueDate || null,
+            auto_review_enabled: autoReviewEnabled,
+            max_auto_revisions: parsedMaxRevisions,
+            assignee_auto_resubmit: assigneeAutoResubmit,
             source_scope_type: seedFromMessage?.scopeType ?? "",
             source_target_id: seedFromMessage?.targetId ?? "",
             source_message_id: seedFromMessage?.messageId ?? null,
@@ -202,15 +255,31 @@ export function CollabTeamTaskDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="collab-task-desc" className="text-[12.5px] font-medium text-ink-secondary">任务要求与验收标准</label>
+            <label htmlFor="collab-task-desc" className="text-[12.5px] font-medium text-ink-secondary">任务背景与详细要求</label>
             <textarea
               id="collab-task-desc"
-              rows={3}
+              rows={2}
               data-collab-task-desc-input=""
               maxLength={8000}
-              placeholder="写清背景、尺寸/时长要求、参考风格或需要对齐的重点（可选）"
+              placeholder="写清背景、参考风格或需要对齐的重点（可选）"
               value={description}
               onChange={e => setDescription(e.target.value)}
+              className={`${COLLAB_INPUT} resize-y`}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="collab-task-criteria" className="text-[12.5px] font-medium text-ink-secondary">
+              客观验收清单（每行一条，供主协调助手自动初审对照）
+            </label>
+            <textarea
+              id="collab-task-criteria"
+              rows={3}
+              data-collab-task-criteria-input=""
+              maxLength={2000}
+              placeholder={"例如：\n共 3 张 9:16 竖图\n古风红衣女主服饰与发饰一致\n画面无文字乱码、无水印"}
+              value={criteriaText}
+              onChange={e => setCriteriaText(e.target.value)}
               className={`${COLLAB_INPUT} resize-y`}
             />
           </div>
@@ -218,67 +287,55 @@ export function CollabTeamTaskDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="collab-task-assignee" className="text-[12.5px] font-medium text-ink-secondary">负责人（真人）</label>
-              <select
+              <CollabSelect
                 id="collab-task-assignee"
-                data-collab-task-assignee-select=""
+                ariaLabel="负责人（真人）"
+                testAttr="data-collab-task-assignee-select"
                 value={assigneeId}
-                onChange={e => setAssigneeId(e.target.value)}
-                className={COLLAB_INPUT}
-              >
-                <option value="">暂不指定（待认领）</option>
-                {eligibleMembers.map(m => (
-                  <option key={m.user_id} value={String(m.user_id)}>{memberOptionLabel(m)}</option>
-                ))}
-              </select>
+                options={assigneeOptions}
+                onChange={setAssigneeId}
+                disabled={busy}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor="collab-task-reviewer" className="text-[12.5px] font-medium text-ink-secondary">验收人（拍板确认）</label>
-              <select
+              <CollabSelect
                 id="collab-task-reviewer"
-                data-collab-task-reviewer-select=""
+                ariaLabel="验收人（拍板确认）"
+                testAttr="data-collab-task-reviewer-select"
                 value={reviewerId}
-                onChange={e => setReviewerId(e.target.value)}
-                className={COLLAB_INPUT}
-              >
-                <option value="">团队任意管理员可验收</option>
-                {eligibleMembers.map(m => (
-                  <option key={m.user_id} value={String(m.user_id)}>{memberOptionLabel(m)}</option>
-                ))}
-              </select>
+                options={reviewerOptions}
+                onChange={setReviewerId}
+                disabled={busy}
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="collab-task-channel" className="text-[12.5px] font-medium text-ink-secondary">所属频道</label>
-              <select
+              <CollabSelect
                 id="collab-task-channel"
+                ariaLabel="所属频道"
                 value={channelId}
-                onChange={e => setChannelId(e.target.value)}
-                className={COLLAB_INPUT}
-              >
-                <option value="">团队通用</option>
-                {activeChannels.map(ch => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.is_private ? `🔒 ${ch.name}` : `#${ch.name}`}
-                  </option>
-                ))}
-              </select>
+                options={channelOptions}
+                onChange={setChannelId}
+                disabled={busy}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor="collab-task-priority" className="text-[12.5px] font-medium text-ink-secondary">优先级</label>
-              <select
+              <CollabSelect
                 id="collab-task-priority"
+                ariaLabel="优先级"
                 value={priority}
-                onChange={e => setPriority(e.target.value as DoneBotTeamTaskPriority)}
-                className={COLLAB_INPUT}
-              >
-                {PRIORITIES.map(p => (
-                  <option key={p} value={p}>{TASK_PRIORITY_LABEL[p]}</option>
-                ))}
-              </select>
+                options={priorityOptions}
+                onChange={next => setPriority(next as DoneBotTeamTaskPriority)}
+                disabled={busy}
+                menuMinWidth={124}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -291,6 +348,43 @@ export function CollabTeamTaskDialog({
                 className={COLLAB_INPUT}
               />
             </div>
+          </div>
+
+          {/* Bot automation policy */}
+          <div className="flex flex-col gap-2 rounded-2xl bg-inset/50 p-3 ring-1 ring-inset ring-ink/[0.06]">
+            <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
+              <Bot size={13.5} className="text-accent-text" aria-hidden="true" />
+              <span>助手自动初审与返工规则</span>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-ink-secondary">
+              <input
+                type="checkbox"
+                checked={autoReviewEnabled}
+                onChange={e => setAutoReviewEnabled(e.target.checked)}
+                className="size-3.5 accent-accent"
+              />
+              <span>提交后由验收人的主协调助手自动初审并生成审阅意见</span>
+            </label>
+            {autoReviewEnabled && (
+              <div className="flex flex-col gap-2 pl-5">
+                <CollabSelect
+                  ariaLabel="自动驳回轮次上限"
+                  value={maxAutoRevisions}
+                  options={MAX_REVISIONS_OPTIONS}
+                  onChange={setMaxAutoRevisions}
+                  disabled={busy}
+                />
+                <label className="flex cursor-pointer items-center gap-2 text-[11.5px] text-ink-tertiary">
+                  <input
+                    type="checkbox"
+                    checked={assigneeAutoResubmit}
+                    onChange={e => setAssigneeAutoResubmit(e.target.checked)}
+                    className="size-3.5 accent-accent"
+                  />
+                  <span>文案/图片类返工自动重提，仅高成本生视频先询问接收者确认</span>
+                </label>
+              </div>
+            )}
           </div>
 
           {eligibleMembers.length > 1 && (

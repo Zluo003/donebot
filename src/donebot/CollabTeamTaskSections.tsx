@@ -1,12 +1,18 @@
 import {
+  AlertTriangle,
+  Bot,
+  CheckCircle2,
   Clock,
   Download,
+  Eye,
   FileText,
+  ListChecks,
   Loader2,
   MessageSquare,
   Music,
   Paperclip,
   Play,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -56,10 +62,13 @@ export function uploadTaskFile(
   body: string,
   notifyChannel: boolean,
   onProgress: (pct: number) => void,
+  opts?: { batchId?: string; finalize?: boolean },
 ): Promise<DoneBotTeamTaskDetail> {
   const params = new URLSearchParams({ kind, name: file.name });
   if (body.trim()) params.set("body", body.trim());
   if (notifyChannel) params.set("notify_channel", "1");
+  if (opts?.batchId) params.set("batch_id", opts.batchId);
+  if (opts?.finalize === false) params.set("finalize", "0");
   const url = `/api/donebot/collab/teams/${teamId}/tasks/${taskId}/files?${params.toString()}`;
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -100,25 +109,151 @@ export function buildBotHandOffPrompt(
   latestFeedback?: DoneBotTeamTaskUpdate,
 ): string {
   const lines = [
-    `请帮我完成团队「${teamName}」中的这项任务，我会审核修改后再提交给团队验收：`,
+    `请帮我完成团队「${teamName}」中的这项任务，我会先审核效果，确认后再让你提交给团队验收：`,
     `【任务标题】${task.title}`,
+    `【任务标识】team_id: ${task.team_id} / task_id: ${task.id}`,
   ];
   if (task.channel_name) lines.push(`【所属频道】#${task.channel_name}`);
   if (task.due_at) lines.push(`【截止时间】${formatShortDueDate(task.due_at)}`);
   if (task.description?.trim()) lines.push(`【任务要求】\n${task.description.trim()}`);
+  if (task.acceptance_criteria && task.acceptance_criteria.length > 0) {
+    lines.push(`【客观验收清单】\n${task.acceptance_criteria.map((c, idx) => `${idx + 1}. ${c}`).join("\n")}`);
+  }
   if (task.source_quote?.trim()) lines.push(`【原讨论摘录】\n${task.source_quote.trim()}`);
   if (latestFeedback?.body?.trim()) lines.push(`【最新退回修改意见】\n${latestFeedback.body.trim()}`);
-  lines.push("请先给出思路或初稿，有需要补充的素材直接告诉我。");
+  lines.push("本会话已绑定该团队任务。请先给出思路或成果，等我确认并说「提交任务」时，再调用 collab_submit_team_task 直接提交简报与成果文件。");
   return lines.join("\n\n");
+}
+
+export function CollabTaskCriteriaCard({ criteria }: { criteria?: readonly string[] }) {
+  if (!criteria || criteria.length === 0) return null;
+  return (
+    <div
+      data-collab-task-criteria=""
+      className="flex flex-col gap-2 rounded-2xl bg-card/70 p-3 ring-1 ring-inset ring-ink/[0.07]"
+    >
+      <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-secondary">
+        <ListChecks size={13} className="text-accent-text" aria-hidden="true" />
+        <span>客观验收清单（{criteria.length} 项）</span>
+      </div>
+      <ol className="flex flex-col gap-1.5 pl-0.5">
+        {criteria.map((item, idx) => (
+          <li key={`${idx}-${item}`} className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ink">
+            <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-ink/[0.08] text-[10.5px] font-medium tabular-nums text-ink-secondary">
+              {idx + 1}
+            </span>
+            <span className="min-w-0 flex-1 break-words">{item}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+export function CollabTaskBotReviewCard({ task }: { task: DoneBotTeamTask }) {
+  const review = task.latest_bot_review;
+  if (task.status === "bot_reviewing") {
+    return (
+      <div
+        data-collab-task-bot-review="reviewing"
+        className="flex items-start gap-2.5 rounded-2xl bg-sky-500/[0.08] p-3 ring-1 ring-inset ring-sky-500/25"
+      >
+        <Bot size={16} className="mt-0.5 shrink-0 text-sky-500" aria-hidden="true" />
+        <div className="min-w-0 flex-1 text-[12.5px]">
+          <div className="font-medium text-ink">主协调助手正在自动初审本批次交付物…</div>
+          <p className="mt-0.5 text-[11.5px] text-ink-secondary">
+            初审完成后将自动刷新结果；你也可以随时直接人工拍板通过或退回。
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (!review) return null;
+  const isPass = review.verdict === "pass";
+  const isReject = review.verdict === "hard_fail";
+  const boxCls = isPass
+    ? "bg-emerald-500/[0.06] ring-emerald-500/25"
+    : isReject
+      ? "bg-purple-500/[0.07] ring-purple-500/25"
+      : "bg-amber-500/[0.08] ring-amber-500/25";
+  const titleText = isPass
+    ? "主协调助手初审通过 · 待验收人终审"
+    : isReject
+      ? `主协调助手初审驳回（已返工 ${task.auto_revision_count ?? 1}/${task.max_auto_revisions ?? 2} 轮）`
+      : "主协调助手已升级人工介入";
+  return (
+    <div
+      data-collab-task-bot-review={review.verdict}
+      className={cn("flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-inset", boxCls)}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] font-semibold text-ink">
+          <Sparkles size={13.5} className={isPass ? "text-emerald-500" : isReject ? "text-purple-400" : "text-amber-500"} aria-hidden="true" />
+          <span className="truncate">{titleText}</span>
+        </div>
+        {review.bot_name && (
+          <span className="shrink-0 rounded-full bg-ink/[0.06] px-2 py-0 text-[10.5px] leading-5 text-ink-secondary">
+            {review.bot_name}
+          </span>
+        )}
+      </div>
+      {review.summary && (
+        <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink">{review.summary}</p>
+      )}
+      {review.passed_items && review.passed_items.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="text-[11px] font-medium text-emerald-500">已核验通过</div>
+          {review.passed_items.map((item, idx) => (
+            <div key={idx} className="flex items-start gap-1.5 text-[12px] text-ink-secondary">
+              <CheckCircle2 size={12.5} className="mt-0.5 shrink-0 text-emerald-500" aria-hidden="true" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {review.attention_items && review.attention_items.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="text-[11px] font-medium text-amber-500">建议你重点关注 / 拍板</div>
+          {review.attention_items.map((item, idx) => (
+            <div key={idx} className="flex items-start gap-1.5 text-[12px] text-ink">
+              <Eye size={12.5} className="mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {review.failed_criteria && review.failed_criteria.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="text-[11px] font-medium text-orange-500">未达标的硬性要求</div>
+          {review.failed_criteria.map((item, idx) => (
+            <div key={idx} className="flex items-start gap-1.5 text-[12px] text-ink">
+              <AlertTriangle size={12.5} className="mt-0.5 shrink-0 text-orange-500" aria-hidden="true" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {review.actionable_fixes && review.actionable_fixes.length > 0 && (
+        <div className="flex flex-col gap-1 rounded-xl bg-inset/60 px-2.5 py-2">
+          <div className="text-[11px] font-medium text-ink-secondary">已发给接收方助手的修改指令</div>
+          {review.actionable_fixes.map((item, idx) => (
+            <div key={idx} className="text-[12px] text-ink">{idx + 1}. {item}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function CollabTaskDeliverablesGallery({
   deliverables,
+  latestBatchId,
   downloadingId,
   onPreview,
   onDownload,
 }: {
   deliverables: DoneBotTeamTaskUpdate[];
+  latestBatchId?: string;
   downloadingId: string | null;
   onPreview: (u: DoneBotTeamTaskUpdate) => void;
   onDownload: (fileId: string, fileName: string) => void;
@@ -128,14 +263,16 @@ export function CollabTaskDeliverablesGallery({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-semibold text-ink-secondary">
-          已提交交付物（{deliverables.length} 版）
+          已提交交付物（{deliverables.length} 个文件）
         </span>
         <span className="text-[11px] text-ink-tertiary">点击图片/视频/音频可直接预览验收</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
         {deliverables.map((u, idx) => {
           const mediaKind = classifyChatMediaKind(u.file_mime, u.file_name);
-          const isLatest = idx === deliverables.length - 1;
+          const isLatest = latestBatchId
+            ? u.batch_id === latestBatchId
+            : idx === deliverables.length - 1;
           return (
             <div
               key={u.id}
@@ -242,22 +379,31 @@ export function CollabTaskTimeline({
               ? { label: "验收通过", cls: "bg-success/14 text-success ring-success/25" }
               : u.kind === "request_changes"
                 ? { label: "退回修改", cls: "bg-orange-500/15 text-orange-500 ring-orange-500/30" }
-                : null;
+                : u.kind === "bot_review_pass"
+                  ? { label: "Bot 初审通过", cls: "bg-emerald-500/14 text-emerald-500 ring-emerald-500/25" }
+                  : u.kind === "bot_reject"
+                    ? { label: "Bot 自动驳回", cls: "bg-purple-500/15 text-purple-400 ring-purple-500/30" }
+                    : u.kind === "bot_escalate"
+                      ? { label: "升级人工介入", cls: "bg-amber-500/15 text-amber-500 ring-amber-500/30" }
+                      : null;
+          const isBotActor = u.actor_kind === "bot";
           return (
             <div
               key={u.id}
               data-collab-task-update={u.kind}
               className={cn(
                 "flex flex-col gap-1.5 rounded-2xl p-3 ring-1 ring-inset",
-                u.kind === "request_changes"
+                u.kind === "request_changes" || u.kind === "bot_escalate"
                   ? "bg-orange-500/[0.06] ring-orange-500/25"
-                  : u.kind === "approve"
-                    ? "bg-success/[0.06] ring-success/25"
-                    : "bg-card/80 ring-ink/[0.07]",
+                  : u.kind === "bot_reject"
+                    ? "bg-purple-500/[0.06] ring-purple-500/25"
+                    : u.kind === "approve" || u.kind === "bot_review_pass"
+                      ? "bg-success/[0.06] ring-success/25"
+                      : "bg-card/80 ring-ink/[0.07]",
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <CollabAvatar
                     avatarUrl={u.actor_avatar_url}
                     remark={u.actor_remark}
@@ -266,6 +412,12 @@ export function CollabTaskTimeline({
                     size={22}
                   />
                   <span className="truncate text-[12.5px] font-medium text-ink">{actorName}</span>
+                  {isBotActor && (
+                    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-ink/[0.07] px-1.5 py-0 text-[10px] font-medium leading-4 text-ink-secondary">
+                      <Bot size={10} aria-hidden="true" />
+                      {u.actor_bot_name?.trim() || "助手"}
+                    </span>
+                  )}
                   {badge && (
                     <span className={cn("inline-flex shrink-0 rounded-full px-1.5 py-0 text-[10px] font-medium leading-4 ring-1 ring-inset", badge.cls)}>
                       {badge.label}

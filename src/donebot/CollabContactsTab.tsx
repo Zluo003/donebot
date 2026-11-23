@@ -15,6 +15,7 @@ import { CommandLine } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
 import type { DoneBotTeamCommand, DoneBotTeamInvitation } from "../../shared/donebot-teams";
 import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
+import { CollabSelect } from "./CollabSelect";
 import {
   cleanError,
   COLLAB_BUTTON,
@@ -519,16 +520,18 @@ export function CollabContactsTab({
                       />
                     </div>
                     {team.role === "owner" && (
-                      <select
-                        aria-label="邀请角色"
+                      <CollabSelect
+                        ariaLabel="邀请角色"
                         value={inviteRole}
-                        onChange={e => setInviteRole(e.target.value === "admin" ? "admin" : "member")}
-                        className={cn(COLLAB_INPUT, "sm:w-28")}
+                        options={[
+                          { value: "member", label: "成员" },
+                          { value: "admin", label: "管理员" },
+                        ]}
+                        onChange={next => setInviteRole(next === "admin" ? "admin" : "member")}
+                        className="sm:w-28"
+                        menuMinWidth={112}
                         disabled={busy}
-                      >
-                        <option value="member">成员</option>
-                        <option value="admin">管理员</option>
-                      </select>
+                      />
                     )}
                     <button type="submit" disabled={busy || !inviteEmail.trim()} className={`${COLLAB_BUTTON} ui-button-primary h-[38px] shrink-0 px-3.5`}>
                       发送邀请

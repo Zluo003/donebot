@@ -49,12 +49,17 @@ import { classifyChatMediaKind } from "./collab-chat-helpers";
 import { CollabMediaPreviewDialog, type CollabMediaPreviewTarget } from "./CollabMediaPreview";
 import {
   buildBotHandOffPrompt,
+  CollabTaskBotReviewCard,
+  CollabTaskCriteriaCard,
   CollabTaskDeliverablesGallery,
   CollabTaskTimeline,
   downloadTaskFile,
   taskFileUrl,
   uploadTaskFile,
 } from "./CollabTeamTaskSections";
+
+const DETAIL_AUTO_REFRESH_MS = 3_500;
+const MAX_SUBMIT_FILES = 10;
 
 export function CollabTeamTaskDetailPanel({
   team,
@@ -84,7 +89,7 @@ export function CollabTeamTaskDetailPanel({
   const [error, setError] = useState("");
   const [actionPane, setActionPane] = useState<null | "submit" | "reject" | "approve" | "bot">(null);
   const [submitBody, setSubmitBody] = useState("");
-  const [submitFile, setSubmitFile] = useState<File | null>(null);
+  const [submitFiles, setSubmitFiles] = useState<File[]>([]);
   const [submitNotify, setSubmitNotify] = useState(true);
   const [reviewBody, setReviewBody] = useState("");
   const [reviewNotify, setReviewNotify] = useState(true);
@@ -94,8 +99,12 @@ export function CollabTeamTaskDetailPanel({
   const [previewMedia, setPreviewMedia] = useState<CollabMediaPreviewTarget | null>(null);
   const submitFileRef = useRef<HTMLInputElement>(null);
   const commentFileRef = useRef<HTMLInputElement>(null);
+  const busyRef = useRef(false);
+  const detailSeqRef = useRef(0);
   const submitInputId = useId();
   const commentFileId = useId();
+
+  busyRef.current = busy;
 
   const memberById = useMemo(
     () => new Map(members.map(m => [m.user_id, m])),
@@ -106,26 +115,50 @@ export function CollabTeamTaskDetailPanel({
     [appState.bots],
   );
 
-  const loadDetail = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadDetail = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    const seq = ++detailSeqRef.current;
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const next = await api<DoneBotTeamTaskDetail>(`/api/donebot/collab/teams/${team.id}/tasks/${taskId}`);
+      if (seq !== detailSeqRef.current) return;
       setDetail(next);
     } catch (cause) {
-      setError(cleanError(cause, "加载任务详情失败。"));
+      if (seq !== detailSeqRef.current) return;
+      if (!silent) setError(cleanError(cause, "加载任务详情失败。"));
     } finally {
-      setLoading(false);
+      if (!silent && seq === detailSeqRef.current) setLoading(false);
     }
   }, [team.id, taskId]);
 
   useEffect(() => {
     setActionPane(null);
     setSubmitBody("");
-    setSubmitFile(null);
+    setSubmitFiles([]);
     setReviewBody("");
     setCommentDraft("");
     void loadDetail();
+  }, [loadDetail]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (busyRef.current) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void loadDetail({ silent: true });
+    }, DETAIL_AUTO_REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && !busyRef.current) {
+        void loadDetail({ silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [loadDetail]);
 
   const task = detail?.task ?? null;
@@ -135,7 +168,7 @@ export function CollabTeamTaskDetailPanel({
     [updates],
   );
   const latestFeedback = useMemo(
-    () => [...updates].reverse().find(u => u.kind === "request_changes"),
+    () => [...updates].reverse().find(u => u.kind === "request_changes" || u.kind === "bot_reject"),
     [updates],
   );
 
@@ -184,14 +217,43 @@ export function CollabTeamTaskDetailPanel({
     setBusy(true);
     setError("");
     try {
-      let next: DoneBotTeamTaskDetail;
-      if (submitFile) {
-        if (submitFile.size === 0) throw new Error("不能上传空文件。");
-        if (submitFile.size > DONEBOT_COLLAB_MAX_FILE_BYTES) {
-          throw new Error(`「${submitFile.name}」超过 100 MB 限制。`);
+      for (const file of submitFiles) {
+        if (file.size === 0) throw new Error(`不能上传空文件「${file.name}」。`);
+        if (file.size > DONEBOT_COLLAB_MAX_FILE_BYTES) {
+          throw new Error(`「${file.name}」超过 100 MB 限制。`);
         }
+      }
+      let next: DoneBotTeamTaskDetail;
+      if (submitFiles.length === 1) {
         setUploadPct(0);
-        next = await uploadTaskFile(team.id, task.id, "submission", submitFile, submitBody, submitNotify, setUploadPct);
+        next = await uploadTaskFile(team.id, task.id, "submission", submitFiles[0]!, submitBody, submitNotify, setUploadPct);
+      } else if (submitFiles.length > 1) {
+        const batchId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `batch-${Date.now()}`;
+        setUploadPct(0);
+        for (let i = 0; i < submitFiles.length; i += 1) {
+          const file = submitFiles[i]!;
+          await uploadTaskFile(
+            team.id,
+            task.id,
+            "submission",
+            file,
+            "",
+            false,
+            pct => setUploadPct(Math.round(((i + pct / 100) / submitFiles.length) * 95)),
+            { batchId, finalize: false },
+          );
+        }
+        next = await api<DoneBotTeamTaskDetail>(`/api/donebot/collab/teams/${team.id}/tasks/${task.id}/submit`, {
+          method: "POST",
+          body: JSON.stringify({
+            body: submitBody.trim(),
+            batch_id: batchId,
+            notify_channel: submitNotify,
+          }),
+        });
+        setUploadPct(100);
       } else {
         next = await api<DoneBotTeamTaskDetail>(`/api/donebot/collab/teams/${team.id}/tasks/${task.id}/submit`, {
           method: "POST",
@@ -201,7 +263,7 @@ export function CollabTeamTaskDetailPanel({
       setDetail(next);
       setActionPane(null);
       setSubmitBody("");
-      setSubmitFile(null);
+      setSubmitFiles([]);
       await onMutated(next.task);
     } catch (cause) {
       setError(cleanError(cause, "提交验收失败。"));
@@ -305,6 +367,17 @@ export function CollabTeamTaskDetailPanel({
     if (!task) return;
     const bot = availableLocalBots.find(b => b.id === botId);
     if (!bot) return;
+    void api("/api/donebot/collab/task-bindings", {
+      method: "POST",
+      body: JSON.stringify({
+        teamId: team.id,
+        teamName: team.name,
+        taskId: task.id,
+        taskTitle: task.title,
+        botId: bot.id,
+        threadId: bot.threadId,
+      }),
+    }).catch(() => {});
     const prompt = buildBotHandOffPrompt(team.name, task, latestFeedback);
     appendComposerDraft(`bot:${bot.id}:${bot.threadId}`, prompt);
     setCollabSidebarTab("bots");
@@ -448,7 +521,7 @@ export function CollabTeamTaskDetailPanel({
                 </button>
               )}
 
-              {(task.status === "todo" || task.status === "in_progress" || task.status === "changes_requested" || task.status === "blocked") && (
+              {(task.status === "todo" || task.status === "in_progress" || task.status === "bot_revising" || task.status === "changes_requested" || task.status === "blocked") && (
                 <button
                   type="button"
                   data-collab-task-open-submit=""
@@ -463,7 +536,7 @@ export function CollabTeamTaskDetailPanel({
                 </button>
               )}
 
-              {task.status === "in_review" && canReview && (
+              {(task.status === "in_review" || task.status === "bot_reviewing" || task.status === "ready_for_review") && canReview && (
                 <>
                   <button
                     type="button"
@@ -537,32 +610,46 @@ export function CollabTeamTaskDetailPanel({
                   onChange={e => setSubmitBody(e.target.value)}
                   className={`${COLLAB_INPUT} resize-y`}
                 />
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={submitFileRef}
-                    id={submitInputId}
-                    type="file"
-                    className="sr-only"
-                    onChange={e => {
-                      setSubmitFile(e.target.files?.[0] ?? null);
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => submitFileRef.current?.click()}
-                    className={`${COLLAB_BUTTON} h-8 px-3 text-[12px]`}
-                  >
-                    <Paperclip size={13} aria-hidden="true" />
-                    {submitFile ? "更换交付文件" : "上传图片 / 视频 / 文件"}
-                  </button>
-                  {submitFile && (
-                    <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg bg-inset px-2.5 py-1 text-[12px] text-ink">
-                      <span className="truncate">{submitFile.name}</span>
-                      <span className="shrink-0 text-ink-tertiary">{formatFileSize(submitFile.size)}</span>
-                      <button type="button" onClick={() => setSubmitFile(null)} className="text-ink-tertiary hover:text-ink">
-                        <X size={12} />
-                      </button>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={submitFileRef}
+                      id={submitInputId}
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      onChange={e => {
+                        const picked = Array.from(e.target.files ?? []);
+                        if (picked.length > 0) {
+                          setSubmitFiles(prev => [...prev, ...picked].slice(0, MAX_SUBMIT_FILES));
+                        }
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => submitFileRef.current?.click()}
+                      className={`${COLLAB_BUTTON} h-8 px-3 text-[12px]`}
+                    >
+                      <Paperclip size={13} aria-hidden="true" />
+                      {submitFiles.length > 0 ? `继续添加文件（${submitFiles.length}/${MAX_SUBMIT_FILES}）` : "上传图片 / 视频 / 文件（支持多选）"}
+                    </button>
+                  </div>
+                  {submitFiles.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      {submitFiles.map((file, idx) => (
+                        <div key={`${file.name}-${idx}`} className="flex min-w-0 items-center gap-1.5 rounded-lg bg-inset px-2.5 py-1 text-[12px] text-ink">
+                          <span className="truncate flex-1">{file.name}</span>
+                          <span className="shrink-0 text-ink-tertiary">{formatFileSize(file.size)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSubmitFiles(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-ink-tertiary hover:text-ink"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -655,7 +742,7 @@ export function CollabTeamTaskDetailPanel({
                   <button type="button" onClick={() => setActionPane(null)} className="text-ink-tertiary hover:text-ink"><X size={13} /></button>
                 </div>
                 <p className="text-[11.5px] leading-relaxed text-ink-tertiary">
-                  会自动把任务要求与最新退回意见带入你的私人对话输入框；助手只在本机运行，做好后由你本人审核并提交给团队验收。
+                  会自动绑定该任务与助手会话并带入要求；完成后你在对话里说「提交任务」，助手就能直接上传简报和成果文件给验收方，被初审驳回时也会自动回到同一会话继续改。
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   {availableLocalBots.map(bot => (
@@ -673,6 +760,10 @@ export function CollabTeamTaskDetailPanel({
                 </div>
               </div>
             )}
+
+            <CollabTaskBotReviewCard task={task} />
+
+            <CollabTaskCriteriaCard criteria={task.acceptance_criteria} />
 
             {/* Metadata grid */}
             <div className="grid grid-cols-2 gap-2.5 rounded-2xl bg-card/65 p-3 text-[12px] ring-1 ring-inset ring-ink/[0.07]">
@@ -716,6 +807,7 @@ export function CollabTeamTaskDetailPanel({
 
             <CollabTaskDeliverablesGallery
               deliverables={deliverables}
+              latestBatchId={task.latest_submission_batch_id}
               downloadingId={downloadingId}
               onPreview={openMediaPreview}
               onDownload={(fileId, fileName) => void handleDownload(fileId, fileName)}

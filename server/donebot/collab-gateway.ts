@@ -218,11 +218,51 @@ export function collabDeleteTeamTask(ctx: CollabGatewayTransport, teamId: string
 export function collabAddTeamTaskComment(ctx: CollabGatewayTransport, teamId: string, taskId: string, body: string) {
   return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/comments`, "POST", { body });
 }
-export function collabSubmitTeamTask(ctx: CollabGatewayTransport, teamId: string, taskId: string, payload: { body: string; notify_channel: boolean }) {
+export function collabSubmitTeamTask(
+  ctx: CollabGatewayTransport,
+  teamId: string,
+  taskId: string,
+  payload: {
+    body: string;
+    batch_id?: string;
+    actor_kind?: "user" | "bot";
+    actor_bot_name?: string;
+    notify_channel: boolean;
+  },
+) {
   return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/submit`, "POST", payload);
 }
-export function collabReviewTeamTask(ctx: CollabGatewayTransport, teamId: string, taskId: string, payload: { decision: "approve" | "request_changes"; body: string; notify_channel: boolean }) {
+export function collabReviewTeamTask(
+  ctx: CollabGatewayTransport,
+  teamId: string,
+  taskId: string,
+  payload: {
+    decision: "approve" | "request_changes";
+    body: string;
+    actor_kind?: "user" | "bot";
+    actor_bot_name?: string;
+    notify_channel: boolean;
+  },
+) {
   return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/review`, "POST", payload);
+}
+export function collabBotReviewTeamTask(
+  ctx: CollabGatewayTransport,
+  teamId: string,
+  taskId: string,
+  payload: Record<string, unknown>,
+) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/bot-review`, "POST", payload);
+}
+export function collabClaimTaskBotEvent(ctx: CollabGatewayTransport) {
+  return collabJsonCall(ctx, "user", "/api/v1/donebot/collab/task-events/claim", "POST", {}, 15_000);
+}
+export function collabCompleteTaskBotEvent(
+  ctx: CollabGatewayTransport,
+  eventId: string,
+  payload: { status: "done" | "failed"; error?: string },
+) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/task-events/${eventId}/complete`, "POST", payload, 15_000);
 }
 export function collabUploadTeamTaskFile(
   ctx: CollabGatewayTransport,

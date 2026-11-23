@@ -30,6 +30,7 @@ import {
   type CollabOverview,
 } from "./collab-types";
 import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
+import { CollabSelect } from "./CollabSelect";
 import { AddGroupMembersDialog, CreateGroupDialog } from "./CollabGroupDialogs";
 import "./collab.css";
 
@@ -567,16 +568,18 @@ function InviteTeamMemberDialog({
                 className={cn(COLLAB_INPUT, "flex-1")}
               />
               {team.role === "owner" && (
-                <select
-                  aria-label="邀请角色"
+                <CollabSelect
+                  ariaLabel="邀请角色"
                   value={role}
-                  onChange={e => setRole(e.target.value === "admin" ? "admin" : "member")}
+                  options={[
+                    { value: "member", label: "成员" },
+                    { value: "admin", label: "管理员" },
+                  ]}
+                  onChange={next => setRole(next === "admin" ? "admin" : "member")}
                   disabled={busy}
-                  className={cn(COLLAB_INPUT, "w-24 shrink-0")}
-                >
-                  <option value="member">成员</option>
-                  <option value="admin">管理员</option>
-                </select>
+                  className="w-24 shrink-0"
+                  menuMinWidth={112}
+                />
               )}
             </div>
           </div>

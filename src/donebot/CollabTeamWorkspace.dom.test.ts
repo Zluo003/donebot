@@ -150,6 +150,7 @@ function makeTask(status: DoneBotTeamTask["status"] = "in_review"): DoneBotTeamT
     channel_name: "第1-5集分镜",
     title: "第3集女主定妆图",
     description: "需与第1集服装保持一致",
+    acceptance_criteria: ["共 3 张 9:16 竖图", "古风红衣人设一致"],
     status,
     priority: "high",
     creator_id: 101,
@@ -157,6 +158,17 @@ function makeTask(status: DoneBotTeamTask["status"] = "in_review"): DoneBotTeamT
     reviewer_id: 101,
     collaborator_ids: [],
     due_at: "2026-12-01T15:59:59Z",
+    auto_review_enabled: true,
+    max_auto_revisions: 2,
+    auto_revision_count: 1,
+    assignee_auto_resubmit: true,
+    latest_bot_review: status === "ready_for_review" ? {
+      verdict: "pass",
+      summary: "3 张定妆图比例均为 9:16，人设一致，建议主人确认表情张力。",
+      passed_items: ["3 张 9:16 竖图齐全", "无文字乱码"],
+      attention_items: ["第 2 张眼神偏柔和，请拍板"],
+      bot_name: "多宝主协调",
+    } : undefined,
     update_count: 1,
     deliverable_count: 1,
     created_at: "2026-11-23T01:00:00Z",
@@ -367,7 +379,89 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
       "bot:bot-duobao:t-main",
       expect.stringContaining("衣服领口偏暗，请调亮"),
     );
+    expect(fixture.api).toHaveBeenCalledWith(
+      "/api/donebot/collab/task-bindings",
+      expect.objectContaining({ method: "POST" }),
+    );
     expect(fixture.openBot).toHaveBeenCalledTimes(1);
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showChat" });
+  });
+
+  it("defaults task status filter to 全部状态 using custom dropdown, shows bot review card, and auto-refreshes", async () => {
+    vi.useFakeTimers();
+    try {
+      const overview = makeOverview();
+      let currentDetail = makeTaskDetail("bot_reviewing");
+      let currentTasks = [currentDetail.task];
+      const requestedTaskUrls: string[] = [];
+
+      fixture.api.mockImplementation(async (path, init) => {
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (path === "/api/donebot/collab/overview") return overview;
+        if (path.startsWith(`/api/donebot/collab/teams/${teamId}/tasks?`)) {
+          requestedTaskUrls.push(path);
+          return currentTasks;
+        }
+        if (path.startsWith(`/api/donebot/collab/teams/${teamId}/tasks/`) && method === "GET") {
+          return currentDetail;
+        }
+        if (path.endsWith("/review") && method === "POST") {
+          currentDetail = makeTaskDetail("done");
+          currentTasks = [currentDetail.task];
+          return currentDetail;
+        }
+        return [];
+      });
+
+      const r = mount();
+      await act(async () => {
+        await refreshCollabOverview();
+        setCollabSelection({ kind: "team", teamId });
+        r.render(createElement(CollabWorkspacePage));
+      });
+      await act(async () => { await Promise.resolve(); });
+
+      // Switch directly to 任务分工 tab.
+      const tasksTab = host!.querySelector<HTMLButtonElement>('[data-collab-team-view-tab="tasks"]');
+      expect(tasksTab).not.toBeNull();
+      await act(async () => { tasksTab!.click(); });
+      await act(async () => { await Promise.resolve(); });
+
+      // Zero native <select> elements; default status filter is 全部状态 (status=all).
+      expect(host!.querySelectorAll("select")).toHaveLength(0);
+      expect(requestedTaskUrls[0]).toContain("status=all");
+      const statusTrigger = host!.querySelector<HTMLButtonElement>("[data-collab-task-status-filter]");
+      expect(statusTrigger).not.toBeNull();
+      expect(statusTrigger!.textContent).toContain("全部状态");
+
+      // Open custom status dropdown and choose 待终审拍板.
+      await act(async () => { statusTrigger!.click(); });
+      const readyOpt = document.body.querySelector<HTMLButtonElement>('[data-collab-select-option="ready_for_review"]');
+      expect(readyOpt).not.toBeNull();
+      await act(async () => { readyOpt!.click(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(requestedTaskUrls.some(u => u.includes("status=ready_for_review"))).toBe(true);
+
+      // Simulate backend Bot finishing first-pass review -> auto-refresh picks up ready_for_review!
+      currentDetail = makeTaskDetail("ready_for_review");
+      currentTasks = [currentDetail.task];
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_600);
+      });
+      expect(host!.textContent).toContain("初审通过，待你拍板");
+
+      // Open task detail -> shows Bot review opinion card and allows human approve.
+      const card = host!.querySelector<HTMLButtonElement>(`[data-collab-task-card="${taskId1}"]`);
+      expect(card).not.toBeNull();
+      await act(async () => { card!.click(); });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(host!.querySelector('[data-collab-task-bot-review="pass"]')).not.toBeNull();
+      expect(host!.textContent).toContain("多宝主协调");
+      expect(host!.textContent).toContain("第 2 张眼神偏柔和，请拍板");
+      expect(host!.querySelector("[data-collab-task-open-approve]")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

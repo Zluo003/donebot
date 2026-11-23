@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  Bot,
   Calendar,
   Columns3,
   Hash,
   LayoutList,
+  ListChecks,
   ListTodo,
   Loader2,
   MessageSquare,
@@ -20,7 +22,7 @@ import type {
   DoneBotTeamTaskStatus,
 } from "../../shared/donebot-collab";
 import type { DoneBotTeamIdentity, DoneBotTeamMember } from "../../shared/donebot-teams";
-import { teamTaskCountsFor } from "./collab-store";
+import { refreshCollabOverview, teamTaskCountsFor } from "./collab-store";
 import {
   cleanError,
   COLLAB_BUTTON,
@@ -29,16 +31,20 @@ import {
   isTaskOverdue,
   TASK_PRIORITY_DOT,
   TASK_PRIORITY_LABEL,
+  TASK_STATUS_DOT,
   TASK_STATUS_LABEL,
   TASK_STATUS_PILL,
   type CollabOverview,
 } from "./collab-types";
 import { CollabAvatar } from "./CollabAvatar";
+import { CollabSelect, type CollabSelectOption } from "./CollabSelect";
 import { CollabTeamTaskDetailPanel } from "./CollabTeamTaskDetail";
 
 type TaskScopeFilter = "all" | "mine" | "review" | "created";
-type TaskStatusFilter = "open" | "all" | DoneBotTeamTaskStatus;
+type TaskStatusFilter = "all" | "open" | "review_queue" | DoneBotTeamTaskStatus;
 type TaskLayoutMode = "list" | "board";
+
+const AUTO_REFRESH_MS = 3_500;
 
 const BOARD_COLUMNS: ReadonlyArray<{
   id: string;
@@ -47,9 +53,23 @@ const BOARD_COLUMNS: ReadonlyArray<{
   accentCls: string;
 }> = [
   { id: "todo", label: "待开始", statuses: ["todo"], accentCls: "bg-ink-tertiary" },
-  { id: "active", label: "进行中 / 待修改", statuses: ["in_progress", "changes_requested", "blocked"], accentCls: "bg-accent" },
-  { id: "review", label: "待验收", statuses: ["in_review"], accentCls: "bg-amber-500" },
+  { id: "active", label: "进行中 / 返工", statuses: ["in_progress", "bot_revising", "changes_requested", "blocked"], accentCls: "bg-accent" },
+  { id: "review", label: "初审 / 待验收", statuses: ["bot_reviewing", "in_review", "ready_for_review"], accentCls: "bg-amber-500" },
   { id: "done", label: "已完成", statuses: ["done"], accentCls: "bg-success" },
+];
+
+const STATUS_FILTER_OPTIONS: readonly CollabSelectOption[] = [
+  { value: "all", label: "全部状态" },
+  { value: "open", label: "未完成" },
+  { value: "ready_for_review", label: "待终审拍板", dotClass: TASK_STATUS_DOT.ready_for_review },
+  { value: "bot_reviewing", label: "Bot 初审中", dotClass: TASK_STATUS_DOT.bot_reviewing },
+  { value: "bot_revising", label: "Bot 自动返工", dotClass: TASK_STATUS_DOT.bot_revising },
+  { value: "in_review", label: "待验收", dotClass: TASK_STATUS_DOT.in_review },
+  { value: "changes_requested", label: "待修改", dotClass: TASK_STATUS_DOT.changes_requested },
+  { value: "in_progress", label: "进行中", dotClass: TASK_STATUS_DOT.in_progress },
+  { value: "todo", label: "待开始", dotClass: TASK_STATUS_DOT.todo },
+  { value: "blocked", label: "已阻塞", dotClass: TASK_STATUS_DOT.blocked },
+  { value: "done", label: "已完成", dotClass: TASK_STATUS_DOT.done },
 ];
 
 export function CollabTeamTasksView({
@@ -82,20 +102,32 @@ export function CollabTeamTasksView({
   const [error, setError] = useState("");
   const [scope, setScope] = useState<TaskScopeFilter>("all");
   const [channelFilter, setChannelFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("open");
+  const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("all");
   const [layout, setLayout] = useState<TaskLayoutMode>("list");
+  const requestSeqRef = useRef(0);
 
   const myUserId = Number(overview.identity.account_id);
   const activeChannels = useMemo(() => channels.filter(c => !c.archived_at), [channels]);
+  const channelOptions = useMemo<CollabSelectOption[]>(() => [
+    { value: "", label: "全部频道" },
+    ...activeChannels.map(ch => ({
+      value: ch.id,
+      label: ch.is_private ? `🔒 ${ch.name}` : `#${ch.name}`,
+    })),
+  ], [activeChannels]);
   const memberById = useMemo(
     () => new Map(members.map(m => [m.user_id, m])),
     [members],
   );
   const counts = teamTaskCountsFor(overview, team.id);
 
-  const loadTasks = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadTasks = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    const seq = ++requestSeqRef.current;
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const params = new URLSearchParams();
       if (channelFilter) params.set("channel_id", channelFilter);
@@ -104,17 +136,43 @@ export function CollabTeamTasksView({
       const list = await api<DoneBotTeamTask[]>(
         `/api/donebot/collab/teams/${team.id}/tasks?${params.toString()}`,
       );
+      if (seq !== requestSeqRef.current) return;
       setTasks(Array.isArray(list) ? list : []);
+      if (silent) setError("");
     } catch (cause) {
-      setError(cleanError(cause, "加载团队任务失败，请确认网关已升级至最新版本。"));
+      if (seq !== requestSeqRef.current) return;
+      if (!silent) {
+        setError(cleanError(cause, "加载团队任务失败，请确认网关已升级至最新版本。"));
+      }
     } finally {
-      setLoading(false);
+      if (!silent && seq === requestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [team.id, channelFilter, statusFilter, scope, layout]);
 
   useEffect(() => {
     void loadTasks();
   }, [loadTasks, refreshKey]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void loadTasks({ silent: true });
+      void refreshCollabOverview({ silent: true });
+    }, AUTO_REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadTasks({ silent: true });
+        void refreshCollabOverview({ silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadTasks]);
 
   const handleMutated = async () => {
     await Promise.all([loadTasks(), onReloadOverview()]);
@@ -150,8 +208,11 @@ export function CollabTeamTasksView({
   const renderTaskCard = (task: DoneBotTeamTask, compact = false) => {
     const selected = selectedTaskId === task.id;
     const overdue = isTaskOverdue(task.due_at, task.status);
-    const needsMyReview = task.status === "in_review" && task.reviewer_id === myUserId;
+    const needsMyReview = (task.status === "in_review" || task.status === "ready_for_review") && task.reviewer_id === myUserId;
+    const isBotReviewing = task.status === "bot_reviewing";
+    const isBotRevising = task.status === "bot_revising";
     const needsMyFix = task.status === "changes_requested" && task.assignee_id === myUserId;
+    const criteriaCount = task.acceptance_criteria?.length ?? 0;
     return (
       <button
         key={task.id}
@@ -182,11 +243,22 @@ export function CollabTeamTasksView({
           )}
         </div>
 
-        {(needsMyReview || needsMyFix) && (
+        {(needsMyReview || isBotReviewing || isBotRevising || needsMyFix) && (
           <div className="flex flex-wrap gap-1.5">
             {needsMyReview && (
-              <span className="inline-flex rounded-full bg-amber-500/14 px-2 py-0 text-[10.5px] font-medium leading-5 text-amber-500 ring-1 ring-inset ring-amber-500/25">
-                待你验收拍板
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/16 px-2 py-0 text-[10.5px] font-medium leading-5 text-amber-500 ring-1 ring-inset ring-amber-500/30">
+                {task.status === "ready_for_review" ? "初审通过，待你拍板" : "待你验收拍板"}
+              </span>
+            )}
+            {isBotReviewing && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/14 px-2 py-0 text-[10.5px] font-medium leading-5 text-sky-500 ring-1 ring-inset ring-sky-500/25">
+                <Bot size={10.5} aria-hidden="true" />主协调助手正在初审…
+              </span>
+            )}
+            {isBotRevising && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/14 px-2 py-0 text-[10.5px] font-medium leading-5 text-purple-400 ring-1 ring-inset ring-purple-500/25">
+                <Bot size={10.5} aria-hidden="true" />
+                Bot 自动返工 {task.auto_revision_count ?? 1}/{task.max_auto_revisions ?? 2}
               </span>
             )}
             {needsMyFix && (
@@ -213,6 +285,11 @@ export function CollabTeamTasksView({
             </span>
           )}
           <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-tertiary">
+            {criteriaCount > 0 && (
+              <span className="inline-flex items-center gap-0.5" title={`包含 ${criteriaCount} 条验收清单`}>
+                <ListChecks size={11} aria-hidden="true" />{criteriaCount}
+              </span>
+            )}
             {task.deliverable_count > 0 && (
               <span className="inline-flex items-center gap-0.5 text-ink-secondary" title="已提交交付物">
                 <Paperclip size={11} aria-hidden="true" />{task.deliverable_count}
@@ -265,34 +342,26 @@ export function CollabTeamTasksView({
               </button>
             ))}
 
-            <select
-              aria-label="按频道筛选任务"
+            <CollabSelect
+              variant="pill"
+              ariaLabel="按频道筛选任务"
+              testAttr="data-collab-task-channel-filter"
               value={channelFilter}
-              onChange={e => setChannelFilter(e.target.value)}
-              className="h-7 rounded-full bg-ink/[0.05] px-2.5 text-[12px] text-ink outline-none ring-1 ring-inset ring-ink/[0.08]"
-            >
-              <option value="">全部频道</option>
-              {activeChannels.map(ch => (
-                <option key={ch.id} value={ch.id}>{ch.is_private ? `🔒 ${ch.name}` : `#${ch.name}`}</option>
-              ))}
-            </select>
+              options={channelOptions}
+              onChange={setChannelFilter}
+              menuMinWidth={156}
+            />
 
             {layout === "list" && (
-              <select
-                aria-label="按状态筛选任务"
+              <CollabSelect
+                variant="pill"
+                ariaLabel="按状态筛选任务"
+                testAttr="data-collab-task-status-filter"
                 value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value as TaskStatusFilter)}
-                className="h-7 rounded-full bg-ink/[0.05] px-2.5 text-[12px] text-ink outline-none ring-1 ring-inset ring-ink/[0.08]"
-              >
-                <option value="open">未完成</option>
-                <option value="in_review">待验收</option>
-                <option value="changes_requested">待修改</option>
-                <option value="in_progress">进行中</option>
-                <option value="todo">待开始</option>
-                <option value="blocked">已阻塞</option>
-                <option value="done">已完成</option>
-                <option value="all">全部状态</option>
-              </select>
+                options={STATUS_FILTER_OPTIONS}
+                onChange={next => setStatusFilter(next as TaskStatusFilter)}
+                menuMinWidth={156}
+              />
             )}
           </div>
 

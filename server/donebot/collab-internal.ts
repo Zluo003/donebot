@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { DONEBOT_COLLAB_MAX_FILE_BYTES } from "../../shared/donebot-collab.ts";
 import { boundedResponseText } from "./bounded-response.ts";
+import { handleDoneBotCollabTaskInternal } from "./collab-task-internal.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -149,6 +150,7 @@ export async function handleDoneBotCollabInternal(
   readInternalBody: () => Promise<Record<string, unknown>>,
 ): Promise<boolean> {
   if (method !== "POST" || !reqPath.startsWith("/api/internal/donebot/collab/")) return false;
+  if (await handleDoneBotCollabTaskInternal(gateway, reqPath, res, json, readInternalBody)) return true;
   try {
     if (reqPath === "/api/internal/donebot/collab/folders") {
       const snapshot = await gateway.collabFolders() as { shared_with_me?: unknown[] };

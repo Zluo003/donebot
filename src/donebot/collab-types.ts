@@ -90,6 +90,9 @@ export const TASK_STATUS_LABEL: Record<DoneBotTeamTaskStatus, string> = {
   todo: "待开始",
   in_progress: "进行中",
   in_review: "待验收",
+  bot_reviewing: "Bot 初审中",
+  bot_revising: "Bot 自动返工",
+  ready_for_review: "待终审拍板",
   changes_requested: "待修改",
   blocked: "已阻塞",
   done: "已完成",
@@ -99,9 +102,24 @@ export const TASK_STATUS_PILL: Record<DoneBotTeamTaskStatus, string> = {
   todo: "bg-ink/[0.06] text-ink-secondary ring-ink/12",
   in_progress: "bg-accent/14 text-accent-text ring-accent/25",
   in_review: "bg-amber-500/14 text-amber-500 ring-amber-500/25",
+  bot_reviewing: "bg-sky-500/14 text-sky-500 ring-sky-500/25",
+  bot_revising: "bg-purple-500/14 text-purple-400 ring-purple-500/25",
+  ready_for_review: "bg-amber-500/18 text-amber-500 ring-amber-500/35",
   changes_requested: "bg-orange-500/15 text-orange-500 ring-orange-500/30",
   blocked: "bg-danger/12 text-danger ring-danger/25",
   done: "bg-success/14 text-success ring-success/25",
+};
+
+export const TASK_STATUS_DOT: Record<DoneBotTeamTaskStatus, string> = {
+  todo: "bg-ink-tertiary",
+  in_progress: "bg-accent",
+  in_review: "bg-amber-500",
+  bot_reviewing: "bg-sky-500",
+  bot_revising: "bg-purple-400",
+  ready_for_review: "bg-amber-500",
+  changes_requested: "bg-orange-500",
+  blocked: "bg-danger",
+  done: "bg-success",
 };
 
 export const TASK_PRIORITY_LABEL: Record<DoneBotTeamTaskPriority, string> = {

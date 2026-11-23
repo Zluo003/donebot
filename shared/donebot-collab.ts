@@ -123,6 +123,9 @@ export type DoneBotTeamTaskStatus =
   | "todo"
   | "in_progress"
   | "in_review"
+  | "bot_reviewing"
+  | "bot_revising"
+  | "ready_for_review"
   | "changes_requested"
   | "blocked"
   | "done";
@@ -134,7 +137,23 @@ export type DoneBotTeamTaskUpdateKind =
   | "submission"
   | "approve"
   | "request_changes"
-  | "status_change";
+  | "status_change"
+  | "bot_review_pass"
+  | "bot_reject"
+  | "bot_escalate";
+
+export interface DoneBotTeamTaskBotReview {
+  verdict: "pass" | "hard_fail" | "escalated" | string;
+  summary: string;
+  bot_name?: string;
+  batch_id?: string;
+  passed_items?: string[];
+  attention_items?: string[];
+  failed_criteria?: string[];
+  actionable_fixes?: string[];
+  round?: number;
+  reviewed_at?: string;
+}
 
 export interface DoneBotTeamTask {
   id: string;
@@ -143,6 +162,7 @@ export interface DoneBotTeamTask {
   channel_name?: string;
   title: string;
   description: string;
+  acceptance_criteria?: string[];
   status: DoneBotTeamTaskStatus;
   priority: DoneBotTeamTaskPriority;
   creator_id: number;
@@ -150,6 +170,14 @@ export interface DoneBotTeamTask {
   reviewer_id?: number;
   collaborator_ids: number[];
   due_at?: string;
+  auto_review_enabled?: boolean;
+  max_auto_revisions?: number;
+  auto_revision_count?: number;
+  assignee_auto_resubmit?: boolean;
+  latest_submission_batch_id?: string;
+  latest_bot_review_verdict?: string;
+  latest_bot_review_summary?: string;
+  latest_bot_review?: DoneBotTeamTaskBotReview;
   source_scope_type?: string;
   source_target_id?: string;
   source_message_id?: number;
@@ -167,18 +195,23 @@ export interface DoneBotTeamTaskCounts {
   open_total: number;
   assigned_to_me: number;
   review_by_me: number;
+  ready_for_my_review?: number;
   changes_requested_to_me: number;
+  bot_revising_count?: number;
 }
 
 export interface DoneBotTeamTaskUpdate {
   id: number;
   task_id: string;
   actor_id: number;
+  actor_kind?: "user" | "bot";
+  actor_bot_name?: string;
   actor_email: string;
   actor_nickname?: string;
   actor_avatar_url?: string;
   actor_remark?: string;
   kind: DoneBotTeamTaskUpdateKind;
+  batch_id?: string;
   body: string;
   file_id?: string;
   file_name?: string;
@@ -192,6 +225,31 @@ export interface DoneBotTeamTaskUpdate {
 export interface DoneBotTeamTaskDetail {
   task: DoneBotTeamTask;
   updates: DoneBotTeamTaskUpdate[];
+}
+
+export interface DoneBotClaimedTaskBotEvent {
+  id: string;
+  team_id: string;
+  team_name: string;
+  task_id: string;
+  event_type: "task_assigned" | "task_submitted" | "task_bot_rejected" | "task_human_rejected";
+  batch_id?: string;
+  payload?: Record<string, unknown>;
+  assignee_name?: string;
+  reviewer_name?: string;
+  creator_name?: string;
+  detail: DoneBotTeamTaskDetail;
+  created_at: string;
+}
+
+export interface DoneBotLocalTaskBinding {
+  teamId: string;
+  teamName: string;
+  taskId: string;
+  taskTitle: string;
+  botId: string;
+  threadId: string;
+  updatedAt: number;
 }
 
 export interface DoneBotChatSummary {

@@ -16,6 +16,8 @@ import type { BotRecord, Store } from "../store.ts";
 import { boundedResponseText } from "./bounded-response.ts";
 import { buildCollabChatBotAppearance, chatBotNeedsSync, type CollabChatBotAppearance } from "./collab-bot-avatar.ts";
 import { createCollabChatBotWorker, type CollabBotTurnOptions } from "./collab-chat-bots.ts";
+import { registerCollabTaskRuntimeHooks } from "./collab-task-internal.ts";
+import { createCollabTaskWorker } from "./collab-task-worker.ts";
 import {
   collabListChatBots,
   collabListGroups,
@@ -234,6 +236,16 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
     threadBusy: deps.threadBusy,
     generateBotText: deps.generateBotText,
   });
+  const taskWorker = createCollabTaskWorker({
+    gateway,
+    store: deps.store,
+    startTurn: deps.startTurn,
+    threadBusy: deps.threadBusy,
+  });
+  registerCollabTaskRuntimeHooks({
+    resolveBotName: id => deps.store.bot(id)?.name ?? "",
+    kickTaskWorker: () => taskWorker.kick(),
+  });
   return async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
     if (!reqPath.startsWith("/api/donebot/collab/")) return PASS;
     if (!ownerOrAdmin(auth)) return json(res, 403, { error: "仅工作空间所有者可使用远程协作。" });
@@ -253,6 +265,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         gateway,
         json,
         helpers: { boundedRequestWebStream, readUpstreamError, pipeUpstreamStream },
+        kickTaskWorker: () => taskWorker.kick(),
       });
       if (wsStreamHandled !== PASS) return wsStreamHandled;
 
@@ -536,7 +549,10 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
             }
           }),
         ]);
-        if (ctx) botWorker.setActive(hasOwnedChatBots);
+        if (ctx) {
+          botWorker.setActive(hasOwnedChatBots);
+          taskWorker.setActive(teamList.length > 0);
+        }
         const visibleLocalById = new Map<string, BotRecord>();
         for (const bot of deps.store.bots) {
           if (!bot.hidden && !isExternalCodingAgentBot(bot)) visibleLocalById.set(bot.id, bot);
@@ -752,6 +768,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         gateway,
         res,
         json,
+        kickTaskWorker: () => taskWorker.kick(),
       });
       if (wsWriteHandled !== PASS) return wsWriteHandled;
 

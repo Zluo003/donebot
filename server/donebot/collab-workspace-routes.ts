@@ -4,6 +4,7 @@ import { DONEBOT_COLLAB_MAX_FILE_BYTES } from "../../shared/donebot-collab.ts";
 import { PASS } from "../routes/table.ts";
 import {
   collabAddTeamTaskComment,
+  collabBotReviewTeamTask,
   collabCreateTeamChannel,
   collabCreateTeamTask,
   collabDeleteTeamTask,
@@ -20,12 +21,24 @@ import {
   collabUpdateTeamTask,
   collabUploadTeamTaskFile,
 } from "./collab-gateway.ts";
+import { listTaskBindings, removeTaskBinding, saveTaskBinding } from "./collab-task-bindings.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const positiveInt = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const taskStatusEnum = z.enum(["todo", "in_progress", "in_review", "changes_requested", "blocked", "done"]);
+const taskStatusEnum = z.enum([
+  "todo",
+  "in_progress",
+  "in_review",
+  "bot_reviewing",
+  "bot_revising",
+  "ready_for_review",
+  "changes_requested",
+  "blocked",
+  "done",
+]);
 const taskPriorityEnum = z.enum(["low", "normal", "high", "urgent"]);
+const actorKindEnum = z.enum(["user", "bot"]);
 
 const createChannelSchema = z.object({
   name: z.string().trim().min(1).max(60),
@@ -50,22 +63,29 @@ const createTaskSchema = z.object({
   channel_id: z.string().max(64).default(""),
   title: z.string().trim().min(1).max(160),
   description: z.string().max(8000).default(""),
+  acceptance_criteria: z.array(z.string().trim().min(1).max(240)).max(12).default([]),
   priority: taskPriorityEnum.default("normal"),
   assignee_id: positiveInt.nullable().optional(),
   reviewer_id: positiveInt.nullable().optional(),
   collaborator_ids: z.array(positiveInt).max(50).default([]),
   due_at: z.string().max(40).nullable().optional(),
+  auto_review_enabled: z.boolean().default(true),
+  max_auto_revisions: z.number().int().min(0).max(5).default(2),
+  assignee_auto_resubmit: z.boolean().default(true),
   source_scope_type: z.enum(["", "team", "channel"]).default(""),
   source_target_id: z.string().max(64).default(""),
   source_message_id: positiveInt.nullable().optional(),
   source_quote: z.string().max(1000).default(""),
   notify_channel: z.boolean().default(true),
+  actor_kind: actorKindEnum.optional(),
+  actor_bot_name: z.string().max(120).optional(),
 }).strict();
 
 const updateTaskSchema = z.object({
   channel_id: z.string().max(64).optional(),
   title: z.string().trim().min(1).max(160).optional(),
   description: z.string().max(8000).optional(),
+  acceptance_criteria: z.array(z.string().trim().min(1).max(240)).max(12).optional(),
   status: taskStatusEnum.optional(),
   priority: taskPriorityEnum.optional(),
   assignee_id: positiveInt.optional(),
@@ -75,6 +95,9 @@ const updateTaskSchema = z.object({
   collaborator_ids: z.array(positiveInt).max(50).optional(),
   due_at: z.string().max(40).optional(),
   clear_due_at: z.boolean().optional(),
+  auto_review_enabled: z.boolean().optional(),
+  max_auto_revisions: z.number().int().min(0).max(5).optional(),
+  assignee_auto_resubmit: z.boolean().optional(),
   note: z.string().max(1000).optional(),
 }).strict();
 
@@ -84,13 +107,39 @@ const commentSchema = z.object({
 
 const submitTaskSchema = z.object({
   body: z.string().max(8000).default(""),
+  batch_id: z.string().max(64).optional(),
   notify_channel: z.boolean().default(true),
+  actor_kind: actorKindEnum.optional(),
+  actor_bot_name: z.string().max(120).optional(),
 }).strict();
 
 const reviewTaskSchema = z.object({
   decision: z.enum(["approve", "request_changes"]),
   body: z.string().max(8000).default(""),
   notify_channel: z.boolean().default(true),
+  actor_kind: actorKindEnum.optional(),
+  actor_bot_name: z.string().max(120).optional(),
+}).strict();
+
+const botReviewTaskSchema = z.object({
+  verdict: z.enum(["pass", "hard_fail", "escalate"]),
+  summary: z.string().max(8000).default(""),
+  passed_items: z.array(z.string().max(240)).max(20).default([]),
+  attention_items: z.array(z.string().max(240)).max(20).default([]),
+  failed_criteria: z.array(z.string().max(240)).max(20).default([]),
+  actionable_fixes: z.array(z.string().max(400)).max(20).default([]),
+  batch_id: z.string().max(64).optional(),
+  bot_name: z.string().max(120).optional(),
+  notify_channel: z.boolean().default(true),
+}).strict();
+
+const saveBindingSchema = z.object({
+  teamId: z.string().regex(uuidPattern),
+  teamName: z.string().max(120).default(""),
+  taskId: z.string().regex(uuidPattern),
+  taskTitle: z.string().max(160).default(""),
+  botId: z.string().trim().min(1).max(128),
+  threadId: z.string().trim().min(1).max(128),
 }).strict();
 
 export interface CollabStreamHelpers {
@@ -114,8 +163,9 @@ export async function handleCollabWorkspaceStreams(opts: {
   gateway: DoneBotGateway;
   json: (res: ServerResponse, status: number, value: unknown) => void;
   helpers: CollabStreamHelpers;
+  kickTaskWorker?: () => void;
 }): Promise<typeof PASS | undefined> {
-  const { req, res, url, reqPath, method, gateway, json, helpers } = opts;
+  const { req, res, url, reqPath, method, gateway, json, helpers, kickTaskWorker } = opts;
 
   const taskFileDownload = reqPath.match(/^\/api\/donebot\/collab\/tasks\/files\/([0-9a-f-]{36})$/);
   if (taskFileDownload && method === "GET") {
@@ -156,6 +206,14 @@ export async function handleCollabWorkspaceStreams(opts: {
     const caption = (url.searchParams.get("body") ?? "").trim();
     if (caption) params.set("body", caption.slice(0, 2000));
     if (url.searchParams.get("notify_channel") === "1") params.set("notify_channel", "1");
+    const batchId = (url.searchParams.get("batch_id") ?? "").trim();
+    if (batchId) params.set("batch_id", batchId.slice(0, 64));
+    const finalize = (url.searchParams.get("finalize") ?? "").trim();
+    if (finalize === "0" || finalize === "1") params.set("finalize", finalize);
+    const actorKind = (url.searchParams.get("actor_kind") ?? "").trim();
+    if (actorKind === "user" || actorKind === "bot") params.set("actor_kind", actorKind);
+    const actorBotName = (url.searchParams.get("actor_bot_name") ?? "").trim();
+    if (actorBotName) params.set("actor_bot_name", actorBotName.slice(0, 120));
 
     const headers: Record<string, string> = {
       "content-type": typeof req.headers["content-type"] === "string" && req.headers["content-type"].trim()
@@ -184,6 +242,7 @@ export async function handleCollabWorkspaceStreams(opts: {
         return undefined;
       }
       const payload = await upstream.json() as { code?: number; data?: unknown };
+      if (kind === "submission" && finalize !== "0") kickTaskWorker?.();
       json(res, 200, payload?.code === 0 && "data" in payload ? payload.data : payload);
     } finally {
       req.off("aborted", onClose);
@@ -205,6 +264,11 @@ export async function handleCollabWorkspaceReadOrDelete(opts: {
   const { method, reqPath, url, gateway, res, json } = opts;
 
   if (method === "GET") {
+    if (reqPath === "/api/donebot/collab/task-bindings") {
+      json(res, 200, { bindings: listTaskBindings() });
+      return undefined;
+    }
+
     if (reqPath === "/api/donebot/collab/tasks/counts") {
       json(res, 200, await collabTeamTaskCounts(gateway.collabCtx()));
       return undefined;
@@ -244,6 +308,13 @@ export async function handleCollabWorkspaceReadOrDelete(opts: {
   }
 
   if (method === "DELETE") {
+    const bindingDel = reqPath.match(/^\/api\/donebot\/collab\/task-bindings\/([0-9a-f-]{36})$/);
+    if (bindingDel) {
+      removeTaskBinding(bindingDel[1]!);
+      json(res, 200, { ok: true });
+      return undefined;
+    }
+
     const taskDel = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/tasks\/([0-9a-f-]{36})$/);
     if (taskDel) {
       json(res, 200, await collabDeleteTeamTask(gateway.collabCtx(), taskDel[1]!, taskDel[2]!));
@@ -261,8 +332,16 @@ export async function handleCollabWorkspaceWrite(opts: {
   gateway: DoneBotGateway;
   res: ServerResponse;
   json: (res: ServerResponse, status: number, value: unknown) => void;
+  kickTaskWorker?: () => void;
 }): Promise<typeof PASS | undefined> {
-  const { method, reqPath, body, gateway, res, json } = opts;
+  const { method, reqPath, body, gateway, res, json, kickTaskWorker } = opts;
+
+  if (method === "POST" && reqPath === "/api/donebot/collab/task-bindings") {
+    const parsed = saveBindingSchema.safeParse(body);
+    if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的任务助手绑定参数。");
+    json(res, 200, { binding: saveTaskBinding(parsed.data) });
+    return undefined;
+  }
 
   const channelPost = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/channels$/);
   if (method === "POST" && channelPost) {
@@ -292,7 +371,9 @@ export async function handleCollabWorkspaceWrite(opts: {
   if (method === "POST" && taskPost) {
     const parsed = createTaskSchema.safeParse(body);
     if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "请填写 1-160 字的任务标题及有效分工信息。");
-    json(res, 200, await collabCreateTeamTask(gateway.collabCtx(), taskPost[1]!, parsed.data));
+    const created = await collabCreateTeamTask(gateway.collabCtx(), taskPost[1]!, parsed.data);
+    kickTaskWorker?.();
+    json(res, 200, created);
     return undefined;
   }
 
@@ -316,7 +397,9 @@ export async function handleCollabWorkspaceWrite(opts: {
   if (method === "POST" && taskSubmitPost) {
     const parsed = submitTaskSchema.safeParse(body ?? {});
     if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "提交验收说明格式无效。");
-    json(res, 200, await collabSubmitTeamTask(gateway.collabCtx(), taskSubmitPost[1]!, taskSubmitPost[2]!, parsed.data));
+    const submitted = await collabSubmitTeamTask(gateway.collabCtx(), taskSubmitPost[1]!, taskSubmitPost[2]!, parsed.data);
+    kickTaskWorker?.();
+    json(res, 200, submitted);
     return undefined;
   }
 
@@ -324,7 +407,19 @@ export async function handleCollabWorkspaceWrite(opts: {
   if (method === "POST" && taskReviewPost) {
     const parsed = reviewTaskSchema.safeParse(body);
     if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "验收操作参数无效。");
-    json(res, 200, await collabReviewTeamTask(gateway.collabCtx(), taskReviewPost[1]!, taskReviewPost[2]!, parsed.data));
+    const reviewed = await collabReviewTeamTask(gateway.collabCtx(), taskReviewPost[1]!, taskReviewPost[2]!, parsed.data);
+    kickTaskWorker?.();
+    json(res, 200, reviewed);
+    return undefined;
+  }
+
+  const taskBotReviewPost = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/tasks\/([0-9a-f-]{36})\/bot-review$/);
+  if (method === "POST" && taskBotReviewPost) {
+    const parsed = botReviewTaskSchema.safeParse(body);
+    if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "Bot 审阅参数无效。");
+    const reviewed = await collabBotReviewTeamTask(gateway.collabCtx(), taskBotReviewPost[1]!, taskBotReviewPost[2]!, parsed.data);
+    kickTaskWorker?.();
+    json(res, 200, reviewed);
     return undefined;
   }
 

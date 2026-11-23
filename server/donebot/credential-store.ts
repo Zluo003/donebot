@@ -15,17 +15,25 @@ export function createDoneBotCredentialStore(port?: DoneBotPrivatePort, sessionF
     return { persistent: false, load: async () => value, save: async next => { value = next; } };
   }
   const pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-  port.on("message", event => {
-    const message = event.data as { type?: string; requestId?: string; ok?: boolean; value?: unknown } | undefined;
-    if (message?.type !== "donebot:credentials-result" || !message.requestId) return;
-    const call = pending.get(message.requestId);
-    if (!call) return;
-    pending.delete(message.requestId);
-    clearTimeout(call.timer);
-    if (message.ok) call.resolve(message.value ?? null);
-    else call.reject(new Error("DoneBot secure credential storage is unavailable."));
-  });
+  // Electron's utilityProcess parentPort flushes queued spawn messages once on the first listener:
+  // defer attaching until the first credential IPC so server/index.ts receives the desktop owner token first.
+  let listening = false;
+  function ensureListening(): void {
+    if (listening) return;
+    listening = true;
+    port!.on("message", event => {
+      const message = event.data as { type?: string; requestId?: string; ok?: boolean; value?: unknown } | undefined;
+      if (message?.type !== "donebot:credentials-result" || !message.requestId) return;
+      const call = pending.get(message.requestId);
+      if (!call) return;
+      pending.delete(message.requestId);
+      clearTimeout(call.timer);
+      if (message.ok) call.resolve(message.value ?? null);
+      else call.reject(new Error("DoneBot secure credential storage is unavailable."));
+    });
+  }
   function request(operation: "load" | "save" | "installation", value?: unknown): Promise<unknown> {
+    ensureListening();
     return new Promise((resolve, reject) => {
       const requestId = randomUUID();
       const timer = setTimeout(() => { pending.delete(requestId); reject(new Error("DoneBot secure credential storage timed out.")); }, 10_000);

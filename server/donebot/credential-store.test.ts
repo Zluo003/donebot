@@ -60,3 +60,22 @@ it("serializes secure writes so logout wins over an overlapping login save", asy
   await Promise.all([store.save(credential), store.save(null)]);
   expect(await createDoneBotCredentialStore(secure.port(), file).load()).toBeNull();
 });
+
+it("defers attaching parentPort message listener until the first credential IPC so startup tokens are not drained early", async () => {
+  let attached = 0;
+  let listener: ((event: { data?: object }) => void) | undefined;
+  const port: DoneBotPrivatePort = {
+    on(_event, callback) {
+      attached += 1;
+      listener = callback;
+    },
+    postMessage(raw) {
+      const msg = raw as { requestId: string };
+      queueMicrotask(() => listener?.({ data: { type: "donebot:credentials-result", requestId: msg.requestId, ok: true, value: null } }));
+    },
+  };
+  const store = createDoneBotCredentialStore(port);
+  expect(attached).toBe(0);
+  expect(await store.load()).toBeNull();
+  expect(attached).toBe(1);
+});

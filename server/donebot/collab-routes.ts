@@ -103,7 +103,7 @@ const INLINE_AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-
 
 export interface DoneBotCollabRouteDeps {
   gateway: DoneBotGateway;
-  store: Pick<Store, "bots" | "bot"> & Partial<Pick<Store, "taskByThread" | "createTask" | "appendMessage" | "messagesFor">>;
+  store: Pick<Store, "bots" | "bot"> & Partial<Pick<Store, "tasks" | "taskByThread" | "createTask" | "appendMessage" | "messagesFor">>;
   collectTeamSkills(bots: readonly BotRecord[], selection: unknown):
     | { ok: true; all: boolean; skillsByBot: Map<string, ExportablePackageSkill[]>; skipped: TeamExportSkip[]; available: string[] }
     | { ok: false; error: string; available: string[] };
@@ -115,6 +115,7 @@ export interface DoneBotCollabRouteDeps {
   currentLocalProfile?(): { name?: string; avatarUrl?: string; email?: string } | undefined;
   startTurn?: (botId: string, text: string, opts: CollabBotTurnOptions) => Promise<unknown>;
   threadBusy?: (botId: string, threadId: string) => boolean;
+  isAutomatedTurn?: (threadId: string) => boolean;
   generateBotText?: (botId: string, prompt: string, signal?: AbortSignal) => Promise<string | undefined>;
 }
 
@@ -254,11 +255,25 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
     threadBusy: deps.threadBusy,
     generateBotText: deps.generateBotText,
   });
+  const listChildThreads = (parentThreadId: string): Array<{ botId: string; botName: string; threadId: string; title?: string }> => {
+    if (!parentThreadId || !deps.store.tasks) return [];
+    const out: Array<{ botId: string; botName: string; threadId: string; title?: string }> = [];
+    for (const bot of deps.store.bots) {
+      if (bot.hidden) continue;
+      for (const task of deps.store.tasks(bot.id) ?? []) {
+        if (task.openedBy?.threadId === parentThreadId) {
+          out.push({ botId: bot.id, botName: bot.name, threadId: task.threadId, ...(task.title ? { title: task.title } : {}) });
+        }
+      }
+    }
+    return out;
+  };
   const taskWorker = createCollabTaskWorker({
     gateway,
     store: deps.store,
     startTurn: deps.startTurn,
     threadBusy: deps.threadBusy,
+    listChildThreads,
   });
   const readStoreThreadFiles = (threadId: string): ThreadFileEntry[] => {
     const out: ThreadFileEntry[] = [];
@@ -301,6 +316,9 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
   registerStoreThreadAttachments(readStoreThreadFiles);
   registerCollabTaskRuntimeHooks({
     resolveBotName: id => deps.store.bot(id)?.name ?? "",
+    isChiefBot: id => Boolean(deps.store.bot(id)?.chiefOfStaff),
+    isAutomatedTurn: threadId => deps.isAutomatedTurn?.(threadId) === true,
+    listChildThreads,
     kickTaskWorker: () => taskWorker.kick(),
     listThreadAttachments: readStoreThreadFiles,
   });

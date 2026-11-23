@@ -90,7 +90,7 @@ export const TASK_STATUS_LABEL: Record<DoneBotTeamTaskStatus, string> = {
   todo: "待开始",
   in_progress: "进行中",
   in_review: "待验收",
-  bot_reviewing: "Bot 初审中",
+  bot_reviewing: "助手二审中",
   bot_revising: "Bot 自动返工",
   ready_for_review: "待终审拍板",
   changes_requested: "待修改",

@@ -40,6 +40,7 @@ import { CollabAvatar } from "./CollabAvatar";
 import { CollabSelect, type CollabSelectOption } from "./CollabSelect";
 import { CollabTeamTaskDetailPanel } from "./CollabTeamTaskDetail";
 import { CollabTeamTaskDispatchBar } from "./CollabTeamTaskDispatchBar";
+import { ChiefAutoSubmitToggle } from "./CollabTeamTaskSections";
 
 type TaskScopeFilter = "all" | "mine" | "review" | "created";
 type TaskStatusFilter = "all" | "open" | "review_queue" | DoneBotTeamTaskStatus;
@@ -55,7 +56,7 @@ const BOARD_COLUMNS: ReadonlyArray<{
 }> = [
   { id: "todo", label: "待开始", statuses: ["todo"], accentCls: "bg-ink-tertiary" },
   { id: "active", label: "进行中 / 返工", statuses: ["in_progress", "bot_revising", "changes_requested", "blocked"], accentCls: "bg-accent" },
-  { id: "review", label: "初审 / 待验收", statuses: ["bot_reviewing", "in_review", "ready_for_review"], accentCls: "bg-amber-500" },
+  { id: "review", label: "二审 / 待终审", statuses: ["bot_reviewing", "in_review", "ready_for_review"], accentCls: "bg-amber-500" },
   { id: "done", label: "已完成", statuses: ["done"], accentCls: "bg-success" },
 ];
 
@@ -63,7 +64,7 @@ const STATUS_FILTER_OPTIONS: readonly CollabSelectOption[] = [
   { value: "all", label: "全部状态" },
   { value: "open", label: "未完成" },
   { value: "ready_for_review", label: "待终审拍板", dotClass: TASK_STATUS_DOT.ready_for_review },
-  { value: "bot_reviewing", label: "Bot 初审中", dotClass: TASK_STATUS_DOT.bot_reviewing },
+  { value: "bot_reviewing", label: "助手二审中", dotClass: TASK_STATUS_DOT.bot_reviewing },
   { value: "bot_revising", label: "Bot 自动返工", dotClass: TASK_STATUS_DOT.bot_revising },
   { value: "in_review", label: "待验收", dotClass: TASK_STATUS_DOT.in_review },
   { value: "changes_requested", label: "待修改", dotClass: TASK_STATUS_DOT.changes_requested },
@@ -250,12 +251,12 @@ export function CollabTeamTasksView({
           <div className="flex flex-wrap gap-1.5">
             {needsMyReview && (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/16 px-2 py-0 text-[10.5px] font-medium leading-5 text-amber-500 ring-1 ring-inset ring-amber-500/30">
-                {task.status === "ready_for_review" ? "初审通过，待你拍板" : "待你验收拍板"}
+                {task.status === "ready_for_review" ? "二审通过，待你终审" : "待你终审拍板"}
               </span>
             )}
             {isBotReviewing && (
               <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/14 px-2 py-0 text-[10.5px] font-medium leading-5 text-sky-500 ring-1 ring-inset ring-sky-500/25">
-                <Bot size={10.5} aria-hidden="true" />主协调助手正在初审…
+                <Bot size={10.5} aria-hidden="true" />派发方助手正在二审…
               </span>
             )}
             {isBotRevising && (
@@ -368,7 +369,9 @@ export function CollabTeamTasksView({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ChiefAutoSubmitToggle variant="compact" />
+
             <div className="flex rounded-full bg-ink/[0.06] p-0.5 ring-1 ring-inset ring-ink/[0.07]">
               <button
                 type="button"

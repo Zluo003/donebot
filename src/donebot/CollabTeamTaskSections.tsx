@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Bot,
@@ -12,10 +13,13 @@ import {
   Music,
   Paperclip,
   Play,
+  ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { api } from "@/state/api";
 import { cn } from "@/lib/cn";
 import type {
+  DoneBotCollabTaskPrefs,
   DoneBotTeamTask,
   DoneBotTeamTaskDetail,
   DoneBotTeamTaskUpdate,
@@ -103,13 +107,130 @@ export function uploadTaskFile(
   });
 }
 
+const TASK_PREFS_EVENT = "donebot-collab-task-prefs-changed";
+
+export function ChiefAutoSubmitToggle({ variant = "compact" }: { variant?: "compact" | "card" }) {
+  const [enabled, setEnabled] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void api<DoneBotCollabTaskPrefs>("/api/donebot/collab/task-prefs")
+      .then(res => {
+        if (alive && typeof res?.chief_auto_submit_on_approve === "boolean") {
+          setEnabled(res.chief_auto_submit_on_approve);
+        }
+      })
+      .catch(() => {});
+    const onChanged = (evt: Event) => {
+      const detail = (evt as CustomEvent<DoneBotCollabTaskPrefs>).detail;
+      if (detail && typeof detail.chief_auto_submit_on_approve === "boolean") {
+        setEnabled(detail.chief_auto_submit_on_approve);
+      }
+    };
+    window.addEventListener(TASK_PREFS_EVENT, onChanged);
+    return () => {
+      alive = false;
+      window.removeEventListener(TASK_PREFS_EVENT, onChanged);
+    };
+  }, []);
+
+  const toggle = async () => {
+    if (saving) return;
+    const next = !enabled;
+    setSaving(true);
+    setEnabled(next);
+    try {
+      const saved = await api<DoneBotCollabTaskPrefs>("/api/donebot/collab/task-prefs", {
+        method: "PATCH",
+        body: JSON.stringify({ chief_auto_submit_on_approve: next }),
+      });
+      const resolved = typeof saved?.chief_auto_submit_on_approve === "boolean" ? saved.chief_auto_submit_on_approve : next;
+      setEnabled(resolved);
+      window.dispatchEvent(new CustomEvent<DoneBotCollabTaskPrefs>(TASK_PREFS_EVENT, {
+        detail: { chief_auto_submit_on_approve: resolved },
+      }));
+    } catch {
+      setEnabled(!next);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tooltip = "开启后，接收任务时主协调助手一审通过专长子助手的成果将直接代你提交团队验收；关闭（默认）时，一审通过先发给你确认后再提交。派发方主协调助手始终只做二审，不能代替终审。";
+
+  if (variant === "card") {
+    return (
+      <div
+        data-collab-task-prefs-card=""
+        className="flex items-start justify-between gap-4 rounded-2xl bg-card/75 p-4 ring-1 ring-inset ring-ink/[0.08]"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+            <ShieldCheck size={15} className="text-accent-text" aria-hidden="true" />
+            <span>主协调助手代人审批并自动提交团队任务</span>
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">
+            接收任务时，主协调助手会自动选派（或创建含 SOUL.md 与 Skill 的）专长子助手干活并执行一审。开启后，一审合格将直接自动提交团队验收；关闭（默认）则一审通过后先发给你确认再提交。派发方主协调助手始终仅做二审与驳回，终审必须由派发人确认。
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="主协调助手代人审批并自动提交团队任务"
+          data-collab-chief-auto-submit=""
+          disabled={saving}
+          onClick={() => void toggle()}
+          className={cn(
+            "relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors disabled:opacity-60",
+            enabled ? "bg-accent" : "bg-ink/20",
+          )}
+        >
+          <span
+            className={cn(
+              "inline-block size-5 rounded-full bg-white shadow-xs transition-transform",
+              enabled ? "translate-x-5" : "translate-x-0",
+            )}
+          />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      data-collab-chief-auto-submit=""
+      disabled={saving}
+      title={tooltip}
+      onClick={() => void toggle()}
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-medium transition-colors ring-1 ring-inset disabled:opacity-60",
+        enabled
+          ? "bg-accent/14 text-accent-text ring-accent/30 hover:bg-accent/20"
+          : "bg-ink/[0.04] text-ink-secondary ring-ink/[0.08] hover:bg-ink/[0.08] hover:text-ink",
+      )}
+    >
+      <ShieldCheck size={12.5} aria-hidden="true" />
+      <span>主协调代审提交：{enabled ? "开" : "关"}</span>
+    </button>
+  );
+}
+
 export function buildBotHandOffPrompt(
   teamName: string,
   task: DoneBotTeamTask,
   latestFeedback?: DoneBotTeamTaskUpdate,
+  opts?: { isChief?: boolean },
 ): string {
+  const isChief = opts?.isChief === true;
   const lines = [
-    `请帮我完成团队「${teamName}」中的这项任务，我会先审核效果，确认后再让你提交给团队验收：`,
+    isChief
+      ? `请作为主协调助手统筹推进团队「${teamName}」中的这项任务（严禁你亲自下场干活，请按能力自动派发给匹配的专长子助手；缺少该能力子助手时自动 create_bot 写好 SOUL.md 并用 skill_find/skill_import/skill_manage 配好 Skill 后再派发，子助手完成后由你自动一审）：`
+      : `请帮我完成团队「${teamName}」中的这项任务，我会先审核效果，确认后再让你提交给团队验收：`,
     `【任务标题】${task.title}`,
     `【任务标识】team_id: ${task.team_id} / task_id: ${task.id}`,
   ];
@@ -121,7 +242,11 @@ export function buildBotHandOffPrompt(
   }
   if (task.source_quote?.trim()) lines.push(`【原讨论摘录】\n${task.source_quote.trim()}`);
   if (latestFeedback?.body?.trim()) lines.push(`【最新退回修改意见】\n${latestFeedback.body.trim()}`);
-  lines.push("本会话已绑定该团队任务。请先给出思路或成果，等我确认并说「提交任务」时，再调用 collab_submit_team_task 直接提交简报与成果文件。");
+  lines.push(
+    isChief
+      ? "本会话已绑定该团队任务。若涉及高成本视频/音乐生成请先向我确认方案；其余常规任务请立即选派或自动创建专长子助手执行。子助手完成后由你自动一审（不合格直接用 coordinate_bots(rework=true) 驳回局部修改；一审通过后请按 collab_get_team_task().task_prefs.chief_auto_submit_on_approve 决定：开启则直接调用 collab_submit_team_task 代为提交，关闭则先汇报等我确认后再提交）。"
+      : "本会话已绑定该团队任务。请先给出思路或成果，等我确认并说「提交任务」时，再调用 collab_submit_team_task 直接提交简报与成果文件。",
+  );
   return lines.join("\n\n");
 }
 
@@ -160,9 +285,9 @@ export function CollabTaskBotReviewCard({ task }: { task: DoneBotTeamTask }) {
       >
         <Bot size={16} className="mt-0.5 shrink-0 text-sky-500" aria-hidden="true" />
         <div className="min-w-0 flex-1 text-[12.5px]">
-          <div className="font-medium text-ink">主协调助手正在自动初审本批次交付物…</div>
+          <div className="font-medium text-ink">派发方主协调助手正在自动二审本批次交付物…</div>
           <p className="mt-0.5 text-[11.5px] text-ink-secondary">
-            初审完成后将自动刷新结果；你也可以随时直接人工拍板通过或退回。
+            二审仅负责核验硬性要求与驳回，绝不代替终审；你也可以随时直接人工拍板通过或退回。
           </p>
         </div>
       </div>
@@ -177,10 +302,10 @@ export function CollabTaskBotReviewCard({ task }: { task: DoneBotTeamTask }) {
       ? "bg-purple-500/[0.07] ring-purple-500/25"
       : "bg-amber-500/[0.08] ring-amber-500/25";
   const titleText = isPass
-    ? "主协调助手初审通过 · 待验收人终审"
+    ? "派发方助手二审通过 · 待派发人终审"
     : isReject
-      ? `主协调助手初审驳回（已返工 ${task.auto_revision_count ?? 1}/${task.max_auto_revisions ?? 2} 轮）`
-      : "主协调助手已升级人工介入";
+      ? `派发方助手二审驳回（已返工 ${task.auto_revision_count ?? 1}/${task.max_auto_revisions ?? 2} 轮）`
+      : "派发方助手已升级人工介入";
   return (
     <div
       data-collab-task-bot-review={review.verdict}
@@ -380,9 +505,9 @@ export function CollabTaskTimeline({
               : u.kind === "request_changes"
                 ? { label: "退回修改", cls: "bg-orange-500/15 text-orange-500 ring-orange-500/30" }
                 : u.kind === "bot_review_pass"
-                  ? { label: "Bot 初审通过", cls: "bg-emerald-500/14 text-emerald-500 ring-emerald-500/25" }
+                  ? { label: "助手二审通过", cls: "bg-emerald-500/14 text-emerald-500 ring-emerald-500/25" }
                   : u.kind === "bot_reject"
-                    ? { label: "Bot 自动驳回", cls: "bg-purple-500/15 text-purple-400 ring-purple-500/30" }
+                    ? { label: "助手二审驳回", cls: "bg-purple-500/15 text-purple-400 ring-purple-500/30" }
                     : u.kind === "bot_escalate"
                       ? { label: "升级人工介入", cls: "bg-amber-500/15 text-amber-500 ring-amber-500/30" }
                       : null;

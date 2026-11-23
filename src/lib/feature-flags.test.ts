@@ -28,9 +28,10 @@ describe("experimental feature flags", () => {
     expect(skillReviewUnavailableEngines([], instances)).toEqual([]);
   });
 
-  it("learns skills automatically only after an opt-in, and never without skill authoring", () => {
-    expect(skillReviewEnabled(null)).toBe(false);
-    expect(skillReviewEnabled({ features: {} })).toBe(false);
+  it("keeps automatic skill learning always on whenever skill authoring is enabled", () => {
+    expect(skillReviewEnabled(null)).toBe(true);
+    expect(skillReviewEnabled({ features: {} })).toBe(true);
+    expect(skillReviewEnabled({ features: { skillReview: false } })).toBe(true);
     expect(skillReviewEnabled({ features: { skillReview: true } })).toBe(true);
     expect(skillReviewEnabled({ features: { skillReview: true, skillAuthoring: false } })).toBe(false);
   });

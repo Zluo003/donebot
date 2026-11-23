@@ -29,7 +29,7 @@ export interface CollabBotTurnOutcome {
 
 export interface CollabBotTurnOptions {
   threadId: string;
-  automationSource: "api";
+  automationSource?: "api";
   unattended: true;
   userMessage: Message;
   onTurnSettled: () => void;

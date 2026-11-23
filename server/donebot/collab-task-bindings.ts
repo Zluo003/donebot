@@ -70,7 +70,10 @@ export function getTaskBindingByThread(botId: string, threadId: string): DoneBot
   ensureLoaded();
   let match: DoneBotLocalTaskBinding | undefined;
   for (const item of bindingsByTask.values()) {
-    if (item.botId === botId && item.threadId === threadId) {
+    const directHit = item.botId === botId && item.threadId === threadId;
+    const chiefHit = item.chiefBotId === botId && item.chiefThreadId === threadId;
+    const workerHit = item.workerBotId === botId && item.workerThreadId === threadId;
+    if (directHit || chiefHit || workerHit) {
       if (!match || item.updatedAt > match.updatedAt) match = item;
     }
   }
@@ -79,8 +82,17 @@ export function getTaskBindingByThread(botId: string, threadId: string): DoneBot
 
 export function saveTaskBinding(input: Omit<DoneBotLocalTaskBinding, "updatedAt">): DoneBotLocalTaskBinding {
   ensureLoaded();
+  const prev = bindingsByTask.get(input.taskId);
   const next: DoneBotLocalTaskBinding = {
+    ...(prev ? {
+      chiefBotId: prev.chiefBotId,
+      chiefThreadId: prev.chiefThreadId,
+      workerBotId: prev.workerBotId,
+      workerThreadId: prev.workerThreadId,
+    } : {}),
     ...input,
+    teamName: input.teamName || prev?.teamName || "",
+    taskTitle: input.taskTitle || prev?.taskTitle || "",
     updatedAt: Date.now(),
   };
   bindingsByTask.set(next.taskId, next);

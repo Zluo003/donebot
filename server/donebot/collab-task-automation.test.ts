@@ -11,6 +11,7 @@ import {
   saveTaskBinding,
 } from "./collab-task-bindings.ts";
 import { handleDoneBotCollabTaskInternal, registerCollabTaskRuntimeHooks, registerMediaPromptLookup } from "./collab-task-internal.ts";
+import { getCollabTaskPrefs, resetCollabTaskPrefsForTests, saveCollabTaskPrefs } from "./collab-task-prefs.ts";
 import { dispatchTeamTaskViaChiefBot } from "./collab-task-dispatch.ts";
 import { buildTaskEventPrompt, createCollabTaskWorker } from "./collab-task-worker.ts";
 import type { DoneBotGateway } from "./gateway.ts";
@@ -557,7 +558,231 @@ describe("team task bot automation", () => {
       expect(uploadedNames).toEqual([tigerName, "script-v2.md", path.basename(snakeNewPath)]);
     } finally {
       registerMediaPromptLookup(undefined);
+      registerCollabTaskRuntimeHooks({});
+      resetCollabTaskPrefsForTests();
       await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("instructs assignee Chief Bot to delegate/create specialists (with SOUL.md & Skill), run first-pass review, and never work directly", async () => {
+    resetCollabTaskPrefsForTests();
+    const assignedEvent: DoneBotClaimedTaskBotEvent = {
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee3",
+      team_id: teamId,
+      team_name: "AI短剧小组",
+      task_id: taskId,
+      event_type: "task_assigned",
+      detail: makeDetail("todo"),
+      creator_name: "老罗",
+      assignee_name: "小王",
+      created_at: "2026-11-23T02:10:00Z",
+    };
+    const promptDefault = buildTaskEventPrompt(assignedEvent, [], {
+      chiefAutoSubmitOnApprove: false,
+      availableSpecialists: [{ id: "bot-writer", name: "小林", title: "文案策划", description: "擅长剧本和分镜" }],
+      targetIsChief: true,
+    });
+    expect(promptDefault.full).toContain("严禁主协调助手亲自干活");
+    expect(promptDefault.full).toContain("create_bot");
+    expect(promptDefault.full).toContain("SOUL.md");
+    expect(promptDefault.full).toContain("skill_find");
+    expect(promptDefault.full).toContain("skill_manage");
+    expect(promptDefault.full).toContain("coordinate_bots");
+    expect(promptDefault.full).toContain("未开启（默认");
+    expect(promptDefault.full).toContain("高成本视频/音乐护栏");
+    expect(promptDefault.full).toContain("@小林");
+
+    const promptAutoSubmit = buildTaskEventPrompt(assignedEvent, [], {
+      chiefAutoSubmitOnApprove: true,
+      availableSpecialists: [],
+      targetIsChief: true,
+    });
+    expect(promptAutoSubmit.full).toContain("已开启（一审通过后可直接代主人自动提交团队验收）");
+
+    // Reviewer Chief Bot second-pass prompt must forbid final approval (done) / human_decision.
+    const submittedEvent: DoneBotClaimedTaskBotEvent = {
+      ...assignedEvent,
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee4",
+      event_type: "task_submitted",
+      detail: makeDetail("bot_reviewing"),
+    };
+    const reviewPrompt = buildTaskEventPrompt(submittedEvent, []);
+    expect(reviewPrompt.display).toContain("待二审");
+    expect(reviewPrompt.full).toContain("严禁调用 mode='human_decision'");
+    expect(reviewPrompt.full).toContain("绝对禁止在本轮执行终审通过");
+
+    // Worker creates a dedicated thread on Chief Bot, binds chiefBotId/chiefThreadId, and runs unattended without automationSource='api'.
+    const chiefBot = { id: "bot-chief", name: "多宝", threadId: "t-chief-main", chiefOfStaff: true, hidden: false } as BotRecord;
+    const specialistBot = { id: "bot-artist", name: "画师", threadId: "t-artist-main", chiefOfStaff: false, hidden: false, title: "视觉设计" } as BotRecord;
+    const messages = new Map<string, Message[]>();
+    const startTurn = vi.fn(async (_botId: string, _text: string, opts: { onTurnSettled?: () => void }) => {
+      opts.onTurnSettled?.();
+    });
+    const createTask = vi.fn((_botId: string, title: string) => ({ threadId: "t-chief-task-1", title }));
+    let claimedOnce = false;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/task-events/claim")) {
+        if (claimedOnce) return mockJsonResponse({ event: null });
+        claimedOnce = true;
+        return mockJsonResponse({ event: assignedEvent });
+      }
+      return mockJsonResponse({ ok: true });
+    }) as unknown as typeof fetch;
+
+    const worker = createCollabTaskWorker({
+      gateway: makeGateway(fetchMock),
+      store: {
+        bots: [chiefBot, specialistBot],
+        bot: id => [chiefBot, specialistBot].find(b => b.id === id) ?? null,
+        createTask: createTask as never,
+        appendMessage: (tid, msg) => {
+          const entry = { id: `m-${Math.random()}`, at: Date.now(), ...msg } as Message;
+          messages.set(tid, [...(messages.get(tid) ?? []), entry]);
+          return entry;
+        },
+        messagesFor: tid => messages.get(tid) ?? [],
+      },
+      startTurn: startTurn as never,
+      threadBusy: () => false,
+    });
+    worker.kick();
+    await new Promise(resolve => setTimeout(resolve, 60));
+    worker.setActive(false);
+
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(startTurn).toHaveBeenCalledTimes(1);
+    expect(startTurn.mock.calls[0]![0]).toBe("bot-chief");
+    expect(startTurn.mock.calls[0]![2]).toMatchObject({ threadId: "t-chief-task-1", unattended: true });
+    expect((startTurn.mock.calls[0]![2] as Record<string, unknown>).automationSource).toBeUndefined();
+    expect(getTaskBinding(taskId)).toMatchObject({
+      botId: "bot-chief",
+      threadId: "t-chief-task-1",
+      chiefBotId: "bot-chief",
+      chiefThreadId: "t-chief-task-1",
+    });
+  });
+
+  it("enforces chief_auto_submit_on_approve guard on submit and blocks automated final approval on review", async () => {
+    resetCollabTaskPrefsForTests();
+    expect(getCollabTaskPrefs().chief_auto_submit_on_approve).toBe(false);
+
+    saveTaskBinding({
+      teamId,
+      teamName: "AI短剧小组",
+      taskId,
+      taskTitle: "第3集女主定妆图",
+      botId: "bot-chief",
+      threadId: "t-chief-task-1",
+      chiefBotId: "bot-chief",
+      chiefThreadId: "t-chief-task-1",
+    });
+
+    let automated = true;
+    registerCollabTaskRuntimeHooks({
+      resolveBotName: id => (id === "bot-chief" ? "多宝" : "画师"),
+      isChiefBot: id => id === "bot-chief",
+      isAutomatedTurn: () => automated,
+      listChildThreads: () => [{ botId: "bot-artist", botName: "画师", threadId: "t-artist-work", title: "角色设计" }],
+    });
+
+    let taskStatus: DoneBotTeamTaskDetail["task"]["status"] = "in_progress";
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/submit")) return mockJsonResponse(makeDetail("bot_reviewing"));
+      if (url.endsWith("/bot-review")) return mockJsonResponse(makeDetail("ready_for_review"));
+      if (url.endsWith("/review")) return mockJsonResponse(makeDetail("done"));
+      return mockJsonResponse(makeDetail(taskStatus));
+    }) as unknown as typeof fetch;
+    const gw = makeGateway(fetchMock);
+
+    const callInternal = async (reqPath: string, body: Record<string, unknown>) => {
+      let status = 0;
+      let payload: unknown = null;
+      await handleDoneBotCollabTaskInternal(
+        gw,
+        reqPath,
+        {} as never,
+        (_res, s, v) => { status = s; payload = v; },
+        async () => body,
+      );
+      return { status, payload: payload as Record<string, unknown> };
+    };
+
+    try {
+      // 1. Detail exposes task_prefs, turn_context, and delegated_workers.
+      const detailRes = await callInternal("/api/internal/donebot/collab/tasks/detail", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-chief-task-1",
+      });
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.payload.task_prefs).toEqual({ chief_auto_submit_on_approve: false });
+      expect(detailRes.payload.turn_context).toEqual({ is_chief_bot: true, is_automated_turn: true });
+      expect(detailRes.payload.delegated_workers).toEqual([
+        { bot_id: "bot-artist", bot_name: "画师", thread_id: "t-artist-work", title: "角色设计" },
+      ]);
+
+      // 2. Specialist sub-bot is blocked from submitting directly in an automated turn on a Chief-orchestrated task.
+      const workerSubmit = await callInternal("/api/internal/donebot/collab/tasks/submit", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-artist", thread_id: "t-artist-work", brief: "子助手尝试直交",
+      });
+      expect(workerSubmit.status).toBe(403);
+      expect(String(workerSubmit.payload.error)).toContain("主协调助手");
+
+      // 3. Chief Bot automated submit is blocked when chief_auto_submit_on_approve is false and status is in_progress.
+      const chiefBlockedSubmit = await callInternal("/api/internal/donebot/collab/tasks/submit", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-chief-task-1", brief: "首次自动提交",
+      });
+      expect(chiefBlockedSubmit.status).toBe(403);
+      expect(String(chiefBlockedSubmit.payload.error)).toContain("主协调助手代人审批提交");
+
+      // 4. Enabling chief_auto_submit_on_approve allows Chief Bot automated submit after first-pass review.
+      saveCollabTaskPrefs({ chief_auto_submit_on_approve: true });
+      const chiefAutoSubmit = await callInternal("/api/internal/donebot/collab/tasks/submit", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-chief-task-1", brief: "一审合格代提交",
+      });
+      expect(chiefAutoSubmit.status).toBe(200);
+
+      // 5. Turning pref back off still allows automated resubmit during bot_revising, and allows human interactive submit.
+      saveCollabTaskPrefs({ chief_auto_submit_on_approve: false });
+      taskStatus = "bot_revising";
+      const revisingSubmit = await callInternal("/api/internal/donebot/collab/tasks/submit", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-chief-task-1", brief: "二审驳回返工重提",
+      });
+      expect(revisingSubmit.status).toBe(200);
+
+      taskStatus = "in_progress";
+      automated = false;
+      const humanConfirmedSubmit = await callInternal("/api/internal/donebot/collab/tasks/submit", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-chief-task-1", brief: "主人确认后提交",
+      });
+      expect(humanConfirmedSubmit.status).toBe(200);
+
+      // 6. Reviewer Chief Bot is BLOCKED from human_decision/approve during automated second-pass review.
+      automated = true;
+      const blockedFinalApprove = await callInternal("/api/internal/donebot/collab/tasks/review", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-reviewer-chief",
+        mode: "human_decision", decision: "approve", summary: "试图自动终审",
+      });
+      expect(blockedFinalApprove.status).toBe(403);
+      expect(String(blockedFinalApprove.payload.error)).toContain("只能执行二审");
+
+      // 7. Reviewer Chief Bot CAN run bot_review (second-pass pass -> ready_for_review) in automated turns.
+      const botSecondPass = await callInternal("/api/internal/donebot/collab/tasks/review", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-reviewer-chief",
+        mode: "bot_review", verdict: "pass", summary: "二审通过，请派发人终审",
+      });
+      expect(botSecondPass.status).toBe(200);
+
+      // 8. When the human reviewer explicitly instructs approval in interactive chat (automated=false), human_decision succeeds.
+      automated = false;
+      const humanSpokenApprove = await callInternal("/api/internal/donebot/collab/tasks/review", {
+        team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-reviewer-chief",
+        mode: "human_decision", decision: "approve", summary: "派发人确认通过",
+      });
+      expect(humanSpokenApprove.status).toBe(200);
+    } finally {
+      registerCollabTaskRuntimeHooks({});
+      resetCollabTaskPrefsForTests();
     }
   });
 });

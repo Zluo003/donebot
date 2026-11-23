@@ -7,6 +7,7 @@ import { COLLAB_BUTTON } from "./collab-types";
 import { CollabFoldersTab } from "./CollabFoldersTab";
 import { CollabBotsTab } from "./CollabBotsTab";
 import { CollabContactsTab } from "./CollabContactsTab";
+import { ChiefAutoSubmitToggle } from "./CollabTeamTaskSections";
 
 type CollabTab = "folders" | "bots" | "contacts";
 
@@ -129,6 +130,8 @@ export function RemoteCollab({ standalone = false }: { standalone?: boolean }) {
       {tab === "folders" && <CollabFoldersTab overview={overview} onReload={load} />}
       {tab === "bots" && <CollabBotsTab overview={overview} onReload={load} />}
       {tab === "contacts" && <CollabContactsTab overview={overview} onReload={load} />}
+
+      <ChiefAutoSubmitToggle variant="card" />
     </div>
   );
 }

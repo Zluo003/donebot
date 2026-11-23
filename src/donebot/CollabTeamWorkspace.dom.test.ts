@@ -20,7 +20,8 @@ const fixture = vi.hoisted(() => ({
     hydrated: true,
     activeView: "collab" as "chat" | "collab",
     bots: [
-      { id: "bot-duobao", name: "多宝", threadId: "t-main", hidden: false },
+      { id: "bot-duobao", name: "多宝", threadId: "t-main", hidden: false, chiefOfStaff: true },
+      { id: "bot-designer", name: "画师小美", threadId: "t-designer", hidden: false, chiefOfStaff: false },
     ],
     config: {
       donebot: { enabled: true, authenticated: true, user: { id: "101", email: "boss@example.invalid" } },
@@ -401,6 +402,10 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
       type: "send",
       botId: "bot-duobao",
       threadId: "t-main",
+      text: expect.stringContaining("严禁你亲自下场干活"),
+    }));
+    expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "send",
       text: expect.stringContaining("衣服领口偏暗，请调亮"),
     }));
   });
@@ -413,8 +418,17 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
       let currentTasks = [currentDetail.task];
       const requestedTaskUrls: string[] = [];
 
+      let chiefAutoSubmit = false;
       fixture.api.mockImplementation(async (path, init) => {
         const method = (init?.method ?? "GET").toUpperCase();
+        if (path === "/api/donebot/collab/task-prefs" && method === "GET") {
+          return { chief_auto_submit_on_approve: chiefAutoSubmit };
+        }
+        if (path === "/api/donebot/collab/task-prefs" && method === "PATCH") {
+          const parsed = JSON.parse(String(init?.body ?? "{}")) as { chief_auto_submit_on_approve?: boolean };
+          if (typeof parsed.chief_auto_submit_on_approve === "boolean") chiefAutoSubmit = parsed.chief_auto_submit_on_approve;
+          return { chief_auto_submit_on_approve: chiefAutoSubmit };
+        }
         if (path === "/api/donebot/collab/overview") return overview;
         if (path.startsWith(`/api/donebot/collab/teams/${teamId}/tasks?`)) {
           requestedTaskUrls.push(path);
@@ -477,9 +491,21 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5_100);
       });
-      expect(host!.textContent).toContain("初审通过，待你拍板");
+      expect(host!.textContent).toContain("二审通过，待你终审");
       const overviewCallsAfter = fixture.api.mock.calls.filter(([p]) => p === "/api/donebot/collab/overview").length;
       expect(overviewCallsAfter).toBe(overviewCallsBefore);
+
+      // Toggle Chief Bot auto-submit preference directly from the task toolbar.
+      const autoSubmitToggle = host!.querySelector<HTMLButtonElement>("[data-collab-chief-auto-submit]");
+      expect(autoSubmitToggle).not.toBeNull();
+      expect(autoSubmitToggle!.getAttribute("aria-checked")).toBe("false");
+      await act(async () => { autoSubmitToggle!.click(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(fixture.api).toHaveBeenCalledWith(
+        "/api/donebot/collab/task-prefs",
+        expect.objectContaining({ method: "PATCH" }),
+      );
+      expect(autoSubmitToggle!.getAttribute("aria-checked")).toBe("true");
 
       // Open task detail -> shows Bot review opinion card and allows human approve.
       const card = host!.querySelector<HTMLButtonElement>(`[data-collab-task-card="${taskId1}"]`);

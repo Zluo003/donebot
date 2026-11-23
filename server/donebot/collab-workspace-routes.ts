@@ -22,6 +22,7 @@ import {
   collabUploadTeamTaskFile,
 } from "./collab-gateway.ts";
 import { listTaskBindings, removeTaskBinding, saveTaskBinding } from "./collab-task-bindings.ts";
+import { getCollabTaskPrefs, saveCollabTaskPrefs } from "./collab-task-prefs.ts";
 import type { CollabTaskDispatchInput, CollabTaskDispatchResult } from "./collab-task-dispatch.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
@@ -141,6 +142,14 @@ const saveBindingSchema = z.object({
   taskTitle: z.string().max(160).default(""),
   botId: z.string().trim().min(1).max(128),
   threadId: z.string().trim().min(1).max(128),
+  chiefBotId: z.string().trim().min(1).max(128).optional(),
+  chiefThreadId: z.string().trim().min(1).max(128).optional(),
+  workerBotId: z.string().trim().min(1).max(128).optional(),
+  workerThreadId: z.string().trim().min(1).max(128).optional(),
+}).strict();
+
+const updateTaskPrefsSchema = z.object({
+  chief_auto_submit_on_approve: z.boolean().optional(),
 }).strict();
 
 const dispatchViaBotSchema = z.object({
@@ -276,6 +285,11 @@ export async function handleCollabWorkspaceReadOrDelete(opts: {
       return undefined;
     }
 
+    if (reqPath === "/api/donebot/collab/task-prefs") {
+      json(res, 200, getCollabTaskPrefs());
+      return undefined;
+    }
+
     if (reqPath === "/api/donebot/collab/tasks/counts") {
       json(res, 200, await collabTeamTaskCounts(gateway.collabCtx()));
       return undefined;
@@ -359,6 +373,13 @@ export async function handleCollabWorkspaceWrite(opts: {
     const parsed = saveBindingSchema.safeParse(body);
     if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的任务助手绑定参数。");
     json(res, 200, { binding: saveTaskBinding(parsed.data) });
+    return undefined;
+  }
+
+  if (method === "PATCH" && reqPath === "/api/donebot/collab/task-prefs") {
+    const parsed = updateTaskPrefsSchema.safeParse(body);
+    if (!parsed.success) throw new DoneBotGatewayError(400, "invalid_input", "无效的协作自动化配置参数。");
+    json(res, 200, saveCollabTaskPrefs(parsed.data));
     return undefined;
   }
 

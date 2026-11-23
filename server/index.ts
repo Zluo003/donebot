@@ -5686,6 +5686,7 @@ async function scheduleTurnDigest(input: {
 
 // Unattended turns never inherit Auto. Marks expire instead of clearing on turn.completed, which the delegation drain reads after the fold; stale means "ask a human".
 const unattendedThreads = new Map<string, { botId: string; at: number }>();
+const automatedTurnByThread = new Map<string, boolean>();
 const UNATTENDED_TTL_MS = 30 * 60_000;
 
 function markUnattended(botId: string, threadId: string) {
@@ -7714,6 +7715,7 @@ async function beginTurn(
   const instanceId = instance.instanceId;
   const automated = commsDepth > 0 || opts?.automationSource !== undefined
     || Boolean(opts?.unattended || opts?.cardContinuation || opts?.peerAsk || opts?.coordination || opts?.compactOnly || opts?.computerSelectionContinuation);
+  automatedTurnByThread.set(threadId, automated);
   const route = routeDirectTurn(bot, task, store.activePath(threadId), resolvedImages, instance, automated, quickFallback.refused(instance.instanceId));
   const { model, effort, variant } = route;
   assertModelVariantSupported({ variant, effort }, instance.adapter.capabilities);
@@ -11952,7 +11954,7 @@ function configStatus() {
     },
     features: {
       skillAuthoring: skillAuthoringEnabled(cfg),
-      skillReview: cfg.features?.skillReview === true,
+      skillReview: skillReviewEnabled(cfg),
       skillReviewSteps: skillReviewSteps(cfg),
       skillsLibrary: skillsLibraryEnabled(cfg),
       shareLearnedSkills: skillsHost.mode(),
@@ -12509,7 +12511,7 @@ ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));
 ROUTES.push(createTeamFilesRoutes({ ...donebotTeamFiles, personName: person => teamHost.personName(person), botName: botId => store.bot(botId)?.name }));
-ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot, syncLocalProfile: (p) => { saveConfig({ profile: { ...cfg.profile, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.avatarUrl !== undefined ? { avatarUrl: p.avatarUrl } : {}), ...(p.email ? { email: p.email } : {}) } }); Object.assign(cfg, loadConfig()); broadcast({ kind: "config", ...configStatus() }); }, currentLocalProfile: () => cfg.profile, startTurn, threadBusy: (botId, threadId) => threadBusy(botId, threadId) || coordinator.awaitingTeammateThreads().has(threadId), generateBotText: (botId, prompt, signal) => sideJobs.text("representative", botId)?.generateText(prompt, { signal, timeoutMs: 90_000 }) ?? Promise.resolve(undefined) }));
+ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot, syncLocalProfile: (p) => { saveConfig({ profile: { ...cfg.profile, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.avatarUrl !== undefined ? { avatarUrl: p.avatarUrl } : {}), ...(p.email ? { email: p.email } : {}) } }); Object.assign(cfg, loadConfig()); broadcast({ kind: "config", ...configStatus() }); }, currentLocalProfile: () => cfg.profile, startTurn, threadBusy: (botId, threadId) => threadBusy(botId, threadId) || coordinator.awaitingTeammateThreads().has(threadId), isAutomatedTurn: (threadId) => automatedTurnByThread.get(threadId) === true, generateBotText: (botId, prompt, signal) => sideJobs.text("representative", botId)?.generateText(prompt, { signal, timeoutMs: 90_000 }) ?? Promise.resolve(undefined) }));
 ROUTES.push(createTeamRoutes({
   store,
   cfg,

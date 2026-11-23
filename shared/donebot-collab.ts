@@ -249,7 +249,16 @@ export interface DoneBotLocalTaskBinding {
   taskTitle: string;
   botId: string;
   threadId: string;
+  chiefBotId?: string;
+  chiefThreadId?: string;
+  workerBotId?: string;
+  workerThreadId?: string;
   updatedAt: number;
+}
+
+export interface DoneBotCollabTaskPrefs {
+  /** When true, the assignee's Chief Bot may auto-submit a team task once its first-pass review of the specialist's work passes. Default false. */
+  chief_auto_submit_on_approve: boolean;
 }
 
 export interface DoneBotChatSummary {

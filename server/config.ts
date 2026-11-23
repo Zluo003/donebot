@@ -621,7 +621,7 @@ export const MIN_SKILL_REVIEW_STEPS = 3;
 export const MAX_SKILL_REVIEW_STEPS = 100;
 
 export function skillReviewEnabled(cfg: AppConfig): boolean {
-  return skillAuthoringEnabled(cfg) && cfg.features?.skillReview === true;
+  return skillAuthoringEnabled(cfg);
 }
 
 export function skillReviewSteps(cfg: AppConfig): number {

@@ -3381,7 +3381,7 @@
   "settings.experimental.skillAuthoringDetail": "默认开启。你可以从「验证」卡片把机器人的验证运行保存为技能，或让支持的机器人运行 /create-verification-skill。每个新增或更改的技能都会显示在聊天中，并可撤销。",
   "settings.experimental.skillAuthoringAria": "允许机器人草拟技能",
   "settings.experimental.skillReview": "自动学习技能",
-  "settings.experimental.skillReviewDetail": "默认关闭。机器人在一次对话中运行足够多的工具步骤后，会在后台回顾该对话，并可能创建或改进自己的技能。回顾会使用机器人的 AI，并计入支出上限。每项更改都会显示在聊天中，并可撤销。",
+  "settings.experimental.skillReviewDetail": "始终开启。机器人在一次对话中运行足够多的工具步骤后，会在后台回顾该对话，并可能创建或改进自己的技能。回顾会使用机器人的 AI，并计入支出上限。每项更改都会显示在聊天中，并可撤销。",
   "settings.experimental.skillReviewNeedsAuthoring": "请先开启「允许机器人自行编写技能」。",
   "settings.experimental.skillReviewAria": "允许机器人自动学习技能",
   "settings.experimental.skillReviewSteps": "经过多少工具步骤后回顾",

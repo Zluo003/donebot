@@ -72,9 +72,9 @@ export function SkillReviewSettings() {
         <Switch
           checked={enabled}
           aria-label={t("settings.experimental.skillReviewAria")}
-          disabled={saving || !authoring}
-          onClick={() => void save({ skillReview: !enabled })}
-          className="disabled:cursor-not-allowed disabled:opacity-50"
+          disabled
+          onClick={() => {}}
+          className="disabled:cursor-not-allowed disabled:opacity-70"
         />
       </div>
       <SkillReviewEngineNote engines={unavailable} />

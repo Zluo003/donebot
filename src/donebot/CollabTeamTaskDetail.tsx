@@ -233,7 +233,7 @@ export function CollabTeamTaskDetailPanel({
   const passiveStatusNote = !task ? "" : (
     task.status === "todo" ? `已指派给 ${assigneeShortName}，等待对方开始处理`
       : task.status === "in_progress" ? `${assigneeShortName} 正在处理中`
-      : task.status === "bot_revising" ? `${assigneeShortName} 的助手正在按初审意见自动返工`
+      : task.status === "bot_revising" ? `${assigneeShortName} 的助手正在按二审意见自动返工`
       : task.status === "changes_requested" ? `已退回给 ${assigneeShortName} 修改`
       : task.status === "blocked" ? `任务已阻塞，等待 ${assigneeShortName} 处理`
       : task.status === "in_review" || task.status === "bot_reviewing" || task.status === "ready_for_review"
@@ -418,6 +418,7 @@ export function CollabTeamTaskDetailPanel({
     setBusy(true);
     setError("");
     try {
+      const isChief = Boolean(bot.chiefOfStaff);
       await api("/api/donebot/collab/task-bindings", {
         method: "POST",
         body: JSON.stringify({
@@ -427,6 +428,7 @@ export function CollabTeamTaskDetailPanel({
           taskTitle: task.title,
           botId: bot.id,
           threadId: bot.threadId,
+          ...(isChief ? { chiefBotId: bot.id, chiefThreadId: bot.threadId } : {}),
         }),
       }).catch(() => {});
       if (task.status === "todo") {
@@ -441,8 +443,10 @@ export function CollabTeamTaskDetailPanel({
         m => typeof m.text === "string" && m.text.includes("[团队新任务") && m.text.includes(task.title),
       );
       const prompt = alreadyIntroducedTask
-        ? `好的，按上面任务「${task.title}」的要求现在就开始执行吧；完成后先发给我审核，等我说「提交任务」再提交团队验收。`
-        : buildBotHandOffPrompt(team.name, task, latestFeedback);
+        ? (isChief
+            ? `好的，按上面任务「${task.title}」的要求现在就开始编排推进：严禁亲自干活，请派发匹配能力的专长子助手（缺少则自动创建并配好 SOUL.md 和 Skill），子助手完成后由你一审，再按当前代审设置提交或汇报给我确认。`
+            : `好的，按上面任务「${task.title}」的要求现在就开始执行吧；完成后先发给我审核，等我说「提交任务」再提交团队验收。`)
+        : buildBotHandOffPrompt(team.name, task, latestFeedback, { isChief });
       setCollabSidebarTab("bots");
       openBot(dispatch, bot, false);
       dispatch({ type: "showChat" });
@@ -821,7 +825,7 @@ export function CollabTeamTaskDetailPanel({
                   <button type="button" onClick={() => setActionPane(null)} className="text-ink-tertiary hover:text-ink"><X size={13} /></button>
                 </div>
                 <p className="text-[11.5px] leading-relaxed text-ink-tertiary">
-                  点击助手后会立即绑定任务并自动发送开工指令，无需再手动发送；完成后你在对话里说「提交任务」，助手就能直接上传简报和成果文件给验收方，被初审驳回时也会自动回到同一会话继续改。
+                  选择主协调助手时会自动派发给匹配的专长子助手（缺人则自动创建并配好 Skill 与 SOUL.md）并由主协调一审；也可直接指定某位专长子助手干活。
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   {availableLocalBots.map(bot => (
@@ -835,6 +839,7 @@ export function CollabTeamTaskDetailPanel({
                     >
                       <Bot size={13} aria-hidden="true" />
                       <span>{bot.name}</span>
+                      {bot.chiefOfStaff && <span className="rounded bg-accent/15 px-1 text-[10px] text-accent-text">主协调</span>}
                     </button>
                   ))}
                 </div>

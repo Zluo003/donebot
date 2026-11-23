@@ -27,7 +27,8 @@ import {
   collabSubmitTeamTask,
   collabUploadTeamTaskFile,
 } from "./collab-gateway.ts";
-import { getTaskBindingByThread, saveTaskBinding } from "./collab-task-bindings.ts";
+import { getTaskBinding, getTaskBindingByThread, saveTaskBinding } from "./collab-task-bindings.ts";
+import { getCollabTaskPrefs } from "./collab-task-prefs.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import { describeMediaAsset, listUnifiedThreadFiles, type ThreadFileEntry } from "./thread-files.ts";
 
@@ -59,8 +60,18 @@ type MediaPromptMeta = {
 
 type MediaPromptLookup = (filePathOrName: string) => MediaPromptMeta | undefined;
 
+type ChildThreadRef = {
+  botId: string;
+  botName: string;
+  threadId: string;
+  title?: string;
+};
+
 type TaskRuntimeHooks = {
   resolveBotName?: (botId: string) => string;
+  isChiefBot?: (botId: string) => boolean;
+  isAutomatedTurn?: (threadId: string) => boolean;
+  listChildThreads?: (parentThreadId: string) => ChildThreadRef[];
   kickTaskWorker?: () => void;
   listThreadAttachments?: (threadId: string) => ThreadAttachmentInput[];
 };
@@ -596,6 +607,22 @@ export async function handleDoneBotCollabTaskInternal(
         };
       });
       const submittedNames = new Set(submissionUpdates.map(u => u.file_name).filter((n): n is string => Boolean(n)));
+      const childThreads = threadId ? (runtimeHooks.listChildThreads?.(threadId) ?? []) : [];
+      const childMetaByName = new Map<string, ThreadFileEntry>();
+      for (const child of childThreads) {
+        const childExtra: ThreadFileEntry[] = (runtimeHooks.listThreadAttachments?.(child.threadId) ?? []).map(a => ({
+          path: a.path,
+          name: a.name || path.basename(a.path),
+          mime: a.mime,
+          at: a.at,
+          messageText: a.messageText,
+        }));
+        for (const entry of listUnifiedThreadFiles(child.botId, child.threadId, childExtra)) {
+          if (entry.name) childMetaByName.set(entry.name, entry);
+          const base = path.basename(entry.path);
+          if (base) childMetaByName.set(base, entry);
+        }
+      }
       const extraFromHooks: ThreadFileEntry[] = threadId
         ? (runtimeHooks.listThreadAttachments?.(threadId) ?? []).map(a => ({
             path: a.path,
@@ -605,17 +632,41 @@ export async function handleDoneBotCollabTaskInternal(
             messageText: a.messageText,
           }))
         : [];
-      const unifiedFiles = threadId ? listUnifiedThreadFiles(botId, threadId, extraFromHooks) : [];
+      const unifiedFiles = (threadId ? listUnifiedThreadFiles(botId, threadId, extraFromHooks) : []).map(item => {
+        const inherited = childMetaByName.get(item.name) ?? childMetaByName.get(path.basename(item.path));
+        if (!inherited) return item;
+        return {
+          ...item,
+          ...(!item.prompt && inherited.prompt ? { prompt: inherited.prompt } : {}),
+          ...(!item.model && inherited.model ? { model: inherited.model } : {}),
+          ...(!item.references?.length && inherited.references?.length ? { references: inherited.references } : {}),
+          ...(!item.kind && inherited.kind ? { kind: inherited.kind } : {}),
+        };
+      });
       const threadAttachments = unifiedFiles.length > 0
         ? await inspectThreadAttachments(unifiedFiles, submittedNames)
         : [];
+      const taskPrefs = getCollabTaskPrefs();
       json(res, 200, {
         ...detail,
+        task_prefs: taskPrefs,
+        turn_context: {
+          is_chief_bot: Boolean(botId && runtimeHooks.isChiefBot?.(botId)),
+          is_automated_turn: Boolean(threadId && runtimeHooks.isAutomatedTurn?.(threadId)),
+        },
+        ...(childThreads.length > 0 ? {
+          delegated_workers: childThreads.map(w => ({
+            bot_id: w.botId,
+            bot_name: w.botName,
+            thread_id: w.threadId,
+            ...(w.title ? { title: w.title } : {}),
+          })),
+        } : {}),
         ...(latestBatchFiles.length > 0 ? { latest_submission_files: latestBatchFiles } : {}),
         ...(downloaded.length > 0 ? { downloaded_deliverables: downloaded } : {}),
         ...(threadAttachments.length > 0 ? {
           recent_thread_attachments: threadAttachments,
-          attachments_note: "以上 recent_thread_attachments 已核验本会话全部本地交付物（图片、视频、音乐/音频、文档/代码等）的存在性、大小、图片像素尺寸、音视频时长与分辨率、文档摘录及生成提示词摘要（prompt_excerpt），并标记了 already_submitted_in_task 与 is_latest。严禁在主人已确认当前成果（图片/视频/音乐/文档等）后擅自重新生成、重画或重写，也切勿调用 workspace_list/workspace_read 访问私有产物目录！提交完整批次或局部返工时：直接把所需文件 path 传给 collab_submit_team_task.file_paths；如需保留上一版中未修改的原交付文件（图片/视频/音乐/文档均适用），可将 latest_submission_files 中的 file_id 传入 reuse_file_ids，与本次修改的新文件 file_paths 合并成完整批次一次提交。",
+          attachments_note: "以上 recent_thread_attachments 已核验本会话全部本地交付物（含专长子助手回传的图片、视频、音乐/音频、文档/代码等）的存在性、大小、图片像素尺寸、音视频时长与分辨率、文档摘录及生成提示词摘要（prompt_excerpt），并标记了 already_submitted_in_task 与 is_latest。严禁在主人已确认当前成果（图片/视频/音乐/文档等）后擅自重新生成、重画或重写，也切勿调用 workspace_list/workspace_read 访问私有产物目录！提交完整批次或局部返工时：直接把所需文件 path 传给 collab_submit_team_task.file_paths；如需保留上一版中未修改的原交付文件（图片/视频/音乐/文档均适用），可将 latest_submission_files 中的 file_id 传入 reuse_file_ids，与本次修改的新文件 file_paths 合并成完整批次一次提交。",
         } : {}),
       });
       return true;
@@ -645,6 +696,22 @@ export async function handleDoneBotCollabTaskInternal(
       if (!teamId || !taskId) {
         json(res, 400, { error: "无法确定要提交的团队任务：请传入 team_id 和 task_id，或在任务详情页点击「带给我的助手干活」建立绑定。" });
         return true;
+      }
+      const automatedTurn = Boolean(threadId && runtimeHooks.isAutomatedTurn?.(threadId));
+      const existingBinding = getTaskBinding(taskId);
+      if (automatedTurn && existingBinding?.chiefBotId && botId && existingBinding.chiefBotId !== botId) {
+        json(res, 403, { error: "该任务由主协调助手负责统一一审与对外提交。请直接向主协调助手汇报并附带全部成果文件（非媒体文档请用 attach_file 附带），不要越级直接提交团队验收。" });
+        return true;
+      }
+      let existingTaskDetail: DoneBotTeamTaskDetail | null = null;
+      if (automatedTurn && !getCollabTaskPrefs().chief_auto_submit_on_approve) {
+        existingTaskDetail = await collabGetTeamTaskDetail(ctx, teamId, taskId) as DoneBotTeamTaskDetail;
+        const allowedAutoResubmit = existingTaskDetail.task.status === "bot_revising"
+          && existingTaskDetail.task.assignee_auto_resubmit !== false;
+        if (!allowedAutoResubmit) {
+          json(res, 403, { error: "当前未开启「主协调助手代人审批提交」，不能在自动审阅轮次直接提交团队验收。请先将一审通过的成果与简报呈报给主人确认，待主人回复同意后再提交（主人也可在团队任务面板开启「主协调助手代人审批提交」开关）。" });
+          return true;
+        }
       }
       const botName = botId ? (runtimeHooks.resolveBotName?.(botId) || "个人助手") : "个人助手";
       const batchId = randomUUID();
@@ -694,7 +761,8 @@ export async function handleDoneBotCollabTaskInternal(
       try {
         const reusedFiles: Array<{ abs: string; size: number; fileName: string; mime: string }> = [];
         if (parsed.data.reuse_file_ids.length > 0 && reuseDir) {
-          const existingDetail = await collabGetTeamTaskDetail(ctx, teamId, taskId) as DoneBotTeamTaskDetail;
+          const existingDetail = existingTaskDetail
+            ?? (await collabGetTeamTaskDetail(ctx, teamId, taskId) as DoneBotTeamTaskDetail);
           const byFileId = new Map(
             existingDetail.updates
               .filter(u => u.kind === "submission" && u.file_id)
@@ -789,6 +857,7 @@ export async function handleDoneBotCollabTaskInternal(
         }) as DoneBotTeamTaskDetail;
 
         if (botId && threadId && detail?.task) {
+          const callerIsChief = Boolean(runtimeHooks.isChiefBot?.(botId));
           saveTaskBinding({
             teamId,
             teamName: "",
@@ -796,6 +865,7 @@ export async function handleDoneBotCollabTaskInternal(
             taskTitle: detail.task.title,
             botId,
             threadId,
+            ...(callerIsChief ? { chiefBotId: botId, chiefThreadId: threadId } : {}),
           });
         }
         runtimeHooks.kickTaskWorker?.();
@@ -840,6 +910,11 @@ export async function handleDoneBotCollabTaskInternal(
 
       if (!parsed.data.decision) {
         json(res, 400, { error: "human_decision 模式必须提供 decision（approve / request_changes）。" });
+        return true;
+      }
+      const reviewThreadId = parsed.data.thread_id || capability?.threadId;
+      if (reviewThreadId && runtimeHooks.isAutomatedTurn?.(reviewThreadId)) {
+        json(res, 403, { error: "派发方主协调助手只能执行二审（允许驳回，或二审通过流转到待终审），严禁在自动审阅轮次直接执行终审决定。请改用 mode='bot_review'（verdict='pass' 或 'hard_fail'），终审必须由派发人本人确认。" });
         return true;
       }
       const detail = await collabReviewTeamTask(ctx, parsed.data.team_id, parsed.data.task_id, {

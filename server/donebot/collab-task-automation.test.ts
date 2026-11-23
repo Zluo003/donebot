@@ -10,7 +10,7 @@ import {
   resetTaskBindingsForTests,
   saveTaskBinding,
 } from "./collab-task-bindings.ts";
-import { handleDoneBotCollabTaskInternal, registerCollabTaskRuntimeHooks } from "./collab-task-internal.ts";
+import { handleDoneBotCollabTaskInternal, registerCollabTaskRuntimeHooks, registerMediaPromptLookup } from "./collab-task-internal.ts";
 import { dispatchTeamTaskViaChiefBot } from "./collab-task-dispatch.ts";
 import { buildTaskEventPrompt, createCollabTaskWorker } from "./collab-task-worker.ts";
 import type { DoneBotGateway } from "./gateway.ts";
@@ -421,5 +421,143 @@ describe("team task bot automation", () => {
     expect(startTurn).not.toHaveBeenCalled();
     expect(completed).toHaveLength(1);
     expect(completed[0]!.body).toContain('"status":"done"');
+  });
+
+  it("enriches collab_get_team_task recent_thread_attachments with image dimensions, prompt_excerpt, and supports reuse_file_ids partial revision", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "donebot-collab-att-"));
+    try {
+      const tigerName = "donebot-11111111-1111-4111-8111-111111111111-1.png";
+      const snakeNewPath = path.join(dir, "donebot-22222222-2222-4222-8222-222222222222-1.png");
+      const songPath = path.join(dir, "donebot-33333333-3333-4333-8333-333333333333-1.mp3");
+      const docPath = path.join(dir, "script-v2.md");
+      const tigerPath = path.join(dir, tigerName);
+      const missingPath = path.join(dir, "missing.png");
+      const pngHeader = Buffer.alloc(32);
+      pngHeader.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+      pngHeader.writeUInt32BE(1024, 16);
+      pngHeader.writeUInt32BE(1024, 20);
+      await fs.writeFile(tigerPath, pngHeader);
+      await fs.writeFile(snakeNewPath, pngHeader);
+      await fs.writeFile(songPath, Buffer.from("ID3synthetic-audio-bytes"));
+      await fs.writeFile(docPath, "# 第3集修订分镜脚本\n已按意见删除多余旁白并补齐镜头时长。");
+
+      const prevDetail = makeDetail("changes_requested");
+      prevDetail.task.latest_submission_batch_id = "batch-v1";
+      prevDetail.updates = [
+        {
+          ...prevDetail.updates[0]!,
+          id: 11,
+          kind: "submission",
+          batch_id: "batch-v1",
+          file_id: "file-tiger-v1",
+          file_name: tigerName,
+          file_mime: "image/png",
+          file_size: 32,
+        },
+      ];
+
+      registerMediaPromptLookup(input => {
+        if (input.includes("11111111")) return { jobId: "11111111-1111-4111-8111-111111111111", model: "seedream-5-5", kind: "image", prompt: "皮克斯3D卡通老虎角色图" };
+        if (input.includes("22222222")) return { jobId: "22222222-2222-4222-8222-222222222222", model: "seedream-5-5", kind: "image", prompt: "修订版光滑绿蛇（无响尾蛇尾环）" };
+        if (input.includes("33333333")) return { jobId: "33333333-3333-4333-8333-333333333333", model: "suno-v6", kind: "music", prompt: "标题:片尾曲 · 风格:轻快管弦乐" };
+        return undefined;
+      });
+      registerCollabTaskRuntimeHooks({
+        resolveBotName: () => "多宝",
+        listThreadAttachments: () => [
+          { path: missingPath, name: "missing.png", mime: "image/png" },
+          { path: tigerPath, name: tigerName, mime: "image/png", at: 1700000000000, messageText: "image · seedream-5-5" },
+          { path: songPath, name: path.basename(songPath), mime: "audio/mpeg", at: 1700000030000, messageText: "music · suno-v6" },
+          { path: docPath, name: "script-v2.md", mime: "text/markdown", at: 1700000045000, messageText: "修订脚本" },
+          { path: snakeNewPath, name: path.basename(snakeNewPath), mime: "image/png", at: 1700000060000, messageText: "image · seedream-5-5" },
+        ],
+      });
+
+      const uploadedNames: string[] = [];
+      const fetchMock = vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/task-files/file-tiger-v1")) {
+          return new Response(pngHeader, { status: 200, headers: { "content-type": "image/png" } });
+        }
+        if (url.includes("/files?")) {
+          const parsedUrl = new URL(url);
+          uploadedNames.push(parsedUrl.searchParams.get("name") || "");
+          return mockJsonResponse(prevDetail);
+        }
+        if (url.endsWith("/submit")) return mockJsonResponse(makeDetail("bot_reviewing"));
+        return mockJsonResponse(prevDetail);
+      }) as unknown as typeof fetch;
+
+      let status = 0;
+      let payload: unknown = null;
+      const handled = await handleDoneBotCollabTaskInternal(
+        makeGateway(fetchMock),
+        "/api/internal/donebot/collab/tasks/detail",
+        {} as never,
+        (_res, s, v) => { status = s; payload = v; },
+        async () => ({ team_id: teamId, task_id: taskId, bot_id: "bot-chief", thread_id: "t-chief" }),
+      );
+      expect(handled).toBe(true);
+      expect(status).toBe(200);
+      const body = payload as {
+        latest_submission_files?: Array<{ file_id: string; prompt_excerpt?: string }>;
+        recent_thread_attachments?: Array<{ path: string; size_bytes: number; dimensions?: { width: number; height: number; aspect_ratio: string }; text_excerpt?: string; media_kind?: string; prompt_excerpt?: string; already_submitted_in_task: boolean; is_latest?: boolean }>;
+        attachments_note?: string;
+      };
+      expect(body.latest_submission_files).toEqual([
+        expect.objectContaining({ file_id: "file-tiger-v1", prompt_excerpt: "皮克斯3D卡通老虎角色图" }),
+      ]);
+      expect(body.recent_thread_attachments).toHaveLength(4);
+      expect(body.recent_thread_attachments![0]).toMatchObject({
+        path: tigerPath,
+        size_bytes: 32,
+        dimensions: { width: 1024, height: 1024, aspect_ratio: "1:1" },
+        prompt_excerpt: "皮克斯3D卡通老虎角色图",
+        already_submitted_in_task: true,
+      });
+      expect(body.recent_thread_attachments![1]).toMatchObject({
+        path: songPath,
+        media_kind: "music",
+        prompt_excerpt: "标题:片尾曲 · 风格:轻快管弦乐",
+        already_submitted_in_task: false,
+      });
+      expect(body.recent_thread_attachments![2]).toMatchObject({
+        path: docPath,
+        text_excerpt: expect.stringContaining("第3集修订分镜脚本"),
+        already_submitted_in_task: false,
+      });
+      expect(body.recent_thread_attachments![3]).toMatchObject({
+        path: snakeNewPath,
+        prompt_excerpt: "修订版光滑绿蛇（无响尾蛇尾环）",
+        already_submitted_in_task: false,
+        is_latest: true,
+      });
+      expect(body.attachments_note).toContain("reuse_file_ids");
+
+      // Now submit partial revision reusing file-tiger-v1 + uploading docPath & snakeNewPath
+      status = 0;
+      payload = null;
+      const submitted = await handleDoneBotCollabTaskInternal(
+        makeGateway(fetchMock),
+        "/api/internal/donebot/collab/tasks/submit",
+        {} as never,
+        (_res, s, v) => { status = s; payload = v; },
+        async () => ({
+          team_id: teamId,
+          task_id: taskId,
+          bot_id: "bot-chief",
+          thread_id: "t-chief",
+          brief: "保留原老虎图，仅替换修订后的脚本与光滑绿蛇图",
+          reuse_file_ids: ["file-tiger-v1"],
+          file_paths: [docPath, snakeNewPath],
+        }),
+      );
+      expect(submitted).toBe(true);
+      expect(status).toBe(200);
+      expect(uploadedNames).toEqual([tigerName, "script-v2.md", path.basename(snakeNewPath)]);
+    } finally {
+      registerMediaPromptLookup(undefined);
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });

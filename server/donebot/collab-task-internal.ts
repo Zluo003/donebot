@@ -34,15 +34,38 @@ const execFileAsync = promisify(execFile);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const positiveInt = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
+type ThreadAttachmentInput = {
+  path: string;
+  name?: string;
+  mime?: string;
+  at?: number;
+  messageText?: string;
+};
+
+type MediaPromptMeta = {
+  jobId: string;
+  model?: string;
+  kind?: string;
+  prompt?: string;
+  createdAt?: number;
+};
+
+type MediaPromptLookup = (filePathOrName: string) => MediaPromptMeta | undefined;
+
 type TaskRuntimeHooks = {
   resolveBotName?: (botId: string) => string;
   kickTaskWorker?: () => void;
-  listThreadAttachments?: (threadId: string) => Array<{ path: string; name?: string; mime?: string }>;
+  listThreadAttachments?: (threadId: string) => ThreadAttachmentInput[];
 };
 let runtimeHooks: TaskRuntimeHooks = {};
+let mediaPromptLookup: MediaPromptLookup | undefined;
 
 export function registerCollabTaskRuntimeHooks(hooks: TaskRuntimeHooks): void {
   runtimeHooks = hooks;
+}
+
+export function registerMediaPromptLookup(lookup: MediaPromptLookup | undefined): void {
+  mediaPromptLookup = lookup;
 }
 
 const createToolSchema = z.object({
@@ -85,6 +108,7 @@ const submitToolSchema = z.object({
   task_id: z.string().regex(uuidPattern).optional(),
   brief: z.string().trim().min(1).max(8000),
   file_paths: z.array(z.string().trim().min(1).max(4096)).max(10).default([]),
+  reuse_file_ids: z.array(z.string().trim().min(1).max(128)).max(10).default([]),
   notify_channel: z.boolean().default(true),
   bot_id: z.string().max(128).optional(),
   thread_id: z.string().max(128).optional(),
@@ -123,12 +147,30 @@ function safeFileName(raw: string, fallback: string): string {
   return base || fallback;
 }
 
-function readImageDimensions(buf: Buffer): { width: number; height: number; aspect_ratio: string } | undefined {
+export function readImageDimensions(buf: Buffer): { width: number; height: number; aspect_ratio: string } | undefined {
   // PNG header
   if (buf.length >= 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
     const width = buf.readUInt32BE(16);
     const height = buf.readUInt32BE(20);
     if (width > 0 && height > 0) return { width, height, aspect_ratio: formatAspectRatio(width, height) };
+  }
+  // WebP header (VP8X / VP8 / VP8L)
+  if (buf.length >= 30 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") {
+    const chunk = buf.toString("ascii", 12, 16);
+    if (chunk === "VP8X") {
+      const width = 1 + (buf[24]! | (buf[25]! << 8) | (buf[26]! << 16));
+      const height = 1 + (buf[27]! | (buf[28]! << 8) | (buf[29]! << 16));
+      if (width > 0 && height > 0) return { width, height, aspect_ratio: formatAspectRatio(width, height) };
+    } else if (chunk === "VP8 " && buf[23] === 0x9d && buf[24] === 0x01 && buf[25] === 0x2a) {
+      const width = buf.readUInt16LE(26) & 0x3fff;
+      const height = buf.readUInt16LE(28) & 0x3fff;
+      if (width > 0 && height > 0) return { width, height, aspect_ratio: formatAspectRatio(width, height) };
+    } else if (chunk === "VP8L" && buf[20] === 0x2f) {
+      const bits = buf.readUInt32LE(21);
+      const width = (bits & 0x3fff) + 1;
+      const height = ((bits >> 14) & 0x3fff) + 1;
+      if (width > 0 && height > 0) return { width, height, aspect_ratio: formatAspectRatio(width, height) };
+    }
   }
   // JPEG SOF marker scan
   if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
@@ -148,6 +190,81 @@ function readImageDimensions(buf: Buffer): { width: number; height: number; aspe
     }
   }
   return undefined;
+}
+
+async function readImageDimensionsFromFile(filePath: string): Promise<{ width: number; height: number; aspect_ratio: string } | undefined> {
+  const fh = await fs.open(filePath, "r").catch(() => null);
+  if (!fh) return undefined;
+  try {
+    const buf = Buffer.alloc(65536);
+    const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+    return bytesRead > 0 ? readImageDimensions(buf.subarray(0, bytesRead)) : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    await fh.close().catch(() => {});
+  }
+}
+
+async function readTextExcerptFromFile(filePath: string): Promise<string | undefined> {
+  const fh = await fs.open(filePath, "r").catch(() => null);
+  if (!fh) return undefined;
+  try {
+    const buf = Buffer.alloc(4096);
+    const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+    if (bytesRead <= 0) return undefined;
+    const text = buf.subarray(0, bytesRead).toString("utf8").replace(/\s+/g, " ").trim();
+    return text ? text.slice(0, 320) : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    await fh.close().catch(() => {});
+  }
+}
+
+async function inspectThreadAttachments(raw: ThreadAttachmentInput[], submittedNames: ReadonlySet<string>) {
+  const deduped = new Map<string, ThreadAttachmentInput>();
+  for (const item of raw) {
+    const p = item.path?.trim();
+    if (!p) continue;
+    deduped.delete(p);
+    deduped.set(p, { ...item, path: p });
+  }
+  const recent = [...deduped.values()].slice(-12);
+  const inspected = await Promise.all(recent.map(async item => {
+    const stat = await fs.lstat(item.path).catch(() => null);
+    if (!stat || stat.isSymbolicLink() || !stat.isFile() || stat.size === 0) return null;
+    const name = item.name || path.basename(item.path);
+    const mime = item.mime || guessMimeByExt(item.path);
+    const mimeLower = mime.toLowerCase();
+    const isImg = mimeLower.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(item.path);
+    const isAv = mimeLower.startsWith("video/") || mimeLower.startsWith("audio/") || /\.(mp4|mov|webm|mp3|wav|m4a|ogg|flac|aac)$/i.test(item.path);
+    const isTextDoc = mimeLower.startsWith("text/") || mimeLower === "application/json" || /\.(md|txt|csv|json|yaml|yml|xml|html|srt|ts|js|py|sql)$/i.test(item.path);
+    const [dimensions, mediaMeta, textExcerpt] = await Promise.all([
+      isImg ? readImageDimensionsFromFile(item.path) : Promise.resolve(undefined),
+      isAv ? probeMediaMetadata(item.path) : Promise.resolve(undefined),
+      isTextDoc ? readTextExcerptFromFile(item.path) : Promise.resolve(undefined),
+    ]);
+    const meta = mediaPromptLookup?.(item.path) ?? mediaPromptLookup?.(name);
+    const ts = item.at ?? meta?.createdAt;
+    return {
+      path: item.path,
+      name,
+      mime,
+      size_bytes: stat.size,
+      ...(dimensions ? { dimensions } : {}),
+      ...(mediaMeta ? { media_meta: mediaMeta } : {}),
+      ...(textExcerpt ? { text_excerpt: textExcerpt } : {}),
+      ...(meta?.kind ? { media_kind: meta.kind } : {}),
+      ...(meta?.prompt ? { prompt_excerpt: meta.prompt } : {}),
+      ...(meta?.model ? { model: meta.model } : {}),
+      ...(ts ? { at: ts, at_iso: new Date(ts).toISOString() } : {}),
+      already_submitted_in_task: submittedNames.has(name),
+      ...(item.messageText ? { source_text: item.messageText } : {}),
+    };
+  }));
+  const valid = inspected.filter((x): x is NonNullable<typeof x> => x !== null);
+  return valid.map((item, idx) => (idx === valid.length - 1 ? { ...item, is_latest: true } : item));
 }
 
 function formatAspectRatio(w: number, h: number): string {
@@ -297,17 +414,29 @@ function guessMimeByExt(filePath: string): string {
     ".jpeg": "image/jpeg",
     ".webp": "image/webp",
     ".gif": "image/gif",
+    ".svg": "image/svg+xml",
     ".mp4": "video/mp4",
     ".mov": "video/quicktime",
     ".webm": "video/webm",
     ".mp3": "audio/mpeg",
     ".wav": "audio/wav",
     ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
     ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".txt": "text/plain",
     ".md": "text/markdown",
     ".json": "application/json",
     ".csv": "text/csv",
+    ".yaml": "text/yaml",
+    ".yml": "text/yaml",
+    ".xml": "application/xml",
+    ".html": "text/html",
+    ".srt": "text/plain",
     ".zip": "application/zip",
   };
   return map[ext] || "application/octet-stream";
@@ -435,13 +564,33 @@ export async function handleDoneBotCollabTaskInternal(
       const downloaded = parsed.data.download_deliverables
         ? await downloadDeliverablesToSandbox(gateway, detail)
         : [];
+      const submissionUpdates = detail.updates.filter(u => u.kind === "submission" && u.file_id);
+      const latestBatch = detail.task.latest_submission_batch_id;
+      const latestBatchFiles = (latestBatch
+        ? submissionUpdates.filter(u => u.batch_id === latestBatch)
+        : submissionUpdates.slice(-10)
+      ).map(u => {
+        const meta = u.file_name ? mediaPromptLookup?.(u.file_name) : undefined;
+        return {
+          file_id: u.file_id!,
+          file_name: u.file_name || "",
+          file_mime: u.file_mime || "",
+          file_size: u.file_size || 0,
+          ...(meta?.prompt ? { prompt_excerpt: meta.prompt } : {}),
+        };
+      });
+      const submittedNames = new Set(submissionUpdates.map(u => u.file_name).filter((n): n is string => Boolean(n)));
       const threadAttachments = parsed.data.thread_id
-        ? (runtimeHooks.listThreadAttachments?.(parsed.data.thread_id) ?? []).slice(-10)
+        ? await inspectThreadAttachments(runtimeHooks.listThreadAttachments?.(parsed.data.thread_id) ?? [], submittedNames)
         : [];
       json(res, 200, {
         ...detail,
+        ...(latestBatchFiles.length > 0 ? { latest_submission_files: latestBatchFiles } : {}),
         ...(downloaded.length > 0 ? { downloaded_deliverables: downloaded } : {}),
-        ...(threadAttachments.length > 0 ? { recent_thread_attachments: threadAttachments } : {}),
+        ...(threadAttachments.length > 0 ? {
+          recent_thread_attachments: threadAttachments,
+          attachments_note: "以上 recent_thread_attachments 已核验本会话全部本地交付物（图片、视频、音乐/音频、文档/代码等）的存在性、大小、图片像素尺寸、音视频时长与分辨率、文档摘录及生成提示词摘要（prompt_excerpt），并标记了 already_submitted_in_task 与 is_latest。严禁在主人已确认当前成果（图片/视频/音乐/文档等）后擅自重新生成、重画或重写，也切勿调用 workspace_list/workspace_read 访问私有产物目录！提交完整批次或局部返工时：直接把所需文件 path 传给 collab_submit_team_task.file_paths；如需保留上一版中未修改的原交付文件（图片/视频/音乐/文档均适用），可将 latest_submission_files 中的 file_id 传入 reuse_file_ids，与本次修改的新文件 file_paths 合并成完整批次一次提交。",
+        } : {}),
       });
       return true;
     }
@@ -449,7 +598,11 @@ export async function handleDoneBotCollabTaskInternal(
     if (reqPath === "/api/internal/donebot/collab/tasks/submit") {
       const parsed = submitToolSchema.safeParse(body);
       if (!parsed.success) {
-        json(res, 400, { error: "提交任务需要填写简报（brief），且最多附带 10 个本地成果文件路径。" });
+        json(res, 400, { error: "提交任务需要填写简报（brief），且最多附带 10 个成果文件。" });
+        return true;
+      }
+      if (parsed.data.file_paths.length + parsed.data.reuse_file_ids.length > 10) {
+        json(res, 400, { error: "单次提交最多附带 10 个成果文件（file_paths 与 reuse_file_ids 合计不超过 10 个）。" });
         return true;
       }
       let teamId = parsed.data.team_id;
@@ -467,13 +620,12 @@ export async function handleDoneBotCollabTaskInternal(
       }
       const botName = parsed.data.bot_id ? (runtimeHooks.resolveBotName?.(parsed.data.bot_id) || "个人助手") : "个人助手";
       const batchId = randomUUID();
-      const uploadedFiles: Array<{ name: string; size: number }> = [];
 
       const threadAttachments = parsed.data.thread_id
         ? (runtimeHooks.listThreadAttachments?.(parsed.data.thread_id) ?? [])
         : [];
 
-      for (const rawPath of parsed.data.file_paths) {
+      const preparedFiles = await Promise.all(parsed.data.file_paths.map(async rawPath => {
         let abs = rawPath.trim();
         if (abs && !path.isAbsolute(abs) && threadAttachments.length > 0) {
           const hit = [...threadAttachments].reverse().find(att =>
@@ -482,66 +634,146 @@ export async function handleDoneBotCollabTaskInternal(
           if (hit) abs = hit.path;
         }
         if (!abs || abs.includes("\0") || !path.isAbsolute(abs)) {
-          json(res, 400, { error: `成果文件路径必须为绝对路径：${abs}` });
-          return true;
+          return { error: `成果文件路径必须为绝对路径：${abs}` };
         }
         const stat = await fs.lstat(abs).catch(() => null);
         if (!stat || stat.isSymbolicLink() || !stat.isFile()) {
-          json(res, 400, { error: `成果文件不存在或不是常规文件：${abs}` });
-          return true;
+          return { error: `成果文件不存在或不是常规文件：${abs}` };
         }
         if (stat.size === 0 || stat.size > DONEBOT_COLLAB_MAX_FILE_BYTES) {
-          json(res, 400, { error: `成果文件大小无效（须为 1B - 100MB）：${path.basename(abs)}` });
+          return { error: `成果文件大小无效（须为 1B - 100MB）：${path.basename(abs)}` };
+        }
+        return { abs, size: stat.size, fileName: path.basename(abs), mime: guessMimeByExt(abs) };
+      }));
+
+      const invalid = preparedFiles.find(item => "error" in item);
+      if (invalid && "error" in invalid) {
+        json(res, 400, { error: invalid.error });
+        return true;
+      }
+
+      const validFiles = preparedFiles as Array<{ abs: string; size: number; fileName: string; mime: string }>;
+      const reuseDir = parsed.data.reuse_file_ids.length > 0
+        ? path.join(os.tmpdir(), "donebot-task-reuse", batchId)
+        : null;
+      try {
+        const reusedFiles: Array<{ abs: string; size: number; fileName: string; mime: string }> = [];
+        if (parsed.data.reuse_file_ids.length > 0 && reuseDir) {
+          const existingDetail = await collabGetTeamTaskDetail(ctx, teamId, taskId) as DoneBotTeamTaskDetail;
+          const byFileId = new Map(
+            existingDetail.updates
+              .filter(u => u.kind === "submission" && u.file_id)
+              .map(u => [u.file_id!, u]),
+          );
+          const uniqueReuseIds = [...new Set(parsed.data.reuse_file_ids)];
+          for (const fid of uniqueReuseIds) {
+            if (!byFileId.has(fid)) {
+              json(res, 400, { error: `无法复用文件 ${fid}：该文件不属于当前任务的既有交付记录。` });
+              return true;
+            }
+          }
+          await fs.mkdir(reuseDir, { recursive: true });
+          const downloadedReused = await Promise.all(uniqueReuseIds.map(async (fid, idx) => {
+            const u = byFileId.get(fid)!;
+            const fileName = safeFileName(u.file_name || "", `reused_${idx + 1}`);
+            const dest = path.join(reuseDir, `${idx + 1}_${fileName}`);
+            const upstream = await collabDownloadTeamTaskFile(ctx, fid, false);
+            if (!upstream.ok || !upstream.body) {
+              return { error: `拉取待复用原图「${fileName}」失败（HTTP ${upstream.status}）。` };
+            }
+            const out = createWriteStream(dest);
+            const reader = upstream.body.getReader();
+            try {
+              for (;;) {
+                const next = await reader.read();
+                if (next.done) break;
+                if (!out.write(next.value)) {
+                  await new Promise<void>((resolve, reject) => {
+                    out.once("drain", resolve);
+                    out.once("error", reject);
+                  });
+                }
+              }
+              await new Promise<void>((resolve, reject) => {
+                out.once("error", reject);
+                out.end(() => resolve());
+              });
+            } catch {
+              out.destroy();
+              await reader.cancel().catch(() => {});
+              return { error: `拉取待复用原图「${fileName}」时传输中断。` };
+            }
+            const stat = await fs.stat(dest).catch(() => null);
+            if (!stat || stat.size === 0 || stat.size > DONEBOT_COLLAB_MAX_FILE_BYTES) {
+              return { error: `待复用原图「${fileName}」大小无效。` };
+            }
+            return { abs: dest, size: stat.size, fileName, mime: u.file_mime || guessMimeByExt(fileName) };
+          }));
+          const failedReuse = downloadedReused.find(item => "error" in item);
+          if (failedReuse && "error" in failedReuse) {
+            json(res, 502, { error: failedReuse.error });
+            return true;
+          }
+          reusedFiles.push(...(downloadedReused as Array<{ abs: string; size: number; fileName: string; mime: string }>));
+        }
+
+        const allFiles = [...reusedFiles, ...validFiles];
+        const uploadResults = await Promise.all(allFiles.map(async file => {
+          const q = new URLSearchParams({
+            kind: "submission",
+            batch_id: batchId,
+            finalize: "0",
+            name: file.fileName,
+            actor_kind: "bot",
+            actor_bot_name: botName,
+          });
+          const stream = Readable.toWeb(createReadStream(file.abs)) as unknown as ReadableStream<Uint8Array>;
+          const upRes = await collabUploadTeamTaskFile(ctx, teamId, taskId, q.toString(), stream, {
+            "content-type": file.mime,
+            "content-length": String(file.size),
+          });
+          if (!upRes.ok) {
+            return { status: upRes.status >= 400 ? upRes.status : 502, error: `上传成果文件「${file.fileName}」失败（HTTP ${upRes.status}）。` };
+          }
+          return { name: file.fileName, size: file.size };
+        }));
+
+        const failedUpload = uploadResults.find(item => "error" in item);
+        if (failedUpload && "error" in failedUpload) {
+          json(res, failedUpload.status ?? 502, { error: failedUpload.error });
           return true;
         }
-        const fileName = path.basename(abs);
-        const mime = guessMimeByExt(abs);
-        const q = new URLSearchParams({
-          kind: "submission",
+        const uploadedFiles = uploadResults as Array<{ name: string; size: number }>;
+
+        const detail = await collabSubmitTeamTask(ctx, teamId, taskId, {
+          body: parsed.data.brief,
           batch_id: batchId,
-          finalize: "0",
-          name: fileName,
           actor_kind: "bot",
           actor_bot_name: botName,
-        });
-        const stream = Readable.toWeb(createReadStream(abs)) as unknown as ReadableStream<Uint8Array>;
-        const upRes = await collabUploadTeamTaskFile(ctx, teamId, taskId, q.toString(), stream, {
-          "content-type": mime,
-          "content-length": String(stat.size),
-        });
-        if (!upRes.ok) {
-          json(res, upRes.status >= 400 ? upRes.status : 502, { error: `上传成果文件「${fileName}」失败（HTTP ${upRes.status}）。` });
-          return true;
+          notify_channel: parsed.data.notify_channel,
+        }) as DoneBotTeamTaskDetail;
+
+        if (parsed.data.bot_id && parsed.data.thread_id && detail?.task) {
+          saveTaskBinding({
+            teamId,
+            teamName: "",
+            taskId,
+            taskTitle: detail.task.title,
+            botId: parsed.data.bot_id,
+            threadId: parsed.data.thread_id,
+          });
         }
-        uploadedFiles.push({ name: fileName, size: stat.size });
-      }
-
-      const detail = await collabSubmitTeamTask(ctx, teamId, taskId, {
-        body: parsed.data.brief,
-        batch_id: batchId,
-        actor_kind: "bot",
-        actor_bot_name: botName,
-        notify_channel: parsed.data.notify_channel,
-      }) as DoneBotTeamTaskDetail;
-
-      if (parsed.data.bot_id && parsed.data.thread_id && detail?.task) {
-        saveTaskBinding({
-          teamId,
-          teamName: "",
-          taskId,
-          taskTitle: detail.task.title,
-          botId: parsed.data.bot_id,
-          threadId: parsed.data.thread_id,
+        runtimeHooks.kickTaskWorker?.();
+        json(res, 200, {
+          submitted: true,
+          batch_id: batchId,
+          uploaded_files: uploadedFiles,
+          task: detail.task,
         });
+        return true;
+      } finally {
+        if (reuseDir) await fs.rm(reuseDir, { recursive: true, force: true }).catch(() => {});
       }
-      runtimeHooks.kickTaskWorker?.();
-      json(res, 200, {
-        submitted: true,
-        batch_id: batchId,
-        uploaded_files: uploadedFiles,
-        task: detail.task,
-      });
-      return true;
     }
 
     if (reqPath === "/api/internal/donebot/collab/tasks/review") {

@@ -94,7 +94,7 @@ export const DONEBOT_COLLAB_TOOL_DEFINITIONS = [
   },
   {
     name: "collab_get_team_task",
-    description: "Read full details, acceptance_criteria, submission batches, and review timeline of a team task. Omit team_id/task_id to inspect the task bound to the current conversation thread. Set download_deliverables=true to download the latest submission files to a local sandbox folder and return their local paths, image dimensions, text excerpts, or video keyframes for inspection.",
+    description: "Read full details, acceptance_criteria, latest_submission_files (with file_id and prompt_excerpt), and review timeline of a team task. Omit team_id/task_id to inspect the task bound to the current conversation thread. Also returns verified recent_thread_attachments for ALL deliverable types in this conversation (images with dimensions, videos/music/audio with media_meta duration/resolution, documents/code with text_excerpt, plus exact local path, size_bytes, prompt_excerpt, at_iso, is_latest, already_submitted_in_task) — NEVER call workspace_list or workspace_read to look for generated media/attachment files in private artifact folders. Set download_deliverables=true to download the latest submission files to a local sandbox folder and return their local paths, image dimensions, text excerpts, or video keyframes for inspection.",
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const,
     inputSchema: {
       type: "object",
@@ -108,7 +108,7 @@ export const DONEBOT_COLLAB_TOOL_DEFINITIONS = [
   },
   {
     name: "collab_submit_team_task",
-    description: "Submit a structured delivery brief and 0-10 local deliverable files (images, videos, audio, docs up to 100 MB each) to the task assigner as one submission batch. Can omit team_id/task_id when called inside a thread already bound to the task. IMPORTANT: For the FIRST submission, ONLY call this after the assignee user explicitly approves submission (e.g. '可以了，提交任务'). During an automated bot_revising round after objective hard_fail rejection, you may call this directly after completing text/code/image fixes (never auto-run expensive video/music regeneration without user confirmation).",
+    description: "Submit a structured delivery brief and 0-10 deliverable files of ANY type (images, videos, music/audio, documents, PDF/Office, code, archives up to 100 MB each) to the task assigner as one submission batch. Can omit team_id/task_id when called inside a thread already bound to the task. Pass exact local paths directly from [DoneBot media receipt: terminal] or collab_get_team_task.recent_thread_attachments (matched by prompt_excerpt, text_excerpt, dimensions/media_meta, and at_iso). NEVER call workspace_list/workspace_read on private media directories, and NEVER regenerate, redraw, or rewrite ANY deliverable (image, video, music/audio, or document) that the user has already reviewed and approved! For partial revisions (e.g. keeping unchanged images/videos/songs/docs from the previous submission and replacing only revised items), pass unchanged file IDs from latest_submission_files in reuse_file_ids (or their original local paths in file_paths) together with the newly revised local file paths in file_paths. IMPORTANT: For the FIRST submission or after human feedback, ONLY call this after the assignee user explicitly approves submission (e.g. '可以了，提交任务'). During an automated bot_revising round after objective hard_fail rejection, you may call this directly after completing text/code/image fixes (never auto-run expensive video/music regeneration without user confirmation).",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const,
     inputSchema: {
       type: "object",
@@ -127,6 +127,12 @@ export const DONEBOT_COLLAB_TOOL_DEFINITIONS = [
           items: { type: "string", maxLength: 4096 },
           maxItems: 10,
           description: "Absolute local paths of deliverable files produced for this task to upload.",
+        },
+        reuse_file_ids: {
+          type: "array",
+          items: { type: "string", maxLength: 128 },
+          maxItems: 10,
+          description: "Optional file_id list from latest_submission_files of THIS task to keep unchanged in the new submission batch (ideal for partial revisions).",
         },
         notify_channel: { type: "boolean", description: "Default true: post a concise submission notice in the channel." },
       },

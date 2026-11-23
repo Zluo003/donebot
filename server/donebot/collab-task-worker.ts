@@ -133,7 +133,7 @@ export function buildTaskEventPrompt(
       ...(fixes.length > 0 ? ["【具体修改指令】", ...fixes.map((f, i) => `${i + 1}. ${f}`)] : []),
       "",
       "执行与费用护栏（必须严格遵守）：",
-      "1. 如果本次修改仅涉及文案、脚本、策划、代码或图片生成/修图：请结合当前对话历史直接按上述修改指令完成修改与自查。",
+      "1. 如果本次修改仅涉及文案、脚本、策划、代码、文档或图片生成/修图：请结合当前对话历史直接按上述修改指令完成修改与自查。若只需局部返工（例如只修改其中 1 份文档、1 张图、1 段视频或 1 首音乐，其余成果保留原版），只修改/重做被要求改动的部分，提交时通过 collab_get_team_task 的 latest_submission_files（reuse_file_ids）与 recent_thread_attachments（按 prompt_excerpt / text_excerpt / media_meta 识别）保留未改动原文件并替换新版，严禁重做未要求改动或主人已确认的版本。",
       autoResubmit
         ? "   修改并核验无误后，请直接调用 collab_submit_team_task 自动重新提交新版任务简报（说明具体改了什么）与新版成果文件路径，然后简洁告知主人本轮自动修正并已重提。"
         : "   修改完成后先不要自动提交，请把修改结果展示给主人等待主人确认后再调用 collab_submit_team_task 提交。",
@@ -149,7 +149,7 @@ export function buildTaskEventPrompt(
     `团队「${ev.team_name}」中的任务「${task.title}」（team_id: ${ev.team_id}，task_id: ${task.id}）被验收人（${ev.reviewer_name || "验收人"}）人工退回修改：`,
     `【验收人修改意见】\n${feedback}`,
     "",
-    "请结合本对话历史，立刻向主人汇报这条修改意见并给出具体修改方案或草稿；修改完成后等待主人点头审批再调用 collab_submit_team_task 重新提交。",
+    "请结合本对话历史，立刻向主人汇报这条修改意见并给出具体修改方案或草稿；若只需局部返工（无论是图片、视频、音乐/音频还是文档/代码），只修改被要求改动的部分，其余未改动成果保留原版。修改完成后等待主人点头审批，审批后直接调用 collab_submit_team_task（通过 file_paths 与 reuse_file_ids 保留未改动原文件并替换新版）重新提交，严禁在主人确认后再次重新生成或重做已确认版本。",
   ].join("\n");
   return { display, full };
 }

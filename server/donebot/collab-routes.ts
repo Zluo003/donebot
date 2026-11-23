@@ -262,7 +262,13 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
     resolveBotName: id => deps.store.bot(id)?.name ?? "",
     kickTaskWorker: () => taskWorker.kick(),
     listThreadAttachments: threadId => (deps.store.messagesFor?.(threadId) ?? [])
-      .flatMap(m => (m.attachments ?? []).map(a => ({ path: a.path, name: "name" in a ? a.name : undefined, mime: a.mime }))),
+      .flatMap(m => (m.attachments ?? []).map(a => ({
+        path: a.path,
+        name: "name" in a ? a.name : undefined,
+        mime: a.mime,
+        at: m.at,
+        messageText: m.text?.slice(0, 120),
+      }))),
   });
   return async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
     if (!reqPath.startsWith("/api/donebot/collab/")) return PASS;

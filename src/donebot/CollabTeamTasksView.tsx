@@ -39,7 +39,6 @@ import {
 import { CollabAvatar } from "./CollabAvatar";
 import { CollabSelect, type CollabSelectOption } from "./CollabSelect";
 import { CollabTeamTaskDetailPanel } from "./CollabTeamTaskDetail";
-import { CollabTeamTaskDispatchBar } from "./CollabTeamTaskDispatchBar";
 import { ChiefAutoSubmitToggle } from "./CollabTeamTaskSections";
 
 type TaskScopeFilter = "all" | "mine" | "review" | "created";
@@ -421,17 +420,6 @@ export function CollabTeamTasksView({
             </button>
           </div>
         </div>
-
-        {/* One-line Chief Bot quick task dispatch bar */}
-        <CollabTeamTaskDispatchBar
-          teamId={team.id}
-          teamName={team.name}
-          channelId={channelFilter || undefined}
-          members={members}
-          jobTitles={jobTitles}
-          mode="inline"
-          onDispatched={handleMutated}
-        />
 
         {/* Main list / board */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">

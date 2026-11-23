@@ -518,29 +518,32 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
       expect(host!.textContent).toContain("第 2 张眼神偏柔和，请拍板");
       expect(host!.querySelector("[data-collab-task-open-approve]")).not.toBeNull();
 
-      // Inline Chief Bot dispatch bar lets user dispatch with one sentence directly from the board.
-      const inlineInput = host!.querySelector<HTMLInputElement>("[data-collab-ai-dispatch-input]");
-      expect(inlineInput).not.toBeNull();
+      // Redundant inline dispatch bar is no longer shown above the task list.
+      expect(host!.querySelector("[data-collab-ai-dispatch-bar]")).toBeNull();
+
+      // Clicking 派发任务 opens directly in 主协调助手派发 mode (no manual form first) and dispatches via Chief Bot.
+      const newTaskBtn = host!.querySelector<HTMLButtonElement>("[data-collab-new-task]");
+      expect(newTaskBtn).not.toBeNull();
+      await act(async () => { newTaskBtn!.click(); });
+      expect(host!.querySelector("[data-collab-ai-dispatch-panel]")).not.toBeNull();
+      expect(host!.querySelector("[data-collab-task-title-input]")).toBeNull();
+
+      const dialogTextarea = host!.querySelector<HTMLTextAreaElement>("[data-collab-ai-dispatch-textarea]");
+      expect(dialogTextarea).not.toBeNull();
       await act(async () => {
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-        setter?.call(inlineInput, "让小王明天前出第4集预告图");
-        inlineInput!.dispatchEvent(new Event("input", { bubbles: true }));
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+        setter?.call(dialogTextarea, "让小王明天前出第4集预告图");
+        dialogTextarea!.dispatchEvent(new Event("input", { bubbles: true }));
       });
-      const inlineBtn = host!.querySelector<HTMLButtonElement>("[data-collab-ai-dispatch-submit]");
-      await act(async () => { inlineBtn!.click(); });
+      const dialogSubmitBtn = host!.querySelector<HTMLButtonElement>("[data-collab-ai-dispatch-dialog-submit]");
+      expect(dialogSubmitBtn).not.toBeNull();
+      await act(async () => { dialogSubmitBtn!.click(); });
       await act(async () => { await Promise.resolve(); });
       expect(fixture.api).toHaveBeenCalledWith(
         `/api/donebot/collab/teams/${teamId}/tasks/dispatch-via-bot`,
         expect.objectContaining({ method: "POST" }),
       );
       expect(host!.querySelector("[data-collab-ai-dispatch-receipt]")?.textContent).toContain("已为小王创建任务");
-
-      // Clicking 派发任务 opens directly in 主协调助手派发 mode (no manual form first).
-      const newTaskBtn = host!.querySelector<HTMLButtonElement>("[data-collab-new-task]");
-      expect(newTaskBtn).not.toBeNull();
-      await act(async () => { newTaskBtn!.click(); });
-      expect(host!.querySelector("[data-collab-ai-dispatch-panel]")).not.toBeNull();
-      expect(host!.querySelector("[data-collab-task-title-input]")).toBeNull();
 
       // Can still switch to 手动填表 tab when needed.
       const manualTab = host!.querySelector<HTMLButtonElement>('[data-collab-task-mode="manual"]');

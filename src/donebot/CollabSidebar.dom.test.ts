@@ -805,4 +805,79 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
     expect(resolvedMsg.bodyId).toBe("hexagon");
     expect(resolvedMsg.color).toBe("purple");
   });
+
+  it("scrolls to the bottom after opening a collab chat and loading messages", async () => {
+    fixture.dispatch.mockImplementation((action: { type: string }) => {
+      if (action.type === "showCollab") fixture.storeState.activeView = "collab";
+      if (action.type === "showChat") fixture.storeState.activeView = "chat";
+    });
+    const overview = makeOverview();
+    overview.groups = [{
+      id: groupId,
+      name: "测试群",
+      creator_id: 101,
+      members: [
+        { user_id: 101, email: "alice@example.invalid", nickname: "老罗", joined_at: "2026-11-23T00:00:00Z" },
+        { user_id: 202, email: "bob@example.invalid", nickname: "小罗", joined_at: "2026-11-23T00:00:00Z" },
+      ],
+      created_at: "2026-11-23T00:00:00Z",
+      updated_at: "2026-11-23T00:00:00Z",
+    }];
+    let resolveMessages!: (value: unknown) => void;
+    const messagesPromise = new Promise(resolve => { resolveMessages = resolve; });
+
+    fixture.api.mockImplementation(async (path: string) => {
+      if (path === "/api/donebot/collab/overview") return overview;
+      if (path === "/api/donebot/collab/activity") return { activity: [] };
+      if (path === "/api/donebot/collab/local-folders") return { folders: [] };
+      if (path.startsWith(`/api/donebot/collab/chats/group/${groupId}/messages`)) return messagesPromise;
+      if (path.startsWith("/api/donebot/collab/chats/")) return [];
+      return { ok: true };
+    });
+
+    await renderHarness();
+    const collabOption = container!.querySelector<HTMLButtonElement>('[data-collab-switch-option="collab"]')!;
+    await act(async () => { collabOption.click(); });
+    await renderHarness();
+
+    const groupRow = container!.querySelector<HTMLButtonElement>(`[data-collab-group-row="${groupId}"]`)!;
+    await act(async () => { groupRow.click(); });
+    await renderHarness();
+
+    const scroller = container!.querySelector<HTMLDivElement>("[data-collab-chat-scroller]")!;
+    expect(scroller).not.toBeNull();
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, get: () => 1800 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 600 });
+    scroller.scrollTop = 0;
+
+    await act(async () => {
+      resolveMessages([
+        {
+          id: 1,
+          scope_type: "group",
+          target_id: groupId,
+          sender_id: 101,
+          sender_kind: "user",
+          sender_email: "alice@example.invalid",
+          kind: "text",
+          body: "较早的消息",
+          created_at: "2026-11-23T01:02:00Z",
+        },
+        {
+          id: 2,
+          scope_type: "group",
+          target_id: groupId,
+          sender_id: 202,
+          sender_kind: "user",
+          sender_email: "bob@example.invalid",
+          kind: "text",
+          body: "最新的消息",
+          created_at: "2026-11-23T01:29:00Z",
+        },
+      ]);
+      await Promise.resolve();
+    });
+
+    expect(scroller.scrollTop).toBe(1800);
+  });
 });

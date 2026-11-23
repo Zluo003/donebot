@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowUp,
@@ -127,10 +127,13 @@ export function CollabChatView({
   const [error, setError] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastIdRef = useRef(0);
   const pinnedBottomRef = useRef(true);
+  const pendingScrollRef = useRef<"instant" | "smooth" | null>(null);
+  const lastScrollTopRef = useRef(0);
   const botWaitTimerRef = useRef<number | null>(null);
   const fileInputId = useId();
 
@@ -222,8 +225,35 @@ export function CollabChatView({
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+    if (smooth && typeof el.scrollTo === "function") {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+    lastScrollTopRef.current = el.scrollTop;
   }, []);
+
+  const lastMessageId = messages[messages.length - 1]?.id ?? 0;
+
+  useLayoutEffect(() => {
+    if (loading) return;
+    const intent = pendingScrollRef.current;
+    if (!intent) return;
+    pendingScrollRef.current = null;
+    scrollToBottom(intent === "smooth");
+  }, [loading, scopeType, targetId, messages.length, lastMessageId, scrollToBottom]);
+
+  useEffect(() => {
+    const content = contentRef.current;
+    const scroller = scrollRef.current;
+    if (!content || !scroller || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (pinnedBottomRef.current) scrollToBottom(false);
+    });
+    observer.observe(content);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [scrollToBottom]);
 
   const markRead = useCallback(async (lastReadId: number) => {
     clearChatSummaryUnread(scopeType, targetId);
@@ -246,11 +276,14 @@ export function CollabChatView({
     clearBotWait();
     lastIdRef.current = 0;
     pinnedBottomRef.current = true;
+    lastScrollTopRef.current = 0;
+    pendingScrollRef.current = null;
 
     void api<DoneBotChatMessage[]>(`/api/donebot/collab/chats/${scopeType}/${encodeURIComponent(targetId)}/messages?limit=80`)
       .then(list => {
         if (!alive) return;
         const arr = Array.isArray(list) ? list : [];
+        pendingScrollRef.current = "instant";
         setMessages(arr);
         const latest = arr[arr.length - 1];
         if (latest) {
@@ -260,7 +293,6 @@ export function CollabChatView({
           clearChatSummaryUnread(scopeType, targetId);
         }
         setLoading(false);
-        queueMicrotask(() => scrollToBottom(false));
       })
       .catch(cause => {
         if (!alive) return;
@@ -281,24 +313,21 @@ export function CollabChatView({
         const query = lastIdRef.current > 0 ? `?after_id=${lastIdRef.current}&limit=100` : "?limit=80";
         const incoming = await api<DoneBotChatMessage[]>(`/api/donebot/collab/chats/${scopeType}/${encodeURIComponent(targetId)}/messages${query}`);
         if (!alive || !Array.isArray(incoming) || incoming.length === 0) return;
-        let newest: DoneBotChatMessage | null = null;
-        let gotBotReply = false;
+        const freshIncoming = incoming.filter(m => m.id > lastIdRef.current);
+        if (freshIncoming.length === 0) return;
+        const newest = freshIncoming[freshIncoming.length - 1]!;
+        const gotBotReply = freshIncoming.some(m => m.sender_kind === "bot");
+        lastIdRef.current = Math.max(lastIdRef.current, newest.id);
+        if (pinnedBottomRef.current) pendingScrollRef.current = "smooth";
         setMessages(prev => {
           const seen = new Set(prev.map(m => m.id));
-          const fresh = incoming.filter(m => !seen.has(m.id));
-          if (fresh.length === 0) return prev;
-          newest = fresh[fresh.length - 1]!;
-          if (fresh.some(m => m.sender_kind === "bot")) gotBotReply = true;
-          lastIdRef.current = Math.max(lastIdRef.current, newest.id);
-          return [...prev, ...fresh];
+          const add = freshIncoming.filter(m => !seen.has(m.id));
+          return add.length === 0 ? prev : [...prev, ...add];
         });
         if (gotBotReply) clearBotWait();
-        if (newest) {
-          upsertChatSummaryFromMessage(newest, -1);
-          void markRead((newest as DoneBotChatMessage).id);
-          if ((newest as DoneBotChatMessage).kind === "file") onChatFileSent?.();
-          if (pinnedBottomRef.current) queueMicrotask(() => scrollToBottom(true));
-        }
+        upsertChatSummaryFromMessage(newest, -1);
+        void markRead(newest.id);
+        if (newest.kind === "file") onChatFileSent?.();
       } catch { /* silent background poll */ }
     };
     const timer = window.setInterval(() => void poll(), awaitingBotReply ? FAST_POLL_MS : POLL_MS);
@@ -376,6 +405,8 @@ export function CollabChatView({
       setMentionedBotIds([]);
       setMentionDismissed(false);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
+      pinnedBottomRef.current = true;
+      pendingScrollRef.current = "smooth";
       setMessages(prev => (prev.some(m => m.id === created.id) ? prev : [...prev, created]));
       lastIdRef.current = Math.max(lastIdRef.current, created.id);
       upsertChatSummaryFromMessage(created, -1);
@@ -387,8 +418,6 @@ export function CollabChatView({
         setAwaitingBotReply(true);
         botWaitTimerRef.current = window.setTimeout(() => setAwaitingBotReply(false), 45_000);
       }
-      pinnedBottomRef.current = true;
-      queueMicrotask(() => scrollToBottom(true));
     } catch (cause) {
       setError(cleanError(cause, "发送消息失败，请稍后重试。"));
     } finally {
@@ -417,12 +446,12 @@ export function CollabChatView({
         setDraft("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
       }
+      pinnedBottomRef.current = true;
+      pendingScrollRef.current = "smooth";
       setMessages(prev => (prev.some(m => m.id === created.id) ? prev : [...prev, created]));
       lastIdRef.current = Math.max(lastIdRef.current, created.id);
       upsertChatSummaryFromMessage(created, -1);
       onChatFileSent?.();
-      pinnedBottomRef.current = true;
-      queueMicrotask(() => scrollToBottom(true));
     } catch (cause) {
       setError(cleanError(cause, "发送文件失败。"));
     } finally {
@@ -446,7 +475,14 @@ export function CollabChatView({
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
-    pinnedBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+    const currentTop = el.scrollTop;
+    const nearBottom = el.scrollHeight - currentTop - el.clientHeight < 96;
+    if (nearBottom) {
+      pinnedBottomRef.current = true;
+    } else if (currentTop < lastScrollTopRef.current - 2) {
+      pinnedBottomRef.current = false;
+    }
+    lastScrollTopRef.current = currentTop;
   };
 
   const handleComposerChange = (value: string, selectionStart: number) => {
@@ -565,10 +601,11 @@ export function CollabChatView({
       {/* Message list */}
       <div
         ref={scrollRef}
+        data-collab-chat-scroller=""
         onScroll={handleScroll}
         className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
       >
-        <div className="mx-auto flex w-full max-w-[740px] flex-col gap-3">
+        <div ref={contentRef} className="mx-auto flex w-full max-w-[740px] flex-col gap-3">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-ink-secondary">
               <Loader2 size={15} className="animate-spin" aria-hidden="true" />

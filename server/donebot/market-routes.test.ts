@@ -15,6 +15,7 @@ import {
   runWithMarketBot,
 } from "./market-installs.ts";
 import { createDoneBotMarketRoutes } from "./market-routes.ts";
+import { createDoneBotAccountRoutes } from "./routes.ts";
 
 const tempDirs: string[] = [];
 
@@ -310,5 +311,34 @@ describe("createDoneBotMarketRoutes", () => {
     // Non-market path passes through
     const pass = await callRoute(handler, "GET", "/api/other/path");
     expect(pass.result).toBe(PASS);
+  });
+
+  it("account routes pass through POST /api/donebot/market/* without consuming the request body stream", async () => {
+    const accountHandler = createDoneBotAccountRoutes(mockGateway(vi.fn() as unknown as typeof fetch));
+    const readBody = vi.fn(async () => { throw new Error("readBody must not be called by account routes for market endpoints"); });
+    const res = {
+      headersSent: false,
+      setHeader() {},
+      destroy() {},
+    } as unknown as ServerResponse;
+    for (const path of [
+      "/api/donebot/market/publish",
+      "/api/donebot/market/bots/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/install",
+      "/api/donebot/market/creator/transfer",
+      "/api/donebot/market/creator/withdrawals",
+    ]) {
+      const result = await accountHandler({
+        req: {} as IncomingMessage,
+        res,
+        url: new URL(`http://127.0.0.1${path}`),
+        path,
+        method: "POST",
+        auth: { kind: "loopback", scopes: ["admin"] },
+        json() {},
+        readBody,
+      } as never);
+      expect(result).toBe(PASS);
+    }
+    expect(readBody).not.toHaveBeenCalled();
   });
 });

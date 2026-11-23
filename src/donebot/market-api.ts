@@ -74,6 +74,7 @@ export const marketApi = {
     return api<MarketListingDetail>("/api/donebot/market/publish", {
       method: "POST",
       body: JSON.stringify(payload),
+      timeoutMs: 40_000,
     });
   },
 
@@ -81,6 +82,7 @@ export const marketApi = {
     return api<{ ok: boolean }>(`/api/donebot/market/bots/${encodeURIComponent(id)}/visibility`, {
       method: "PATCH",
       body: JSON.stringify({ listed }),
+      timeoutMs: 20_000,
     });
   },
 
@@ -88,6 +90,7 @@ export const marketApi = {
     return api<MarketInstallActionResponse>(`/api/donebot/market/bots/${encodeURIComponent(id)}/install`, {
       method: "POST",
       body: JSON.stringify({}),
+      timeoutMs: 35_000,
     });
   },
 
@@ -95,6 +98,7 @@ export const marketApi = {
     return api<MarketInstallActionResponse>(`/api/donebot/market/bots/${encodeURIComponent(id)}/update`, {
       method: "POST",
       body: JSON.stringify(botId ? { bot_id: botId } : {}),
+      timeoutMs: 35_000,
     });
   },
 
@@ -144,16 +148,19 @@ export function marketStatusMeta(status: string): { label: string; className: st
   switch (status) {
     case "published":
       return { label: "已上架", className: "bg-emerald-500/15 text-emerald-500" };
+    case "pending_review":
     case "ai_reviewing":
       return { label: "AI 审核中", className: "bg-sky-500/15 text-sky-500" };
+    case "manual_review":
     case "pending_manual":
       return { label: "人工复审中", className: "bg-amber-500/15 text-amber-500" };
     case "rejected":
       return { label: "审核驳回", className: "bg-danger/15 text-danger" };
     case "unlisted":
       return { label: "已自行下架", className: "bg-ink-secondary/15 text-ink-secondary" };
+    case "suspended":
     case "removed":
-      return { label: "管理员下架", className: "bg-danger/15 text-danger" };
+      return { label: "管理员封禁", className: "bg-danger/15 text-danger" };
     default:
       return { label: status || "未知", className: "bg-ink-secondary/15 text-ink-secondary" };
   }

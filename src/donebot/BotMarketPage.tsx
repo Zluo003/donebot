@@ -38,7 +38,7 @@ export function BotMarketPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"popular" | "latest">("popular");
+  const [sort, setSort] = useState<"installs" | "newest">("installs");
 
   const [listings, setListings] = useState<MarketListingSummary[]>([]);
   const [installedMap, setInstalledMap] = useState<Record<string, MarketInstalledBotInfo>>({});
@@ -273,11 +273,11 @@ export function BotMarketPage() {
                   </form>
                   <select
                     value={sort}
-                    onChange={e => setSort(e.target.value as "popular" | "latest")}
+                    onChange={e => setSort(e.target.value as "installs" | "newest")}
                     className="rounded-xl border border-hairline bg-card px-2.5 py-1.5 text-[12.5px] text-ink outline-none"
                   >
-                    <option value="popular">按热门安装</option>
-                    <option value="latest">按最新发布</option>
+                    <option value="installs">按热门安装</option>
+                    <option value="newest">按最新发布</option>
                   </select>
                 </div>
               </div>

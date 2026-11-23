@@ -14,6 +14,7 @@ import type { BotRecord, Store } from "../store.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import { createDoneBotMarketClient } from "./market-gateway.ts";
 import { DoneBotOpcStore } from "./opc-store.ts";
+import type { DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
 import { runPaperclipEvalMatrix } from "./paperclip-eval-kernel.ts";
 import { evaluateRewakeThrottle, type RecentRunSample } from "./paperclip-rewake-throttle.ts";
 
@@ -91,6 +92,7 @@ const resetBreakerSchema = z.object({
 
 export interface DoneBotOpcRouteDeps {
   opcStore: DoneBotOpcStore;
+  orgStore?: DoneBotOrgWorkflowStore;
   gateway: DoneBotGateway;
   store: Store;
   listBotSkills(botId: string): SkillListing[];
@@ -383,14 +385,21 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
         const pendingArtifacts = allArtifacts.filter(a => a.reviewStatus === "pending");
         const heartbeats = deps.opcStore.listHeartbeats().map(decorateHeartbeat);
         const goals = deps.opcStore.listGoals().filter(g => g.status === "active");
+        const workflows = deps.orgStore?.listWorkflows() ?? [];
+        const waitingWorkflowRuns = deps.orgStore?.listWaitingWorkflowRuns() ?? [];
+        const trippedWorkflowCount = workflows.filter(w => w.pausedByCircuitBreaker).length;
         const spend = await loadSpend(days);
         const overview: OpcBossOverview = {
           pendingArtifactCount: pendingArtifacts.length,
           activeHeartbeatCount: heartbeats.filter(h => h.enabled && !h.pausedByCircuitBreaker).length,
-          trippedCircuitBreakerCount: heartbeats.filter(h => h.pausedByCircuitBreaker).length,
+          trippedCircuitBreakerCount: heartbeats.filter(h => h.pausedByCircuitBreaker).length + trippedWorkflowCount,
           activeGoalCount: goals.length,
+          activeWorkflowCount: workflows.filter(w => w.enabled && !w.pausedByCircuitBreaker).length,
+          waitingWorkflowCount: waitingWorkflowRuns.length,
+          orgEnforcementMode: deps.orgStore?.getOrgChart().enforcementMode ?? "free",
           spend,
           pendingArtifacts: pendingArtifacts.slice(0, 24),
+          waitingWorkflowRuns: waitingWorkflowRuns.slice(0, 12),
           heartbeats,
         };
         return json(res, 200, overview);

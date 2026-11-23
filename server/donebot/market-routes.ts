@@ -11,6 +11,8 @@ import type { SkillListing } from "../skills.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import { createDoneBotMarketClient } from "./market-gateway.ts";
+import type { DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
+import type { OpcOrgBlueprint } from "../../shared/donebot-opc.ts";
 import type { DoneBotMarketInstallStore } from "./market-installs.ts";
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -78,6 +80,7 @@ export interface DoneBotMarketRouteDeps {
   packageImportDeps(selection: ModelSelection): PackageImportDeps;
   broadcast(frame: unknown): void;
   publicBot(bot: BotRecord): unknown;
+  orgStore?: DoneBotOrgWorkflowStore;
 }
 
 function visibleBotIds(store: Store): Set<string> {
@@ -301,6 +304,10 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           ...(primaryBot.mascotExpression ? { mascot_expression: primaryBot.mascotExpression } : {}),
         };
 
+        const orgBlueprint = isStudio && deps.orgStore ? deps.orgStore.exportOrgBlueprint(bots.map(b => b.id)) : undefined;
+        const packagePayload = orgBlueprint
+          ? { ...(exported.document as unknown as Record<string, unknown>), donebotOrgBlueprint: orgBlueprint }
+          : exported.document;
         const result = await client.publish({
           ...(input.listing_id ? { listing_id: input.listing_id } : {}),
           listing_type: input.listing_type,
@@ -318,7 +325,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           eval_samples: input.eval_samples,
           soul_text: soulText,
           skills: skillsPayload,
-          package: exported.document,
+          package: packagePayload,
           changelog: input.changelog,
         });
         return json(res, 200, result);
@@ -334,7 +341,15 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
       const installMatch = reqPath.match(/^\/api\/donebot\/market\/bots\/([0-9a-f-]{36})\/install$/);
       if (method === "POST" && installMatch) {
         const fetched = await client.install(installMatch[1]!);
-        const parsedDoc = parsePackageDocument(fetched.package, { trust: "file" });
+        let orgBlueprint: OpcOrgBlueprint | undefined;
+        let rawPackage: unknown = fetched.package;
+        if (rawPackage && typeof rawPackage === "object" && !Array.isArray(rawPackage) && "donebotOrgBlueprint" in rawPackage) {
+          const cloned = { ...(rawPackage as Record<string, unknown>) };
+          orgBlueprint = cloned.donebotOrgBlueprint as OpcOrgBlueprint;
+          delete cloned.donebotOrgBlueprint;
+          rawPackage = cloned;
+        }
+        const parsedDoc = parsePackageDocument(rawPackage, { trust: "file" });
         const importDeps = deps.packageImportDeps(await deps.defaultSelection());
         const imported = importPackageDocument(parsedDoc, { mode: "add", trust: "file" }, importDeps);
         if (imported.alreadyAdded || imported.bots.length === 0) {
@@ -361,6 +376,9 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           };
         });
         deps.marketInstalls.setMany(installRecords);
+        if (orgBlueprint && deps.orgStore) {
+          deps.orgStore.importOrgBlueprint(imported.bots.map(b => b.id), orgBlueprint);
+        }
         const installRecord = installRecords[0]!;
         const enabledSkills = [...enabledSkillsSet];
 

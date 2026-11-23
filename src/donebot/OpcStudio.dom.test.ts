@@ -28,7 +28,10 @@ vi.mock("@/state/store", () => ({
 const { OpcBossDashboard } = await import("./OpcBossDashboard");
 const { OpcBossConsolePage } = await import("./OpcBossConsolePage");
 const { OpcBossSidebarRow } = await import("./OpcBossSidebarRow");
+const { OpcOrgChartView } = await import("./OpcOrgChartView");
+const { OpcWorkflowsView } = await import("./OpcWorkflowsView");
 const { OpcNativeDialog } = await import("./paperclip-ui");
+const { layoutOrganization, routeReportingEdges, DEFAULT_ORG_GEOMETRY } = await import("./paperclip-org-layout");
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -183,5 +186,63 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("封面视觉");
     expect(container.textContent).toContain("项目目标卡");
     expect(container.textContent).toContain("24h 静默巡检");
+  });
+
+  it("lays out org chart via Paperclip layout engine and renders OrgChart + Workflows views", async () => {
+    const block = layoutOrganization([
+      {
+        id: "__boss__",
+        name: "你（老板）",
+        role: "最终拍板",
+        status: "owner",
+        reports: [
+          {
+            id: "b1",
+            name: "多宝",
+            role: "主编",
+            status: "idle",
+            reports: [{ id: "b2", name: "视觉", role: "设计师", status: "idle", reports: [] }],
+          },
+        ],
+      },
+    ], { width: 960, height: 560 }, DEFAULT_ORG_GEOMETRY);
+    const edges = routeReportingEdges(block.roots, DEFAULT_ORG_GEOMETRY.gap);
+    expect(edges.length).toBe(2);
+
+    mockApi.mockImplementation(async (path) => {
+      if (path.startsWith("/api/donebot/opc/spend")) return { available: true, days: 30, totalCost: 0, llmCost: 0, imageCost: 0, videoCost: 0, musicCost: 0, bots: [] };
+      if (path === "/api/donebot/opc/workflows") return { workflows: [], runs: [] };
+      return {};
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const bots = [
+      { id: "b1", name: "多宝", color: "amber", hidden: false },
+      { id: "b2", name: "视觉", color: "blue", hidden: false },
+    ] as never;
+    const org = {
+      enforcementMode: "enforced" as const,
+      nodes: {
+        b1: { botId: "b1", reportsToBotId: null, handoffToBotIds: ["b2"], roleTitle: "总控主编" },
+        b2: { botId: "b2", reportsToBotId: "b1", handoffToBotIds: [], requireBossApproval: true },
+      },
+      updatedAt: 1,
+    };
+
+    await act(async () => {
+      root!.render(createElement(OpcOrgChartView, { bots, org, onOrgChange: vi.fn() }));
+    });
+    expect(container.textContent).toContain("你（老板）");
+    expect(container.textContent).toContain("总控主编");
+    expect(container.textContent).toContain("需拍板");
+
+    await act(async () => {
+      root!.render(createElement(OpcWorkflowsView, { bots }));
+    });
+    expect(container.textContent).toContain("固定与定时工作流");
+    expect(container.textContent).toContain("新建工作流");
   });
 });

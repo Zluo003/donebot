@@ -1,4 +1,8 @@
 import { UPSTREAM_SERVICES } from "@/donebot/services";
+import { OpcOrgChartView } from "@/donebot/OpcOrgChartView";
+import { OpcWorkflowsView } from "@/donebot/OpcWorkflowsView";
+import { opcApi } from "@/donebot/opc-api";
+import type { OpcOrgChartState, OpcOrgEnforcementMode } from "../../shared/donebot-opc";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, BookOpen, Box, Loader2, Monitor, Plus, Save, Users, UsersRound, X } from "lucide-react";
@@ -289,6 +293,30 @@ export function TeamMapPage() {
   const [computerDrop, setComputerDrop] = useState<{ id: string; section: string } | null>(null);
   const clearComputerDrop = useCallback(() => setComputerDrop(null), []);
   const [pendingMove, setPendingMove] = useState<{ bot: Bot; destination: string; resolve: (moved: boolean) => void } | null>(null);
+  const [opcTab, setOpcTab] = useState<"org" | "workflows" | "departments">("org");
+  const [orgState, setOrgState] = useState<OpcOrgChartState>({ enforcementMode: "free", nodes: {}, updatedAt: 0 });
+  const [orgModeBusy, setOrgModeBusy] = useState(false);
+  const opcOrgEnabled = !teamPeople && !remoteClient;
+  const loadOrg = useCallback(async () => {
+    if (!opcOrgEnabled) return;
+    try {
+      setOrgState(await opcApi.getOrg());
+    } catch {
+      // Quietly keep default free org state on older remote runtimes.
+    }
+  }, [opcOrgEnabled]);
+  useEffect(() => { void loadOrg(); }, [loadOrg]);
+  const switchOrgMode = async (next: OpcOrgEnforcementMode) => {
+    if (orgModeBusy || orgState.enforcementMode === next) return;
+    setOrgModeBusy(true);
+    try {
+      setOrgState(await opcApi.setOrgMode(next));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setOrgModeBusy(false);
+    }
+  };
   const pendingMoveRef = useRef(pendingMove);
   pendingMoveRef.current = pendingMove;
   useEffect(() => () => pendingMoveRef.current?.resolve(false), []);
@@ -356,64 +384,140 @@ export function TeamMapPage() {
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-app text-ink">
-      <header {...dragProps} className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline/40 px-6 py-4 max-md:pl-12">
+      <header {...dragProps} className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline/40 px-6 py-3.5 max-md:pl-12">
         <div>
           <div className="flex items-center gap-2.5">
-            <UsersRound size={18} className="text-ink-secondary" />
-            <h1 className="text-[17px] font-semibold">{t("canvas.title")}</h1>
-            <span className="ml-1 text-[11px] text-ink-secondary">{teamMapBotCount(bots.length)}</span>
+            <UsersRound size={17} className="text-ink-secondary" />
+            <h1 className="text-[16px] font-semibold">{opcOrgEnabled ? "组织架构" : t("canvas.title")}</h1>
+            <span className="ml-0.5 text-[11.5px] tabular-nums text-ink-tertiary">{teamMapBotCount(bots.length)}</span>
           </div>
-          <p className="mt-1 text-[12px] text-ink-secondary">{t("canvas.description")}</p>
+          <p className="mt-0.5 text-[12px] text-ink-tertiary">
+            {opcOrgEnabled
+              ? opcTab === "org"
+                ? "拖拽调整汇报层级 · 点击员工配置流水线交接与审批门禁"
+                : opcTab === "workflows"
+                  ? "按固定顺序编排多员工流水线，支持定时触发与老板拍板暂停"
+                  : t("canvas.description")
+              : t("canvas.description")}
+          </p>
         </div>
-        {teamPeople && <MapModeToggle />}
-        {!remoteClient && <div className="flex items-center gap-2">
-          <button onClick={() => setShowComputers(!showComputers)} aria-pressed={showComputers} title={t("canvas.showComputersHint")}
-            className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium transition-colors", showComputers ? "border-accent/40 bg-accent/10 text-ink" : "border-hairline/60 bg-panel text-ink-secondary hover:bg-control hover:text-ink")}>
-            <span aria-hidden className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", showComputers ? "bg-accent" : "bg-control")}>
-              <span className={cn("absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-[left]", showComputers ? "left-3.5" : "left-0.5")} />
-            </span>
-            {t("canvas.showComputers")}
-          </button>
-          {UPSTREAM_SERVICES.boat && <button onClick={() => setComputersOpen((value) => !value)} aria-label={t("canvas.computers")} aria-expanded={computersOpen} className="rounded-lg p-2 text-ink-secondary hover:bg-control hover:text-ink"><Monitor size={17} /></button>}
-          {admin !== false && <details className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.removeAttribute("open"); }} onKeyDown={(event) => {
-            if (event.key === "Escape") { event.currentTarget.removeAttribute("open"); event.currentTarget.querySelector("summary")?.focus(); }
-          }}>
-            <summary aria-label={t("canvas.addToMap")} className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-hairline/60 bg-panel px-3 py-2 text-[12px] font-medium hover:bg-control [&::-webkit-details-marker]:hidden"><Plus size={14} /> {t("common.add")}</summary>
-            <div className="absolute right-0 top-full z-40 mt-2 w-52 rounded-xl border border-hairline/60 bg-panel p-1.5 shadow-xl" onClick={(event) => {
-              const details = event.currentTarget.closest("details"); details?.querySelector("summary")?.focus(); details?.removeAttribute("open");
-            }}>
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => setTeamEditor({})}><Users size={14} />{t("team.create")}</button>
-              {UPSTREAM_SERVICES.boat && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => { setComputersOpen(true); setCreateComputerRequest((value) => value + 1); }}><Box size={14} />{t("canvas.cloudComputer")}</button>}
-              {placeOffered("vm", state.config) && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => dispatch({ type: "toggleAppSettings", section: "computer", open: true })}><Monitor size={14} />{t("canvas.localVm")}</button>}
-            </div>
-          </details>}
-        </div>}
+
+        {teamPeople ? (
+          <MapModeToggle />
+        ) : opcOrgEnabled ? (
+          <div role="tablist" aria-label="组织架构视图" className="inline-flex items-center rounded-full bg-ink/[0.05] p-0.5">
+            {([
+              { id: "org", label: "组织架构" },
+              { id: "workflows", label: "固定工作流" },
+              { id: "departments", label: "部门画布" },
+            ] as const).map(item => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={opcTab === item.id}
+                onClick={() => setOpcTab(item.id)}
+                className={cn(
+                  "rounded-full px-3.5 py-1 text-[12px] font-medium transition-colors",
+                  opcTab === item.id ? "bg-ink text-app" : "text-ink-secondary hover:text-ink",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {!remoteClient && (
+          <div className="flex items-center gap-2">
+            {opcOrgEnabled && opcTab === "org" && (
+              <div
+                role="group"
+                aria-label="协作约束模式"
+                title="开启「按架构约束」后，系统会拦截越级指挥与循环互派，仅允许按汇报线、交接链派单或跨岗咨询"
+                className="inline-flex items-center rounded-full bg-ink/[0.05] p-0.5"
+              >
+                {([
+                  { mode: "free", label: "自由协作" },
+                  { mode: "enforced", label: "按架构约束" },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.mode}
+                    type="button"
+                    disabled={orgModeBusy}
+                    aria-pressed={orgState.enforcementMode === opt.mode}
+                    onClick={() => void switchOrgMode(opt.mode)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors",
+                      orgState.enforcementMode === opt.mode ? "bg-panel text-ink shadow-xs" : "text-ink-tertiary hover:text-ink",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {(!opcOrgEnabled || opcTab === "departments") && (
+              <>
+                <button onClick={() => setShowComputers(!showComputers)} aria-pressed={showComputers} title={t("canvas.showComputersHint")}
+                  className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium transition-colors", showComputers ? "border-accent/40 bg-accent/10 text-ink" : "border-hairline/60 bg-panel text-ink-secondary hover:bg-control hover:text-ink")}>
+                  <span aria-hidden className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", showComputers ? "bg-accent" : "bg-control")}>
+                    <span className={cn("absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-[left]", showComputers ? "left-3.5" : "left-0.5")} />
+                  </span>
+                  {t("canvas.showComputers")}
+                </button>
+                {UPSTREAM_SERVICES.boat && <button onClick={() => setComputersOpen((value) => !value)} aria-label={t("canvas.computers")} aria-expanded={computersOpen} className="rounded-lg p-2 text-ink-secondary hover:bg-control hover:text-ink"><Monitor size={17} /></button>}
+                {admin !== false && <details className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.removeAttribute("open"); }} onKeyDown={(event) => {
+                  if (event.key === "Escape") { event.currentTarget.removeAttribute("open"); event.currentTarget.querySelector("summary")?.focus(); }
+                }}>
+                  <summary aria-label={t("canvas.addToMap")} className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-hairline/60 bg-panel px-3 py-2 text-[12px] font-medium hover:bg-control [&::-webkit-details-marker]:hidden"><Plus size={14} /> {t("common.add")}</summary>
+                  <div className="absolute right-0 top-full z-40 mt-2 w-52 rounded-xl border border-hairline/60 bg-panel p-1.5 shadow-xl" onClick={(event) => {
+                    const details = event.currentTarget.closest("details"); details?.querySelector("summary")?.focus(); details?.removeAttribute("open");
+                  }}>
+                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => setTeamEditor({})}><Users size={14} />{t("team.create")}</button>
+                    {UPSTREAM_SERVICES.boat && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => { setComputersOpen(true); setCreateComputerRequest((value) => value + 1); }}><Box size={14} />{t("canvas.cloudComputer")}</button>}
+                    {placeOffered("vm", state.config) && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => dispatch({ type: "toggleAppSettings", section: "computer", open: true })}><Monitor size={14} />{t("canvas.localVm")}</button>}
+                  </div>
+                </details>}
+              </>
+            )}
+          </div>
+        )}
       </header>
       {(error || refreshError) && <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-danger/20 bg-danger/10 px-6 py-2 text-[12px] text-danger">
         {error || refreshError}
         <button aria-label={t("common.close")} className="rounded p-1 hover:bg-danger/10" onClick={() => { setError(null); setRefreshError(null); }}><X size={14} /></button>
       </div>}
       <div className="relative flex min-h-0 flex-1">
-      <div className="relative flex min-h-0 min-w-0 flex-1">
-      {reportsChart ? <TeamOrgChart bots={bots} /> : <TeamCanvas sections={sections} canManage={!remoteClient && admin !== false} onMove={requestMove} taggedBotIds={taggedBotIds} sent={sent} bottomInset={bots.length ? 96 : 0}
-        connectedBotIds={state.settingsOpen ? edges.flatMap((edge) => edge.sourceBotId === state.selectedId ? [edge.targetBotId] : edge.targetBotId === state.selectedId ? [edge.sourceBotId] : []) : []}
-        onComputer={(bot) => openBotSettings(dispatch, "access", { botId: bot.id })}
-        computers={showComputers && computersChoiceLoaded && !remoteClient ? mapComputers.computers : undefined} computerFrames={mapComputers.frames}
-        onOpenComputer={(computer) => computer.kind === "team" ? setComputersOpen(true) : dispatch({ type: "toggleComputer", open: true, botId: computer.id })}
-        teamComputers={Object.fromEntries(computers.filter((computer) => computer.section !== null).map((computer) => [computer.section!, { name: computer.name, state: computer.state }]))}
-        onTeamComputer={() => setComputersOpen(true)}
-        onComputerDrop={(id, section) => { if (!remoteClient) { setComputersOpen(true); setComputerDrop({ id, section }); } }}
-        onInstructions={(section, label) => setContextEditor({ section, label })}
-        onMemory={(section, label) => setMemoryEditor({ section, label })}
-        onEditTeam={(section, rename) => setTeamEditor({ section, rename })}
-        onDeleteTeam={setDeletingTeam}
-        isEmpty={(key) => ![...state.bots, ...state.groups].some((record) => record.section?.trim() === key)} />}
-      {bots.length > 0 && <MapComposer bots={bots} teams={composerTeams} onTagged={setTaggedBotIds} onSent={acknowledgeSent} />}
+      {opcOrgEnabled && opcTab === "org" ? (
+        <OpcOrgChartView bots={bots} org={orgState} onOrgChange={setOrgState} />
+      ) : opcOrgEnabled && opcTab === "workflows" ? (
+        <OpcWorkflowsView bots={bots} />
+      ) : (
+        <>
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+          {reportsChart ? <TeamOrgChart bots={bots} /> : <TeamCanvas sections={sections} canManage={!remoteClient && admin !== false} onMove={requestMove} taggedBotIds={taggedBotIds} sent={sent} bottomInset={bots.length ? 96 : 0}
+            connectedBotIds={state.settingsOpen ? edges.flatMap((edge) => edge.sourceBotId === state.selectedId ? [edge.targetBotId] : edge.targetBotId === state.selectedId ? [edge.sourceBotId] : []) : []}
+            onComputer={(bot) => openBotSettings(dispatch, "access", { botId: bot.id })}
+            computers={showComputers && computersChoiceLoaded && !remoteClient ? mapComputers.computers : undefined} computerFrames={mapComputers.frames}
+            onOpenComputer={(computer) => computer.kind === "team" ? setComputersOpen(true) : dispatch({ type: "toggleComputer", open: true, botId: computer.id })}
+            teamComputers={Object.fromEntries(computers.filter((computer) => computer.section !== null).map((computer) => [computer.section!, { name: computer.name, state: computer.state }]))}
+            onTeamComputer={() => setComputersOpen(true)}
+            onComputerDrop={(id, section) => { if (!remoteClient) { setComputersOpen(true); setComputerDrop({ id, section }); } }}
+            onInstructions={(section, label) => setContextEditor({ section, label })}
+            onMemory={(section, label) => setMemoryEditor({ section, label })}
+            onEditTeam={(section, rename) => setTeamEditor({ section, rename })}
+            onDeleteTeam={setDeletingTeam}
+            isEmpty={(key) => ![...state.bots, ...state.groups].some((record) => record.section?.trim() === key)} />}
+          {bots.length > 0 && <MapComposer bots={bots} teams={composerTeams} onTagged={setTaggedBotIds} onSent={acknowledgeSent} />}
+          </div>
+          {UPSTREAM_SERVICES.boat && !remoteClient && <CanvasComputers open={computersOpen} createRequest={createComputerRequest} drop={computerDrop} sections={sections}
+            onClose={() => setComputersOpen(false)} onDropHandled={clearComputerDrop} onChange={setComputers} />}
+        </>
+      )}
       </div>
-      {UPSTREAM_SERVICES.boat && !remoteClient && <CanvasComputers open={computersOpen} createRequest={createComputerRequest} drop={computerDrop} sections={sections}
-        onClose={() => setComputersOpen(false)} onDropHandled={clearComputerDrop} onChange={setComputers} />}
-      </div>
-      {edges.length > 0 && <details className="shrink-0 border-t border-hairline/40 bg-panel px-6 py-3">
+      {(!opcOrgEnabled || opcTab === "departments") && edges.length > 0 && <details className="shrink-0 border-t border-hairline/40 bg-panel px-6 py-3">
         <summary className="cursor-pointer text-[12px] text-ink-secondary">{t("canvas.whoHandsOn")} · {edges.length}</summary>
         <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{edges.slice(0, 12).map((edge) => <EdgeRow key={`${edge.sourceBotId}:${edge.targetBotId}`} edge={edge} bots={bots} />)}</div>
       </details>}

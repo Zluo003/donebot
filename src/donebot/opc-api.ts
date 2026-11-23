@@ -6,8 +6,14 @@ import type {
   OpcConfigSnapshot,
   OpcEvalRun,
   OpcHeartbeatConfig,
+  OpcOrgChartState,
+  OpcOrgEnforcementMode,
+  OpcOrgNodeConfig,
   OpcProjectGoal,
   OpcSpendResponse,
+  OpcWorkflowDefinition,
+  OpcWorkflowRun,
+  OpcWorkflowScheduleKind,
 } from "../../shared/donebot-opc";
 import type { MarketEvalSample } from "../../shared/donebot-market";
 import { api } from "@/state/api";
@@ -182,5 +188,95 @@ export const opcApi = {
       `/api/donebot/opc/heartbeats/${encodeURIComponent(id)}/reset-breaker`,
       { method: "POST", body: JSON.stringify({ reenable }) },
     );
+  },
+
+  getOrg(): Promise<OpcOrgChartState> {
+    return api<OpcOrgChartState>("/api/donebot/opc/org");
+  },
+
+  setOrgMode(enforcementMode: OpcOrgEnforcementMode): Promise<OpcOrgChartState> {
+    return api<OpcOrgChartState>("/api/donebot/opc/org/mode", {
+      method: "PUT",
+      body: JSON.stringify({ enforcementMode }),
+    });
+  },
+
+  saveOrgNode(
+    botId: string,
+    patch: Partial<Omit<OpcOrgNodeConfig, "botId">>,
+  ): Promise<{ node: OpcOrgNodeConfig; org: OpcOrgChartState }> {
+    return api<{ node: OpcOrgNodeConfig; org: OpcOrgChartState }>(
+      `/api/donebot/opc/org/nodes/${encodeURIComponent(botId)}`,
+      { method: "PUT", body: JSON.stringify(patch) },
+    );
+  },
+
+  listWorkflows(): Promise<{ workflows: OpcWorkflowDefinition[]; runs: OpcWorkflowRun[] }> {
+    return api<{ workflows: OpcWorkflowDefinition[]; runs: OpcWorkflowRun[] }>("/api/donebot/opc/workflows");
+  },
+
+  async createWorkflow(input: {
+    name: string;
+    description?: string;
+    enabled?: boolean;
+    scheduleKind?: OpcWorkflowScheduleKind;
+    intervalMinutes?: number;
+    dailyTime?: string;
+    silentWhenOk?: boolean;
+    steps: Array<{ id?: string; name: string; botId: string; instruction: string; approvalGate?: boolean }>;
+    maxConsecutiveFailures?: number;
+  }): Promise<OpcWorkflowDefinition> {
+    const res = await api<{ workflow: OpcWorkflowDefinition }>("/api/donebot/opc/workflows", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return res.workflow;
+  },
+
+  async updateWorkflow(
+    id: string,
+    patch: Partial<{
+      name: string;
+      description: string;
+      enabled: boolean;
+      scheduleKind: OpcWorkflowScheduleKind;
+      intervalMinutes: number;
+      dailyTime: string;
+      silentWhenOk: boolean;
+      steps: Array<{ id?: string; name: string; botId: string; instruction: string; approvalGate?: boolean }>;
+      pausedByCircuitBreaker: boolean;
+      consecutiveFailures: number;
+      circuitBreakerReason: string | undefined;
+    }>,
+  ): Promise<OpcWorkflowDefinition> {
+    const res = await api<{ workflow: OpcWorkflowDefinition }>(`/api/donebot/opc/workflows/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    return res.workflow;
+  },
+
+  deleteWorkflow(id: string): Promise<{ ok: boolean }> {
+    return api<{ ok: boolean }>(`/api/donebot/opc/workflows/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  async runWorkflow(id: string, variables: Record<string, string> = {}): Promise<OpcWorkflowRun> {
+    const res = await api<{ run: OpcWorkflowRun }>(`/api/donebot/opc/workflows/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+      body: JSON.stringify({ variables }),
+      timeoutMs: 180_000,
+    });
+    return res.run;
+  },
+
+  async decideWorkflowRun(
+    runId: string,
+    payload: { action: "approve" | "revise" | "cancel"; note?: string },
+  ): Promise<OpcWorkflowRun> {
+    const res = await api<{ run: OpcWorkflowRun }>(
+      `/api/donebot/opc/workflow-runs/${encodeURIComponent(runId)}/decision`,
+      { method: "POST", body: JSON.stringify(payload), timeoutMs: 180_000 },
+    );
+    return res.run;
   },
 };

@@ -31,7 +31,15 @@ function intervalLabel(minutes: number): string {
   return `每 ${minutes} 分钟`;
 }
 
-export function OpcHeartbeatPanel({ bots, compact = false }: { bots: Bot[]; compact?: boolean }) {
+export function OpcHeartbeatPanel({
+  bots,
+  compact = false,
+  variant = "default",
+}: {
+  bots: Bot[];
+  compact?: boolean;
+  variant?: "default" | "editorial";
+}) {
   const [items, setItems] = useState<OpcHeartbeatConfig[]>([]);
   const [creating, setCreating] = useState(false);
   const [botId, setBotId] = useState(bots[0]?.id ?? "");
@@ -134,31 +142,49 @@ export function OpcHeartbeatPanel({ bots, compact = false }: { bots: Bot[]; comp
 
   if (bots.length === 0) return null;
 
+  const isEditorial = variant === "editorial";
+
   return (
     <section
       aria-label="24h 静默巡检"
       className={cn(
         "space-y-3",
-        compact ? "rounded-2xl bg-card p-4 ring-[0.5px] ring-hairline/70" : "mb-6",
+        isEditorial ? "" : compact ? "rounded-2xl bg-card p-4 ring-[0.5px] ring-hairline/70" : "mb-6",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-2",
+          isEditorial ? "border-b border-hairline/50 pb-3" : "px-0.5",
+        )}
+      >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Activity size={15} className="shrink-0 text-accent" aria-hidden="true" />
-            <h2 className="text-[14px] font-semibold text-ink">24h 静默巡检</h2>
+            {!isEditorial && <Activity size={15} className="shrink-0 text-accent" aria-hidden="true" />}
+            <h2 className={cn("font-semibold text-ink", isEditorial ? "text-[13px] tracking-wide" : "text-[14px]")}>
+              24h 静默巡检
+            </h2>
+            {isEditorial && items.length > 0 && (
+              <span className="text-[12px] tabular-nums text-ink-tertiary">{items.length}</span>
+            )}
           </div>
-          <p className="mt-0.5 text-[12px] text-ink-tertiary">无事静默不打扰 · 连续失败自动熔断防跑飞</p>
+          {!isEditorial && (
+            <p className="mt-0.5 text-[12px] text-ink-tertiary">无事静默不打扰 · 连续失败自动熔断防跑飞</p>
+          )}
         </div>
         <button
           type="button"
           onClick={() => setCreating(v => !v)}
           className={cn(
-            "inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[12px] font-medium text-ink transition-colors",
-            compact ? "bg-raised hover:bg-control" : "bg-card ring-[0.5px] ring-hairline/60 hover:bg-raised",
+            "inline-flex items-center gap-1 text-[12px] font-medium transition-colors",
+            isEditorial
+              ? "rounded-full px-2.5 py-1 text-ink-secondary hover:bg-ink/[0.06] hover:text-ink"
+              : compact
+                ? "h-7 rounded-lg bg-raised px-2.5 text-ink hover:bg-control"
+                : "h-7 rounded-lg bg-card px-2.5 text-ink ring-[0.5px] ring-hairline/60 hover:bg-raised",
           )}
         >
-          <Plus size={13} /> {creating ? "收起" : "新建巡检"}
+          <Plus size={13} /> {creating ? "收起" : isEditorial ? "新建" : "新建巡检"}
         </button>
       </div>
 
@@ -169,7 +195,13 @@ export function OpcHeartbeatPanel({ bots, compact = false }: { bots: Bot[]; comp
       )}
 
       {creating && (
-        <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-hairline/50 bg-card p-4">
+        <form
+          onSubmit={handleCreate}
+          className={cn(
+            "space-y-3 rounded-2xl p-4",
+            isEditorial ? "bg-ink/[0.03] ring-[0.5px] ring-hairline/50" : "border border-hairline/50 bg-card",
+          )}
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1">
               <span className="text-[12px] font-medium text-ink-secondary">值班员工</span>
@@ -252,7 +284,10 @@ export function OpcHeartbeatPanel({ bots, compact = false }: { bots: Bot[]; comp
             <button
               type="submit"
               disabled={busyId === "create"}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-1.5 text-[12.5px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12.5px] font-medium transition-opacity hover:opacity-85 disabled:opacity-45",
+                isEditorial ? "bg-ink text-app" : "bg-accent text-accent-ink",
+              )}
             >
               {busyId === "create" && <Loader2 size={13} className="animate-spin" />}
               保存巡检
@@ -261,12 +296,32 @@ export function OpcHeartbeatPanel({ bots, compact = false }: { bots: Bot[]; comp
         </form>
       )}
 
+      {items.length === 0 && !creating && isEditorial && (
+        <div className="py-2">
+          <p className="text-[13px] leading-relaxed text-ink-tertiary">
+            设定定时巡检任务：无异常时静默不打扰，发现变化再推送；连续失败自动熔断保护算力。
+          </p>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-3.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-ink/[0.11]"
+          >
+            <Plus size={13} /> 开启首条巡检
+          </button>
+        </div>
+      )}
+
       {items.length > 0 && (
-        <ul className="divide-y divide-hairline/30 overflow-hidden rounded-2xl border border-hairline/40 bg-card">
+        <ul
+          className={cn(
+            "divide-y divide-hairline/40",
+            isEditorial ? "" : "overflow-hidden rounded-2xl border border-hairline/40 bg-card",
+          )}
+        >
           {items.map(hb => {
             const tripped = hb.pausedByCircuitBreaker;
             return (
-              <li key={hb.id} className="flex items-start gap-3 px-4 py-3.5">
+              <li key={hb.id} className={cn("flex items-start gap-3", isEditorial ? "py-3" : "px-4 py-3.5")}>
                 <span
                   aria-hidden="true"
                   className={cn(

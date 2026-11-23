@@ -28,7 +28,7 @@ export function OpcBossSidebarRow({
       void opcApi.getOverview(30).then(res => {
         if (alive) {
           setBadge({
-            pending: res.pendingArtifactCount ?? 0,
+            pending: (res.pendingArtifactCount ?? 0) + (res.waitingWorkflowCount ?? 0),
             tripped: res.trippedCircuitBreakerCount ?? 0,
           });
         }
@@ -100,7 +100,7 @@ export function OpcBossSidebarRow({
         <span
           className={cn(
             "relative grid shrink-0 place-items-center rounded-full transition-colors",
-            active ? "bg-accent text-accent-ink" : "bg-raised text-ink-secondary",
+            active ? "bg-ink/[0.16] text-ink" : "bg-raised text-ink-secondary",
             large ? "size-9" : "size-8",
           )}
         >
@@ -118,7 +118,7 @@ export function OpcBossSidebarRow({
         {count > 0 && (
           <span
             aria-hidden="true"
-            className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-accent"
+            className="shrink-0 rounded-full bg-ink/[0.12] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-ink"
           >
             {shown}
           </span>

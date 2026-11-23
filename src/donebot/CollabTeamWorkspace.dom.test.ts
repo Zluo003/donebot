@@ -365,9 +365,24 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
     );
     expect(host!.textContent).toContain("待修改");
 
-    // Hand off task to local bot -> binds task, navigates, and auto-sends kickoff directly without leaving a draft.
+    // Assigner/reviewer (老罗, 101) must NOT see execution buttons on a task assigned to 小王 (202).
+    expect(host!.querySelector("[data-collab-task-start]")).toBeNull();
+    expect(host!.querySelector("[data-collab-task-open-submit]")).toBeNull();
+    expect(host!.querySelector("[data-collab-task-handoff-bot]")).toBeNull();
+    expect(host!.querySelector("[data-collab-task-passive-status]")?.textContent).toContain("已退回给 小王 修改");
+
+    // Switch task assignee to current user (101) and re-open detail -> execution buttons + auto-send handoff appear.
+    currentDetail = { ...currentDetail, task: { ...currentDetail.task, assignee_id: 101 } };
+    const closeBtn = host!.querySelector<HTMLButtonElement>('button[aria-label="关闭任务详情"]');
+    await act(async () => { closeBtn!.click(); });
+    await flush();
+    const reopenRow = host!.querySelector<HTMLButtonElement>(`[data-collab-task-card="${taskId1}"]`);
+    await act(async () => { reopenRow!.click(); });
+    await flush();
+
     const handoffBtn = host!.querySelector<HTMLButtonElement>("[data-collab-task-handoff-bot]");
     expect(handoffBtn).not.toBeNull();
+    expect(host!.querySelector("[data-collab-task-open-submit]")).not.toBeNull();
     await act(async () => { handoffBtn!.click(); });
     await flush();
     const pickBotBtn = host!.querySelector<HTMLButtonElement>('[data-collab-handoff-bot-pick="bot-duobao"]');

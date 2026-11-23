@@ -180,6 +180,13 @@ export function CollabTeamTaskDetailPanel({
     return title ? `${name} · ${title}` : name;
   };
 
+  const canExecute = Boolean(
+    task && (
+      !task.assignee_id
+      || task.assignee_id === myUserId
+      || task.collaborator_ids.includes(myUserId)
+    ),
+  );
   const canReview = Boolean(
     task && (
       task.reviewer_id === myUserId
@@ -190,6 +197,48 @@ export function CollabTeamTaskDetailPanel({
   );
   const canDelete = Boolean(
     task && (task.creator_id === myUserId || team.role === "owner" || team.role === "admin"),
+  );
+  const canReopen = Boolean(task && task.status === "done" && (canReview || canExecute || canDelete));
+
+  const assigneeShortName = task?.assignee_id
+    ? (memberById.get(task.assignee_id) ? displayPersonName(memberById.get(task.assignee_id)!) : `成员 #${task.assignee_id}`)
+    : "负责人";
+  const reviewerShortName = task?.reviewer_id
+    ? (memberById.get(task.reviewer_id) ? displayPersonName(memberById.get(task.reviewer_id)!) : `成员 #${task.reviewer_id}`)
+    : "验收人";
+  const showStartBtn = Boolean(task && canExecute && task.status === "todo");
+  const showSubmitBtn = Boolean(
+    task && canExecute && (
+      task.status === "todo"
+      || task.status === "in_progress"
+      || task.status === "bot_revising"
+      || task.status === "changes_requested"
+      || task.status === "blocked"
+    ),
+  );
+  const showReviewBtns = Boolean(
+    task && canReview && (
+      task.status === "in_review"
+      || task.status === "bot_reviewing"
+      || task.status === "ready_for_review"
+    ),
+  );
+  const showBlockBtn = Boolean(
+    task && canExecute && (task.status === "in_progress" || task.status === "changes_requested"),
+  );
+  const showHandoffBtn = Boolean(
+    task && canExecute && availableLocalBots.length > 0 && task.status !== "done",
+  );
+  const hasActionButtons = showStartBtn || showSubmitBtn || showReviewBtns || showBlockBtn || canReopen || showHandoffBtn;
+  const passiveStatusNote = !task ? "" : (
+    task.status === "todo" ? `已指派给 ${assigneeShortName}，等待对方开始处理`
+      : task.status === "in_progress" ? `${assigneeShortName} 正在处理中`
+      : task.status === "bot_revising" ? `${assigneeShortName} 的助手正在按初审意见自动返工`
+      : task.status === "changes_requested" ? `已退回给 ${assigneeShortName} 修改`
+      : task.status === "blocked" ? `任务已阻塞，等待 ${assigneeShortName} 处理`
+      : task.status === "in_review" || task.status === "bot_reviewing" || task.status === "ready_for_review"
+        ? `已提交交付物，等待 ${reviewerShortName} 验收`
+      : "任务已完成"
   );
 
   const quickStatus = async (status: DoneBotTeamTaskStatus, note?: string) => {
@@ -533,7 +582,7 @@ export function CollabTeamTaskDetailPanel({
 
             {/* Primary workflow action bar */}
             <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card/85 p-3 ring-1 ring-inset ring-ink/[0.07]">
-              {task.status === "todo" && (
+              {showStartBtn && (
                 <button
                   type="button"
                   data-collab-task-start=""
@@ -545,7 +594,7 @@ export function CollabTeamTaskDetailPanel({
                 </button>
               )}
 
-              {(task.status === "todo" || task.status === "in_progress" || task.status === "bot_revising" || task.status === "changes_requested" || task.status === "blocked") && (
+              {showSubmitBtn && (
                 <button
                   type="button"
                   data-collab-task-open-submit=""
@@ -560,7 +609,7 @@ export function CollabTeamTaskDetailPanel({
                 </button>
               )}
 
-              {(task.status === "in_review" || task.status === "bot_reviewing" || task.status === "ready_for_review") && canReview && (
+              {showReviewBtns && (
                 <>
                   <button
                     type="button"
@@ -583,7 +632,7 @@ export function CollabTeamTaskDetailPanel({
                 </>
               )}
 
-              {(task.status === "in_progress" || task.status === "changes_requested") && (
+              {showBlockBtn && (
                 <button
                   type="button"
                   disabled={busy}
@@ -594,7 +643,7 @@ export function CollabTeamTaskDetailPanel({
                 </button>
               )}
 
-              {task.status === "done" && (
+              {canReopen && (
                 <button
                   type="button"
                   disabled={busy}
@@ -605,7 +654,7 @@ export function CollabTeamTaskDetailPanel({
                 </button>
               )}
 
-              {availableLocalBots.length > 0 && task.status !== "done" && (
+              {showHandoffBtn && (
                 <button
                   type="button"
                   data-collab-task-handoff-bot=""
@@ -616,10 +665,16 @@ export function CollabTeamTaskDetailPanel({
                   <Sparkles size={12.5} aria-hidden="true" />带给我的助手干活
                 </button>
               )}
+
+              {!hasActionButtons && (
+                <span data-collab-task-passive-status="" className="text-[12.5px] text-ink-secondary">
+                  {passiveStatusNote}
+                </span>
+              )}
             </div>
 
             {/* Contextual inline action panes */}
-            {actionPane === "submit" && (
+            {actionPane === "submit" && canExecute && (
               <form
                 onSubmit={e => void handleSubmitReview(e)}
                 data-collab-task-submit-form=""
@@ -759,7 +814,7 @@ export function CollabTeamTaskDetailPanel({
               </div>
             )}
 
-            {actionPane === "bot" && (
+            {actionPane === "bot" && canExecute && (
               <div className="flex flex-col gap-2 rounded-2xl bg-card p-3.5 ring-1 ring-inset ring-accent/30">
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-medium text-ink">选择一个本机助手私下协助</span>

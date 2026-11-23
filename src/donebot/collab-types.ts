@@ -10,6 +10,11 @@ import type {
   DoneBotFriendsSnapshot,
   DoneBotIncomingTeamInvitation,
   DoneBotLocalSharedFolder,
+  DoneBotTeamChannel,
+  DoneBotTeamMemberProfile,
+  DoneBotTeamTaskCounts,
+  DoneBotTeamTaskPriority,
+  DoneBotTeamTaskStatus,
 } from "../../shared/donebot-collab";
 import type { DoneBotTeamIdentity, DoneBotTeamMember, DoneBotTeamRole } from "../../shared/donebot-teams";
 
@@ -48,6 +53,9 @@ export interface CollabOverview {
   chat_bots?: Record<string, DoneBotCollabChatBot[]>;
   team_capabilities: string[];
   team_members: Record<string, DoneBotTeamMember[]>;
+  team_channels?: Record<string, DoneBotTeamChannel[]>;
+  team_member_profiles?: Record<string, DoneBotTeamMemberProfile[]>;
+  team_task_counts?: DoneBotTeamTaskCounts[];
   incoming_team_invitations: DoneBotIncomingTeamInvitation[];
   chat_summaries?: DoneBotChatSummary[];
   local_bots: LocalBotSummary[];
@@ -77,6 +85,73 @@ export const TEAM_ROLE_PILL: Record<DoneBotTeamRole, string> = {
   admin: "bg-ink/[0.08] text-ink ring-ink/15",
   member: "bg-ink/[0.05] text-ink-secondary ring-ink/10",
 };
+
+export const TASK_STATUS_LABEL: Record<DoneBotTeamTaskStatus, string> = {
+  todo: "待开始",
+  in_progress: "进行中",
+  in_review: "待验收",
+  changes_requested: "待修改",
+  blocked: "已阻塞",
+  done: "已完成",
+};
+
+export const TASK_STATUS_PILL: Record<DoneBotTeamTaskStatus, string> = {
+  todo: "bg-ink/[0.06] text-ink-secondary ring-ink/12",
+  in_progress: "bg-accent/14 text-accent-text ring-accent/25",
+  in_review: "bg-amber-500/14 text-amber-500 ring-amber-500/25",
+  changes_requested: "bg-orange-500/15 text-orange-500 ring-orange-500/30",
+  blocked: "bg-danger/12 text-danger ring-danger/25",
+  done: "bg-success/14 text-success ring-success/25",
+};
+
+export const TASK_PRIORITY_LABEL: Record<DoneBotTeamTaskPriority, string> = {
+  low: "低",
+  normal: "普通",
+  high: "高",
+  urgent: "紧急",
+};
+
+export const TASK_PRIORITY_DOT: Record<DoneBotTeamTaskPriority, string> = {
+  low: "bg-ink-tertiary",
+  normal: "bg-accent",
+  high: "bg-amber-500",
+  urgent: "bg-danger",
+};
+
+export function teamJobTitleMap(overview: CollabOverview | null | undefined, teamId: string): Record<number, string> {
+  const map: Record<number, string> = {};
+  for (const profile of overview?.team_member_profiles?.[teamId] ?? []) {
+    if (profile.job_title?.trim()) map[profile.user_id] = profile.job_title.trim();
+  }
+  return map;
+}
+
+export function formatShortDueDate(iso?: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return sameYear
+    ? `${date.getMonth() + 1}月${date.getDate()}日`
+    : `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+export function isTaskOverdue(dueAt?: string | null, status?: DoneBotTeamTaskStatus): boolean {
+  if (!dueAt || status === "done") return false;
+  const ts = Date.parse(dueAt);
+  return !Number.isNaN(ts) && ts < Date.now();
+}
+
+export function toDateInputValue(iso?: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 export function initialGlyph(label: string): string {
   const clean = label.trim();

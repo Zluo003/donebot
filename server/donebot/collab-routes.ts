@@ -1,8 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
-import fs from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
@@ -20,8 +16,20 @@ import type { BotRecord, Store } from "../store.ts";
 import { boundedResponseText } from "./bounded-response.ts";
 import { buildCollabChatBotAppearance, chatBotNeedsSync, type CollabChatBotAppearance } from "./collab-bot-avatar.ts";
 import { createCollabChatBotWorker, type CollabBotTurnOptions } from "./collab-chat-bots.ts";
-import { collabListChatBots, collabListGroups, collabSyncChatBots } from "./collab-gateway.ts";
+import {
+  collabListChatBots,
+  collabListGroups,
+  collabListTeamChannels,
+  collabListTeamMemberProfiles,
+  collabSyncChatBots,
+  collabTeamTaskCounts,
+} from "./collab-gateway.ts";
 import { handleCollabGroupReadOrDelete, handleCollabGroupWrite } from "./collab-group-routes.ts";
+import {
+  handleCollabWorkspaceReadOrDelete,
+  handleCollabWorkspaceStreams,
+  handleCollabWorkspaceWrite,
+} from "./collab-workspace-routes.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
 const uuidV4 = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -53,21 +61,6 @@ const invokeFolderSchema = z.object({
   new_text: z.string().max(350_000).optional(),
   expected_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict();
-const internalTransferSchema = z.discriminatedUnion("action", [
-  z.object({
-    folder_id: uuidV4,
-    action: z.literal("download_file"),
-    path: z.string().min(1).max(2048),
-    save_to: z.string().min(1).max(4096),
-  }).strict(),
-  z.object({
-    folder_id: uuidV4,
-    action: z.literal("upload_file"),
-    path: z.string().min(1).max(2048),
-    local_path: z.string().min(1).max(4096),
-  }).strict(),
-]);
-const internalInvokeSchema = invokeFolderSchema.extend({ folder_id: uuidV4 }).strict();
 const shareBotSchema = z.object({
   id: uuidV4.optional(),
   bot_id: z.string().trim().min(1).max(128),
@@ -97,7 +90,7 @@ const chatReadSchema = z.object({
 
 function validChatTarget(scopeType: string, targetId: string): boolean {
   if (scopeType === "friend") return /^[1-9]\d{0,18}$/.test(targetId);
-  if (scopeType === "team" || scopeType === "group") return uuidV4.safeParse(targetId).success;
+  if (scopeType === "team" || scopeType === "group" || scopeType === "channel") return uuidV4.safeParse(targetId).success;
   return false;
 }
 
@@ -251,6 +244,18 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
       }
 
       // --- Streaming file transfer routes (never call readBody) ---
+      const wsStreamHandled = await handleCollabWorkspaceStreams({
+        req,
+        res,
+        url,
+        reqPath,
+        method,
+        gateway,
+        json,
+        helpers: { boundedRequestWebStream, readUpstreamError, pipeUpstreamStream },
+      });
+      if (wsStreamHandled !== PASS) return wsStreamHandled;
+
       const chatFileDownload = reqPath.match(/^\/api\/donebot\/collab\/chats\/files\/([0-9a-f-]{36})$/);
       if (chatFileDownload && method === "GET") {
         const inline = url.searchParams.get("inline") === "1";
@@ -269,7 +274,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return;
       }
 
-      const chatFileUpload = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/files$/);
+      const chatFileUpload = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group|channel)\/([^/]+)\/files$/);
       if (chatFileUpload && method === "POST") {
         const [, scopeType, targetId] = chatFileUpload;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -441,7 +446,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
 
       if (method === "GET" && reqPath === "/api/donebot/collab/overview") {
         const ctx = typeof gateway.collabCtx === "function" ? gateway.collabCtx() : null;
-        const [identity, profile, friends, folders, bots, workspaces, incomingInvitations, chatSummaries, groups] = await Promise.all([
+        const [identity, profile, friends, folders, bots, workspaces, incomingInvitations, chatSummaries, groups, taskCounts] = await Promise.all([
           gateway.collabIdentity(),
           gateway.collabUserProfile?.().catch(() => null) ?? Promise.resolve(null),
           gateway.collabFriends(),
@@ -451,6 +456,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           gateway.collabIncomingTeamInvitations().catch(() => []),
           gateway.collabChatSummaries?.().catch(() => []) ?? Promise.resolve([]),
           ctx ? collabListGroups(ctx).catch(() => []) : Promise.resolve([]),
+          ctx ? collabTeamTaskCounts(ctx).catch(() => []) : Promise.resolve([]),
         ]);
         const nickname = typeof profile?.username === "string" ? profile.username.trim() : "";
         const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
@@ -474,6 +480,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           }
         }
         const teamMembers: Record<string, unknown[]> = {};
+        const teamChannels: Record<string, unknown[]> = {};
+        const teamMemberProfiles: Record<string, unknown[]> = {};
         const chatBots: Record<string, unknown[]> = {};
         const teamList = Array.isArray(workspaces?.workspaces) ? workspaces.workspaces : [];
         const groupList = Array.isArray(groups) ? (groups as Array<{ id: string }>) : [];
@@ -487,13 +495,33 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
               teamMembers[team.id] = [];
             }
             if (ctx) {
-              try {
-                const list = await collabListChatBots(ctx, "team", team.id) as Array<{ owner_user_id?: number }>;
-                chatBots[`team:${team.id}`] = Array.isArray(list) ? list : [];
-                if (Array.isArray(list) && list.some(b => b.owner_user_id === myId)) hasOwnedChatBots = true;
-              } catch {
-                chatBots[`team:${team.id}`] = [];
-              }
+              await Promise.all([
+                (async () => {
+                  try {
+                    const list = await collabListChatBots(ctx, "team", team.id) as Array<{ owner_user_id?: number }>;
+                    chatBots[`team:${team.id}`] = Array.isArray(list) ? list : [];
+                    if (Array.isArray(list) && list.some(b => b.owner_user_id === myId)) hasOwnedChatBots = true;
+                  } catch {
+                    chatBots[`team:${team.id}`] = [];
+                  }
+                })(),
+                (async () => {
+                  try {
+                    const list = await collabListTeamChannels(ctx, team.id, false);
+                    teamChannels[team.id] = Array.isArray(list) ? list : [];
+                  } catch {
+                    teamChannels[team.id] = [];
+                  }
+                })(),
+                (async () => {
+                  try {
+                    const list = await collabListTeamMemberProfiles(ctx, team.id);
+                    teamMemberProfiles[team.id] = Array.isArray(list) ? list : [];
+                  } catch {
+                    teamMemberProfiles[team.id] = [];
+                  }
+                })(),
+              ]);
             }
           }),
           ...groupList.map(async group => {
@@ -580,13 +608,16 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           chat_bots: chatBots,
           team_capabilities: workspaces?.capabilities ?? [],
           team_members: teamMembers,
+          team_channels: teamChannels,
+          team_member_profiles: teamMemberProfiles,
+          team_task_counts: Array.isArray(taskCounts) ? taskCounts : [],
           incoming_team_invitations: incomingInvitations,
           chat_summaries: Array.isArray(chatSummaries) ? chatSummaries : [],
           local_bots: localBots,
         });
       }
 
-      const chatMessagesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/messages$/);
+      const chatMessagesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group|channel)\/([^/]+)\/messages$/);
       if (method === "GET" && chatMessagesGet) {
         const [, scopeType, targetId] = chatMessagesGet;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -600,7 +631,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return json(res, 200, await gateway.collabChatMessages(scopeType, targetId, params.toString()));
       }
 
-      const chatFilesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/files$/);
+      const chatFilesGet = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group|channel)\/([^/]+)\/files$/);
       if (method === "GET" && chatFilesGet) {
         const [, scopeType, targetId] = chatFilesGet;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -612,6 +643,11 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
       if ((method === "GET" || method === "DELETE") && (reqPath.startsWith("/api/donebot/collab/groups") || reqPath.includes("/bots"))) {
         const handled = await handleCollabGroupReadOrDelete({ method, reqPath, gateway, res, json });
         if (handled !== PASS) return handled;
+      }
+
+      if (method === "GET" || method === "DELETE") {
+        const wsReadHandled = await handleCollabWorkspaceReadOrDelete({ method, reqPath, url, gateway, res, json });
+        if (wsReadHandled !== PASS) return wsReadHandled;
       }
 
       const teamInvList = reqPath.match(/^\/api\/donebot\/collab\/teams\/([0-9a-f-]{36})\/invitations$/);
@@ -671,7 +707,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         });
       }
 
-      const chatSendPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/messages$/);
+      const chatSendPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group|channel)\/([^/]+)\/messages$/);
       if (method === "POST" && chatSendPost) {
         const [, scopeType, targetId] = chatSendPost;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -686,7 +722,7 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         return json(res, 200, sent);
       }
 
-      const chatReadPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group)\/([^/]+)\/read$/);
+      const chatReadPost = reqPath.match(/^\/api\/donebot\/collab\/chats\/(friend|team|group|channel)\/([^/]+)\/read$/);
       if (method === "POST" && chatReadPost) {
         const [, scopeType, targetId] = chatReadPost;
         if (!scopeType || !targetId || !validChatTarget(scopeType, targetId)) {
@@ -708,6 +744,16 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         json,
       });
       if (groupWriteHandled !== PASS) return groupWriteHandled;
+
+      const wsWriteHandled = await handleCollabWorkspaceWrite({
+        method,
+        reqPath,
+        body,
+        gateway,
+        res,
+        json,
+      });
+      if (wsWriteHandled !== PASS) return wsWriteHandled;
 
       const friendRemark = reqPath.match(/^\/api\/donebot\/collab\/friends\/([1-9]\d{0,18})\/remark$/);
       if (method === "PUT" && friendRemark) {
@@ -834,127 +880,4 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
   };
 }
 
-async function handleInternalFileTransfer(
-  gateway: DoneBotGateway,
-  input: z.infer<typeof internalTransferSchema>,
-): Promise<unknown> {
-  const relPath = cleanRelativeFilePath(input.path);
-  if (!relPath) throw new DoneBotGatewayError(400, "invalid_path", "Invalid remote relative file path.");
-
-  if (input.action === "download_file") {
-    const dest = input.save_to.trim();
-    if (!dest || dest.includes("\0") || !path.isAbsolute(dest)) {
-      throw new DoneBotGatewayError(400, "invalid_path", "save_to must be an absolute local file path.");
-    }
-    const existing = await fs.lstat(dest).catch(() => null);
-    if (existing?.isSymbolicLink() || existing?.isDirectory()) {
-      throw new DoneBotGatewayError(400, "invalid_path", "save_to must point to a regular file path.");
-    }
-    const upstream = await gateway.collabDownloadFile(input.folder_id, relPath);
-    if (!upstream.ok) {
-      throw new DoneBotGatewayError(upstream.status >= 400 ? upstream.status : 502, "download_failed", await readUpstreamError(upstream, "下载远程共享文件失败。"));
-    }
-    if (!upstream.body) throw new DoneBotGatewayError(502, "download_failed", "远程文件流为空。");
-    await fs.mkdir(path.dirname(dest), { recursive: true });
-    const tmp = `${dest}.${process.pid}.${randomUUID()}.part`;
-    const hasher = createHash("sha256");
-    let bytes = 0;
-    const reader = upstream.body.getReader();
-    const out = createWriteStream(tmp, { flags: "wx", mode: 0o644 });
-    try {
-      for (;;) {
-        const next = await reader.read();
-        if (next.done) break;
-        bytes += next.value.byteLength;
-        if (bytes > DONEBOT_COLLAB_MAX_FILE_BYTES) {
-          throw new DoneBotGatewayError(413, "file_too_large", "远程文件超过 100 MB 限制。");
-        }
-        hasher.update(next.value);
-        if (!out.write(next.value)) {
-          await new Promise<void>((resolve, reject) => {
-            out.once("drain", resolve);
-            out.once("error", reject);
-          });
-        }
-      }
-      await new Promise<void>((resolve, reject) => {
-        out.once("error", reject);
-        out.end(() => resolve());
-      });
-      await fs.rename(tmp, dest);
-      return { result: { saved: true, path: dest, bytes, sha256: hasher.digest("hex") } };
-    } catch (error) {
-      out.destroy();
-      await reader.cancel().catch(() => {});
-      await fs.unlink(tmp).catch(() => {});
-      throw error;
-    }
-  }
-
-  const src = input.local_path.trim();
-  if (!src || src.includes("\0") || !path.isAbsolute(src)) {
-    throw new DoneBotGatewayError(400, "invalid_path", "local_path must be an absolute local file path.");
-  }
-  const stat = await fs.lstat(src).catch(() => null);
-  if (!stat || stat.isSymbolicLink() || !stat.isFile()) {
-    throw new DoneBotGatewayError(400, "invalid_path", "local_path must be an existing regular file.");
-  }
-  if (stat.size > DONEBOT_COLLAB_MAX_FILE_BYTES) {
-    throw new DoneBotGatewayError(413, "file_too_large", "上传文件不能超过 100 MB。");
-  }
-  const fileStream = Readable.toWeb(createReadStream(src)) as unknown as ReadableStream<Uint8Array>;
-  const upstream = await gateway.collabUploadFile(input.folder_id, relPath, fileStream, {
-    "content-type": "application/octet-stream",
-    "content-length": String(stat.size),
-  });
-  if (!upstream.ok) {
-    throw new DoneBotGatewayError(upstream.status >= 400 ? upstream.status : 502, "upload_failed", await readUpstreamError(upstream, "上传文件到远程共享文件夹失败。"));
-  }
-  const payload = await upstream.json() as { code?: number; data?: unknown };
-  return payload?.code === 0 && "data" in payload ? payload.data : payload;
-}
-
-export async function handleDoneBotCollabInternal(
-  gateway: DoneBotGateway,
-  method: string,
-  reqPath: string,
-  res: ServerResponse,
-  json: (res: ServerResponse, status: number, value: unknown) => void,
-  readInternalBody: () => Promise<Record<string, unknown>>,
-): Promise<boolean> {
-  if (method !== "POST" || !reqPath.startsWith("/api/internal/donebot/collab/")) return false;
-  try {
-    if (reqPath === "/api/internal/donebot/collab/folders") {
-      const snapshot = await gateway.collabFolders() as { shared_with_me?: unknown[] };
-      json(res, 200, { folders: snapshot?.shared_with_me ?? [] });
-      return true;
-    }
-    if (reqPath === "/api/internal/donebot/collab/invoke") {
-      const body = await readInternalBody();
-      const transferParsed = internalTransferSchema.safeParse(body);
-      if (transferParsed.success) {
-        const answer = await handleInternalFileTransfer(gateway, transferParsed.data);
-        json(res, 200, answer);
-        return true;
-      }
-      const parsed = internalInvokeSchema.safeParse(body);
-      if (!parsed.success) {
-        json(res, 400, { error: "Invalid collab_folder arguments." });
-        return true;
-      }
-      const { folder_id, ...operation } = parsed.data;
-      const answer = await gateway.collabInvokeFolder(folder_id, operation);
-      json(res, 200, answer);
-      return true;
-    }
-    json(res, 404, { error: "unknown collab endpoint" });
-    return true;
-  } catch (error) {
-    if (error instanceof DoneBotGatewayError) {
-      json(res, error.status, { error: error.message });
-      return true;
-    }
-    json(res, 502, { error: error instanceof Error ? error.message : "远程共享文件夹调用失败。" });
-    return true;
-  }
-}
+export { handleDoneBotCollabInternal } from "./collab-internal.ts";

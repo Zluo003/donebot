@@ -129,19 +129,25 @@ async function loadChatContext(
               roleLabel: m.user_id === found.creator_id ? "群主" : "群成员",
             }));
           }
-        } else if (inv.scope_type === "team" && typeof deps.gateway.teamMembers === "function") {
-          const list = await deps.gateway.teamMembers(inv.target_id);
-          members = (Array.isArray(list) ? list : []).map(m => ({
-            userId: m.user_id,
-            name: formatPersonLabel(m),
-            roleLabel: teamRoleLabel(m.role),
-          }));
+        } else if ((inv.scope_type === "team" || inv.scope_type === "channel") && typeof deps.gateway.teamMembers === "function") {
+          const teamId = inv.scope_type === "channel" ? (inv.team_id || "") : inv.target_id;
+          if (teamId) {
+            const list = await deps.gateway.teamMembers(teamId);
+            members = (Array.isArray(list) ? list : []).map(m => ({
+              userId: m.user_id,
+              name: formatPersonLabel(m),
+              roleLabel: teamRoleLabel(m.role),
+            }));
+          }
         }
       } catch { /* Best-effort roster lookup */ }
     })(),
     (async () => {
       try {
-        const raw = await collabListChatBots(ctx, inv.scope_type, inv.target_id);
+        const botScope = inv.scope_type === "channel" ? "team" : inv.scope_type;
+        const botTarget = inv.scope_type === "channel" ? (inv.team_id || "") : inv.target_id;
+        if (!botTarget) return;
+        const raw = await collabListChatBots(ctx, botScope, botTarget);
         const list = Array.isArray(raw) ? (raw as DoneBotCollabChatBot[]) : [];
         chatBots = list.map(b => ({
           id: b.id,
@@ -175,7 +181,7 @@ export function formatChatPrompt(
   inv: DoneBotClaimedBotInvocation,
   chatContext?: CollabChatContext,
 ): { display: string; full: string } {
-  const kindLabel = inv.scope_type === "team" ? "团队聊天" : "好友群聊";
+  const kindLabel = inv.scope_type === "channel" ? "团队频道" : inv.scope_type === "team" ? "团队聊天" : "好友群聊";
   const chatTitle = chatContext?.chatName?.trim() || inv.chat_name?.trim() || inv.target_id;
   const memberById = new Map((chatContext?.members ?? []).map(m => [m.userId, m]));
   const trigger = inv.recent_messages.find(m => m.id === inv.message_id) ?? inv.recent_messages[inv.recent_messages.length - 1];

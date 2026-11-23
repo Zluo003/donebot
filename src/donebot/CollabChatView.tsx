@@ -12,6 +12,7 @@ import {
   FileImage,
   FileText,
   FileVideo,
+  ListTodo,
   Loader2,
   PanelRight,
   Plus,
@@ -32,6 +33,7 @@ import {
   type DoneBotCollabChatBot,
   type DoneBotCollabGroup,
   type DoneBotFriend,
+  type DoneBotTeamChannel,
 } from "../../shared/donebot-collab";
 import type { DoneBotTeamIdentity } from "../../shared/donebot-teams";
 import {
@@ -94,19 +96,27 @@ export function CollabChatView({
   targetId,
   friend,
   team,
+  channel,
   group,
   chatBots = [],
   overview,
+  memberJobTitles,
+  hideHeader = false,
   onChatFileSent,
+  onConvertToTask,
 }: {
   scopeType: CollabChatScopeType;
   targetId: string;
   friend?: DoneBotFriend | null;
   team?: DoneBotTeamIdentity | null;
+  channel?: DoneBotTeamChannel | null;
   group?: DoneBotCollabGroup | null;
   chatBots?: DoneBotCollabChatBot[];
   overview: CollabOverview;
+  memberJobTitles?: Record<number, string>;
+  hideHeader?: boolean;
   onChatFileSent?: () => void;
+  onConvertToTask?: (msg: DoneBotChatMessage) => void;
 }) {
   const { dragProps } = useCaptionChrome();
   const { rightPanelOpen } = useCollabStore();
@@ -150,28 +160,44 @@ export function CollabChatView({
     nickname: overview.identity.nickname,
     email: overview.identity.email,
   });
-  const isGroupLike = scopeType === "team" || scopeType === "group";
-  const title = friend ? displayPersonName(friend) : team ? team.name : (group?.name ?? "协作聊天");
+  const isGroupLike = scopeType === "team" || scopeType === "group" || scopeType === "channel";
+  const privateMemberSet = useMemo(
+    () => (channel?.is_private ? new Set(channel.member_ids ?? []) : null),
+    [channel],
+  );
+  const effectiveChatBots = useMemo(
+    () => (privateMemberSet ? chatBots.filter(b => privateMemberSet.has(b.owner_user_id)) : chatBots),
+    [chatBots, privateMemberSet],
+  );
+  const title = friend
+    ? displayPersonName(friend)
+    : team && channel && !channel.is_default
+      ? `#${channel.name}`
+      : team
+        ? team.name
+        : (group?.name ?? "协作聊天");
   const headerAvatarUrl = team?.avatar_url ?? group?.avatar_url;
   const subtitle = friend
     ? (friend.remark && friend.nickname && friend.nickname !== friend.remark ? `${friend.nickname} · ${friend.email}` : friend.email)
-    : team
-      ? `${overview.team_members[team.id]?.length ?? 0} 位成员`
-      : group
-        ? `${group.members.length} 位成员`
-        : "";
+    : team && channel && !channel.is_default
+      ? (channel.description?.trim() || (channel.is_private ? `私密频道 · ${channel.member_ids.length} 位成员` : `${team.name} · 公开频道`))
+      : team
+        ? `${overview.team_members[team.id]?.length ?? 0} 位成员`
+        : group
+          ? `${group.members.length} 位成员`
+          : "";
 
   const mentionableMembers = useMemo<MentionableMember[]>(() => {
     if (team) {
       return (overview.team_members[team.id] ?? [])
-        .filter(m => m.user_id !== myUserId)
+        .filter(m => m.user_id !== myUserId && (!privateMemberSet || privateMemberSet.has(m.user_id)))
         .map(m => ({
           user_id: m.user_id,
           email: m.email,
           nickname: m.nickname,
           remark: m.remark,
           avatar_url: m.avatar_url,
-          roleLabel: TEAM_ROLES[m.role],
+          roleLabel: memberJobTitles?.[m.user_id] || TEAM_ROLES[m.role],
         }));
     }
     if (group) {
@@ -187,9 +213,9 @@ export function CollabChatView({
         }));
     }
     return [];
-  }, [team, group, overview.team_members, myUserId]);
+  }, [team, group, overview.team_members, myUserId, privateMemberSet, memberJobTitles]);
 
-  const hasMentionTargets = isGroupLike && (chatBots.length > 0 || mentionableMembers.length > 0);
+  const hasMentionTargets = isGroupLike && (effectiveChatBots.length > 0 || mentionableMembers.length > 0);
 
   const mentionMatch = useMemo(
     () => (hasMentionTargets && !mentionDismissed ? detectMentionQuery(draft, caretPos) : null),
@@ -197,8 +223,8 @@ export function CollabChatView({
   );
 
   const mentionItems = useMemo(
-    () => (mentionMatch ? buildCollabMentionItems({ query: mentionMatch.query, members: mentionableMembers, chatBots }) : []),
-    [mentionMatch, mentionableMembers, chatBots],
+    () => (mentionMatch ? buildCollabMentionItems({ query: mentionMatch.query, members: mentionableMembers, chatBots: effectiveChatBots }) : []),
+    [mentionMatch, mentionableMembers, effectiveChatBots],
   );
 
   const selectableMentionItems = useMemo(
@@ -389,7 +415,7 @@ export function CollabChatView({
     try {
       const activeMentionIds = isGroupLike
         ? mentionedBotIds.filter(id => {
-          const bot = chatBots.find(b => b.id === id);
+          const bot = effectiveChatBots.find(b => b.id === id);
           return bot ? text.toLowerCase().includes(`@${bot.bot_name.toLowerCase()}`) : false;
         })
         : [];
@@ -517,6 +543,7 @@ export function CollabChatView({
       className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-app"
     >
       {/* Floating Chat Header matching native ChatHeadPill */}
+      {!hideHeader && (
       <header {...dragProps} className="flex h-[54px] shrink-0 items-center justify-between gap-3 px-4 max-md:pl-12">
         <button
           type="button"
@@ -588,6 +615,7 @@ export function CollabChatView({
           </button>
         </div>
       </header>
+      )}
 
       {/* Drop overlay */}
       {draggingOver && (
@@ -685,8 +713,20 @@ export function CollabChatView({
                       {formatMessageStamp(msg.created_at)}
                     </div>
                   )}
-                  <div className={cn("flex items-end gap-2.5", mine ? "justify-end" : "justify-start")}>
+                  <div className={cn("group/msg flex items-end gap-2.5", mine ? "justify-end" : "justify-start")}>
                     {!mine && avatarNode}
+                    {mine && onConvertToTask && (
+                      <button
+                        type="button"
+                        data-collab-msg-to-task={msg.id}
+                        title="转为团队任务"
+                        aria-label="转为团队任务"
+                        onClick={() => onConvertToTask(msg)}
+                        className="mb-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.06] px-2 py-1 text-[11px] font-medium text-ink-secondary opacity-0 transition-opacity hover:bg-ink/[0.12] hover:text-ink group-hover/msg:opacity-100 focus-visible:opacity-100"
+                      >
+                        <ListTodo size={12} aria-hidden="true" />转为任务
+                      </button>
+                    )}
                     <div className={cn("flex max-w-[min(78%,520px)] flex-col gap-1", mine ? "items-end" : "items-start")}>
                       {isBot ? (
                         <div className="flex items-center gap-1.5 px-1 text-[11.5px] text-ink-tertiary">
@@ -697,7 +737,14 @@ export function CollabChatView({
                           <span>来自 {senderLabel}</span>
                         </div>
                       ) : isGroupLike ? (
-                        <span data-collab-msg-sender="" className="px-1 text-[11.5px] text-ink-tertiary">{senderLabel}</span>
+                        <div className="flex items-center gap-1.5 px-1 text-[11.5px] text-ink-tertiary">
+                          <span data-collab-msg-sender="">{senderLabel}</span>
+                          {memberJobTitles?.[msg.sender_id] && (
+                            <span className="rounded-full bg-ink/[0.05] px-1.5 py-0 text-[10px] text-ink-secondary ring-1 ring-inset ring-ink/10">
+                              {memberJobTitles[msg.sender_id]}
+                            </span>
+                          )}
+                        </div>
                       ) : null}
 
                       {msg.kind === "file" && msg.file_id && mediaKind !== "file" ? (
@@ -762,6 +809,18 @@ export function CollabChatView({
                         </div>
                       )}
                     </div>
+                    {!mine && onConvertToTask && (
+                      <button
+                        type="button"
+                        data-collab-msg-to-task={msg.id}
+                        title="转为团队任务"
+                        aria-label="转为团队任务"
+                        onClick={() => onConvertToTask(msg)}
+                        className="mb-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.06] px-2 py-1 text-[11px] font-medium text-ink-secondary opacity-0 transition-opacity hover:bg-ink/[0.12] hover:text-ink group-hover/msg:opacity-100 focus-visible:opacity-100"
+                      >
+                        <ListTodo size={12} aria-hidden="true" />转为任务
+                      </button>
+                    )}
                     {mine && avatarNode}
                   </div>
                 </div>

@@ -5,15 +5,17 @@ import { cn } from "@/lib/cn";
 import {
   openCollabDialog,
   refreshCollabOverview,
+  resolveTeamActiveChannel,
   useCollabStore,
 } from "./collab-store";
 import { COLLAB_BUTTON, COLLAB_CARD } from "./collab-types";
 import { CollabChatView } from "./CollabChatView";
 import { CollabRightPanel } from "./CollabRightPanel";
+import { CollabTeamWorkspace } from "./CollabTeamWorkspace";
 
 export function CollabWorkspacePage() {
   const { dragProps } = useCaptionChrome();
-  const { overview, loaded, refreshing, error, selection, rightPanelOpen } = useCollabStore();
+  const { overview, loaded, refreshing, error, selection, rightPanelOpen, teamChannelById } = useCollabStore();
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
 
   const reload = useCallback(async () => {
@@ -35,6 +37,9 @@ export function CollabWorkspacePage() {
     : null;
   const activeScope = activeFriend ? "friend" : activeTeam ? "team" : "group";
   const activeTargetId = activeFriend ? String(activeFriend.user_id) : activeTeam ? activeTeam.id : (activeGroup?.id ?? "");
+  const activeTeamChannel = activeTeam
+    ? resolveTeamActiveChannel(overview, activeTeam.id, teamChannelById[activeTeam.id])
+    : null;
   const activeChatBots = activeTeam
     ? (overview?.chat_bots?.[`team:${activeTeam.id}`] ?? [])
     : activeGroup
@@ -125,20 +130,31 @@ export function CollabWorkspacePage() {
 
   return (
     <main data-collab-workspace="" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-app text-ink">
-      <CollabChatView
-        scopeType={activeScope}
-        targetId={activeTargetId}
-        friend={activeFriend}
-        team={activeTeam}
-        group={activeGroup}
-        chatBots={activeChatBots}
-        overview={overview}
-        onChatFileSent={() => setFilesRefreshKey(k => k + 1)}
-      />
+      {activeTeam ? (
+        <CollabTeamWorkspace
+          team={activeTeam}
+          chatBots={activeChatBots}
+          overview={overview}
+          onChatFileSent={() => setFilesRefreshKey(k => k + 1)}
+          onReload={reload}
+        />
+      ) : (
+        <CollabChatView
+          scopeType={activeScope}
+          targetId={activeTargetId}
+          friend={activeFriend}
+          team={null}
+          group={activeGroup}
+          chatBots={activeChatBots}
+          overview={overview}
+          onChatFileSent={() => setFilesRefreshKey(k => k + 1)}
+        />
+      )}
       {rightPanelOpen && (
         <CollabRightPanel
           friend={activeFriend}
           team={activeTeam}
+          activeChannel={activeTeamChannel}
           group={activeGroup}
           chatBots={activeChatBots}
           overview={overview}

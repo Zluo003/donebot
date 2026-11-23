@@ -2,11 +2,18 @@ import { useSyncExternalStore } from "react";
 import { api } from "@/state/api";
 import type { Action, AppState } from "@/state/store";
 import { notificationSoundsEnabled } from "@/lib/notification-preferences";
-import type { CollabChatScopeType, DoneBotChatMessage, DoneBotChatSummary } from "../../shared/donebot-collab";
+import type {
+  CollabChatScopeType,
+  DoneBotChatMessage,
+  DoneBotChatSummary,
+  DoneBotTeamChannel,
+  DoneBotTeamTaskCounts,
+} from "../../shared/donebot-collab";
 import { cleanError, displayPersonName, type CollabOverview } from "./collab-types";
 import { isDoneBotCloudBrowser } from "./services";
 
 export type CollabSidebarTab = "bots" | "collab";
+export type TeamWorkspaceView = "channels" | "tasks";
 
 export type CollabSelection =
   | { kind: "friend"; userId: number }
@@ -41,6 +48,8 @@ export interface CollabStoreState {
   selection: CollabSelection;
   selectionTouched: boolean;
   rightPanelOpen: boolean;
+  teamViewById: Record<string, TeamWorkspaceView>;
+  teamChannelById: Record<string, string>;
   activeDialog: CollabDialogTarget;
   overview: CollabOverview | null;
   loaded: boolean;
@@ -73,6 +82,8 @@ function initialState(): CollabStoreState {
     selection: null,
     selectionTouched: false,
     rightPanelOpen: true,
+    teamViewById: {},
+    teamChannelById: {},
     activeDialog: null,
     overview: null,
     loaded: false,
@@ -131,6 +142,58 @@ export function findChatSummary(
   targetId: string,
 ): DoneBotChatSummary | undefined {
   return overview?.chat_summaries?.find(item => item.scope_type === scopeType && item.target_id === targetId);
+}
+
+export function resolveTeamActiveChannel(
+  overview: CollabOverview | null,
+  teamId: string,
+  preferredId?: string,
+): DoneBotTeamChannel | null {
+  const channels = (overview?.team_channels?.[teamId] ?? []).filter(ch => !ch.archived_at);
+  if (channels.length === 0) return null;
+  if (preferredId) {
+    const found = channels.find(ch => ch.id === preferredId);
+    if (found) return found;
+  }
+  return channels.find(ch => ch.is_default) ?? channels[0] ?? null;
+}
+
+export function teamTotalUnreadCount(overview: CollabOverview | null, teamId: string): number {
+  if (!overview) return 0;
+  let total = findChatSummary(overview, "team", teamId)?.unread_count ?? 0;
+  for (const ch of overview.team_channels?.[teamId] ?? []) {
+    if (ch.is_default || ch.archived_at) continue;
+    total += findChatSummary(overview, "channel", ch.id)?.unread_count ?? 0;
+  }
+  return total;
+}
+
+export function teamLatestChatSummary(
+  overview: CollabOverview | null,
+  teamId: string,
+): { summary?: DoneBotChatSummary; channelName?: string } {
+  if (!overview) return {};
+  let best = findChatSummary(overview, "team", teamId);
+  let bestChannelName: string | undefined;
+  for (const ch of overview.team_channels?.[teamId] ?? []) {
+    if (ch.is_default || ch.archived_at) continue;
+    const sum = findChatSummary(overview, "channel", ch.id);
+    if (sum && sum.last_message_id > (best?.last_message_id ?? 0)) {
+      best = sum;
+      bestChannelName = ch.name;
+    }
+  }
+  return { summary: best, channelName: bestChannelName };
+}
+
+export function teamTaskCountsFor(overview: CollabOverview | null, teamId: string): DoneBotTeamTaskCounts | undefined {
+  return overview?.team_task_counts?.find(c => c.team_id === teamId);
+}
+
+export function teamTaskActionCount(overview: CollabOverview | null, teamId: string): number {
+  const counts = teamTaskCountsFor(overview, teamId);
+  if (!counts) return 0;
+  return (counts.assigned_to_me || 0) + (counts.review_by_me || 0);
 }
 
 function loadNotified(accountId: string): Set<string> {
@@ -319,6 +382,16 @@ export function toggleCollabRightPanel() {
   setState({ rightPanelOpen: !state.rightPanelOpen });
 }
 
+export function setTeamWorkspaceView(teamId: string, view: TeamWorkspaceView) {
+  if (state.teamViewById[teamId] === view) return;
+  setState({ teamViewById: { ...state.teamViewById, [teamId]: view } });
+}
+
+export function setTeamActiveChannel(teamId: string, channelId: string) {
+  if (state.teamChannelById[teamId] === channelId) return;
+  setState({ teamChannelById: { ...state.teamChannelById, [teamId]: channelId } });
+}
+
 export function openCollabDialog(dialog: CollabDialogTarget) {
   setState({
     activeDialog: dialog,
@@ -435,20 +508,32 @@ export async function refreshCollabOverview(opts: { silent?: boolean } = {}): Pr
       }
       // If currently viewing an active chat, keep its unread count at 0 until poll catches up.
       if (uiActiveView === "collab" && state.selection && next.chat_summaries) {
-        const activeScope = state.selection.kind;
-        const activeTarget = state.selection.kind === "friend"
-          ? String(state.selection.userId)
-          : state.selection.kind === "team"
-            ? state.selection.teamId
-            : state.selection.groupId;
-        patch.overview = {
-          ...next,
-          chat_summaries: next.chat_summaries.map(item =>
-            item.scope_type === activeScope && item.target_id === activeTarget
-              ? { ...item, unread_count: 0 }
-              : item,
-          ),
-        };
+        let activeScope: CollabChatScopeType | null = null;
+        let activeTarget = "";
+        if (state.selection.kind === "friend") {
+          activeScope = "friend";
+          activeTarget = String(state.selection.userId);
+        } else if (state.selection.kind === "group") {
+          activeScope = "group";
+          activeTarget = state.selection.groupId;
+        } else if (state.selection.kind === "team") {
+          const teamView = state.teamViewById[state.selection.teamId] ?? "channels";
+          if (teamView === "channels") {
+            const activeCh = resolveTeamActiveChannel(next, state.selection.teamId, state.teamChannelById[state.selection.teamId]);
+            activeScope = activeCh?.chat_scope_type ?? "team";
+            activeTarget = activeCh?.chat_target_id ?? state.selection.teamId;
+          }
+        }
+        if (activeScope && activeTarget) {
+          patch.overview = {
+            ...next,
+            chat_summaries: next.chat_summaries.map(item =>
+              item.scope_type === activeScope && item.target_id === activeTarget
+                ? { ...item, unread_count: 0 }
+                : item,
+            ),
+          };
+        }
       }
       setState(patch);
       reconcileNotifications(next);

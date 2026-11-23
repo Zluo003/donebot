@@ -1,6 +1,6 @@
 export type CollabAccess = "read" | "write";
 export type CollabSubjectType = "user" | "team";
-export type CollabChatScopeType = "friend" | "team" | "group";
+export type CollabChatScopeType = "friend" | "team" | "group" | "channel";
 
 export const DONEBOT_COLLAB_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
@@ -88,12 +88,110 @@ export interface DoneBotClaimedBotInvocation {
   id: string;
   chat_bot_id: string;
   message_id: number;
-  scope_type: "team" | "group";
+  scope_type: "team" | "group" | "channel";
   target_id: string;
+  team_id?: string;
   chat_name?: string;
   local_bot_id: string;
   bot_name: string;
   recent_messages: DoneBotChatMessage[];
+}
+
+export interface DoneBotTeamChannel {
+  id: string;
+  team_id: string;
+  name: string;
+  description?: string;
+  is_default: boolean;
+  is_private: boolean;
+  chat_scope_type: "team" | "channel";
+  chat_target_id: string;
+  created_by: number;
+  member_ids: number[];
+  archived_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DoneBotTeamMemberProfile {
+  user_id: number;
+  job_title: string;
+  updated_at: string;
+}
+
+export type DoneBotTeamTaskStatus =
+  | "todo"
+  | "in_progress"
+  | "in_review"
+  | "changes_requested"
+  | "blocked"
+  | "done";
+
+export type DoneBotTeamTaskPriority = "low" | "normal" | "high" | "urgent";
+
+export type DoneBotTeamTaskUpdateKind =
+  | "comment"
+  | "submission"
+  | "approve"
+  | "request_changes"
+  | "status_change";
+
+export interface DoneBotTeamTask {
+  id: string;
+  team_id: string;
+  channel_id?: string;
+  channel_name?: string;
+  title: string;
+  description: string;
+  status: DoneBotTeamTaskStatus;
+  priority: DoneBotTeamTaskPriority;
+  creator_id: number;
+  assignee_id?: number;
+  reviewer_id?: number;
+  collaborator_ids: number[];
+  due_at?: string;
+  source_scope_type?: string;
+  source_target_id?: string;
+  source_message_id?: number;
+  source_quote?: string;
+  update_count: number;
+  deliverable_count: number;
+  submitted_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DoneBotTeamTaskCounts {
+  team_id: string;
+  open_total: number;
+  assigned_to_me: number;
+  review_by_me: number;
+  changes_requested_to_me: number;
+}
+
+export interface DoneBotTeamTaskUpdate {
+  id: number;
+  task_id: string;
+  actor_id: number;
+  actor_email: string;
+  actor_nickname?: string;
+  actor_avatar_url?: string;
+  actor_remark?: string;
+  kind: DoneBotTeamTaskUpdateKind;
+  body: string;
+  file_id?: string;
+  file_name?: string;
+  file_mime?: string;
+  file_size?: number;
+  file_sha256?: string;
+  meta?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface DoneBotTeamTaskDetail {
+  task: DoneBotTeamTask;
+  updates: DoneBotTeamTaskUpdate[];
 }
 
 export interface DoneBotChatSummary {

@@ -178,3 +178,69 @@ export function collabSyncChatBots(ctx: CollabGatewayTransport, installationId: 
 export function collabReplyBotInvocation(ctx: CollabGatewayTransport, invocationId: string, payload: { body?: string; error?: string }) {
   return collabJsonCall(ctx, "user", `/api/v1/donebot/collab/chat-bots/invocations/${invocationId}/reply`, "POST", payload, 15_000);
 }
+
+// --- Team Channels, Member Job Titles & Tasks ---
+
+export function collabListTeamChannels(ctx: CollabGatewayTransport, teamId: string, includeArchived = false) {
+  const qs = includeArchived ? "?include_archived=1" : "";
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/channels${qs}`, "GET");
+}
+export function collabCreateTeamChannel(ctx: CollabGatewayTransport, teamId: string, payload: Record<string, unknown>) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/channels`, "POST", payload);
+}
+export function collabUpdateTeamChannel(ctx: CollabGatewayTransport, teamId: string, channelId: string, payload: Record<string, unknown>) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/channels/${channelId}`, "PATCH", payload);
+}
+export function collabListTeamMemberProfiles(ctx: CollabGatewayTransport, teamId: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/member-profiles`, "GET");
+}
+export function collabSetTeamMemberJobTitle(ctx: CollabGatewayTransport, teamId: string, userId: number, jobTitle: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/members/${userId}/profile`, "PUT", { job_title: jobTitle });
+}
+export function collabTeamTaskCounts(ctx: CollabGatewayTransport) {
+  return collabJsonCall(ctx, "user", "/api/v1/donebot/collab/tasks/counts", "GET");
+}
+export function collabListTeamTasks(ctx: CollabGatewayTransport, teamId: string, query: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks${query ? `?${query}` : ""}`, "GET");
+}
+export function collabCreateTeamTask(ctx: CollabGatewayTransport, teamId: string, payload: Record<string, unknown>) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks`, "POST", payload);
+}
+export function collabGetTeamTaskDetail(ctx: CollabGatewayTransport, teamId: string, taskId: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}`, "GET");
+}
+export function collabUpdateTeamTask(ctx: CollabGatewayTransport, teamId: string, taskId: string, payload: Record<string, unknown>) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}`, "PATCH", payload);
+}
+export function collabDeleteTeamTask(ctx: CollabGatewayTransport, teamId: string, taskId: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}`, "DELETE");
+}
+export function collabAddTeamTaskComment(ctx: CollabGatewayTransport, teamId: string, taskId: string, body: string) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/comments`, "POST", { body });
+}
+export function collabSubmitTeamTask(ctx: CollabGatewayTransport, teamId: string, taskId: string, payload: { body: string; notify_channel: boolean }) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/submit`, "POST", payload);
+}
+export function collabReviewTeamTask(ctx: CollabGatewayTransport, teamId: string, taskId: string, payload: { decision: "approve" | "request_changes"; body: string; notify_channel: boolean }) {
+  return collabJsonCall(ctx, "user", `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/review`, "POST", payload);
+}
+export function collabUploadTeamTaskFile(
+  ctx: CollabGatewayTransport,
+  teamId: string,
+  taskId: string,
+  query: string,
+  body: ReadableStream<Uint8Array> | Buffer,
+  headers: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return collabStreamCall(ctx, "auto", () => `/api/v1/donebot/teams/${teamId}/tasks/${taskId}/files${query ? `?${query}` : ""}`, { method: "POST", body, headers, signal });
+}
+export function collabDownloadTeamTaskFile(
+  ctx: CollabGatewayTransport,
+  fileId: string,
+  inline: boolean,
+  signal?: AbortSignal,
+  range?: string,
+): Promise<Response> {
+  return collabStreamCall(ctx, "auto", () => `/api/v1/donebot/collab/tasks/files/${fileId}${inline ? "?inline=1" : ""}`, { method: "GET", headers: range ? { range } : undefined, signal });
+}

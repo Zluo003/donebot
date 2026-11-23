@@ -24,6 +24,7 @@ import type {
   DoneBotCollabGroup,
   DoneBotFriend,
   DoneBotSharedFolder,
+  DoneBotTeamChannel,
 } from "../../shared/donebot-collab";
 import type { DoneBotTeamCommand, DoneBotTeamIdentity } from "../../shared/donebot-teams";
 import {
@@ -40,6 +41,7 @@ import {
   personSecondaryLabel,
   TEAM_ROLE_PILL,
   TEAM_ROLES,
+  teamJobTitleMap,
   type CollabOverview,
 } from "./collab-types";
 import { CollabAvatar, CollabTeamBadge, compressAvatarFile } from "./CollabAvatar";
@@ -53,6 +55,7 @@ type RightTabId = "info" | "folders" | "bots" | "files";
 export function CollabRightPanel({
   friend,
   team,
+  activeChannel,
   group,
   chatBots = [],
   overview,
@@ -61,6 +64,7 @@ export function CollabRightPanel({
 }: {
   friend?: DoneBotFriend | null;
   team?: DoneBotTeamIdentity | null;
+  activeChannel?: DoneBotTeamChannel | null;
   group?: DoneBotCollabGroup | null;
   chatBots?: DoneBotCollabChatBot[];
   overview: CollabOverview;
@@ -72,6 +76,8 @@ export function CollabRightPanel({
   const [tab, setTab] = useState<RightTabId>("info");
   const [browsingFolderId, setBrowsingFolderId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [editingJobMemberId, setEditingJobMemberId] = useState<number | null>(null);
+  const [jobTitleDraft, setJobTitleDraft] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -87,10 +93,39 @@ export function CollabRightPanel({
   useEffect(() => {
     setBrowsingFolderId(null);
     setEditingTitle(null);
+    setEditingJobMemberId(null);
+    setJobTitleDraft("");
     setError("");
     setNotice("");
     bodyRef.current?.scrollTo({ top: 0 });
   }, [entityKey]);
+
+  const jobTitles = useMemo(
+    () => (team ? teamJobTitleMap(overview, team.id) : {}),
+    [overview, team],
+  );
+
+  const saveMemberJobTitle = async (userId: number, raw: string) => {
+    setEditingJobMemberId(null);
+    if (!team) return;
+    const clean = raw.trim();
+    if (clean === (jobTitles[userId] ?? "")) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await api(`/api/donebot/collab/teams/${team.id}/members/${userId}/profile`, {
+        method: "PUT",
+        body: JSON.stringify({ job_title: clean }),
+      });
+      setNotice(clean ? `岗位分工已更新为「${clean}」` : "已清除岗位分工");
+      await onReload();
+    } catch (cause) {
+      setError(cleanError(cause, "更新岗位分工失败。"));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (isGroup) setTab(prev => (prev === "folders" ? "info" : prev));
@@ -653,6 +688,8 @@ export function CollabRightPanel({
                     {members.map(member => {
                       const name = displayPersonName(member);
                       const sub = personSecondaryLabel(member);
+                      const jobTitle = jobTitles[member.user_id] ?? "";
+                      const canEditJob = member.user_id === myUserId || team.role === "owner" || team.role === "admin";
                       const manageable = member.role !== "owner"
                         && (team.role === "owner" || (team.role === "admin" && member.role === "member"));
                       return (
@@ -665,11 +702,64 @@ export function CollabRightPanel({
                             size={32}
                           />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <span className="truncate text-[13.5px] font-medium text-ink">{name}</span>
                               <span className={cn("inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL[member.role])}>
                                 {TEAM_ROLES[member.role]}
                               </span>
+                              {editingJobMemberId === member.user_id ? (
+                                <input
+                                  autoFocus
+                                  data-collab-job-title-input={member.user_id}
+                                  maxLength={40}
+                                  placeholder="如：分镜/运营/美工"
+                                  value={jobTitleDraft}
+                                  onChange={e => setJobTitleDraft(e.target.value)}
+                                  onBlur={() => void saveMemberJobTitle(member.user_id, jobTitleDraft)}
+                                  onKeyDown={e => {
+                                    if (imeComposing(e.nativeEvent)) return;
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      void saveMemberJobTitle(member.user_id, jobTitleDraft);
+                                    } else if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      setEditingJobMemberId(null);
+                                    }
+                                  }}
+                                  className="w-28 rounded-md border border-accent-border bg-inset px-1.5 py-0.5 text-[11px] text-ink outline-none"
+                                />
+                              ) : jobTitle ? (
+                                canEditJob ? (
+                                  <button
+                                    type="button"
+                                    data-collab-job-title-edit={member.user_id}
+                                    title="点击修改岗位分工"
+                                    onClick={() => {
+                                      setEditingJobMemberId(member.user_id);
+                                      setJobTitleDraft(jobTitle);
+                                    }}
+                                    className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-text ring-1 ring-inset ring-accent/20 hover:bg-accent/18"
+                                  >
+                                    {jobTitle}
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-text ring-1 ring-inset ring-accent/20">
+                                    {jobTitle}
+                                  </span>
+                                )
+                              ) : canEditJob ? (
+                                <button
+                                  type="button"
+                                  data-collab-job-title-edit={member.user_id}
+                                  onClick={() => {
+                                    setEditingJobMemberId(member.user_id);
+                                    setJobTitleDraft("");
+                                  }}
+                                  className="text-[10.5px] text-ink-tertiary hover:text-accent-text"
+                                >
+                                  + 岗位
+                                </button>
+                              ) : null}
                             </div>
                             {sub && <div className="truncate text-[11.5px] text-ink-tertiary">{sub}</div>}
                           </div>
@@ -846,8 +936,8 @@ export function CollabRightPanel({
             <div role="tabpanel" aria-labelledby={`${tabIdPrefix}-tab-files`} hidden={tab !== "files"}>
               {(friend || team || group) && (
                 <CollabRightFilesTab
-                  scopeType={friend ? "friend" : team ? "team" : "group"}
-                  targetId={friend ? String(friend.user_id) : team ? team.id : group!.id}
+                  scopeType={friend ? "friend" : team ? (activeChannel?.chat_scope_type ?? "team") : "group"}
+                  targetId={friend ? String(friend.user_id) : team ? (activeChannel?.chat_target_id ?? team.id) : group!.id}
                   refreshKey={filesRefreshKey}
                 />
               )}

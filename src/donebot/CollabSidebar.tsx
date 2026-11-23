@@ -12,6 +12,9 @@ import {
   openCollabDialog,
   refreshCollabOverview,
   setCollabSidebarTab,
+  teamLatestChatSummary,
+  teamTaskCountsFor,
+  teamTotalUnreadCount,
   useCollabStore,
   type CollabSelection,
   type CollabSidebarTab,
@@ -213,7 +216,7 @@ export function CollabSidebarList({
 
         {teams.map(team => {
           const active = isCollabView && selectionEquals(selection, { kind: "team", teamId: team.id });
-          const unread = findChatSummary(overview, "team", team.id)?.unread_count ?? 0;
+          const unread = teamTotalUnreadCount(overview, team.id);
           return (
             <button
               key={`t:${team.id}`}
@@ -369,11 +372,21 @@ export function CollabSidebarList({
                 {teams.map(team => {
                   const active = isCollabView && selectionEquals(selection, { kind: "team", teamId: team.id });
                   const memberCount = overview.team_members[team.id]?.length ?? 0;
-                  const summary = findChatSummary(overview, "team", team.id);
-                  const snippet = chatSnippet(summary, true, myUserId, myLabel)
-                    || `${memberCount > 0 ? `${memberCount} 人 · ` : ""}${TEAM_ROLES[team.role]}`;
+                  const { summary, channelName } = teamLatestChatSummary(overview, team.id);
+                  const rawSnippet = chatSnippet(summary, true, myUserId, myLabel);
+                  const snippet = rawSnippet
+                    ? (channelName ? `#${channelName} · ${rawSnippet}` : rawSnippet)
+                    : `${memberCount > 0 ? `${memberCount} 人 · ` : ""}${TEAM_ROLES[team.role]}`;
                   const timeText = formatChatTime(summary?.last_created_at);
-                  const unread = summary?.unread_count ?? 0;
+                  const unread = teamTotalUnreadCount(overview, team.id);
+                  const counts = teamTaskCountsFor(overview, team.id);
+                  const reviewCount = counts?.review_by_me ?? 0;
+                  const mineCount = counts?.assigned_to_me ?? 0;
+                  const taskPill = reviewCount > 0
+                    ? `${reviewCount} 待验收`
+                    : mineCount > 0
+                      ? `${mineCount} 待办`
+                      : "";
                   return (
                     <li key={team.id}>
                       <button
@@ -397,11 +410,26 @@ export function CollabSidebarList({
                           </span>
                           <span className="flex items-center justify-between gap-1.5">
                             <span className="truncate text-[11.5px] text-ink-tertiary">{snippet}</span>
-                            {unread > 0 && (
-                              <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white">
-                                {unread > 99 ? "99+" : unread}
-                              </span>
-                            )}
+                            <span className="flex shrink-0 items-center gap-1">
+                              {taskPill && (
+                                <span
+                                  data-collab-team-task-pill=""
+                                  className={cn(
+                                    "inline-flex shrink-0 items-center rounded-full px-1.5 py-0 text-[10px] font-medium leading-4 ring-1 ring-inset",
+                                    reviewCount > 0
+                                      ? "bg-amber-500/14 text-amber-500 ring-amber-500/25"
+                                      : "bg-accent/14 text-accent-text ring-accent/25",
+                                  )}
+                                >
+                                  {taskPill}
+                                </span>
+                              )}
+                              {unread > 0 && (
+                                <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white">
+                                  {unread > 99 ? "99+" : unread}
+                                </span>
+                              )}
+                            </span>
                           </span>
                         </span>
                       </button>

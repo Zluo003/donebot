@@ -4,7 +4,7 @@ export const COLLAB_CHAT_THREAD_TITLE_PREFIX = "[群聊] ";
 export const COLLAB_CHAT_MEDIA_BLOCK_MESSAGE = "群聊中的机器人仅允许使用文本对话（LLM）和画图，禁止使用视频模型和音乐模型。";
 
 export interface CollabChatThreadMeta {
-  scopeType: "team" | "group";
+  scopeType: "team" | "group" | "channel";
   targetId: string;
   chatBotId: string;
   botName: string;

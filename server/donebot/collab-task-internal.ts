@@ -352,8 +352,8 @@ export async function downloadDeliverablesToSandbox(
   const allSubmissions = detail.updates.filter(u => u.kind === "submission" && u.file_id);
   const targetFiles = latestBatchId
     ? allSubmissions.filter(u => u.batch_id === latestBatchId)
-    : allSubmissions.slice(-5);
-  const files = targetFiles.length > 0 ? targetFiles : allSubmissions.slice(-5);
+    : allSubmissions.slice(-10);
+  const files = targetFiles.length > 0 ? targetFiles : allSubmissions.slice(-10);
   if (files.length === 0) return [];
 
   const sandboxDir = path.join(
@@ -398,10 +398,14 @@ export async function downloadDeliverablesToSandbox(
       }
     }
 
+    const rawMime = (u.file_mime || "").split(";", 1)[0]?.trim().toLowerCase() || "";
+    const resolvedMime = rawMime && rawMime !== "application/octet-stream"
+      ? (rawMime === "image/jpg" ? "image/jpeg" : rawMime)
+      : guessMimeByExt(cleanName);
     const info: DownloadedDeliverableInfo = {
       file_id: u.file_id,
       file_name: u.file_name || cleanName,
-      file_mime: u.file_mime || "application/octet-stream",
+      file_mime: resolvedMime,
       file_size: u.file_size || 0,
       local_path: destPath,
     };

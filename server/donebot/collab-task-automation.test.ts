@@ -3,6 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DoneBotClaimedTaskBotEvent, DoneBotTeamTaskDetail } from "../../shared/donebot-collab.ts";
+import { ATTACHMENTS_DIR } from "../attachments.ts";
+import { collectBotArtifacts } from "../bot-artifacts.ts";
+import { extractTurnImages } from "../turn-images.ts";
 import {
   getTaskBinding,
   getTaskBindingByThread,
@@ -783,6 +786,183 @@ describe("team task bot automation", () => {
     } finally {
       registerCollabTaskRuntimeHooks({});
       resetCollabTaskPrefsForTests();
+    }
+  });
+
+  it("stages all original submitted deliverables into chat, Artifacts panel, and native vision turn without relying on bot attach_file", async () => {
+    // Minimal distinct valid 1x1 PNG buffers (different IHDR dimensions / payload bytes so content hashes differ).
+    const makePng = (width: number, height: number, tag: number) => {
+      const buf = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, tag,
+      ]);
+      buf.writeUInt32BE(width, 16);
+      buf.writeUInt32BE(height, 20);
+      return buf;
+    };
+    const batchId = `batch-${Date.now()}`;
+    const fileMap = new Map<string, { bytes: Buffer; mime: string; name: string }>([
+      ["file-fox", { bytes: makePng(1024, 1024, 1), mime: "image/png", name: "第四批-狐狸.png" }],
+      ["file-wolf", { bytes: makePng(1024, 1024, 2), mime: "image/png", name: "第四批-狼.png" }],
+      ["file-bear", { bytes: makePng(1024, 1024, 3), mime: "image/png", name: "第四批-熊.png" }],
+      ["file-doc", { bytes: Buffer.from("# 设计说明\n三只角色均为动物本体。"), mime: "text/markdown", name: "设计说明.md" }],
+    ]);
+
+    const detail = makeDetail("bot_reviewing");
+    detail.task.title = "角色形象设计第四批：狐狸 / 狼 / 熊";
+    detail.task.latest_submission_batch_id = batchId;
+    detail.updates = [
+      {
+        id: 10,
+        task_id: taskId,
+        actor_id: 202,
+        actor_email: "xiaoluo@example.invalid",
+        actor_nickname: "小罗",
+        actor_kind: "bot",
+        actor_bot_name: "多宝",
+        kind: "submission",
+        body: "已提交 3 张角色原图与设计说明",
+        batch_id: batchId,
+        created_at: "2026-11-23T19:40:00Z",
+      },
+      ...[...fileMap.entries()].map(([fileId, meta], idx) => ({
+        id: 11 + idx,
+        task_id: taskId,
+        actor_id: 202,
+        actor_email: "xiaoluo@example.invalid",
+        actor_nickname: "小罗",
+        actor_kind: "bot" as const,
+        actor_bot_name: "多宝",
+        kind: "submission" as const,
+        body: "",
+        batch_id: batchId,
+        file_id: fileId,
+        file_name: meta.name,
+        file_mime: meta.mime,
+        file_size: meta.bytes.byteLength,
+        created_at: "2026-11-23T19:40:00Z",
+      })),
+    ];
+
+    const event: DoneBotClaimedTaskBotEvent = {
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeee99",
+      team_id: teamId,
+      team_name: "DoneBot 开发",
+      task_id: taskId,
+      event_type: "task_submitted",
+      payload: { batch_id: batchId },
+      detail,
+      creator_name: "老罗",
+      assignee_name: "小罗",
+      reviewer_name: "老罗",
+      created_at: "2026-11-23T19:41:00Z",
+    };
+
+    const chiefBot = { id: "bot-chief", name: "多宝", threadId: "t-chief", chiefOfStaff: true, hidden: false } as BotRecord;
+    const messages = new Map<string, Message[]>();
+    let seq = 0;
+    let receivedPrompt = "";
+    let receivedExcludeIds: string[] | undefined;
+
+    const startTurn = vi.fn(async (_botId, text, opts) => {
+      receivedPrompt = text;
+      receivedExcludeIds = opts.excludeMessageIds;
+      // Simulate bot replying with text ONLY (without calling attach_file).
+      const list = messages.get(opts.threadId) ?? [];
+      list.push({
+        id: `m-${++seq}`,
+        at: Date.now() + seq,
+        role: "bot",
+        kind: "text",
+        text: "老板，二审通过，请您终审拍板。",
+        requestMessageId: opts.userMessage.id,
+      } as Message);
+      messages.set(opts.threadId, list);
+      opts.onTurnSettled?.();
+    });
+
+    let claimedOnce = false;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/task-events/claim")) {
+        if (claimedOnce) return mockJsonResponse({ event: null });
+        claimedOnce = true;
+        return mockJsonResponse({ event });
+      }
+      const fileMatch = url.match(/\/tasks\/files\/([^/?]+)/);
+      if (fileMatch) {
+        const entry = fileMap.get(fileMatch[1]!);
+        if (entry) {
+          return new Response(new Uint8Array(entry.bytes), {
+            status: 200,
+            headers: { "content-type": entry.mime },
+          });
+        }
+      }
+      if (url.includes("/task-events/") && url.endsWith("/complete")) {
+        return mockJsonResponse({ ok: true });
+      }
+      return mockJsonResponse({});
+    }) as unknown as typeof fetch;
+
+    const worker = createCollabTaskWorker({
+      gateway: makeGateway(fetchMock),
+      store: {
+        bots: [chiefBot],
+        bot: id => (id === chiefBot.id ? chiefBot : null),
+        appendMessage: (tid, msg) => {
+          const entry = { ...msg, id: `m-${++seq}`, at: Date.now() + seq } as Message;
+          messages.set(tid, [...(messages.get(tid) ?? []), entry]);
+          return entry;
+        },
+        messagesFor: tid => messages.get(tid) ?? [],
+      },
+      startTurn,
+      threadBusy: () => false,
+    });
+
+    try {
+      worker.kick();
+      await new Promise(resolve => setTimeout(resolve, 120));
+      worker.setActive(false);
+
+      expect(startTurn).toHaveBeenCalledTimes(1);
+      const threadMsgs = messages.get("t-chief") ?? [];
+      // 1) User notification has NO broken /tmp attachments.
+      const userMsg = threadMsgs.find(m => m.role === "user");
+      expect(userMsg).toBeDefined();
+      expect(userMsg!.attachments).toBeUndefined();
+
+      // 2) Deterministic bot deliverable message carries all 4 original files in ATTACHMENTS_DIR and is excluded from prior transcript.
+      const deliveredMsg = threadMsgs.find(m => m.sendId === `collab_task_deliverables_${taskId}_${batchId}`);
+      expect(deliveredMsg).toBeDefined();
+      expect(deliveredMsg!.role).toBe("bot");
+      expect(deliveredMsg!.attachments).toHaveLength(4);
+      expect(receivedExcludeIds).toEqual([deliveredMsg!.id]);
+      for (const att of deliveredMsg!.attachments!) {
+        expect(att.path.startsWith(ATTACHMENTS_DIR)).toBe(true);
+      }
+
+      // 3) Vision LLM receives all 3 original images natively via extractTurnImages, plus anti-collage rule.
+      expect(receivedPrompt).toContain("严禁自作主张把原图拼接/裁剪成汇总宫格图");
+      const extracted = extractTurnImages(receivedPrompt);
+      expect(extracted.images).toHaveLength(3);
+
+      // 4) Bot Artifacts panel ("产物") deterministically shows all 4 original submitted deliverables.
+      const artifacts = collectBotArtifacts("bot-chief", [{
+        threadId: "t-chief",
+        title: "多宝",
+        ownerBotId: "bot-chief",
+        messages: threadMsgs,
+      }]);
+      const names = artifacts.map(a => a.name).sort();
+      expect(names).toEqual(["第四批-熊.png", "第四批-狐狸.png", "第四批-狼.png", "设计说明.md"].sort());
+      expect(artifacts.filter(a => a.kind === "image")).toHaveLength(3);
+      expect(artifacts.filter(a => a.kind === "document")).toHaveLength(1);
+    } finally {
+      await fs.rm(path.join(os.tmpdir(), "donebot-task-review", taskId, batchId), { recursive: true, force: true }).catch(() => {});
     }
   });
 });

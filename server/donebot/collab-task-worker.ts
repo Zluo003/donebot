@@ -1,5 +1,11 @@
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import fs from "node:fs/promises";
 import { isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import type { DoneBotClaimedTaskBotEvent, DoneBotCollabTaskPrefs } from "../../shared/donebot-collab.ts";
+import { escapeAttribute } from "../../src/lib/composer-attachments.ts";
+import { extensionForFileMime, extensionForMime, FILE_MAX_BYTES, IMAGE_MAX_BYTES, saveFile, saveImage } from "../attachments.ts";
+import { contentUploadId } from "../bot-attachment.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
 import type { CollabBotTurnOptions } from "./collab-chat-bots.ts";
 import { collabClaimTaskBotEvent, collabCompleteTaskBotEvent } from "./collab-gateway.ts";
@@ -108,19 +114,78 @@ function formatDeliverablesBlock(files: readonly DownloadedDeliverableInfo[]): s
   return lines;
 }
 
-function collectReviewImageAttachments(files: readonly DownloadedDeliverableInfo[]): NonNullable<Message["attachments"]> {
-  const out: NonNullable<Message["attachments"]> = [];
+const MAX_VISION_IMAGES = 8;
+const MAX_VISION_IMAGE_BYTES = 30 * 1024 * 1024;
+
+function normalizeDeliverableMime(raw: string): string {
+  const base = raw.split(";", 1)[0]?.trim().toLowerCase() || "";
+  return base === "image/jpg" ? "image/jpeg" : base;
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
+/** Stage downloaded task deliverables into ATTACHMENTS_DIR so they render reliably in chat, Artifacts, and vision turns. */
+export async function stageDeliverablesForReview(
+  files: readonly DownloadedDeliverableInfo[],
+): Promise<{
+  attachments: NonNullable<Message["attachments"]>;
+  promptTags: string[];
+}> {
+  const attachments: NonNullable<Message["attachments"]> = [];
+  const promptTags: string[] = [];
+  let visionCount = 0;
+  let visionBytes = 0;
+
   for (const f of files) {
-    if (out.length >= 5) break;
-    if (f.file_mime.toLowerCase().startsWith("image/")) {
-      out.push({ kind: "image", path: f.local_path, mime: f.file_mime, name: f.file_name });
-    } else if (f.keyframe_paths && f.keyframe_paths.length > 0) {
-      for (let i = 0; i < f.keyframe_paths.length && out.length < 5; i += 1) {
-        out.push({ kind: "image", path: f.keyframe_paths[i]!, mime: "image/jpeg", name: `${f.file_name}_frame_${i + 1}.jpg` });
+    const stat = await fs.stat(f.local_path).catch(() => null);
+    if (!stat || !stat.isFile() || stat.size <= 0) continue;
+    const mime = normalizeDeliverableMime(f.file_mime);
+    const imgExt = extensionForMime(mime);
+    try {
+      if (imgExt && stat.size <= IMAGE_MAX_BYTES) {
+        const buf = await fs.readFile(f.local_path);
+        const sha = createHash("sha256").update(buf).digest("hex");
+        const saved = saveImage(buf, mime, contentUploadId(sha, imgExt));
+        attachments.push({ kind: "image", path: saved.path, mime: saved.mime, name: f.file_name, source: f.local_path });
+        if (visionCount < MAX_VISION_IMAGES && visionBytes + saved.bytes <= MAX_VISION_IMAGE_BYTES) {
+          promptTags.push(`<attached-image path="${escapeAttribute(saved.path)}" name="${escapeAttribute(f.file_name)}" />`);
+          visionCount += 1;
+          visionBytes += saved.bytes;
+        }
+      } else if (stat.size <= FILE_MAX_BYTES) {
+        const sha = await sha256File(f.local_path);
+        const ext = extensionForFileMime(mime) ?? ".bin";
+        const saved = await saveFile(createReadStream(f.local_path), f.file_name, mime || "application/octet-stream", {
+          expectedBytes: stat.size,
+          uploadId: contentUploadId(sha, ext),
+        });
+        attachments.push({ kind: "file", path: saved.path, mime: saved.mime, name: saved.name, source: f.local_path });
+        promptTags.push(`<attached-file path="${escapeAttribute(saved.path)}" name="${escapeAttribute(saved.name)}" />`);
+        if (f.keyframe_paths?.length) {
+          for (let i = 0; i < f.keyframe_paths.length; i += 1) {
+            if (visionCount >= MAX_VISION_IMAGES) break;
+            const kf = f.keyframe_paths[i]!;
+            const kfStat = await fs.stat(kf).catch(() => null);
+            if (!kfStat || !kfStat.isFile() || kfStat.size <= 0 || kfStat.size > IMAGE_MAX_BYTES) continue;
+            if (visionBytes + kfStat.size > MAX_VISION_IMAGE_BYTES) break;
+            const kfBuf = await fs.readFile(kf);
+            const kfSha = createHash("sha256").update(kfBuf).digest("hex");
+            const kfSaved = saveImage(kfBuf, "image/jpeg", contentUploadId(kfSha, ".jpg"));
+            promptTags.push(`<attached-image path="${escapeAttribute(kfSaved.path)}" name="${escapeAttribute(`${f.file_name}_frame_${i + 1}.jpg`)}" />`);
+            visionCount += 1;
+            visionBytes += kfSaved.bytes;
+          }
+        }
       }
+    } catch {
+      // Skip a single unstageable file without aborting the review turn.
     }
   }
-  return out;
+  return { attachments, promptTags };
 }
 
 export function buildTaskEventPrompt(
@@ -170,9 +235,9 @@ export function buildTaskEventPrompt(
       "   - 先调用 collab_get_team_task() 读取最新任务状态、客观验收清单、recent_thread_attachments（已汇集子助手回传的全部交付物本地路径、尺寸/音视频元数据/文档摘录/提示词摘要）以及最新的 task_prefs.chief_auto_submit_on_approve。",
       "   - 逐条对照任务要求和客观验收清单执行一审：",
       "     * 若发现硬性缺陷或未达标项：严禁自己替子助手重做！直接调用 coordinate_bots(bot_ids=[子助手id], thread=原工作线程id, rework=true, message=具体不符合项与局部修改要求) 驳回给子助手修改（保留已合格成果，严禁重做已合格部分；本地一审自动返工最多 2 轮，超过 2 轮仍不达标则停止循环并升级汇报给主人）。",
-      "     * 若一审全部合格：以 collab_get_team_task().task_prefs.chief_auto_submit_on_approve 实时值为准：",
-      "       - 为 true（主人已开启代人审批提交）：直接调用 collab_submit_team_task 提交结构化交付简报与全部交付文件给团队验收，然后简洁告知主人「已一审通过并代为提交团队验收」；",
-      "       - 为 false（默认关闭）：绝不私自提交！向主人呈报一审通过结论、交付物清单与效果摘要，等主人回复确认（如「可以/提交任务」）后，再调用 collab_submit_team_task 提交既有成果（严禁在主人确认后重新生成或重做已确认成果）。",
+      "     * 若一审全部合格：以 collab_get_team_task().task_prefs.chief_auto_submit_on_approve 实时值为准（提交时必须提交专长子助手产出的全部原始交付文件，严禁擅自用汇总宫格图/拼图替代原始文件）：",
+      "       - 为 true（主人已开启代人审批提交）：直接调用 collab_submit_team_task 提交结构化交付简报与全部原始交付文件给团队验收，然后简洁告知主人「已一审通过并代为提交团队验收」；",
+      "       - 为 false（默认关闭）：绝不私自提交！向主人呈报一审通过结论、交付物清单与效果摘要，等主人回复确认（如「可以/提交任务」）后，再调用 collab_submit_team_task 提交既有原始成果（严禁在主人确认后重新生成或重做已确认成果）。",
     ].filter(Boolean).join("\n");
     return { display, full };
   }
@@ -197,14 +262,15 @@ export function buildTaskEventPrompt(
       "",
       "请严格按以下步骤与铁律执行二审：",
       "1. 【终审权限铁律】派发方主协调助手只能做「二审」：发现硬性不符允许驳回，二审合格只能流转到待终审（ready_for_review）呈报主人，**绝对禁止在本轮执行终审通过（done），严禁调用 mode='human_decision'**！终审通过必须由派发人本人决定。",
-      "2. 如本批次包含图片或视频抽帧图，请结合已附带的预览图片与尺寸/比例数据逐项核查画面质量、物种/元素准确性与是否无文字乱码/水印；如含文档/代码请阅读核对；若包含视频/音频，请在审阅意见中诚实提醒主人动态流畅度与声音情绪需本人播放终审。",
-      "3. 严格区分「硬性不符」与「主观审美」：",
+      "2. 【原始交付物保真铁律】下游提交的全部原始交付文件已由系统自动附带到本对话并归档到你的「产物」面板供主人直接查看与下载：**严禁对这些原文件重复调用 attach_file**，更**严禁自作主张把原图拼接/裁剪成汇总宫格图、对比拼图或合图并附带给主人**（除非任务要求或主人明确要求拼图）。如需对比多个角色或往期批次，只需在文字汇报中逐条说明差异即可。",
+      "3. 如本批次包含图片或视频抽帧图，请结合已附带的原始图片与尺寸/比例数据逐项核查画面质量、物种/元素准确性与是否无文字乱码/水印；如含文档/代码请阅读核对；若包含视频/音频，请在审阅意见中诚实提醒主人动态流畅度与声音情绪需本人播放终审。",
+      "4. 严格区分「硬性不符」与「主观审美」：",
       "   - 只有存在明确、客观的硬性违背（如缺失文件、张数不够、画幅比例错误、文字明显乱码/严重崩图、遗漏核心要求）时，才判 hard_fail；",
       "   - 主观审美偏好或二选一方案绝对禁止自动驳回，必须判 pass 并把建议关注点写入 attention_items 交由主人终审拍板。",
-      "4. 必须调用工具 collab_review_team_task（mode='bot_review'）写入你的二审结论：",
+      "5. 必须调用工具 collab_review_team_task（mode='bot_review'）写入你的二审结论：",
       "   - 二审合格或仅需主人主观拍板：verdict='pass'，填好 summary、passed_items、attention_items（状态将进入待终审拍板 ready_for_review，不会直接完成）；",
       "   - 明显硬性不符：verdict='hard_fail'，填好 summary、failed_criteria 与具体可执行的 actionable_fixes（网关会在未超上限时自动驳回给对方主协调助手安排子助手局部修改，超限则升级给双方真人）。",
-      "5. 调用完工具后，用简洁明了的中文在当前对话向主人汇报：",
+      "6. 调用完工具后，用简洁明了的中文在当前对话向主人汇报：",
       "   - 如果 verdict='pass'：总结交付亮点、已核验通过项、建议主人重点关注/拍板的点，并提示主人可在任务详情页点击「验收通过 / 退回修改」，或直接在本对话明确回复「通过」/「指出修改意见退回」由你代为执行终审；",
       "   - 如果 verdict='hard_fail'：简短告知主人发现了哪些硬性问题，已二审驳回给对方返工（或因达到轮次上限已升级为人工介入）。",
     ].filter(Boolean).join("\n");
@@ -297,7 +363,7 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
     fallbackTitle: string,
     display: string,
     full: string,
-    attachments?: Message["attachments"],
+    deliverables?: { attachments: NonNullable<Message["attachments"]>; sendId: string },
   ): Promise<string> {
     const { store, startTurn } = deps;
     if (!startTurn || !store.appendMessage || !store.messagesFor) {
@@ -318,8 +384,20 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
       kind: "text",
       text: display,
       via: "api",
-      ...(attachments && attachments.length > 0 ? { attachments } : {}),
     });
+    let excludeMessageIds: string[] | undefined;
+    if (deliverables && deliverables.attachments.length > 0) {
+      const existing = store.messagesFor(threadId).find(line => line.sendId === deliverables.sendId);
+      const delivered = existing ?? store.appendMessage(threadId, {
+        role: "bot",
+        kind: "text",
+        text: "",
+        sendId: deliverables.sendId,
+        requestMessageId: userMessage.id,
+        attachments: deliverables.attachments,
+      });
+      excludeMessageIds = [delivered.id];
+    }
     const after = () => {
       const all = store.messagesFor!(threadId);
       const idx = all.findIndex(line => line.id === userMessage.id);
@@ -332,6 +410,7 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
       threadId,
       unattended: true,
       userMessage,
+      ...(excludeMessageIds ? { excludeMessageIds } : {}),
       onTurnSettled: () => { settled = true; },
       onDispatchError: msg => { dispatchError = msg; },
     });
@@ -420,7 +499,9 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
       const downloaded = ev.event_type === "task_submitted"
         ? await downloadDeliverablesToSandbox(deps.gateway, ev.detail).catch(() => [])
         : [];
-      const reviewAttachments = ev.event_type === "task_submitted" ? collectReviewImageAttachments(downloaded) : undefined;
+      const staged = ev.event_type === "task_submitted" && downloaded.length > 0
+        ? await stageDeliverablesForReview(downloaded)
+        : { attachments: [], promptTags: [] };
       const delegatedWorkers = (ev.event_type === "task_bot_rejected" || ev.event_type === "task_human_rejected")
         ? (deps.listChildThreads?.(targetThreadId) ?? [])
         : [];
@@ -431,13 +512,19 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
         targetIsChief,
         delegatedWorkers,
       });
+      const fullWithTags = staged.promptTags.length > 0
+        ? `${staged.promptTags.join("\n\n")}\n\n${full}`
+        : full;
+      const batchKey = ev.detail.task.latest_submission_batch_id || ev.id;
       const actualThreadId = await runEventTurn(
         targetBot,
         targetThreadId,
         `[团队任务] ${ev.detail.task.title}`,
         display,
-        full,
-        reviewAttachments,
+        fullWithTags,
+        staged.attachments.length > 0
+          ? { attachments: staged.attachments, sendId: `collab_task_deliverables_${ev.task_id}_${batchKey}` }
+          : undefined,
       );
       if (
         actualThreadId !== targetThreadId

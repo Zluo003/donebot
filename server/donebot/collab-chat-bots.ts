@@ -32,6 +32,7 @@ export interface CollabBotTurnOptions {
   automationSource?: "api";
   unattended: true;
   userMessage: Message;
+  excludeMessageIds?: string[];
   onTurnSettled: () => void;
   onDispatchError: (message: string) => void;
 }

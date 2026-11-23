@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import WebSocket from "ws";
 import { boundedResponseText } from "./bounded-response.ts";
-import { collabJsonCall, collabStreamCall, type CollabGatewayTransport } from "./collab-gateway.ts";
+import { collabJsonCall, collabStreamCall, fetchWithTransientGetRetry, type CollabGatewayTransport } from "./collab-gateway.ts";
 import { DEFAULT_DONEBOT_MEDIA_PREFERENCES, type DoneBotAccountState, type DoneBotCatalog, type DoneBotMediaPreferences } from "../../shared/donebot.ts";
 import type { DoneBotAuthSettings, DoneBotEmailDelivery } from "../../shared/donebot-auth.ts";
 import type { DoneBotCloudInstance, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudOperation, DoneBotCloudPlan, DoneBotCloudSnapshot } from "../../shared/donebot-cloud.ts";
@@ -634,10 +634,10 @@ export class DoneBotGateway {
     if (accountId && accountId !== session.user.id) throw new DoneBotGatewayError(409, "account_changed", "DoneBot 账号已切换，请刷新后重试。");
     const controller = new AbortController(); this.controllers.add(controller);
     try {
-      const response = await this.fetcher(`${this.origin}/api/v1/donebot/${path}`, { method, redirect: "error", credentials: "omit",
+      const response = await fetchWithTransientGetRetry(this.fetcher, `${this.origin}/api/v1/donebot/${path}`, { method, redirect: "error", credentials: "omit",
         headers: { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json", ...(key ? { "Idempotency-Key": key } : {}) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
-      });
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }, controller, 15_000, () => this.checkEpoch(epoch));
       const value = await this.readGatewayJson(response) as { code?: number; data?: unknown };
       this.checkEpoch(epoch);
       if (!response.ok || value.code !== undefined && value.code !== 0) throw new DoneBotGatewayError(response.status, "team_request_failed",

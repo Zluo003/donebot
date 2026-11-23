@@ -5,6 +5,7 @@ import { readBody } from "../harness/http.ts";
 import { dispatchRoutes } from "../routes/table.ts";
 import { createDoneBotAccountRoutes } from "./routes.ts";
 import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./collab-routes.ts";
+import { collabJsonCall, type CollabGatewayTransport } from "./collab-gateway.ts";
 import { teamIdentity, teamMembers } from "./teams.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import type { BotRecord } from "../store.ts";
@@ -494,5 +495,67 @@ describe("DoneBot collab routes and bot tools", () => {
     });
 
     expect(out.status).toBe(429);
+  });
+
+  it("retries transient GET network/503 failures in collabJsonCall without retrying POST mutations", async () => {
+    const makeTransport = (fetcher: typeof fetch): CollabGatewayTransport => ({
+      origin: "https://donebot.test",
+      fetcher,
+      controllers: new Set<AbortController>(),
+      epoch: () => 1,
+      checkEpoch: () => {},
+      validSession: async () => ({
+        accessToken: "tok-user",
+        expiresAt: Date.now() + 60_000,
+        credential: "cred-1",
+        installationId: "inst-1",
+        user: { id: "101", email: "alice@example.invalid" },
+      }),
+      readGatewayJson: async res => res.json(),
+    });
+
+    // 1) GET recovers after fetch failed + 503.
+    let getAttempts = 0;
+    const okGetFetcher = vi.fn(async () => {
+      getAttempts += 1;
+      if (getAttempts === 1) throw new TypeError("fetch failed");
+      if (getAttempts === 2) return new Response("upstream restarting", { status: 503 });
+      return new Response(JSON.stringify({ code: 0, data: { friends: ["ok"] } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const recovered = await collabJsonCall(makeTransport(okGetFetcher), "user", "/api/v1/donebot/friends", "GET");
+    expect(recovered).toEqual({ friends: ["ok"] });
+    expect(okGetFetcher).toHaveBeenCalledTimes(3);
+
+    // 2) GET maps exhausted network failures to a friendly 502 DoneBotGatewayError.
+    const alwaysFailFetcher = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch;
+
+    await expect(
+      collabJsonCall(makeTransport(alwaysFailFetcher), "user", "/api/v1/donebot/friends", "GET"),
+    ).rejects.toMatchObject({
+      status: 502,
+      code: "collab_network_error",
+      message: expect.stringContaining("暂时无法连接到 DoneBot 网关"),
+    });
+    expect(alwaysFailFetcher).toHaveBeenCalledTimes(3);
+
+    // 3) POST never retries on transient network failure to prevent duplicate side effects.
+    const postFailFetcher = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch;
+
+    await expect(
+      collabJsonCall(makeTransport(postFailFetcher), "user", "/api/v1/donebot/friends/requests", "POST", { email: "bob@example.invalid" }),
+    ).rejects.toMatchObject({
+      status: 502,
+      code: "collab_network_error",
+      message: expect.stringContaining("暂时无法连接到 DoneBot 网关"),
+    });
+    expect(postFailFetcher).toHaveBeenCalledTimes(1);
   });
 });

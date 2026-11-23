@@ -230,7 +230,11 @@ export function formatChatTime(iso?: string | null): string {
 
 export function cleanError(error: unknown, fallback = "操作未完成，请稍后重试。"): string {
   if (error instanceof Error && error.message.trim()) {
-    return error.message.replace(/^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/, "").trim();
+    const cleaned = error.message.replace(/^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/, "").trim();
+    if (/^(?:fetch failed|failed to fetch|load failed|networkerror\b.*)$/i.test(cleaned)) {
+      return "暂时无法连接到协作服务，请检查网络或稍候几秒重试。";
+    }
+    return cleaned;
   }
   return fallback;
 }

@@ -33,11 +33,14 @@ vi.mock("@/components/DesktopCapabilities", () => ({
 const {
   COLLAB_DESKTOP_NOTIFY_BOT_ID,
   COLLAB_DESKTOP_NOTIFY_THREAD_ID,
+  getCollabStoreSnapshot,
   isCollabEligible,
   refreshCollabOverview,
   resetCollabStore,
+  syncCollabAccount,
   useCollabStore,
 } = await import("./collab-store");
+const { cleanError } = await import("./collab-types");
 const { CollabSidebarList, CollabSidebarSwitch } = await import("./CollabSidebar");
 const { CollabWorkspacePage } = await import("./CollabWorkspacePage");
 const { CollabSyncHost, CollabToastHost } = await import("./CollabNotifications");
@@ -879,5 +882,37 @@ describe("Collab sidebar switcher, chat workspace, right drawer, and modals", ()
     });
 
     expect(scroller.scrollTop).toBe(1800);
+  });
+
+  it("normalizes raw fetch failed errors and auto-retries cold-start overview failures", async () => {
+    expect(cleanError(new Error("fetch failed"))).toContain("暂时无法连接到协作服务");
+    expect(cleanError(new Error("Failed to fetch"))).toContain("暂时无法连接到协作服务");
+
+    vi.useFakeTimers();
+    try {
+      syncCollabAccount("101");
+      const overview = makeOverview({ incomingFriend: false, incomingTeam: false });
+      let calls = 0;
+      fixture.api.mockImplementation(async (path: string) => {
+        if (path === "/api/donebot/collab/overview") {
+          calls += 1;
+          if (calls === 1) throw new Error("fetch failed");
+          return overview;
+        }
+        return { ok: true };
+      });
+
+      const first = await refreshCollabOverview();
+      expect(first).toBeNull();
+      expect(getCollabStoreSnapshot().overview).toBeNull();
+      expect(getCollabStoreSnapshot().error).toContain("暂时无法连接到协作服务");
+
+      await vi.advanceTimersByTimeAsync(3_100);
+      expect(calls).toBe(2);
+      expect(getCollabStoreSnapshot().overview?.identity.account_id).toBe("101");
+      expect(getCollabStoreSnapshot().error).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

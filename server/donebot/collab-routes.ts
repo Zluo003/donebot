@@ -978,7 +978,11 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
       }
       if (error instanceof DoneBotGatewayError) return json(res, error.status, { error: error.message, code: error.code });
       if (error instanceof TeamExportError || error instanceof PackageImportError) return json(res, error.status, { error: error.message });
-      return json(res, 502, { error: error instanceof Error ? error.message : "远程协作请求失败，请稍后重试。" });
+      const rawMsg = error instanceof Error ? error.message : "";
+      const friendly = /fetch failed|econnreset|etimedout|socket|network/i.test(rawMsg)
+        ? "暂时无法连接到 DoneBot 网关，请检查网络或稍候几秒重试。"
+        : (rawMsg || "远程协作请求失败，请稍后重试。");
+      return json(res, 502, { error: friendly });
     }
   };
 }

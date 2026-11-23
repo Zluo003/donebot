@@ -22,6 +22,89 @@ function extractGatewayError(value: unknown, status: number, fallback: string): 
   return status === 401 ? "登录或安装凭据已失效，请重新登录。" : fallback;
 }
 
+function isTransientNetworkError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  if (error instanceof DoneBotGatewayError) return false;
+  const err = error as { name?: unknown; message?: unknown; code?: unknown; cause?: { code?: unknown; message?: unknown } };
+  if (err.name === "AbortError" || err.name === "TimeoutError") return true;
+  const msg = `${String(err.message ?? "")} ${String(err.cause?.message ?? "")}`.toLowerCase();
+  const code = String(err.code ?? err.cause?.code ?? "").toUpperCase();
+  return msg.includes("fetch failed")
+    || msg.includes("socket")
+    || msg.includes("network")
+    || msg.includes("econnreset")
+    || msg.includes("econnrefused")
+    || msg.includes("etimedout")
+    || msg.includes("epipe")
+    || msg.includes("enotfound")
+    || msg.includes("eai_again")
+    || msg.includes("terminated")
+    || code === "ECONNRESET"
+    || code === "ECONNREFUSED"
+    || code === "ETIMEDOUT"
+    || code === "EPIPE"
+    || code === "ENOTFOUND"
+    || code === "EAI_AGAIN"
+    || code === "UND_ERR_SOCKET"
+    || code === "UND_ERR_CONNECT_TIMEOUT"
+    || code === "UND_ERR_BODY_TIMEOUT";
+}
+
+function isTransientGatewayStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) { reject(signal.reason); return; }
+    const timer = setTimeout(() => { signal.removeEventListener("abort", onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(signal.reason); };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+export async function fetchWithTransientGetRetry(
+  fetcher: typeof fetch,
+  url: string,
+  init: RequestInit,
+  controller: AbortController,
+  timeoutMs: number,
+  checkEpoch: () => void,
+): Promise<Response> {
+  const canRetryGet = (init.method ?? "GET").toUpperCase() === "GET";
+  const maxAttempts = canRetryGet ? 3 : 1;
+  const retryDelays = process.env.VITEST ? [10, 20] : [300, 900];
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetcher(url, {
+        ...init,
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
+      });
+      if (canRetryGet && attempt + 1 < maxAttempts && isTransientGatewayStatus(response.status)) {
+        await response.body?.cancel().catch(() => {});
+        await sleepAbortable(retryDelays[attempt] ?? 300, controller.signal);
+        checkEpoch();
+        continue;
+      }
+      return response;
+    } catch (error) {
+      checkEpoch();
+      if (controller.signal.aborted) throw error;
+      if (error instanceof DoneBotGatewayError) throw error;
+      if (isTransientNetworkError(error)) {
+        if (canRetryGet && attempt + 1 < maxAttempts) {
+          await sleepAbortable(retryDelays[attempt] ?? 300, controller.signal);
+          checkEpoch();
+          continue;
+        }
+        throw new DoneBotGatewayError(502, "collab_network_error", "暂时无法连接到 DoneBot 网关，请检查网络或稍候几秒重试。");
+      }
+      throw error;
+    }
+  }
+  throw new DoneBotGatewayError(502, "collab_network_error", "暂时无法连接到 DoneBot 网关，请检查网络或稍候几秒重试。");
+}
+
 export async function collabJsonCall(
   ctx: CollabGatewayTransport,
   mode: "user" | "runtime",
@@ -42,14 +125,14 @@ export async function collabJsonCall(
     ? { authorization: `Bearer ${session.credential}`, "X-DoneBot-Installation": session.installationId, "content-type": "application/json" }
     : { authorization: `Bearer ${session.accessToken}`, "content-type": "application/json" };
   try {
-    const response = await ctx.fetcher(`${ctx.origin}${fullPath}`, {
-      method,
-      redirect: "error",
-      credentials: "omit",
-      headers,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
-    });
+    const response = await fetchWithTransientGetRetry(
+      ctx.fetcher,
+      `${ctx.origin}${fullPath}`,
+      { method, redirect: "error", credentials: "omit", headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) },
+      controller,
+      timeoutMs,
+      () => ctx.checkEpoch(epoch),
+    );
     const value = await ctx.readGatewayJson(response) as { code?: number; data?: unknown };
     ctx.checkEpoch(epoch);
     if (!response.ok || (value.code !== undefined && value.code !== 0)) {

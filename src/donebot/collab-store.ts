@@ -102,11 +102,22 @@ let inFlight: Promise<CollabOverview | null> | null = null;
 let requestGeneration = 0;
 let lastOverviewSuccessAt = 0;
 let silentBackoffUntil = 0;
+let coldRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let coldRetryCount = 0;
 let notifiedAccount = "";
 let notifiedIds = new Set<string>();
 const listeners = new Set<() => void>();
 
 const RATE_LIMIT_BACKOFF_MS = 25_000;
+const COLD_RETRY_DELAY_MS = 3_000;
+const COLD_RETRY_MAX = 3;
+
+function clearColdRetry() {
+  if (coldRetryTimer !== null) {
+    clearTimeout(coldRetryTimer);
+    coldRetryTimer = null;
+  }
+}
 
 function emit() {
   for (const listener of listeners) listener();
@@ -358,6 +369,8 @@ export function syncCollabAccount(accountKey: string | null) {
   if (currentAccountKey === accountKey) return;
   currentAccountKey = accountKey;
   requestGeneration++;
+  clearColdRetry();
+  coldRetryCount = 0;
   inFlight = null;
   lastOverviewSuccessAt = 0;
   silentBackoffUntil = 0;
@@ -365,6 +378,15 @@ export function syncCollabAccount(accountKey: string | null) {
   notifiedIds = new Set();
   state = { ...initialState(), modalOpen: state.modalOpen };
   emit();
+}
+
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("online", () => {
+    if (currentAccountKey && (!state.overview || state.error)) {
+      coldRetryCount = 0;
+      void refreshCollabOverview({ silent: Boolean(state.overview) });
+    }
+  });
 }
 
 export function setCollabSidebarTab(tab: CollabSidebarTab) {
@@ -509,6 +531,8 @@ export async function refreshCollabOverview(opts: { silent?: boolean; minGapMs?:
   }
   const mine = ++requestGeneration;
   if (!opts.silent) {
+    clearColdRetry();
+    coldRetryCount = 0;
     setState({ refreshing: true });
   }
   let promise: Promise<CollabOverview | null> | null = null;
@@ -518,6 +542,8 @@ export async function refreshCollabOverview(opts: { silent?: boolean; minGapMs?:
       if (requestGeneration !== mine) return null;
       lastOverviewSuccessAt = Date.now();
       silentBackoffUntil = 0;
+      clearColdRetry();
+      coldRetryCount = 0;
       const patch: Partial<CollabStoreState> = {
         overview: next,
         loaded: true,
@@ -577,6 +603,18 @@ export async function refreshCollabOverview(opts: { silent?: boolean; minGapMs?:
         refreshing: false,
         ...(opts.silent && state.overview ? {} : { error: errMsg }),
       });
+      const transient = /暂时无法连接|fetch failed|failed to fetch|502|503|504|网关|网络/i.test(errMsg);
+      if (!state.overview && transient && coldRetryCount < COLD_RETRY_MAX && typeof setTimeout !== "undefined") {
+        coldRetryCount += 1;
+        clearColdRetry();
+        const retryGen = requestGeneration;
+        coldRetryTimer = setTimeout(() => {
+          coldRetryTimer = null;
+          if (requestGeneration === retryGen && !state.overview) {
+            void refreshCollabOverview({ silent: true });
+          }
+        }, COLD_RETRY_DELAY_MS);
+      }
       return null;
     } finally {
       if (inFlight === promise) inFlight = null;
@@ -607,6 +645,8 @@ export function useCollabPendingCount(): number {
 /** Tests only. */
 export function resetCollabStore() {
   requestGeneration++;
+  clearColdRetry();
+  coldRetryCount = 0;
   inFlight = null;
   lastOverviewSuccessAt = 0;
   silentBackoffUntil = 0;

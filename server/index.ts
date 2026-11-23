@@ -2077,7 +2077,7 @@ function hostTurnResult(node: HandoffView | undefined, generation: string, outco
   const cards = resumableCards(node.threadId, node.startedAt ?? node.createdAt, node.groupId ? node.botId : undefined).filter((card) => !coordinator.active().some((other) => other.id !== node.id && other.threadId === node.threadId && other.status === "waiting" && other.cards?.includes(card.id)));
   if (result.stalled) stopCards(node.threadId, new Set(cards.map((card) => card.id)));
   const mediaContinuation = !result.stalled ? mediaFollowups?.continuation(node) : undefined;
-  if (mediaContinuation) result.cap = { ...result.cap, ...mediaContinuation, note: [result.cap?.note, mediaContinuation.note].filter(Boolean).join("\n") };
+  if (mediaContinuation) { result.cap = { ...result.cap, ...mediaContinuation, note: [result.cap?.note, mediaContinuation.note].filter(Boolean).join("\n") }; result.evidence = { ...result.evidence, okToolCalls: Math.max(result.evidence?.okToolCalls ?? 0, mediaContinuation.mediaJobIds?.length ?? 1), errors: [] }; }
   if (node.goalRunId) return result;
   if (seat) {
     parkedSeats.set(node.id, seat);
@@ -12509,7 +12509,7 @@ ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));
 ROUTES.push(createTeamFilesRoutes({ ...donebotTeamFiles, personName: person => teamHost.personName(person), botName: botId => store.bot(botId)?.name }));
-ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot, syncLocalProfile: (p) => { saveConfig({ profile: { ...cfg.profile, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.avatarUrl !== undefined ? { avatarUrl: p.avatarUrl } : {}), ...(p.email ? { email: p.email } : {}) } }); Object.assign(cfg, loadConfig()); broadcast({ kind: "config", ...configStatus() }); }, currentLocalProfile: () => cfg.profile, startTurn, threadBusy, generateBotText: (botId, prompt, signal) => sideJobs.text("representative", botId)?.generateText(prompt, { signal, timeoutMs: 90_000 }) ?? Promise.resolve(undefined) }));
+ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot, syncLocalProfile: (p) => { saveConfig({ profile: { ...cfg.profile, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.avatarUrl !== undefined ? { avatarUrl: p.avatarUrl } : {}), ...(p.email ? { email: p.email } : {}) } }); Object.assign(cfg, loadConfig()); broadcast({ kind: "config", ...configStatus() }); }, currentLocalProfile: () => cfg.profile, startTurn, threadBusy: (botId, threadId) => threadBusy(botId, threadId) || coordinator.awaitingTeammateThreads().has(threadId), generateBotText: (botId, prompt, signal) => sideJobs.text("representative", botId)?.generateText(prompt, { signal, timeoutMs: 90_000 }) ?? Promise.resolve(undefined) }));
 ROUTES.push(createTeamRoutes({
   store,
   cfg,
@@ -12663,7 +12663,7 @@ const donebotMediaHost = createDoneBotMediaHost({
   store, gateway: donebot, dataDir: DATA_DIR, attachmentsDir: ATTACHMENTS_DIR, enabled: DONEBOT_GATEWAY,
   fullAccess: fullAccessForSource, messageFileRootsForThread,
   canReadThread: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId),
-  wrote: markTaskContextExternallyUpdated, fetchArtifact: donebotHost.fetchArtifact,
+  wrote: (bot, threadId) => { markTaskContextExternallyUpdated(bot, threadId); handoffTicks.kick(); }, fetchArtifact: donebotHost.fetchArtifact,
 });
 mediaFollowups = donebotMediaHost;
 const handoffAttachments = createHandoffAttachments({

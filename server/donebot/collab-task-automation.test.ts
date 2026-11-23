@@ -266,7 +266,7 @@ describe("team task bot automation", () => {
     const artBot = { id: "bot-art", name: "美术助手", threadId: "t-art-default", chiefOfStaff: false, hidden: false } as BotRecord;
     const messages = new Map<string, Message[]>();
     const startTurn = vi.fn(async (_botId, _text, opts) => {
-      opts.onSettled?.({ text: "已修改并重提", ok: true });
+      opts.onTurnSettled?.();
     });
 
     const completed: Array<{ url: string; body?: string }> = [];
@@ -319,7 +319,11 @@ describe("team task bot automation", () => {
     const messages = new Map<string, Message[]>();
     const kicked = vi.fn();
     const startTurn = vi.fn(async (_botId, _text, opts) => {
-      opts.onSettled?.({ ok: true, text: "已为小王创建任务「第3集定妆图」并设置 3 条验收清单。" });
+      messages.set(opts.threadId, [
+        ...(messages.get(opts.threadId) ?? []),
+        { id: "m-bot-1", role: "bot", kind: "text", text: "已为小王创建任务「第3集定妆图」并设置 3 条验收清单。", at: Date.now() } as Message,
+      ]);
+      opts.onTurnSettled?.();
     });
 
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
@@ -364,5 +368,58 @@ describe("team task bot automation", () => {
     expect(startTurn.mock.calls[0]![1]).toContain("分镜美术");
     expect(startTurn.mock.calls[0]![1]).toContain("collab_create_team_task");
     expect(kicked).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips stale task_assigned event when the task is already bound locally to a bot", async () => {
+    saveTaskBinding({
+      teamId,
+      teamName: "AI短剧小组",
+      taskId,
+      taskTitle: "第3集女主定妆图",
+      botId: "bot-chief",
+      threadId: "t-chief",
+    });
+    const event: DoneBotClaimedTaskBotEvent = {
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+      team_id: teamId,
+      team_name: "AI短剧小组",
+      task_id: taskId,
+      event_type: "task_assigned",
+      detail: makeDetail("todo"),
+      creator_name: "老罗",
+      assignee_name: "小王",
+      created_at: "2026-11-23T02:05:00Z",
+    };
+    const chiefBot = { id: "bot-chief", name: "多宝", threadId: "t-chief", chiefOfStaff: true, hidden: false } as BotRecord;
+    const startTurn = vi.fn();
+    const completed: Array<{ body?: string }> = [];
+    let claimedOnce = false;
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/task-events/claim")) {
+        if (claimedOnce) return mockJsonResponse({ event: null });
+        claimedOnce = true;
+        return mockJsonResponse({ event });
+      }
+      if (url.endsWith("/complete")) {
+        completed.push({ body: typeof init?.body === "string" ? init.body : undefined });
+        return mockJsonResponse({ ok: true });
+      }
+      return mockJsonResponse({});
+    }) as unknown as typeof fetch;
+
+    const worker = createCollabTaskWorker({
+      gateway: makeGateway(fetchMock),
+      store: { bots: [chiefBot], bot: () => chiefBot },
+      startTurn,
+      threadBusy: () => false,
+    });
+    worker.kick();
+    await new Promise(resolve => setTimeout(resolve, 60));
+    worker.setActive(false);
+
+    expect(startTurn).not.toHaveBeenCalled();
+    expect(completed).toHaveLength(1);
+    expect(completed[0]!.body).toContain('"status":"done"');
   });
 });

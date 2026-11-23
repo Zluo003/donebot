@@ -1,7 +1,7 @@
 import { isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import type { DoneBotTeamChannel, DoneBotTeamMemberProfile } from "../../shared/donebot-collab.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
-import type { CollabBotTurnOptions, CollabBotTurnOutcome } from "./collab-chat-bots.ts";
+import type { CollabBotTurnOptions } from "./collab-chat-bots.ts";
 import { collabListTeamChannels, collabListTeamMemberProfiles } from "./collab-gateway.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 
@@ -148,14 +148,14 @@ export async function dispatchTeamTaskViaChiefBot(
     return idx >= 0 ? all.slice(idx + 1) : [];
   };
 
-  let settled: CollabBotTurnOutcome | undefined;
+  let settled = false;
   let dispatchError: string | undefined;
   await deps.startTurn(chief.id, full, {
     threadId,
     automationSource: "api",
     unattended: true,
     userMessage,
-    onSettled: outcome => { settled = outcome; },
+    onTurnSettled: () => { settled = true; },
     onDispatchError: msg => { dispatchError = msg; },
   });
 
@@ -179,7 +179,7 @@ export async function dispatchTeamTaskViaChiefBot(
     .reverse()
     .find(m => m.role === "bot" && typeof m.text === "string" && m.text.trim())
     ?.text?.trim() ?? "";
-  const reply = (settled?.text?.trim() || replyFromMessages || (pendingCard
+  const reply = (replyFromMessages || (pendingCard
     ? `「${chief.name}」需要你进一步确认后再继续，请打开对话确认。`
     : `已通知「${chief.name}」处理该派发需求，任务创建后将自动出现在看板上。`));
 
@@ -187,7 +187,7 @@ export async function dispatchTeamTaskViaChiefBot(
     bot_id: chief.id,
     bot_name: chief.name,
     thread_id: threadId,
-    ok: settled ? settled.ok : true,
+    ok: true,
     reply,
     pending_card: pendingCard,
   };

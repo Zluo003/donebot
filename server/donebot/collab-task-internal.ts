@@ -37,6 +37,7 @@ const positiveInt = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 type TaskRuntimeHooks = {
   resolveBotName?: (botId: string) => string;
   kickTaskWorker?: () => void;
+  listThreadAttachments?: (threadId: string) => Array<{ path: string; name?: string; mime?: string }>;
 };
 let runtimeHooks: TaskRuntimeHooks = {};
 
@@ -434,9 +435,13 @@ export async function handleDoneBotCollabTaskInternal(
       const downloaded = parsed.data.download_deliverables
         ? await downloadDeliverablesToSandbox(gateway, detail)
         : [];
+      const threadAttachments = parsed.data.thread_id
+        ? (runtimeHooks.listThreadAttachments?.(parsed.data.thread_id) ?? []).slice(-10)
+        : [];
       json(res, 200, {
         ...detail,
         ...(downloaded.length > 0 ? { downloaded_deliverables: downloaded } : {}),
+        ...(threadAttachments.length > 0 ? { recent_thread_attachments: threadAttachments } : {}),
       });
       return true;
     }
@@ -464,8 +469,18 @@ export async function handleDoneBotCollabTaskInternal(
       const batchId = randomUUID();
       const uploadedFiles: Array<{ name: string; size: number }> = [];
 
+      const threadAttachments = parsed.data.thread_id
+        ? (runtimeHooks.listThreadAttachments?.(parsed.data.thread_id) ?? [])
+        : [];
+
       for (const rawPath of parsed.data.file_paths) {
-        const abs = rawPath.trim();
+        let abs = rawPath.trim();
+        if (abs && !path.isAbsolute(abs) && threadAttachments.length > 0) {
+          const hit = [...threadAttachments].reverse().find(att =>
+            att.name === abs || path.basename(att.path) === abs,
+          );
+          if (hit) abs = hit.path;
+        }
         if (!abs || abs.includes("\0") || !path.isAbsolute(abs)) {
           json(res, 400, { error: `成果文件路径必须为绝对路径：${abs}` });
           return true;

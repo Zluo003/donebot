@@ -32,7 +32,7 @@ export interface CollabBotTurnOptions {
   automationSource: "api";
   unattended: true;
   userMessage: Message;
-  onSettled: (outcome: CollabBotTurnOutcome) => void;
+  onTurnSettled: () => void;
   onDispatchError: (message: string) => void;
 }
 
@@ -304,14 +304,14 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
       return idx >= 0 ? all.slice(idx + 1) : [];
     };
 
-    let settled: CollabBotTurnOutcome | undefined;
+    let settled = false;
     let dispatchError: string | undefined;
     await runWithCollabChatTurn(threadId, () => startTurn(inv.local_bot_id, full, {
       threadId: threadId!,
       automationSource: "api",
       unattended: true,
       userMessage,
-      onSettled: outcome => { settled = outcome; },
+      onTurnSettled: () => { settled = true; },
       onDispatchError: msg => { dispatchError = msg; },
     }));
 
@@ -327,12 +327,7 @@ export function createCollabChatBotWorker(deps: CollabChatBotWorkerDeps) {
     if (hasPendingCard(after())) {
       return "该操作涉及本机敏感权限，需要机器人所有者在 DoneBot 对应会话中审批后继续。";
     }
-    const text = collectReplyText(after());
-    if (text) return text;
-    if (settled && !settled.ok && settled.text) {
-      throw new Error(settled.text);
-    }
-    return settled?.text?.trim() ? redactSecretsInText(settled.text.trim()) : "";
+    return collectReplyText(after());
   }
 
   async function processInvocation(

@@ -1,7 +1,7 @@
 import { isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import type { DoneBotClaimedTaskBotEvent } from "../../shared/donebot-collab.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
-import type { CollabBotTurnOptions, CollabBotTurnOutcome } from "./collab-chat-bots.ts";
+import type { CollabBotTurnOptions } from "./collab-chat-bots.ts";
 import { collabClaimTaskBotEvent, collabCompleteTaskBotEvent } from "./collab-gateway.ts";
 import { getTaskBinding, saveTaskBinding } from "./collab-task-bindings.ts";
 import { downloadDeliverablesToSandbox, type DownloadedDeliverableInfo } from "./collab-task-internal.ts";
@@ -198,14 +198,14 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
       return idx >= 0 ? all.slice(idx + 1) : [];
     };
 
-    let settled: CollabBotTurnOutcome | undefined;
+    let settled = false;
     let dispatchError: string | undefined;
     await startTurn(bot.id, full, {
       threadId,
       automationSource: "api",
       unattended: true,
       userMessage,
-      onSettled: outcome => { settled = outcome; },
+      onTurnSettled: () => { settled = true; },
       onDispatchError: msg => { dispatchError = msg; },
     });
 
@@ -223,6 +223,11 @@ export function createCollabTaskWorker(deps: CollabTaskWorkerDeps) {
     runningEvents.add(ev.id);
     const ctx = deps.gateway.collabCtx();
     try {
+      // If the assignee already picked up and bound this task locally (or started it), do not re-trigger it with a stale task_assigned prompt.
+      if (ev.event_type === "task_assigned" && (getTaskBinding(ev.task_id) || ev.detail.task.status !== "todo")) {
+        await collabCompleteTaskBotEvent(ctx, ev.id, { status: "done" });
+        return;
+      }
       let targetBot: BotRecord | undefined;
       let targetThreadId = "";
 

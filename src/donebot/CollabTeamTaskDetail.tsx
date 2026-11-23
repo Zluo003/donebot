@@ -378,6 +378,12 @@ export function CollabTeamTaskDetailPanel({
         threadId: bot.threadId,
       }),
     }).catch(() => {});
+    if (task.status === "todo") {
+      void api(`/api/donebot/collab/teams/${team.id}/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "in_progress" }),
+      }).catch(() => {});
+    }
     const prompt = buildBotHandOffPrompt(team.name, task, latestFeedback);
     appendComposerDraft(`bot:${bot.id}:${bot.threadId}`, prompt);
     setCollabSidebarTab("bots");

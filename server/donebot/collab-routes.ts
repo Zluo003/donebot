@@ -261,6 +261,8 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
   registerCollabTaskRuntimeHooks({
     resolveBotName: id => deps.store.bot(id)?.name ?? "",
     kickTaskWorker: () => taskWorker.kick(),
+    listThreadAttachments: threadId => (deps.store.messagesFor?.(threadId) ?? [])
+      .flatMap(m => (m.attachments ?? []).map(a => ({ path: a.path, name: "name" in a ? a.name : undefined, mime: a.mime }))),
   });
   return async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
     if (!reqPath.startsWith("/api/donebot/collab/")) return PASS;

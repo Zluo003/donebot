@@ -508,7 +508,7 @@ export function BotMarketPage() {
             )
           )}
 
-          {tab === "earnings" && <BotMarketCreatorPanel />}
+          {tab === "earnings" && <BotMarketCreatorPanel cloudManaged={state.config?.donebot?.cloudManaged === true} />}
         </div>
       </div>
 

@@ -341,4 +341,78 @@ describe("createDoneBotMarketRoutes", () => {
     }
     expect(readBody).not.toHaveBeenCalled();
   });
+
+  it("uses /v1/donebot/runtime/market with installation credential in Cloud mode and blocks payout mutations", async () => {
+    const calls: Array<{ url: string; auth: string | null; install: string | null }> = [];
+    const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      calls.push({
+        url: String(input),
+        auth: headers.get("authorization"),
+        install: headers.get("X-DoneBot-Installation"),
+      });
+      return new Response(JSON.stringify({ code: 0, data: { items: [], total: 0, page: 1, page_size: 20 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const controllers = new Set<AbortController>();
+    const cloudGateway = {
+      collabIdentity: async () => ({
+        account_id: "42",
+        installation_id: "inst-cloud-1",
+        device_name: "cloud",
+        email: "creator@example.com",
+      }),
+      account: async () => ({ balance_cents: 0, concurrency: 5 }),
+      collabCtx: () => ({
+        origin: "https://donebot.cn",
+        fetcher,
+        controllers,
+        epoch: () => 1,
+        checkEpoch: () => {},
+        validSession: async () => ({
+          mode: "installation" as const,
+          accessToken: "",
+          credential: "sk-donebot-cloud-cred",
+          installationId: "inst-cloud-1",
+          expiresAt: Date.now() + 3600_000,
+          user: { id: "42", email: "creator@example.com" },
+        }),
+        readGatewayJson: async (res: Response) => res.json(),
+      }),
+    } as unknown as DoneBotGateway;
+
+    const store = makeStore([makeBot()]);
+    const handler = createDoneBotMarketRoutes({
+      gateway: cloudGateway,
+      store,
+      marketInstalls: new DoneBotMarketInstallStore(tempFile("cloud-installs.json")),
+      listBotSkills: () => [],
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+      defaultSelection: async () => ({ instanceId: "donebot", model: "gpt-5.4" }),
+      packageImportDeps: () => ({}) as unknown as PackageImportDeps,
+      broadcast: () => {},
+      publicBot: (b: BotRecord) => b,
+    });
+
+    const browse = await callRoute(handler, "GET", "/api/donebot/market/bots");
+    expect(browse.status, JSON.stringify(browse.payload)).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("https://donebot.cn/v1/donebot/runtime/market/bots");
+    expect(calls[0]!.auth).toBe("Bearer sk-donebot-cloud-cred");
+    expect(calls[0]!.install).toBe("inst-cloud-1");
+
+    const transfer = await callRoute(handler, "POST", "/api/donebot/market/creator/transfer", { amount: 10 });
+    expect(transfer.status).toBe(403);
+    const withdraw = await callRoute(handler, "POST", "/api/donebot/market/creator/withdrawals", {
+      amount: 100,
+      alipay_account: "test@example.com",
+      alipay_real_name: "测试",
+    });
+    expect(withdraw.status).toBe(403);
+    // Payout mutations must be rejected locally without hitting the gateway.
+    expect(calls).toHaveLength(1);
+  });
 });

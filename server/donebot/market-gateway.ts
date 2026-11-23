@@ -41,24 +41,35 @@ async function marketJsonCall<T>(
   method: string,
   body?: unknown,
   timeoutMs = 20_000,
+  options: { requireUserLogin?: boolean } = {},
 ): Promise<T> {
   const epoch = ctx.epoch();
   const session = await ctx.validSession();
   ctx.checkEpoch(epoch);
-  if (session.mode === "installation") {
-    throw new DoneBotGatewayError(403, "market_login_required", "请先在本机登录 DoneBot 账号后再使用 Bot 广场。");
+  const isInstallation = session.mode === "installation";
+  if (isInstallation && options.requireUserLogin) {
+    throw new DoneBotGatewayError(
+      403,
+      "market_local_login_required",
+      "为保障资金安全，转入算力余额与支付宝提现请切回「这台电脑」本机登录空间操作。",
+    );
   }
+  const token = isInstallation ? session.credential : session.accessToken;
+  if (!token) {
+    throw new DoneBotGatewayError(401, "market_login_required", "请先登录 DoneBot 账号后再使用 Bot 广场。");
+  }
+  const prefix = isInstallation ? "/v1/donebot/runtime/market" : "/api/v1/donebot/market";
   const controller = new AbortController();
   ctx.controllers.add(controller);
   const headers: Record<string, string> = {
-    authorization: `Bearer ${session.accessToken}`,
+    authorization: `Bearer ${token}`,
     "content-type": "application/json",
     ...(session.installationId ? { "X-DoneBot-Installation": session.installationId } : {}),
   };
   try {
     const response = await fetchWithTransientGetRetry(
       ctx.fetcher,
-      `${ctx.origin}/api/v1/donebot/market${path}`,
+      `${ctx.origin}${prefix}${path}`,
       { method, redirect: "error", credentials: "omit", headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) },
       controller,
       timeoutMs,
@@ -114,14 +125,14 @@ export function createDoneBotMarketClient(ctx: () => CollabGatewayTransport) {
       return marketJsonCall(ctx(), `/creator/ledger${qs ? `?${qs}` : ""}`, "GET");
     },
     async transferToBalance(amount?: number): Promise<MarketTransferResult> {
-      return marketJsonCall(ctx(), "/creator/transfer", "POST", amount !== undefined ? { amount } : {});
+      return marketJsonCall(ctx(), "/creator/transfer", "POST", amount !== undefined ? { amount } : {}, 20_000, { requireUserLogin: true });
     },
     async listCreatorWithdrawals(params: URLSearchParams): Promise<{ items: MarketWithdrawalRecord[]; total: number; page: number; page_size: number }> {
       const qs = params.toString();
       return marketJsonCall(ctx(), `/creator/withdrawals${qs ? `?${qs}` : ""}`, "GET");
     },
     async requestWithdrawal(payload: { amount: number; alipay_account: string; alipay_real_name: string }): Promise<MarketWithdrawalRecord> {
-      return marketJsonCall(ctx(), "/creator/withdrawals", "POST", payload);
+      return marketJsonCall(ctx(), "/creator/withdrawals", "POST", payload, 20_000, { requireUserLogin: true });
     },
   };
 }

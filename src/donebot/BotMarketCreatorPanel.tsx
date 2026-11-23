@@ -21,20 +21,26 @@ function withdrawalStatusBadge(status: string): { label: string; className: stri
 
 function ledgerTypeLabel(entry: MarketRewardLedgerEntry): string {
   switch (entry.entry_type) {
+    case "accrue":
     case "accrual":
       return `分润 · ${marketCategoryLabel(entry.category)}`;
     case "transfer_to_balance":
       return "转入算力余额";
+    case "withdraw_freeze":
     case "withdraw_request":
       return "申请支付宝提现";
+    case "withdraw_paid":
+      return "支付宝提现已打款";
     case "withdraw_refund":
       return "提现驳回退回";
+    case "risk_clawback":
+      return "风控核减";
     default:
       return entry.entry_type;
   }
 }
 
-export function BotMarketCreatorPanel() {
+export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?: boolean }) {
   const [wallet, setWallet] = useState<MarketCreatorWallet | null>(null);
   const [ledger, setLedger] = useState<MarketRewardLedgerEntry[]>([]);
   const [withdrawals, setWithdrawals] = useState<MarketWithdrawalRecord[]>([]);
@@ -208,6 +214,13 @@ export function BotMarketCreatorPanel() {
             </button>
           </div>
 
+          {cloudManaged && (
+            <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-[12.5px] text-amber-500">
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
+              <span>当前位于云空间，可随时查看创作者收益与明细；为保障资金安全，转入算力余额与申请支付宝提现请切回「这台电脑」本机登录空间操作。</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <form onSubmit={handleTransfer} className="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 space-y-3">
               <div className="space-y-2.5">
@@ -231,8 +244,9 @@ export function BotMarketCreatorPanel() {
                   max={wallet.available_amount || undefined}
                   value={transferAmount}
                   onChange={e => setTransferAmount(e.target.value)}
+                  disabled={cloudManaged}
                   placeholder={`留空全部转入（可用 ${formatCny(wallet.available_amount)}）`}
-                  className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                  className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-50"
                 />
                 {transferPreviewBase >= 1 && (
                   <div className="rounded-xl bg-app/70 px-3 py-2 text-[12px] text-ink-secondary">
@@ -243,11 +257,11 @@ export function BotMarketCreatorPanel() {
               </div>
               <button
                 type="submit"
-                disabled={transferring || wallet.available_amount < 1}
+                disabled={cloudManaged || transferring || wallet.available_amount < 1}
                 className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {transferring && <Loader2 size={14} className="animate-spin" />}
-                立即转入算力余额
+                {cloudManaged ? "请在本机空间操作转入" : "立即转入算力余额"}
               </button>
             </form>
 
@@ -265,15 +279,17 @@ export function BotMarketCreatorPanel() {
                   <input
                     value={alipayAccount}
                     onChange={e => setAlipayAccount(e.target.value)}
+                    disabled={cloudManaged}
                     placeholder="支付宝账号（手机号或邮箱）"
-                    className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                    className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-50"
                     required
                   />
                   <input
                     value={alipayRealName}
                     onChange={e => setAlipayRealName(e.target.value)}
+                    disabled={cloudManaged}
                     placeholder="支付宝实名姓名"
-                    className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                    className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-50"
                     required
                   />
                 </div>
@@ -284,20 +300,23 @@ export function BotMarketCreatorPanel() {
                   max={wallet.available_amount || undefined}
                   value={withdrawAmount}
                   onChange={e => setWithdrawAmount(e.target.value)}
+                  disabled={cloudManaged}
                   placeholder={`提现金额（>= ${formatCny(wallet.min_withdraw_amount)}）`}
-                  className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                  className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-50"
                   required
                 />
               </div>
               <button
                 type="submit"
-                disabled={withdrawing || wallet.available_amount < wallet.min_withdraw_amount}
+                disabled={cloudManaged || withdrawing || wallet.available_amount < wallet.min_withdraw_amount}
                 className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-accent bg-accent/10 px-4 py-2 text-[13px] font-medium text-accent hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {withdrawing && <Loader2 size={14} className="animate-spin" />}
-                {wallet.available_amount < wallet.min_withdraw_amount
-                  ? `满 ${formatCny(wallet.min_withdraw_amount)} 可申请提现`
-                  : "提交支付宝提现申请"}
+                {cloudManaged
+                  ? "请在本机空间申请提现"
+                  : wallet.available_amount < wallet.min_withdraw_amount
+                    ? `满 ${formatCny(wallet.min_withdraw_amount)} 可申请提现`
+                    : "提交支付宝提现申请"}
               </button>
             </form>
           </div>

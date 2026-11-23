@@ -16,6 +16,12 @@ import {
   type OpcWorkflowStep,
   type OpcWorkflowStepRun,
 } from "../../shared/donebot-opc.ts";
+import {
+  hasWorkflowCycle,
+  resolveWorkflowExecutionPlan,
+  type OpcWorkflowStepInput,
+} from "../../shared/donebot-opc-graph.ts";
+export { resolveWorkflowExecutionPlan } from "../../shared/donebot-opc-graph.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
@@ -29,6 +35,50 @@ interface OrgWorkflowFileState {
 }
 
 const MAX_WORKFLOW_RUNS = 60;
+
+function normalizeTriggerPosition(pos?: { x: number; y: number }): { x: number; y: number } | undefined {
+  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return undefined;
+  return { x: Math.round(pos.x), y: Math.round(pos.y) };
+}
+
+function normalizeWorkflowGraph(
+  rawSteps: readonly OpcWorkflowStepInput[],
+  rawEntryStepIds?: readonly string[],
+): { steps: OpcWorkflowStep[]; entryStepIds?: string[] } {
+  const baseSteps: OpcWorkflowStep[] = rawSteps
+    .map((step, index) => ({
+      id: step.id?.trim() || `step-${index + 1}-${randomUUID().slice(0, 6)}`,
+      name: step.name.trim() || `步骤 ${index + 1}`,
+      botId: step.botId.trim(),
+      instruction: step.instruction.trim(),
+      approvalGate: Boolean(step.approvalGate),
+      ...(Number.isFinite(step.x) ? { x: Math.round(step.x!) } : {}),
+      ...(Number.isFinite(step.y) ? { y: Math.round(step.y!) } : {}),
+      ...(Array.isArray(step.nextStepIds) ? { nextStepIds: step.nextStepIds } : {}),
+    }))
+    .filter(s => s.botId && s.instruction);
+
+  if (baseSteps.length === 0) {
+    throw new Error("工作流至少需要 1 个有效步骤（指定员工和任务指令）。");
+  }
+
+  const validIds = new Set(baseSteps.map(s => s.id));
+  const steps: OpcWorkflowStep[] = baseSteps.map(step => {
+    if (!step.nextStepIds) return step;
+    const cleanNext = [...new Set(step.nextStepIds.map(id => id.trim()).filter(id => id && id !== step.id && validIds.has(id)))];
+    return { ...step, nextStepIds: cleanNext };
+  });
+
+  if (hasWorkflowCycle(steps)) {
+    throw new Error("工作流节点连线不能形成循环回路，请断开环形连线后再保存。");
+  }
+
+  const entryStepIds = Array.isArray(rawEntryStepIds)
+    ? [...new Set(rawEntryStepIds.map(id => id.trim()).filter(id => validIds.has(id)))]
+    : undefined;
+
+  return { steps, entryStepIds };
+}
 
 function emptyState(): OrgWorkflowFileState {
   return {
@@ -347,23 +397,15 @@ export class DoneBotOrgWorkflowStore {
     intervalMinutes?: number;
     dailyTime?: string;
     silentWhenOk?: boolean;
-    steps: Array<{ id?: string; name: string; botId: string; instruction: string; approvalGate?: boolean }>;
+    triggerPosition?: { x: number; y: number };
+    entryStepIds?: string[];
+    steps: OpcWorkflowStepInput[];
     maxConsecutiveFailures?: number;
   }): OpcWorkflowDefinition {
     this.ensureLoaded();
     const now = Date.now();
-    const steps: OpcWorkflowStep[] = input.steps
-      .map((step, index) => ({
-        id: step.id?.trim() || `step-${index + 1}-${randomUUID().slice(0, 6)}`,
-        name: step.name.trim() || `步骤 ${index + 1}`,
-        botId: step.botId.trim(),
-        instruction: step.instruction.trim(),
-        approvalGate: Boolean(step.approvalGate),
-      }))
-      .filter(s => s.botId && s.instruction);
-    if (steps.length === 0) {
-      throw new Error("工作流至少需要 1 个有效步骤（指定员工和任务指令）。");
-    }
+    const { steps, entryStepIds } = normalizeWorkflowGraph(input.steps, input.entryStepIds);
+    const triggerPosition = normalizeTriggerPosition(input.triggerPosition);
     const scheduleKind: OpcWorkflowScheduleKind = input.scheduleKind === "interval" || input.scheduleKind === "daily"
       ? input.scheduleKind
       : "manual";
@@ -376,6 +418,8 @@ export class DoneBotOrgWorkflowStore {
       ...(scheduleKind === "interval" ? { intervalMinutes: Math.max(15, Math.min(10080, Math.round(input.intervalMinutes ?? 60))) } : {}),
       ...(scheduleKind === "daily" ? { dailyTime: /^\d{2}:\d{2}$/.test(input.dailyTime ?? "") ? input.dailyTime : "09:00" } : {}),
       silentWhenOk: Boolean(input.silentWhenOk),
+      ...(triggerPosition ? { triggerPosition } : {}),
+      ...(entryStepIds !== undefined ? { entryStepIds } : {}),
       steps,
       variables: extractWorkflowVariables(steps),
       maxConsecutiveFailures: Math.max(2, Math.min(10, Math.round(input.maxConsecutiveFailures ?? 3))),
@@ -399,7 +443,9 @@ export class DoneBotOrgWorkflowStore {
       intervalMinutes: number;
       dailyTime: string;
       silentWhenOk: boolean;
-      steps: Array<{ id?: string; name: string; botId: string; instruction: string; approvalGate?: boolean }>;
+      triggerPosition: { x: number; y: number };
+      entryStepIds: string[];
+      steps: OpcWorkflowStepInput[];
       maxConsecutiveFailures: number;
       pausedByCircuitBreaker: boolean;
       consecutiveFailures: number;
@@ -410,20 +456,17 @@ export class DoneBotOrgWorkflowStore {
     this.ensureLoaded();
     const existing = this.state.workflows[id];
     if (!existing) return null;
-    const steps: OpcWorkflowStep[] = patch.steps
-      ? patch.steps
-        .map((step, index) => ({
-          id: step.id?.trim() || `step-${index + 1}-${randomUUID().slice(0, 6)}`,
-          name: step.name.trim() || `步骤 ${index + 1}`,
-          botId: step.botId.trim(),
-          instruction: step.instruction.trim(),
-          approvalGate: Boolean(step.approvalGate),
-        }))
-        .filter(s => s.botId && s.instruction)
-      : existing.steps;
-    if (steps.length === 0) {
-      throw new Error("工作流至少需要 1 个有效步骤。");
-    }
+    const normalized = patch.steps
+      ? normalizeWorkflowGraph(patch.steps, patch.entryStepIds !== undefined ? patch.entryStepIds : existing.entryStepIds)
+      : {
+        steps: existing.steps,
+        entryStepIds: patch.entryStepIds !== undefined
+          ? patch.entryStepIds.filter(sid => existing.steps.some(s => s.id === sid))
+          : existing.entryStepIds,
+      };
+    const triggerPosition = patch.triggerPosition !== undefined
+      ? normalizeTriggerPosition(patch.triggerPosition)
+      : existing.triggerPosition;
     const scheduleKind = patch.scheduleKind ?? existing.scheduleKind;
     const updated: OpcWorkflowDefinition = {
       ...existing,
@@ -438,8 +481,10 @@ export class DoneBotOrgWorkflowStore {
         ? (/^\d{2}:\d{2}$/.test(patch.dailyTime ?? existing.dailyTime ?? "") ? (patch.dailyTime ?? existing.dailyTime) : "09:00")
         : undefined,
       ...(patch.silentWhenOk !== undefined ? { silentWhenOk: Boolean(patch.silentWhenOk) } : {}),
-      steps,
-      variables: extractWorkflowVariables(steps),
+      ...(triggerPosition ? { triggerPosition } : {}),
+      ...(normalized.entryStepIds !== undefined ? { entryStepIds: normalized.entryStepIds } : {}),
+      steps: normalized.steps,
+      variables: extractWorkflowVariables(normalized.steps),
       ...(patch.maxConsecutiveFailures !== undefined ? { maxConsecutiveFailures: Math.max(2, Math.min(10, Math.round(patch.maxConsecutiveFailures))) } : {}),
       ...(patch.pausedByCircuitBreaker !== undefined ? { pausedByCircuitBreaker: patch.pausedByCircuitBreaker } : {}),
       ...(patch.consecutiveFailures !== undefined ? { consecutiveFailures: patch.consecutiveFailures } : {}),
@@ -519,17 +564,18 @@ function buildStepPrompt(
   wf: OpcWorkflowDefinition,
   step: OpcWorkflowStep,
   stepIndex: number,
+  totalSteps: number,
   variables: Record<string, string>,
   completedSteps: readonly OpcWorkflowStepRun[],
   revisionNote?: string,
 ): string {
   const rendered = interpolateTemplate(step.instruction, variables);
   const sections: string[] = [
-    `[固定工作流执行] 工作流「${wf.name}」· 第 ${stepIndex + 1}/${wf.steps.length} 步「${step.name}」`,
+    `[固定工作流执行] 工作流「${wf.name}」· 第 ${stepIndex + 1}/${totalSteps} 步「${step.name}」`,
   ];
   if (completedSteps.length > 0) {
     const prevBlock = completedSteps
-      .map((s, idx) => `### 第 ${idx + 1} 步 · ${s.stepName}（${s.botName}）\n${s.output || "(无文本输出)"}`)
+      .map((s, idx) => `### 上游节点 ${idx + 1} · ${s.stepName}（${s.botName}）\n${s.output || "(无文本输出)"}`)
       .join("\n\n");
     const fence = safeFence(prevBlock);
     sections.push(`上游阶段已完成产出：\n${fence}\n${prevBlock}\n${fence}`);
@@ -564,11 +610,16 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
     if (activeRunByWorkflow.has(wf.id)) return run;
     activeRunByWorkflow.add(wf.id);
     try {
+      const plan = resolveWorkflowExecutionPlan(wf);
+      const stepById = new Map(wf.steps.map(s => [s.id, s]));
       let current = { ...run, status: "running" as OpcWorkflowRun["status"] };
       deps.orgStore.saveWorkflowRun(current);
 
-      for (let i = startIndex; i < wf.steps.length; i++) {
-        const step = wf.steps[i]!;
+      const totalSteps = current.stepResults.length;
+      for (let i = startIndex; i < totalSteps; i++) {
+        const planned = current.stepResults[i];
+        const step = (planned ? stepById.get(planned.stepId) : undefined) ?? plan.orderedSteps[i];
+        if (!step) continue;
         const bot = deps.store.bot(step.botId);
         const stepRun: OpcWorkflowStepRun = {
           ...(current.stepResults[i] ?? {
@@ -598,8 +649,20 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
           return current;
         }
 
-        const completedPrev = current.stepResults.slice(0, i).filter(s => s.status === "completed");
-        const prompt = buildStepPrompt(wf, step, i, current.variables, completedPrev, i === startIndex ? revisionNote : undefined);
+        const priorCompleted = current.stepResults.slice(0, i).filter(s => s.status === "completed");
+        const directParentIds = plan.parentsByStepId.get(step.id) ?? [];
+        const completedPrev = plan.isExplicitGraph
+          ? priorCompleted.filter(s => directParentIds.includes(s.stepId))
+          : priorCompleted;
+        const prompt = buildStepPrompt(
+          wf,
+          step,
+          i,
+          totalSteps,
+          current.variables,
+          completedPrev,
+          i === startIndex ? revisionNote : undefined,
+        );
 
         try {
           let output = "";
@@ -670,6 +733,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
     trigger: "manual" | "schedule",
     variables: Record<string, string>,
   ): Promise<OpcWorkflowRun> {
+    const plan = resolveWorkflowExecutionPlan(wf);
     const run: OpcWorkflowRun = {
       id: randomUUID(),
       workflowId: wf.id,
@@ -678,7 +742,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
       variables,
       status: "running",
       currentStepIndex: 0,
-      stepResults: wf.steps.map(step => ({
+      stepResults: plan.orderedSteps.map(step => ({
         stepId: step.id,
         stepName: step.name,
         botId: step.botId,
@@ -832,7 +896,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
           if (run.stepResults[idx]) {
             run.stepResults[idx] = { ...run.stepResults[idx]!, status: "completed", finishedAt: Date.now() };
           }
-          if (idx + 1 >= wf.steps.length) {
+          if (idx + 1 >= run.stepResults.length) {
             const done: OpcWorkflowRun = { ...run, status: "completed", finishedAt: Date.now() };
             deps.orgStore.saveWorkflowRun(done);
             json(res, 200, { run: done });

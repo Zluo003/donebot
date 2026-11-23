@@ -372,7 +372,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
   };
 
   const handler: RouteHandler = async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
-    if (!reqPath.startsWith("/api/donebot/opc/")) return PASS;
+    if (!reqPath.startsWith("/api/donebot/opc/") || reqPath.startsWith("/api/donebot/opc/org") || reqPath.startsWith("/api/donebot/opc/workflow")) return PASS;
     if (!ownerOrAdmin(auth)) return json(res, 403, { error: "仅工作空间所有者可使用工作室管理功能。" });
     res.setHeader("Cache-Control", "no-store");
 
@@ -473,6 +473,11 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
       }
 
       if (method !== "POST" && method !== "PUT" && method !== "PATCH") return PASS;
+      const ownedMutation = reqPath.startsWith("/api/donebot/opc/goals")
+        || reqPath.startsWith("/api/donebot/opc/artifacts")
+        || reqPath.startsWith("/api/donebot/opc/bots/")
+        || reqPath.startsWith("/api/donebot/opc/heartbeats");
+      if (!ownedMutation) return PASS;
       const body = await readBody(req, 1024 * 1024);
 
       if (method === "PUT" && reqPath === "/api/donebot/opc/goals") {

@@ -239,10 +239,49 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("总控主编");
     expect(container.textContent).toContain("需拍板");
 
+    // Click an employee node to open the right inspector drawer
+    const empCard = container.querySelector<HTMLElement>('[data-org-node="b1"]')!;
+    await act(async () => { empCard.click(); });
+    expect(container.textContent).toContain("岗位与工作流约束");
+
+    // Workflows list -> open full-workspace infinite-canvas node-graph editor
+    mockApi.mockImplementation(async (path, init) => {
+      if (path === "/api/donebot/opc/workflows" && (!init?.method || init.method === "GET")) {
+        return { workflows: [], runs: [] };
+      }
+      if (path === "/api/donebot/opc/workflows" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        return {
+          workflow: {
+            id: "wf-new",
+            ...body,
+            enabled: true,
+            variables: ["主题"],
+            maxConsecutiveFailures: 3,
+            consecutiveFailures: 0,
+            pausedByCircuitBreaker: false,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        };
+      }
+      return {};
+    });
+
     await act(async () => {
       root!.render(createElement(OpcWorkflowsView, { bots }));
     });
     expect(container.textContent).toContain("固定与定时工作流");
-    expect(container.textContent).toContain("新建工作流");
+    const createBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.includes("新建工作流"))!;
+    await act(async () => { createBtn.click(); });
+
+    expect(container.querySelector("[data-opc-workflow-canvas]")).not.toBeNull();
+    expect(container.textContent).toContain("触发起点");
+    expect(container.querySelectorAll("[data-wf-node]").length).toBe(3); // 1 trigger + 2 default step nodes
+
+    // Add a 3rd employee node on canvas
+    const addNodeBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.includes("添加员工节点"))!;
+    await act(async () => { addNodeBtn.click(); });
+    expect(container.querySelectorAll("[data-wf-node]").length).toBe(4);
   });
 });

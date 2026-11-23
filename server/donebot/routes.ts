@@ -16,9 +16,31 @@ function text(body: Record<string, unknown>, key: string, max = 1000): string {
 function proofs(body: Record<string, unknown>): Record<string, string> {
   return Object.fromEntries(proofKeys.filter(key => body[key] !== undefined).map(key => [key, text(body, key, 8192)]));
 }
+const ACCOUNT_POST_EXACT = new Set([
+  "/api/donebot/teams",
+  "/api/donebot/payments/orders",
+  "/api/donebot/cloud",
+  "/api/donebot/cloud/connect",
+  "/api/donebot/verification",
+  "/api/donebot/forgot-password",
+  "/api/donebot/reset-password",
+  "/api/donebot/login",
+  "/api/donebot/register",
+  "/api/donebot/2fa",
+  "/api/donebot/cancel-login",
+  "/api/donebot/logout",
+]);
+
+function isAccountPostPath(path: string): boolean {
+  if (ACCOUNT_POST_EXACT.has(path)) return true;
+  if (/^\/api\/donebot\/teams\/[a-f0-9-]{36}\/(cloud(\/connect)?|devices)$/.test(path)) return true;
+  if (/^\/api\/donebot\/payments\/orders\/[1-9]\d{0,14}\/(status|verify|cancel)$/.test(path)) return true;
+  return false;
+}
+
 export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandler {
   return async ({ req, res, path, method, auth, json, readBody }) => {
-    if (!path.startsWith("/api/donebot/") || path.startsWith("/api/donebot/collab/") || path.startsWith("/api/donebot/market/") || path.startsWith("/api/donebot/coding-agents")) return PASS;
+    if (!path.startsWith("/api/donebot/") || path.startsWith("/api/donebot/collab/") || path.startsWith("/api/donebot/market/") || path.startsWith("/api/donebot/opc/") || path.startsWith("/api/donebot/coding-agents")) return PASS;
     if (!ownerOrAdmin(auth)) return json(res, 403, { error: "Only the workspace owner can manage the DoneBot account." });
     res.setHeader("Cache-Control", "no-store");
     try {
@@ -37,7 +59,7 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
       const teamDevicesGet = path.match(/^\/api\/donebot\/teams\/([a-f0-9-]{36})\/devices$/);
       if (method === "GET" && teamDevicesGet) return json(res, 200, await gateway.teamDevices(teamDevicesGet[1]!));
       if (method === "GET" && path === "/api/donebot/payments") return json(res, 200, await paymentSnapshot(gateway));
-      if (method !== "POST") return PASS;
+      if (method !== "POST" || !isAccountPostPath(path)) return PASS;
       if (process.env.DONEBOT_CLOUD_CREDENTIAL_FILE) return json(res, 403, { error: "请在 DoneBot Cloud 控制台管理此账号。" });
       const body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) throw new DoneBotGatewayError(400, "invalid_input", "Expected an account JSON object.");

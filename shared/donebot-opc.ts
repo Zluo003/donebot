@@ -189,6 +189,11 @@ export interface OpcWorkflowStep {
   instruction: string;
   /** Pause after this step completes and wait for Boss approval in Boss Console before advancing. */
   approvalGate: boolean;
+  /** Optional infinite-canvas coordinates for visual node-graph layout. */
+  x?: number;
+  y?: number;
+  /** Directed downstream step IDs connected from this node's output port. */
+  nextStepIds?: string[];
 }
 
 export interface OpcWorkflowDefinition {
@@ -202,6 +207,10 @@ export interface OpcWorkflowDefinition {
   /** Local HH:mm used when scheduleKind === "daily" (e.g. "09:00"). */
   dailyTime?: string;
   silentWhenOk?: boolean;
+  /** Infinite-canvas position of the start/trigger node. */
+  triggerPosition?: { x: number; y: number };
+  /** Step IDs connected from the start/trigger node's output port. */
+  entryStepIds?: string[];
   steps: OpcWorkflowStep[];
   /** Auto-detected `{{name}}` template variable names across all step instructions. */
   variables: string[];

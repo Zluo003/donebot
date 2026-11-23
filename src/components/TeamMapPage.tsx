@@ -308,10 +308,14 @@ export function TeamMapPage() {
   useEffect(() => { void loadOrg(); }, [loadOrg]);
   const switchOrgMode = async (next: OpcOrgEnforcementMode) => {
     if (orgModeBusy || orgState.enforcementMode === next) return;
+    const prev = orgState;
+    setOrgState({ ...prev, enforcementMode: next });
     setOrgModeBusy(true);
+    setError(null);
     try {
       setOrgState(await opcApi.setOrgMode(next));
     } catch (cause) {
+      setOrgState(prev);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setOrgModeBusy(false);
@@ -449,7 +453,7 @@ export function TeamMapPage() {
                     onClick={() => void switchOrgMode(opt.mode)}
                     className={cn(
                       "rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors",
-                      orgState.enforcementMode === opt.mode ? "bg-panel text-ink shadow-xs" : "text-ink-tertiary hover:text-ink",
+                      orgState.enforcementMode === opt.mode ? "bg-ink text-app shadow-xs" : "text-ink-secondary hover:text-ink",
                     )}
                   >
                     {opt.label}

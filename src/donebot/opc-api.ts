@@ -223,7 +223,18 @@ export const opcApi = {
     intervalMinutes?: number;
     dailyTime?: string;
     silentWhenOk?: boolean;
-    steps: Array<{ id?: string; name: string; botId: string; instruction: string; approvalGate?: boolean }>;
+    triggerPosition?: { x: number; y: number };
+    entryStepIds?: string[];
+    steps: Array<{
+      id?: string;
+      name: string;
+      botId: string;
+      instruction: string;
+      approvalGate?: boolean;
+      x?: number;
+      y?: number;
+      nextStepIds?: string[];
+    }>;
     maxConsecutiveFailures?: number;
   }): Promise<OpcWorkflowDefinition> {
     const res = await api<{ workflow: OpcWorkflowDefinition }>("/api/donebot/opc/workflows", {
@@ -243,7 +254,18 @@ export const opcApi = {
       intervalMinutes: number;
       dailyTime: string;
       silentWhenOk: boolean;
-      steps: Array<{ id?: string; name: string; botId: string; instruction: string; approvalGate?: boolean }>;
+      triggerPosition: { x: number; y: number };
+      entryStepIds: string[];
+      steps: Array<{
+        id?: string;
+        name: string;
+        botId: string;
+        instruction: string;
+        approvalGate?: boolean;
+        x?: number;
+        y?: number;
+        nextStepIds?: string[];
+      }>;
       pausedByCircuitBreaker: boolean;
       consecutiveFailures: number;
       circuitBreakerReason: string | undefined;

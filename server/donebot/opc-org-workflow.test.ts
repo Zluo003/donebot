@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { dispatchRoutes } from "../routes/table.ts";
 import type { BotRecord, Store } from "../store.ts";
+import { createDoneBotAccountRoutes } from "./routes.ts";
+import { DoneBotOpcStore } from "./opc-store.ts";
+import { createDoneBotOpcRoutes } from "./opc-routes.ts";
 import { createDoneBotOrgWorkflowRoutes, DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
 
 const tempDirs: string[] = [];
@@ -138,5 +142,157 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     expect(run3.stepResults[1]?.status).toBe("completed");
     expect(run3.stepResults[1]?.output).toContain("视觉终稿");
     expect(prompts[2]).toContain("脚本 v2");
+  });
+
+  it("never double-reads request bodies when chained after DoneBot account & OPC routes", async () => {
+    const orgStore = new DoneBotOrgWorkflowStore(makeTempFile());
+    const opcStore = new DoneBotOpcStore(makeTempFile());
+    const writer = makeBot("b1", "文案写手");
+    const store = {
+      bots: [writer],
+      bot: (id: string) => (id === writer.id ? writer : undefined),
+    } as unknown as Store;
+
+    const accountRoutes = createDoneBotAccountRoutes({} as never);
+    const opcRoutes = createDoneBotOpcRoutes({
+      opcStore,
+      orgStore,
+      gateway: {} as never,
+      store,
+      listBotSkills: () => [],
+      readBotSkill: () => null,
+      installBotSkill: () => ({ error: "noop" }),
+      removeBotSkill: () => {},
+      setBotSkillEnabled: () => ({ error: "noop" }),
+      publicBot: b => b,
+      broadcast: () => {},
+      startTurn: async () => {},
+      generateBotText: async () => "ok",
+    });
+    const orgRoutes = createDoneBotOrgWorkflowRoutes({
+      orgStore,
+      store,
+      generateBotText: async () => "ok",
+      enableScheduler: false,
+    });
+    const chain = [accountRoutes, opcRoutes, orgRoutes];
+
+    const dispatchStrict = async (method: string, path: string, body: unknown) => {
+      let readCount = 0;
+      let status = 0;
+      let payload: unknown = null;
+      const handled = await dispatchRoutes(chain, {
+        req: {} as never,
+        res: { setHeader: vi.fn(), headersSent: false, destroy: vi.fn() } as never,
+        url: new URL(`http://127.0.0.1${path}`),
+        path,
+        method,
+        auth: { kind: "loopback", scopes: ["admin"] } as never,
+        json: (_res: unknown, code: number, value: unknown) => { status = code; payload = value; },
+        readBody: async () => {
+          readCount += 1;
+          if (readCount > 1) {
+            throw new Error(`readBody was called ${readCount} times for ${method} ${path} (would hang real HTTP stream!)`);
+          }
+          return body;
+        },
+      } as never);
+      expect(handled).toBe(true);
+      expect(readCount).toBe(1);
+      return { status, payload: payload as Record<string, unknown> };
+    };
+
+    const modeRes = await dispatchStrict("PUT", "/api/donebot/opc/org/mode", { enforcementMode: "enforced" });
+    expect(modeRes.status).toBe(200);
+    expect(modeRes.payload.enforcementMode).toBe("enforced");
+
+    const nodeRes = await dispatchStrict("PUT", "/api/donebot/opc/org/nodes/b1", { roleTitle: "总主编" });
+    expect(nodeRes.status).toBe(200);
+
+    const wfRes = await dispatchStrict("POST", "/api/donebot/opc/workflows", {
+      name: "防卡死测试流程",
+      scheduleKind: "manual",
+      steps: [{ id: "s1", name: "第一步", botId: "b1", instruction: "执行测试", x: 300, y: 120, nextStepIds: [] }],
+      entryStepIds: ["s1"],
+      triggerPosition: { x: 60, y: 120 },
+    });
+    expect(wfRes.status).toBe(201);
+    const createdId = (wfRes.payload.workflow as { id: string }).id;
+
+    const patchRes = await dispatchStrict("PATCH", `/api/donebot/opc/workflows/${createdId}`, { enabled: false });
+    expect(patchRes.status).toBe(200);
+    opcRoutes.stopScheduler();
+  });
+
+  it("executes branched DAG workflows in topological order and rejects cyclic node edges", async () => {
+    const orgStore = new DoneBotOrgWorkflowStore(makeTempFile());
+    const scout = makeBot("b-scout", "选题侦察");
+    const writer = makeBot("b-writer", "脚本写手");
+    const designer = makeBot("b-design", "视觉出图");
+    const editor = makeBot("b-editor", "终审汇编");
+    const bots = [scout, writer, designer, editor];
+    const store = {
+      bots,
+      bot: (id: string) => bots.find(b => b.id === id),
+    } as unknown as Store;
+
+    // Cyclic graph must be rejected cleanly.
+    expect(() => orgStore.createWorkflow({
+      name: "非法环路",
+      steps: [
+        { id: "a", name: "节点A", botId: scout.id, instruction: "A", nextStepIds: ["b"] },
+        { id: "b", name: "节点B", botId: writer.id, instruction: "B", nextStepIds: ["a"] },
+      ],
+      entryStepIds: ["a"],
+    })).toThrow(/循环回路/);
+
+    // Diamond DAG: Trigger -> [sA, sB] -> sC, plus an unlinked draft node sDraft that should NOT run.
+    const executedOrder: string[] = [];
+    const promptByBot = new Map<string, string>();
+    const route = createDoneBotOrgWorkflowRoutes({
+      orgStore,
+      store,
+      generateBotText: async (botId, prompt) => {
+        executedOrder.push(botId);
+        promptByBot.set(botId, prompt);
+        return `产出(${botId})`;
+      },
+      enableScheduler: false,
+    });
+
+    const wf = orgStore.createWorkflow({
+      name: "并行汇聚流水线",
+      scheduleKind: "manual",
+      triggerPosition: { x: 40, y: 200 },
+      entryStepIds: ["sA", "sB"],
+      steps: [
+        { id: "sC", name: "终审汇总", botId: editor.id, instruction: "汇总上游两路产出", x: 760, y: 200, nextStepIds: [] },
+        { id: "sA", name: "写文字脚本", botId: writer.id, instruction: "产出文字脚本", x: 380, y: 120, nextStepIds: ["sC"] },
+        { id: "sB", name: "做视觉配图", botId: designer.id, instruction: "产出视觉配图", x: 380, y: 300, nextStepIds: ["sC"] },
+        { id: "sDraft", name: "未连线草稿", botId: scout.id, instruction: "草稿节点", x: 380, y: 500, nextStepIds: [] },
+      ],
+    });
+
+    let status = 0;
+    let payload: Record<string, unknown> = {};
+    await route({
+      req: {} as never,
+      res: { setHeader: vi.fn() } as never,
+      url: new URL(`http://127.0.0.1/api/donebot/opc/workflows/${wf.id}/run`),
+      path: `/api/donebot/opc/workflows/${wf.id}/run`,
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] } as never,
+      json: (_res: unknown, code: number, value: unknown) => { status = code; payload = value as Record<string, unknown>; },
+      readBody: async () => ({ variables: {} }),
+    } as never);
+
+    expect(status).toBe(200);
+    expect(executedOrder).toEqual([writer.id, designer.id, editor.id]);
+    const editorPrompt = promptByBot.get(editor.id) ?? "";
+    expect(editorPrompt).toContain("产出(b-writer)");
+    expect(editorPrompt).toContain("产出(b-design)");
+    const run = payload.run as { status: string; stepResults: Array<{ stepId: string }> };
+    expect(run.status).toBe("completed");
+    expect(run.stepResults.map(s => s.stepId)).toEqual(["sA", "sB", "sC"]);
   });
 });

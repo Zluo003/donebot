@@ -48,6 +48,7 @@ import { DoneBotCloudDialog } from "@/donebot/CloudDialog";
 import { CollabSyncHost, CollabToastHost } from "@/donebot/CollabNotifications";
 import { CollabWorkspacePage } from "@/donebot/CollabWorkspacePage";
 import { BotMarketPage } from "@/donebot/BotMarketPage";
+import { OpcBossConsolePage } from "@/donebot/OpcBossConsolePage";
 import { CloudHowTo } from "@/components/CloudHowTo";
 import { DesktopCapabilitiesProvider, useCaptionChrome, useDesktopCapabilities, WindowDragStrip, windowFramed } from "@/components/DesktopCapabilities";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
@@ -384,6 +385,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         <CollabWorkspacePage />
       ) : state.activeView === "market" ? (
         <BotMarketPage />
+      ) : state.activeView === "boss" ? (
+        <OpcBossConsolePage />
       ) : state.activeView === "team-map" ? (
         <TeamMapPage />
       ) : state.activeView === "team-files" && state.config?.team?.sharedFiles === true ? (

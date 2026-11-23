@@ -14,6 +14,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { OpcArtifactItem, OpcBossOverview } from "../../shared/donebot-opc";
+import { closeInbox } from "@/state/inbox";
 import { useStore } from "@/state/store";
 import { formatCny } from "./market-api";
 import { opcApi } from "./opc-api";
@@ -202,13 +203,6 @@ export function OpcBossDashboard() {
 
   if (!overview) return null;
 
-  const hasActivity = overview.pendingArtifactCount > 0
-    || overview.activeHeartbeatCount > 0
-    || overview.trippedCircuitBreakerCount > 0
-    || (overview.spend.available && overview.spend.totalCost > 0);
-
-  if (!hasActivity) return null;
-
   const handleResolved = (artifactId: string) => {
     setOverview(prev => {
       if (!prev) return prev;
@@ -228,6 +222,19 @@ export function OpcBossDashboard() {
 
   return (
     <section aria-label="老板批示台" className="mx-[13px] mb-2 mt-1 space-y-2.5">
+      <div className="flex items-center justify-between px-0.5">
+        <span className="text-[11.5px] font-medium text-ink-secondary">老板批示台</span>
+        <button
+          type="button"
+          onClick={() => {
+            closeInbox();
+            dispatch({ type: "showBoss" });
+          }}
+          className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-accent hover:underline"
+        >
+          打开完整老板台 <ArrowUpRight size={12} />
+        </button>
+      </div>
       <div className="flex gap-2">
         <OpcMetricCard
           icon={CheckCircle2}

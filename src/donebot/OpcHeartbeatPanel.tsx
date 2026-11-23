@@ -31,7 +31,7 @@ function intervalLabel(minutes: number): string {
   return `每 ${minutes} 分钟`;
 }
 
-export function OpcHeartbeatPanel({ bots }: { bots: Bot[] }) {
+export function OpcHeartbeatPanel({ bots, compact = false }: { bots: Bot[]; compact?: boolean }) {
   const [items, setItems] = useState<OpcHeartbeatConfig[]>([]);
   const [creating, setCreating] = useState(false);
   const [botId, setBotId] = useState(bots[0]?.id ?? "");
@@ -135,17 +135,28 @@ export function OpcHeartbeatPanel({ bots }: { bots: Bot[] }) {
   if (bots.length === 0) return null;
 
   return (
-    <section aria-label="24h 静默巡检" className="mb-6 space-y-3">
+    <section
+      aria-label="24h 静默巡检"
+      className={cn(
+        "space-y-3",
+        compact ? "rounded-2xl bg-card p-4 ring-[0.5px] ring-hairline/70" : "mb-6",
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-        <div className="flex items-center gap-2">
-          <Activity size={15} className="text-accent" aria-hidden="true" />
-          <h2 className="text-[14px] font-semibold text-ink">24h 静默巡检</h2>
-          <span className="text-[12px] text-ink-tertiary">无事静默不打扰 · 连续失败自动熔断防跑飞</span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Activity size={15} className="shrink-0 text-accent" aria-hidden="true" />
+            <h2 className="text-[14px] font-semibold text-ink">24h 静默巡检</h2>
+          </div>
+          <p className="mt-0.5 text-[12px] text-ink-tertiary">无事静默不打扰 · 连续失败自动熔断防跑飞</p>
         </div>
         <button
           type="button"
           onClick={() => setCreating(v => !v)}
-          className="inline-flex items-center gap-1 rounded-lg bg-card px-2.5 py-1.5 text-[12px] font-medium text-ink ring-[0.5px] ring-hairline/60 transition-colors hover:bg-raised"
+          className={cn(
+            "inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[12px] font-medium text-ink transition-colors",
+            compact ? "bg-raised hover:bg-control" : "bg-card ring-[0.5px] ring-hairline/60 hover:bg-raised",
+          )}
         >
           <Plus size={13} /> {creating ? "收起" : "新建巡检"}
         </button>

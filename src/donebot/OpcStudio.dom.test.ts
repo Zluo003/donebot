@@ -11,14 +11,23 @@ const mockApi = vi.hoisted(() => vi.fn<(path: string, init?: RequestInit) => Pro
 const mockDispatch = vi.hoisted(() => vi.fn());
 
 vi.mock("@/state/api", () => ({ api: mockApi }));
+vi.mock("@/state/inbox", () => ({ closeInbox: vi.fn() }));
+vi.mock("@/components/DesktopCapabilities", () => ({ useCaptionChrome: () => ({ dragProps: {} }) }));
 vi.mock("@/state/store", () => ({
   useStore: () => ({
-    state: { bots: [], groups: [], config: { donebot: { enabled: true, authenticated: true } } },
+    state: {
+      activeView: "boss",
+      bots: [{ id: "b1", name: "封面视觉", color: "blue", hidden: false }],
+      groups: [],
+      config: { donebot: { enabled: true, authenticated: true } },
+    },
     dispatch: mockDispatch,
   }),
 }));
 
 const { OpcBossDashboard } = await import("./OpcBossDashboard");
+const { OpcBossConsolePage } = await import("./OpcBossConsolePage");
+const { OpcBossSidebarRow } = await import("./OpcBossSidebarRow");
 const { OpcNativeDialog } = await import("./paperclip-ui");
 
 let root: Root | null = null;
@@ -129,5 +138,50 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
       dialog!.dispatchEvent(new Event("close"));
     });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Boss Dashboard visible on zero-activity cold start and renders full Boss Console page", async () => {
+    mockApi.mockImplementation(async (path) => {
+      if (path.startsWith("/api/donebot/opc/overview")) {
+        return {
+          pendingArtifactCount: 0,
+          activeHeartbeatCount: 0,
+          trippedCircuitBreakerCount: 0,
+          activeGoalCount: 0,
+          spend: { available: true, days: 30, totalCost: 0, llmCost: 0, imageCost: 0, videoCost: 0, musicCost: 0, bots: [] },
+          pendingArtifacts: [],
+          heartbeats: [],
+        };
+      }
+      if (path === "/api/donebot/opc/goals") return { goals: [] };
+      if (path === "/api/donebot/opc/heartbeats") return { heartbeats: [] };
+      return {};
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    // 1. Sidebar entry always visible
+    await act(async () => {
+      root!.render(createElement(OpcBossSidebarRow, { icons: false, large: true }));
+    });
+    expect(container.textContent).toContain("老板台");
+
+    // 2. Inbox compact dashboard does not vanish when all counts are zero
+    await act(async () => {
+      root!.render(createElement(OpcBossDashboard));
+    });
+    expect(container.textContent).toContain("老板批示台");
+    expect(container.textContent).toContain("打开完整老板台");
+
+    // 3. Full Boss Console renders KPI strip, employee table, goal card and 24h heartbeat panel
+    await act(async () => {
+      root!.render(createElement(OpcBossConsolePage));
+    });
+    expect(container.textContent).toContain("在岗员工");
+    expect(container.textContent).toContain("封面视觉");
+    expect(container.textContent).toContain("项目目标卡");
+    expect(container.textContent).toContain("24h 静默巡检");
   });
 });

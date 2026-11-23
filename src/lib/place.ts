@@ -1,6 +1,6 @@
 import { cloudHomeOffersPlace } from "../../shared/cloud-home";
 import { toolSurfaceKind } from "../../shared/tool-surface";
-import { DONEBOT_PRIVATE_DESKTOP_ENABLED } from "@/donebot/services";
+import { DONEBOT_CLOUD_DESKTOP_ENABLED, DONEBOT_PRIVATE_DESKTOP_ENABLED } from "@/donebot/services";
 import type { Bot, Task } from "@/state/store";
 import type { LocaleKey } from "@/locales";
 
@@ -10,6 +10,7 @@ export type EffectivePlace = Place | "auto" | "off";
 
 export function placeOffered(place: Place, config: { cloudHome?: boolean } | null | undefined): boolean {
   if (place === "vm" && !DONEBOT_PRIVATE_DESKTOP_ENABLED) return false;
+  if (place === "cloud" && !DONEBOT_CLOUD_DESKTOP_ENABLED) return false;
   return !config?.cloudHome || cloudHomeOffersPlace(place);
 }
 

@@ -90,6 +90,7 @@ vi.mock("@/donebot/services", async original => {
   return {
     ...services,
     DONEBOT_PRIVATE_DESKTOP_ENABLED: true,
+    DONEBOT_CLOUD_DESKTOP_ENABLED: true,
     UPSTREAM_SERVICES: { ...services.UPSTREAM_SERVICES, boat: true },
     doneBotKeyVisible: (id: string) => id === "box" || services.doneBotKeyVisible(id),
   };

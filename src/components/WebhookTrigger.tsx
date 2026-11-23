@@ -8,6 +8,7 @@ import { BotAvatar } from "@/components/Avatar";
 import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { DONEBOT_CLOUD_DESKTOP_ENABLED } from "@/donebot/services";
 import { boatCapableEngine } from "@/lib/remote-desktop";
 import type { RoutineRunOn } from "@/lib/routines";
 import { WEBHOOK_DEFAULT_MAX_PENDING_RUNS, WEBHOOK_MAX_PENDING_RUNS_LIMIT, webhookActivationDefaults, webhookMaxPendingRunsInput, type WebhookCredential, type WebhookTrigger, type WebhookTriggerInput } from "@/lib/webhooks";
@@ -85,13 +86,13 @@ export function WebhookEditor({ webhook, bots, initialBotId, onClose, onCredenti
             <summary className="cursor-pointer text-[13px] font-medium text-ink">{t("automations.more")}</summary>
             <div className="mt-4 space-y-4">
               <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-ink-secondary">{t("automations.editor.app.name")}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={suggestedName(prompt, bots.find((bot) => bot.id === botId))} className={FIELD} /></label>
-              <div>
+              {(DONEBOT_CLOUD_DESKTOP_ENABLED || runOn === "cloud") && <div>
                 <div className="mb-2 text-[12px] font-medium text-ink-secondary">{t("automations.editor.app.runOn")}</div>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setRunOn("maus")} className={cn("flex items-center gap-2 rounded-xl border p-3 text-left text-[13px] font-medium text-ink", runOn === "maus" ? "border-accent/70 bg-accent/10" : "border-hairline/50 bg-panel hover:bg-raised/60")}><Laptop size={14} />{t("automations.editor.app.thisComputer")}</button>
                   <button type="button" disabled={!cloudReady && runOn !== "cloud"} onClick={() => setRunOn("cloud")} className={cn("flex items-center gap-2 rounded-xl border p-3 text-left text-[13px] font-medium text-ink disabled:cursor-not-allowed disabled:opacity-45", runOn === "cloud" ? "border-accent/70 bg-accent/10" : "border-hairline/50 bg-panel hover:bg-raised/60")}><Cloud size={14} />{t("automations.editor.app.cloud")}</button>
                 </div>
-              </div>
+              </div>}
               <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-ink-secondary">{t("automations.editor.app.events")}</span><input value={eventTypes} onChange={(event) => setEventTypes(event.target.value)} placeholder="push, workflow_run" className={FIELD} /><span className="mt-1.5 block text-[11px] text-ink-secondary">{t("automations.editor.app.eventsHelp")}</span></label>
               <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-ink-secondary">{t("automations.editor.app.limit")}</span><input type="number" inputMode="numeric" min={1} max={WEBHOOK_MAX_PENDING_RUNS_LIMIT} step={1} value={maxPendingRuns} onChange={(event) => setMaxPendingRuns(event.target.value)} placeholder={String(WEBHOOK_DEFAULT_MAX_PENDING_RUNS)} className={FIELD} /><span className="mt-1.5 block text-[11px] text-ink-secondary">{t("automations.editor.app.limitHelp", { count: WEBHOOK_DEFAULT_MAX_PENDING_RUNS })}</span></label>
               <SameConversationOption checked={sameConversation} onChange={setSameConversation} />

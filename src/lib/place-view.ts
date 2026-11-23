@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DONEBOT_PRIVATE_DESKTOP_ENABLED, UPSTREAM_SERVICES } from "@/donebot/services";
+import { DONEBOT_CLOUD_DESKTOP_ENABLED, DONEBOT_PRIVATE_DESKTOP_ENABLED, UPSTREAM_SERVICES } from "@/donebot/services";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
 import { cloudPlanView } from "@/lib/cloud-plan";
@@ -85,11 +85,13 @@ export function placeRowViewFor(row: PlaceRow, seat: PlaceSeat, worksOnLabel?: s
 }
 
 function doneBotPlaceView(view: PlaceView): PlaceView {
-  if (DONEBOT_PRIVATE_DESKTOP_ENABLED) return view;
-  if (view.state === "vm" || view.state === "vm-cannot") {
+  if (!DONEBOT_PRIVATE_DESKTOP_ENABLED && (view.state === "vm" || view.state === "vm-cannot")) {
     return { ...view, short: t("computer.privateDesktopDisabledLabel"), line: t("computer.privateDesktopDisabled"), action: null };
   }
-  return view.state === "auto" ? { ...view, line: t("place.autoDetail") } : view;
+  if (!DONEBOT_CLOUD_DESKTOP_ENABLED && view.state.startsWith("cc-")) {
+    return { ...view, short: "云端桌面已停用", line: "已停用云端图形桌面，请选择「自动」或「浏览器」工作。", action: null };
+  }
+  return !DONEBOT_PRIVATE_DESKTOP_ENABLED && view.state === "auto" ? { ...view, line: t("place.autoDetail") } : view;
 }
 
 export function placeBlocked(view: PlaceView): boolean {

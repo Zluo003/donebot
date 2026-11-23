@@ -1,4 +1,4 @@
-import { boatCapableEngine } from "@/lib/remote-desktop";
+import { boatCapableEngine } from "@/lib/remote-desktop"; import { DONEBOT_CLOUD_DESKTOP_ENABLED } from "@/donebot/services";
 import {
   useEffect,
   useLayoutEffect,
@@ -844,9 +844,9 @@ export function EventEditor({
                     <div className="text-[13px] font-medium text-ink">{t(cloudHome ? "routines.editor.goalRunsOnCloud" : "routines.editor.goalRunsOnComputer")}</div>
                     <div className="mt-1 text-[11px] leading-relaxed text-ink-secondary">{t("routines.editor.roomGoalKept")}</div>
                   </div>
-                ) : <div className="grid grid-cols-2 gap-2">
+                ) : <div className={cn("grid gap-2", DONEBOT_CLOUD_DESKTOP_ENABLED || runOn === "cloud" ? "grid-cols-2" : "grid-cols-1")}>
                   <button type="button" onClick={() => setRunOn("maus")} className={cn("rounded-xl border p-3 text-left", runOn === "maus" ? "border-accent/60 bg-accent/10" : "border-hairline/50 bg-inset hover:bg-raised")}><div className="text-[13px] font-medium text-ink">{t("routines.editor.currentSetup")}</div><div className="mt-1 text-[11px] text-ink-secondary">Keeps its model and configured computer, including a self-hosted VPS.</div></button>
-                  <button type="button" disabled={!cloudReady || attachments.length > 0} onClick={() => setRunOn("cloud")} className={cn("rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45", runOn === "cloud" ? "border-accent/60 bg-accent/10" : "border-hairline/50 bg-inset hover:bg-raised")}><div className="text-[13px] font-medium text-ink">{t("routines.runsOn.boat")}</div><div className="mt-1 text-[11px] text-ink-secondary">{t(cloudHome ? "routines.runsOn.boatHintCloudHome" : "routines.runsOn.boatHint")}</div></button>
+                  {(DONEBOT_CLOUD_DESKTOP_ENABLED || runOn === "cloud") && <button type="button" disabled={!cloudReady || attachments.length > 0} onClick={() => setRunOn("cloud")} className={cn("rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45", runOn === "cloud" ? "border-accent/60 bg-accent/10" : "border-hairline/50 bg-inset hover:bg-raised")}><div className="text-[13px] font-medium text-ink">{t("routines.runsOn.boat")}</div><div className="mt-1 text-[11px] text-ink-secondary">{t(cloudHome ? "routines.runsOn.boatHintCloudHome" : "routines.runsOn.boatHint")}</div></button>}
                 </div>}
               </div>
             </div>

@@ -68,7 +68,7 @@ function usePlaceChoices(bot: Bot) {
     { value: "auto", label: t("computer.simple.dest.letItChoose") },
     ...(placeViews.local.policy ? [choice("local")] : []),
     ...(placeViews.browser.policy || current === "browser" ? [choice("browser")] : []),
-    ...(placeViews.cloud.policy ? [choice("cloud")] : []),
+    ...(placeOffered("cloud", state.config) && placeViews.cloud.policy ? [choice("cloud")] : []),
     ...(placeOffered("vm", state.config) && (placeViews.vm.policy || current === "vm") ? [choice("vm")] : []),
     ...(current === "off" ? [{ value: current, label: OFF_LABEL(), disabled: true }] : []),
   ];

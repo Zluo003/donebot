@@ -139,12 +139,13 @@ it("hides private desktop installation and stops polling its runtime while prese
   expect(requests.some(path => path.startsWith("/api/local-computer") || path === "/api/computers/boxes")).toBe(false);
 });
 
-it("omits private desktops from work locations on both local and Cloud workspaces", () => {
+it("omits private and cloud desktops from work locations on both local and Cloud workspaces", () => {
   const capabilities = { host: { platform: "darwin" }, localComputer: {} } as DesktopCapabilities;
   for (const cloudHome of [false, true]) {
     const modes = worksOnChoices({ cloudHome }, capabilities).map(([mode]) => mode);
     expect(modes).not.toContain("vm");
-    expect(modes).toEqual(expect.arrayContaining([null, "cloud", "browser", "off"]));
+    expect(modes).not.toContain("cloud");
+    expect(modes).toEqual(expect.arrayContaining([null, "browser", "off"]));
     expect(modes.includes("local")).toBe(!cloudHome);
   }
 });

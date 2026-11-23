@@ -38,6 +38,10 @@ vi.mock("./DesktopCapabilities", async (importOriginal) => ({
   useDesktopCapabilities: () => ({ capabilities: { host: {}, dictation: { available: false } }, ready: true }),
 }));
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
+vi.mock("@/donebot/services", async (original) => ({
+  ...await original<typeof import("@/donebot/services")>(),
+  DONEBOT_CLOUD_DESKTOP_ENABLED: true,
+}));
 
 const { initialState } = await import("@/state/store");
 const { EventDetails, EventEditor, RoutineEditor } = await import("./RoutineCalendarPage");

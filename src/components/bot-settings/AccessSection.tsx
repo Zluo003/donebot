@@ -13,6 +13,7 @@ import { placeBlocked, placeFacts, placeHasIssue, placeViewFor, usePlaceSeat, ty
 import { shortPath } from "@/lib/short-path";
 import { isOwnThreadFolder } from "../../../shared/thread-folder";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
+import { DONEBOT_CLOUD_DESKTOP_ENABLED } from "@/donebot/services";
 import { CloudBackendPicker } from "../CloudBackendPicker";
 import { placeManagedBy, worksOnChoices, WorksOnGrid, worksOnSelected, type WorksOnMode } from "../WorksOnGrid";
 import { Switch } from "../SettingsPrimitives";
@@ -528,7 +529,7 @@ function RecordStepsRow({ on, browserOn, myChrome, onChange }: { on: boolean; br
 }
 
 export function cloudPreferenceShown(bot: Pick<Bot, "computer">, config: { cloudHome?: boolean } | null | undefined): boolean {
-  return (!bot.computer || bot.computer === "cloud") && !config?.cloudHome;
+  return DONEBOT_CLOUD_DESKTOP_ENABLED && (!bot.computer || bot.computer === "cloud") && !config?.cloudHome;
 }
 
 /**

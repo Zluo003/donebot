@@ -11,7 +11,6 @@ import { api, ApiError, currentTaskBot, useStore, type Bot, type ConfigStatus } 
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
 import { DONEBOT_PRIVATE_DESKTOP_ENABLED } from "@/donebot/services";
-import { DoneBotDesktopPanel } from "@/donebot/DesktopPanel";
 import { ComputerFilesPane } from "./ComputerFilesPane";
 import { effectivePlace, isComputerPlace, personPin, placeLabelKey, placeOffered } from "@/lib/place";
 import type { CloudBackend } from "../../shared/wire";
@@ -92,12 +91,7 @@ const computerControlSnapshotSchema = z.object({
   owned: z.boolean().optional(),
 }).passthrough();
 
-export function ComputerPanel(props: { bot: Bot; onOpenVmWorkspace?: (botId: string) => void }) {
-  const bot = currentTaskBot(props.bot), place = effectivePlace(props.bot, props.bot.tasks?.find(task => task.threadId === props.bot.threadId));
-  return place === "cloud" && (bot.cloudBackend !== "vps")
-    ? <DoneBotDesktopPanel key={`${bot.id}:${bot.threadId}`} bot={bot} /> : <OriginalComputerPanel {...props} />;
-}
-function OriginalComputerPanel({
+export function ComputerPanel({
   bot: profileBot,
   onOpenVmWorkspace,
 }: {
@@ -1131,7 +1125,6 @@ function OriginalComputerPanel({
     if (mode === "local" && approvalModeFor(profileBot) === "auto") {
       setLocalAutoWarningTarget(bot.id);
     }
-    else if (mode === "cloud" && cloudBackend !== "vps") updateComputerSelection({ computer: mode, cloudBackend: "donebot" });
     else if (mode === "browser") updateComputerSelection({ computer: mode, browser: true });
     else updateComputerSelection({ computer: mode });
   };

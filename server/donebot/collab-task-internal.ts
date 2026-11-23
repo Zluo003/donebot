@@ -29,6 +29,7 @@ import {
 } from "./collab-gateway.ts";
 import { getTaskBindingByThread, saveTaskBinding } from "./collab-task-bindings.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
+import { describeMediaAsset, listUnifiedThreadFiles, type ThreadFileEntry } from "./thread-files.ts";
 
 const execFileAsync = promisify(execFile);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -40,6 +41,11 @@ type ThreadAttachmentInput = {
   mime?: string;
   at?: number;
   messageText?: string;
+  kind?: ThreadFileEntry["kind"];
+  model?: string;
+  prompt?: string;
+  references?: string[];
+  source?: ThreadFileEntry["source"];
 };
 
 type MediaPromptMeta = {
@@ -47,6 +53,7 @@ type MediaPromptMeta = {
   model?: string;
   kind?: string;
   prompt?: string;
+  references?: string[];
   createdAt?: number;
 };
 
@@ -245,19 +252,25 @@ async function inspectThreadAttachments(raw: ThreadAttachmentInput[], submittedN
       isAv ? probeMediaMetadata(item.path) : Promise.resolve(undefined),
       isTextDoc ? readTextExcerptFromFile(item.path) : Promise.resolve(undefined),
     ]);
-    const meta = mediaPromptLookup?.(item.path) ?? mediaPromptLookup?.(name);
+    const meta = mediaPromptLookup?.(item.path) ?? mediaPromptLookup?.(name) ?? describeMediaAsset(item.path) ?? describeMediaAsset(name);
     const ts = item.at ?? meta?.createdAt;
+    const prompt = item.prompt ?? meta?.prompt;
+    const model = item.model ?? meta?.model;
+    const mediaKind = meta?.kind ?? (item.kind === "image" || item.kind === "video" || item.kind === "music" ? item.kind : undefined);
+    const refs = item.references?.length ? item.references : meta?.references;
     return {
       path: item.path,
       name,
       mime,
       size_bytes: stat.size,
+      ...(item.source ? { source: item.source } : {}),
       ...(dimensions ? { dimensions } : {}),
       ...(mediaMeta ? { media_meta: mediaMeta } : {}),
       ...(textExcerpt ? { text_excerpt: textExcerpt } : {}),
-      ...(meta?.kind ? { media_kind: meta.kind } : {}),
-      ...(meta?.prompt ? { prompt_excerpt: meta.prompt } : {}),
-      ...(meta?.model ? { model: meta.model } : {}),
+      ...(mediaKind ? { media_kind: mediaKind } : {}),
+      ...(prompt ? { prompt_excerpt: prompt } : {}),
+      ...(model ? { model } : {}),
+      ...(refs?.length ? { references: refs } : {}),
       ...(ts ? { at: ts, at_iso: new Date(ts).toISOString() } : {}),
       already_submitted_in_task: submittedNames.has(name),
       ...(item.messageText ? { source_text: item.messageText } : {}),
@@ -448,6 +461,7 @@ export async function handleDoneBotCollabTaskInternal(
   res: ServerResponse,
   json: (res: ServerResponse, status: number, value: unknown) => void,
   readInternalBody: () => Promise<Record<string, unknown>>,
+  capability?: { botId?: string; threadId?: string },
 ): Promise<boolean> {
   if (!reqPath.startsWith("/api/internal/donebot/collab/tasks/")) return false;
   const ctx = gateway.collabCtx();
@@ -547,10 +561,12 @@ export async function handleDoneBotCollabTaskInternal(
         json(res, 400, { error: "查询任务详情参数无效。" });
         return true;
       }
+      const botId = parsed.data.bot_id || capability?.botId;
+      const threadId = parsed.data.thread_id || capability?.threadId;
       let teamId = parsed.data.team_id;
       let taskId = parsed.data.task_id;
-      if ((!teamId || !taskId) && parsed.data.bot_id && parsed.data.thread_id) {
-        const binding = getTaskBindingByThread(parsed.data.bot_id, parsed.data.thread_id);
+      if ((!teamId || !taskId) && botId && threadId) {
+        const binding = getTaskBindingByThread(botId, threadId);
         if (binding) {
           teamId = teamId || binding.teamId;
           taskId = taskId || binding.taskId;
@@ -570,7 +586,7 @@ export async function handleDoneBotCollabTaskInternal(
         ? submissionUpdates.filter(u => u.batch_id === latestBatch)
         : submissionUpdates.slice(-10)
       ).map(u => {
-        const meta = u.file_name ? mediaPromptLookup?.(u.file_name) : undefined;
+        const meta = u.file_name ? (mediaPromptLookup?.(u.file_name) ?? describeMediaAsset(u.file_name)) : undefined;
         return {
           file_id: u.file_id!,
           file_name: u.file_name || "",
@@ -580,8 +596,18 @@ export async function handleDoneBotCollabTaskInternal(
         };
       });
       const submittedNames = new Set(submissionUpdates.map(u => u.file_name).filter((n): n is string => Boolean(n)));
-      const threadAttachments = parsed.data.thread_id
-        ? await inspectThreadAttachments(runtimeHooks.listThreadAttachments?.(parsed.data.thread_id) ?? [], submittedNames)
+      const extraFromHooks: ThreadFileEntry[] = threadId
+        ? (runtimeHooks.listThreadAttachments?.(threadId) ?? []).map(a => ({
+            path: a.path,
+            name: a.name || path.basename(a.path),
+            mime: a.mime,
+            at: a.at,
+            messageText: a.messageText,
+          }))
+        : [];
+      const unifiedFiles = threadId ? listUnifiedThreadFiles(botId, threadId, extraFromHooks) : [];
+      const threadAttachments = unifiedFiles.length > 0
+        ? await inspectThreadAttachments(unifiedFiles, submittedNames)
         : [];
       json(res, 200, {
         ...detail,
@@ -605,10 +631,12 @@ export async function handleDoneBotCollabTaskInternal(
         json(res, 400, { error: "单次提交最多附带 10 个成果文件（file_paths 与 reuse_file_ids 合计不超过 10 个）。" });
         return true;
       }
+      const botId = parsed.data.bot_id || capability?.botId;
+      const threadId = parsed.data.thread_id || capability?.threadId;
       let teamId = parsed.data.team_id;
       let taskId = parsed.data.task_id;
-      if ((!teamId || !taskId) && parsed.data.bot_id && parsed.data.thread_id) {
-        const binding = getTaskBindingByThread(parsed.data.bot_id, parsed.data.thread_id);
+      if ((!teamId || !taskId) && botId && threadId) {
+        const binding = getTaskBindingByThread(botId, threadId);
         if (binding) {
           teamId = teamId || binding.teamId;
           taskId = taskId || binding.taskId;
@@ -618,12 +646,19 @@ export async function handleDoneBotCollabTaskInternal(
         json(res, 400, { error: "无法确定要提交的团队任务：请传入 team_id 和 task_id，或在任务详情页点击「带给我的助手干活」建立绑定。" });
         return true;
       }
-      const botName = parsed.data.bot_id ? (runtimeHooks.resolveBotName?.(parsed.data.bot_id) || "个人助手") : "个人助手";
+      const botName = botId ? (runtimeHooks.resolveBotName?.(botId) || "个人助手") : "个人助手";
       const batchId = randomUUID();
 
-      const threadAttachments = parsed.data.thread_id
-        ? (runtimeHooks.listThreadAttachments?.(parsed.data.thread_id) ?? [])
+      const extraFromHooks: ThreadFileEntry[] = threadId
+        ? (runtimeHooks.listThreadAttachments?.(threadId) ?? []).map(a => ({
+            path: a.path,
+            name: a.name || path.basename(a.path),
+            mime: a.mime,
+            at: a.at,
+            messageText: a.messageText,
+          }))
         : [];
+      const threadAttachments = threadId ? listUnifiedThreadFiles(botId, threadId, extraFromHooks) : [];
 
       const preparedFiles = await Promise.all(parsed.data.file_paths.map(async rawPath => {
         let abs = rawPath.trim();
@@ -753,14 +788,14 @@ export async function handleDoneBotCollabTaskInternal(
           notify_channel: parsed.data.notify_channel,
         }) as DoneBotTeamTaskDetail;
 
-        if (parsed.data.bot_id && parsed.data.thread_id && detail?.task) {
+        if (botId && threadId && detail?.task) {
           saveTaskBinding({
             teamId,
             teamName: "",
             taskId,
             taskTitle: detail.task.title,
-            botId: parsed.data.bot_id,
-            threadId: parsed.data.thread_id,
+            botId,
+            threadId,
           });
         }
         runtimeHooks.kickTaskWorker?.();

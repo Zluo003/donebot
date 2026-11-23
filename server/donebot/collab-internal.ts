@@ -148,9 +148,10 @@ export async function handleDoneBotCollabInternal(
   res: ServerResponse,
   json: (res: ServerResponse, status: number, value: unknown) => void,
   readInternalBody: () => Promise<Record<string, unknown>>,
+  capability?: { botId?: string; threadId?: string },
 ): Promise<boolean> {
   if (method !== "POST" || !reqPath.startsWith("/api/internal/donebot/collab/")) return false;
-  if (await handleDoneBotCollabTaskInternal(gateway, reqPath, res, json, readInternalBody)) return true;
+  if (await handleDoneBotCollabTaskInternal(gateway, reqPath, res, json, readInternalBody, capability)) return true;
   try {
     if (reqPath === "/api/internal/donebot/collab/folders") {
       const snapshot = await gateway.collabFolders() as { shared_with_me?: unknown[] };

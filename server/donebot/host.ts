@@ -17,6 +17,7 @@ import {
   isCollabChatThread,
 } from "./collab-chat-policy.ts";
 import { readImageDimensions, registerMediaPromptLookup } from "./collab-task-internal.ts";
+import { registerMediaThreadSource, type ThreadFileEntry } from "./thread-files.ts";
 import { doneBotClientMediaCatalog } from "./media-registry.ts";
 import { modelCapabilities } from "./capabilities.ts";
 import { doneBotMediaModel, doneBotModelCapabilities } from "./catalog.ts";
@@ -262,18 +263,52 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       const job = donebotMedia.deliveryJob(match[1]!);
       if (!job) return undefined;
       const summary = summarizeMediaJobPrompt(job);
+      const references = extractMediaJobReferences(job);
       return {
         jobId: job.id,
         model: job.model,
         kind: job.kind,
         ...(summary ? { prompt: summary } : {}),
+        ...(references.length ? { references } : {}),
         createdAt: job.createdAt,
       };
     } catch {
       return undefined;
     }
   };
+  const listThreadMedia = (botId: string, threadId: string): ThreadFileEntry[] => {
+    if (closed || !botId || !threadId) return [];
+    try {
+      const jobs = donebotMedia.threadJobs(botId, threadId);
+      const entries: ThreadFileEntry[] = [];
+      for (const job of jobs) {
+        if (job.status !== "completed" || job.waitingStopped || !job.artifacts.length) continue;
+        const summary = summarizeMediaJobPrompt(job);
+        const references = extractMediaJobReferences(job);
+        for (const file of job.artifacts) {
+          entries.push({
+            path: file.path,
+            name: file.name,
+            mime: file.mime,
+            kind: job.kind,
+            bytes: file.bytes,
+            at: job.deliveredAt ?? job.updatedAt ?? job.createdAt,
+            role: "bot",
+            jobId: job.id,
+            model: job.model,
+            ...(summary ? { prompt: summary } : {}),
+            ...(references.length ? { references } : {}),
+            source: "bot-generated",
+          });
+        }
+      }
+      return entries;
+    } catch {
+      return [];
+    }
+  };
   registerMediaPromptLookup(describeGeneratedPath);
+  registerMediaThreadSource({ describeMedia: describeGeneratedPath, listThreadMedia });
 
   return {
     continuation(node: HandoffView): HostTurnResult["cap"] {
@@ -332,8 +367,34 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
       return store.messagesFor(threadId).find(message => message.card?.requestId === requestId)?.card?.answered === "allow" ? "allowed-once" : "rejected";
     },
     withContext<T>(context: MediaContext, work: () => T): T { return mediaRouteContexts.run(context, work); },
-    async close() { closed = true; registerMediaPromptLookup(undefined); donebotMediaApproval.close(); await donebotMedia.close(); },
+    async close() { closed = true; registerMediaPromptLookup(undefined); registerMediaThreadSource(undefined); donebotMediaApproval.close(); await donebotMedia.close(); },
   };
+}
+
+function extractMediaJobReferences(job: MediaJob): string[] {
+  const params = job.parameters;
+  if (!params || typeof params !== "object") return [];
+  const found = new Set<string>();
+  const addRef = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) {
+      const base = value.trim().split(/[\\/]/).at(-1);
+      if (base) found.add(base);
+    } else if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      addRef(obj.local_path);
+      addRef(obj.path);
+      if (obj.url && typeof obj.url === "object") addRef(obj.url);
+    }
+  };
+  if (Array.isArray(params.references)) {
+    for (const ref of params.references) addRef(ref);
+  }
+  for (const key of ["image", "images", "reference_image", "first_frame", "last_frame", "video", "audio"]) {
+    const val = params[key];
+    if (Array.isArray(val)) for (const item of val) addRef(item);
+    else addRef(val);
+  }
+  return [...found].slice(0, 6);
 }
 
 function summarizeMediaJobPrompt(job: MediaJob): string | undefined {

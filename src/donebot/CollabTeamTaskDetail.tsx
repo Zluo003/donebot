@@ -21,7 +21,6 @@ import {
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
 import { openBot } from "@/state/thread-navigation";
-import { appendComposerDraft } from "@/lib/drafts";
 import { cn } from "@/lib/cn";
 import {
   DONEBOT_COLLAB_MAX_FILE_BYTES,
@@ -363,33 +362,52 @@ export function CollabTeamTaskDetailPanel({
     }
   };
 
-  const handOffToLocalBot = (botId: string) => {
-    if (!task) return;
+  const handOffToLocalBot = async (botId: string) => {
+    if (!task || busy) return;
     const bot = availableLocalBots.find(b => b.id === botId);
     if (!bot) return;
-    void api("/api/donebot/collab/task-bindings", {
-      method: "POST",
-      body: JSON.stringify({
-        teamId: team.id,
-        teamName: team.name,
-        taskId: task.id,
-        taskTitle: task.title,
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/donebot/collab/task-bindings", {
+        method: "POST",
+        body: JSON.stringify({
+          teamId: team.id,
+          teamName: team.name,
+          taskId: task.id,
+          taskTitle: task.title,
+          botId: bot.id,
+          threadId: bot.threadId,
+        }),
+      }).catch(() => {});
+      if (task.status === "todo") {
+        const updated = await api<DoneBotTeamTask>(`/api/donebot/collab/teams/${team.id}/tasks/${task.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "in_progress" }),
+        }).catch(() => null);
+        if (updated) void onMutated(updated);
+      }
+      const recentMsgs = (bot.messages ?? []).slice(-12);
+      const alreadyIntroducedTask = !latestFeedback && recentMsgs.some(
+        m => typeof m.text === "string" && m.text.includes("[团队新任务") && m.text.includes(task.title),
+      );
+      const prompt = alreadyIntroducedTask
+        ? `好的，按上面任务「${task.title}」的要求现在就开始执行吧；完成后先发给我审核，等我说「提交任务」再提交团队验收。`
+        : buildBotHandOffPrompt(team.name, task, latestFeedback);
+      setCollabSidebarTab("bots");
+      openBot(dispatch, bot, false);
+      dispatch({ type: "showChat" });
+      dispatch({
+        type: "send",
         botId: bot.id,
         threadId: bot.threadId,
-      }),
-    }).catch(() => {});
-    if (task.status === "todo") {
-      void api(`/api/donebot/collab/teams/${team.id}/tasks/${task.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "in_progress" }),
-      }).catch(() => {});
+        text: prompt,
+        ...(bot.busy ? { followUp: "queue" as const } : {}),
+      });
+      setActionPane(null);
+    } finally {
+      setBusy(false);
     }
-    const prompt = buildBotHandOffPrompt(team.name, task, latestFeedback);
-    appendComposerDraft(`bot:${bot.id}:${bot.threadId}`, prompt);
-    setCollabSidebarTab("bots");
-    openBot(dispatch, bot, false);
-    dispatch({ type: "showChat" });
-    setActionPane(null);
   };
 
   const handleDownload = async (fileId: string, fileName: string) => {
@@ -748,16 +766,17 @@ export function CollabTeamTaskDetailPanel({
                   <button type="button" onClick={() => setActionPane(null)} className="text-ink-tertiary hover:text-ink"><X size={13} /></button>
                 </div>
                 <p className="text-[11.5px] leading-relaxed text-ink-tertiary">
-                  会自动绑定该任务与助手会话并带入要求；完成后你在对话里说「提交任务」，助手就能直接上传简报和成果文件给验收方，被初审驳回时也会自动回到同一会话继续改。
+                  点击助手后会立即绑定任务并自动发送开工指令，无需再手动发送；完成后你在对话里说「提交任务」，助手就能直接上传简报和成果文件给验收方，被初审驳回时也会自动回到同一会话继续改。
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   {availableLocalBots.map(bot => (
                     <button
                       key={bot.id}
                       type="button"
+                      disabled={busy}
                       data-collab-handoff-bot-pick={bot.id}
-                      onClick={() => handOffToLocalBot(bot.id)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-inset px-3 py-1.5 text-[12.5px] font-medium text-ink ring-1 ring-inset ring-ink/[0.08] hover:bg-accent/14 hover:text-accent-text hover:ring-accent/30"
+                      onClick={() => void handOffToLocalBot(bot.id)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-inset px-3 py-1.5 text-[12.5px] font-medium text-ink ring-1 ring-inset ring-ink/[0.08] hover:bg-accent/14 hover:text-accent-text hover:ring-accent/30 disabled:opacity-50"
                     >
                       <Bot size={13} aria-hidden="true" />
                       <span>{bot.name}</span>

@@ -365,7 +365,7 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
     );
     expect(host!.textContent).toContain("待修改");
 
-    // Hand off task to local bot -> writes composer draft with latest review feedback and navigates.
+    // Hand off task to local bot -> binds task, navigates, and auto-sends kickoff directly without leaving a draft.
     const handoffBtn = host!.querySelector<HTMLButtonElement>("[data-collab-task-handoff-bot]");
     expect(handoffBtn).not.toBeNull();
     await act(async () => { handoffBtn!.click(); });
@@ -375,16 +375,19 @@ describe("CollabTeamWorkspace multi-channel & human task review", () => {
     await act(async () => { pickBotBtn!.click(); });
     await flush();
 
-    expect(fixture.appendComposerDraft).toHaveBeenCalledWith(
-      "bot:bot-duobao:t-main",
-      expect.stringContaining("衣服领口偏暗，请调亮"),
-    );
+    expect(fixture.appendComposerDraft).not.toHaveBeenCalled();
     expect(fixture.api).toHaveBeenCalledWith(
       "/api/donebot/collab/task-bindings",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fixture.openBot).toHaveBeenCalledTimes(1);
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showChat" });
+    expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "send",
+      botId: "bot-duobao",
+      threadId: "t-main",
+      text: expect.stringContaining("衣服领口偏暗，请调亮"),
+    }));
   });
 
   it("defaults task status filter to 全部状态 using custom dropdown, shows bot review card, and auto-refreshes", async () => {

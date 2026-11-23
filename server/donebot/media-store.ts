@@ -94,6 +94,13 @@ export class MediaJobStore {
       .all(botId, threadId, assignmentId).map(row => jobSchema.parse(JSON.parse(String(row.json))));
   }
 
+  forThread(botId: string, threadId: string): MediaJob[] {
+    return this.db.prepare(`SELECT json FROM donebot_media_jobs
+      WHERE json_extract(json, '$.botId') = ? AND json_extract(json, '$.threadId') = ?
+      ORDER BY rowid`)
+      .all(botId, threadId).map(row => jobSchema.parse(JSON.parse(String(row.json))));
+  }
+
   pending(): MediaJob[] {
     return this.db.prepare("SELECT json FROM donebot_media_jobs ORDER BY rowid").all()
       .map(row => jobSchema.parse(JSON.parse(String(row.json))))

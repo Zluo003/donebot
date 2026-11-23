@@ -1,11 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 import { botAvatarProfile, botAvatarUrlFromStoredPath, clampAvatarFocus, clampAvatarZoom } from "../../shared/bot-avatar.ts";
 import { EXTERNAL_CODING_AGENT_SHARE_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import { DONEBOT_COLLAB_MAX_FILE_BYTES, type DoneBotCollabChatBot } from "../../shared/donebot-collab.ts";
-import { saveImage } from "../attachments.ts";
+import { ATTACHMENTS_DIR, saveImage } from "../attachments.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { parsePackageDocument } from "../bot-package.ts";
@@ -18,6 +19,7 @@ import { buildCollabChatBotAppearance, chatBotNeedsSync, type CollabChatBotAppea
 import { createCollabChatBotWorker, type CollabBotTurnOptions } from "./collab-chat-bots.ts";
 import { dispatchTeamTaskViaChiefBot } from "./collab-task-dispatch.ts";
 import { registerCollabTaskRuntimeHooks } from "./collab-task-internal.ts";
+import { registerStoreThreadAttachments, type ThreadFileEntry } from "./thread-files.ts";
 import { createCollabTaskWorker } from "./collab-task-worker.ts";
 import {
   collabListChatBots,
@@ -258,17 +260,49 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
     startTurn: deps.startTurn,
     threadBusy: deps.threadBusy,
   });
+  const readStoreThreadFiles = (threadId: string): ThreadFileEntry[] => {
+    const out: ThreadFileEntry[] = [];
+    for (const m of deps.store.messagesFor?.(threadId) ?? []) {
+      const role = m.role === "user" ? "user" : "bot";
+      const snippet = m.text?.slice(0, 120);
+      for (const a of m.attachments ?? []) {
+        const raw = a.path?.trim();
+        if (!raw) continue;
+        const abs = path.isAbsolute(raw) ? raw : path.join(ATTACHMENTS_DIR, raw);
+        out.push({
+          path: abs,
+          name: ("name" in a && a.name ? a.name : undefined) || path.basename(abs),
+          mime: a.mime,
+          at: m.at,
+          role,
+          messageId: m.id,
+          messageText: snippet,
+        });
+      }
+      if (role === "user" && typeof m.text === "string" && m.text.includes("<attached-")) {
+        const tagRe = /<attached-(?:image|file|video|audio)\s+[^>]*?path="([^"]+)"(?:[^>]*?name="([^"]*)")?[^>]*\/>/g;
+        for (const match of m.text.matchAll(tagRe)) {
+          const raw = match[1]?.trim();
+          if (!raw) continue;
+          const abs = path.isAbsolute(raw) ? raw : path.join(ATTACHMENTS_DIR, raw);
+          out.push({
+            path: abs,
+            name: match[2]?.trim() || path.basename(abs),
+            at: m.at,
+            role: "user",
+            messageId: m.id,
+            messageText: snippet,
+          });
+        }
+      }
+    }
+    return out;
+  };
+  registerStoreThreadAttachments(readStoreThreadFiles);
   registerCollabTaskRuntimeHooks({
     resolveBotName: id => deps.store.bot(id)?.name ?? "",
     kickTaskWorker: () => taskWorker.kick(),
-    listThreadAttachments: threadId => (deps.store.messagesFor?.(threadId) ?? [])
-      .flatMap(m => (m.attachments ?? []).map(a => ({
-        path: a.path,
-        name: "name" in a ? a.name : undefined,
-        mime: a.mime,
-        at: m.at,
-        messageText: m.text?.slice(0, 120),
-      }))),
+    listThreadAttachments: readStoreThreadFiles,
   });
   return async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
     if (!reqPath.startsWith("/api/donebot/collab/")) return PASS;

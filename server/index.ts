@@ -13422,7 +13422,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       }
       // The mail passwords stay here; the agent process holds only the turn's capability, and every call gets the live bot's verdict.
       if (method === "POST" && path === EMAIL_INTERNAL_MCP_PATH) { return json(res, 200, { result: await emailHost.handle(await readInternalBody(), internalCapability, requireActiveInternalCapability) }); }
-      if (DONEBOT_GATEWAY && !DONEBOT_TEAM_RUNTIME && await handleDoneBotCollabInternal(donebotHost.gateway, method, path, res, json, readInternalBody)) return;
+      if (DONEBOT_GATEWAY && !DONEBOT_TEAM_RUNTIME && await handleDoneBotCollabInternal(donebotHost.gateway, method, path, res, json, readInternalBody, { botId: internalCapability.botId, threadId: internalCapability.threadId })) return;
       if (method === "POST" && path === PHONE_INTERNAL_MCP_PATH) {
         return json(res, 200, { result: await phones.handle(await readInternalBody(), internalCapability, requireActiveInternalCapability) });
       }

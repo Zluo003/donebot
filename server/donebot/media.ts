@@ -157,6 +157,10 @@ export class DoneBotMediaService {
     return this.store.forAssignment(botId, threadId, assignmentId);
   }
 
+  threadJobs(botId: string, threadId: string): MediaJob[] {
+    return this.store.forThread(botId, threadId);
+  }
+
   beginFollowup(job: MediaJob): void { this.save(job, { followupStartedAt: this.now() }); }
 
   private save(job: MediaJob, patch: Partial<MediaJob>): MediaJob {

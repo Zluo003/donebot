@@ -9,6 +9,8 @@ import type { SendTurnInput, TurnImageInput } from "../contracts.ts";
 import { chatImageBudget, type ChatContentPart } from "../drivers/chat-images.ts";
 import type { OpenAIChatMessage } from "../drivers/openai-chat.ts";
 import { createDoneBotImageContext } from "./image-context.ts";
+import { doneBotImageReferences } from "./image-references.ts";
+import { registerMediaThreadSource, registerStoreThreadAttachments } from "./thread-files.ts";
 
 const folders: string[] = [];
 afterEach(async () => { for (const folder of folders.splice(0)) await rm(folder, { recursive: true, force: true }); });
@@ -107,4 +109,68 @@ it("honors attachment tool exclusions, rejects foreign IDs and does not follow o
   const context = fx.context();
   await expect(context.userContent(fx.turn.text)).rejects.toThrow();
   await expect(context.tools.execute("attachment_read_image", { id: `image-${"0".repeat(24)}` }, fx.controller.signal)).rejects.toThrow(/not an admitted/);
+});
+
+it("indexes bot-generated images and non-image conversation files (video, music, document) in attachment_list and userContent", async () => {
+  const fx = await fixture();
+  const imgPath = join(fx.cwd, "donebot-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1-1.png");
+  const vidPath = join(fx.cwd, "donebot-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2-1.mp4");
+  const docPath = join(fx.cwd, "proposal-v2.md");
+  await writeFile(imgPath, png(16, 16));
+  await writeFile(vidPath, Buffer.from("synthetic-mp4-bytes"));
+  await writeFile(docPath, "# 交付说明\n包含角色图与分镜视频。");
+
+  registerMediaThreadSource({
+    describeMedia: input => {
+      if (input.includes("aaaaaaaa")) {
+        return { jobId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", kind: "image", model: "seedream-5-5", prompt: "皮克斯3D卡通公鸡角色图", references: ["ref-style.png"] };
+      }
+      if (input.includes("bbbbbbbb")) {
+        return { jobId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2", kind: "video", model: "seedance-2-5", prompt: "5s · 16:9 · 公鸡展翅打鸣动画", references: ["donebot-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1-1.png"] };
+      }
+      return undefined;
+    },
+    listThreadMedia: (botId, threadId) => (botId === "bot-1" && threadId === "thread-1" ? [
+      { path: imgPath, name: "donebot-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1-1.png", mime: "image/png", kind: "image", bytes: 100, at: 1700000001000, model: "seedream-5-5", prompt: "皮克斯3D卡通公鸡角色图", references: ["ref-style.png"], source: "bot-generated" },
+      { path: vidPath, name: "donebot-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2-1.mp4", mime: "video/mp4", kind: "video", bytes: 19, at: 1700000002000, model: "seedance-2-5", prompt: "5s · 16:9 · 公鸡展翅打鸣动画", references: ["donebot-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1-1.png"], source: "bot-generated" },
+    ] : []),
+  });
+  registerStoreThreadAttachments(threadId => (threadId === "thread-1" ? [
+    { path: docPath, name: "proposal-v2.md", mime: "text/markdown", kind: "document", bytes: 42, at: 1700000003000, role: "bot", messageText: "已附上交付说明文档" },
+  ] : []));
+
+  try {
+    const refs = doneBotImageReferences([
+      {
+        id: "m-bot-img",
+        role: "bot",
+        text: "image · seedream-5-5",
+        attachments: [{ kind: "image", path: imgPath, mime: "image/png", name: "donebot-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1-1.png" }],
+      },
+    ], [], fx.cwd);
+    expect(refs).toHaveLength(1);
+    expect(refs[0]!.image.path).toBe(imgPath);
+    expect(refs[0]!.text).toContain("皮克斯3D卡通公鸡角色图");
+    expect(refs[0]!.text).toContain("ref-style.png");
+
+    fx.turn.botId = "bot-1";
+    fx.turn.threadId = "thread-1";
+    fx.turn.imageReferences = refs;
+    const context = fx.context();
+    const content = await context.userContent("提交任务");
+    const serialized = JSON.stringify(content);
+    expect(serialized).toContain("皮克斯3D卡通公鸡角色图");
+    expect(serialized).toContain("公鸡展翅打鸣动画");
+    expect(serialized).toContain("proposal-v2.md");
+
+    const listed = JSON.parse((await context.tools.execute("attachment_list", {}, fx.controller.signal)).text);
+    expect(listed.attachments).toHaveLength(1);
+    expect(listed.attachments[0].originalPath).toBe(imgPath);
+    expect(listed.files).toHaveLength(2);
+    expect(listed.files.map((f: { kind: string }) => f.kind)).toEqual(["document", "video"]);
+    expect(listed.files[1].references).toEqual(["donebot-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1-1.png"]);
+  } finally {
+    registerMediaThreadSource(undefined);
+    registerStoreThreadAttachments(undefined);
+  }
 });

@@ -123,7 +123,7 @@ const BY_DRIVER_KIND = new Map<string, ExternalCodingAgentSpec>(
 );
 
 export const EXTERNAL_CODING_AGENT_GROUP_REFUSAL =
-  "外部本地编程 Agent 仅限个人本地使用，不允许加入群聊或团队群聊。";
+  "外部本地编程 Agent 仅限个人本机使用，不允许加入好友群聊或团队群聊。";
 
 export const EXTERNAL_CODING_AGENT_SHARE_REFUSAL =
   "外部本地编程 Agent 仅限个人本地使用，不允许共享到好友或团队。";

@@ -310,7 +310,7 @@ export function CollabChatBotsPanel({
           <div className="flex flex-col gap-3 px-3.5 py-3">
             {availableLocalBots.length === 0 ? (
               <p className="text-[12px] text-ink-tertiary">
-                本机所有可用 Bot 都已加入本群，或本机尚未创建 Bot（外部本地编程 Agent 仅限个人本地使用，不可加入群聊）。
+                本机所有可用 Bot 都已加入本群，或本机尚未创建 Bot（外部本地编程 Agent 不可加入好友群聊或团队群聊）。
               </p>
             ) : (
               <>

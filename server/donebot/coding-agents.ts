@@ -6,9 +6,7 @@ import {
   codingAgentById,
   codingAgentByInstanceId,
   EXTERNAL_CODING_AGENTS,
-  EXTERNAL_CODING_AGENT_GROUP_REFUSAL,
   EXTERNAL_CODING_AGENT_SWITCH_REFUSAL,
-  isExternalCodingAgentBot,
   isExternalCodingAgentInstance,
   type ExternalCodingAgentId,
   type ExternalCodingAgentSource,
@@ -388,18 +386,6 @@ export function externalCodingAgentSwitchRefusal(
   if (!fromExternal && !toExternal) return undefined;
   if (current.instanceId !== next.instanceId) {
     return EXTERNAL_CODING_AGENT_SWITCH_REFUSAL;
-  }
-  return undefined;
-}
-
-export function externalCodingAgentMemberRefusal(
-  memberIds: readonly string[],
-  botById: (id: string) => Pick<BotRecord, "modelSelection"> | null | undefined,
-): string | undefined {
-  for (const id of memberIds) {
-    if (isExternalCodingAgentBot(botById(id))) {
-      return EXTERNAL_CODING_AGENT_GROUP_REFUSAL;
-    }
   }
   return undefined;
 }

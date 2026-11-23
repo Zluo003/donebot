@@ -77,7 +77,7 @@ import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { DONEBOT_TEAM_LENDING, teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession, teamRuntimeSessionLive, teamSharedComputersEnabled } from "./donebot/team-runtime.ts";
-import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts"; import { createDoneBotCodingAgentRoutes, externalCodingAgentMemberRefusal, externalCodingAgentSwitchRefusal } from "./donebot/coding-agents.ts";
+import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts"; import { createDoneBotCodingAgentRoutes, externalCodingAgentSwitchRefusal } from "./donebot/coding-agents.ts";
 import { createTeamFilesRoutes } from "./routes/team-files.ts";
 import { createTeamTemplateRoutes } from "./routes/team-templates.ts";
 import { createShareGithubAccess } from "./host/share-github-access.ts";
@@ -2858,7 +2858,7 @@ function checkedMemberIds(value: unknown): { ok: true; memberIds: string[] } | {
     return { ok: false, error: `unknown channel member: ${String(value[invalidIndex])}` };
   }
   const memberIds = [...new Set(value as string[])].filter((id) => store.bot(id));
-  if (!memberIds.length) return { ok: false, error: "a channel needs at least one bot" }; const codingMemberError = externalCodingAgentMemberRefusal(memberIds, (id) => store.bot(id)); if (codingMemberError) return { ok: false, error: codingMemberError };
+  if (!memberIds.length) return { ok: false, error: "a channel needs at least one bot" };
   if (memberIds.every((id) => store.bot(id)?.hidden)) {
     return {
       ok: false,

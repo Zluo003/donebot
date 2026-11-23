@@ -17,7 +17,6 @@ import {
   buildExternalCodingAgentConfigs,
   createDoneBotCodingAgentRoutes,
   externalCodingAgentDrivers,
-  externalCodingAgentMemberRefusal,
   externalCodingAgentSwitchRefusal,
   findClaudeDesktopBinary,
   findDeepSeekDesktopBinary,
@@ -136,7 +135,7 @@ describe("external local coding agents", () => {
     }
   });
 
-  it("blocks external coding agent bots from local groups, engine switching, and collab group/team chats", async () => {
+  it("blocks external coding agent bots from engine switching and collab friend/team group chats", async () => {
     const normalBot = {
       id: "bot-normal",
       name: "多宝",
@@ -157,10 +156,6 @@ describe("external local coding agents", () => {
       [normalBot.id, normalBot],
       [claudeBot.id, claudeBot],
     ]);
-    expect(externalCodingAgentMemberRefusal([normalBot.id], (id) => bots.get(id))).toBeUndefined();
-    expect(externalCodingAgentMemberRefusal([normalBot.id, claudeBot.id], (id) => bots.get(id))).toBe(
-      EXTERNAL_CODING_AGENT_GROUP_REFUSAL,
-    );
 
     expect(
       externalCodingAgentSwitchRefusal(

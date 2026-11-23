@@ -337,7 +337,7 @@ export function CodingAgentsDialog({
 
         <div className="flex items-center gap-2 border-b border-hairline/30 bg-inset/60 px-5 py-2.5 text-[12px] text-ink-secondary">
           <ShieldAlert size={14} className="shrink-0 text-warning" aria-hidden="true" />
-          <span>外部本地编程 Agent 仅限个人本地工作空间使用，不允许加入群聊或团队群聊。</span>
+          <span>外部本地编程 Agent 仅限个人本机使用（可加入本机机器人群聊），不允许加入好友群聊或团队群聊。</span>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">

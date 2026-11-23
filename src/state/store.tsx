@@ -570,7 +570,8 @@ export interface AppState {
   liveCallVersion: number;
   liveCallLookupSeq: number;
   selectedId: string;
-  activeView: "chat" | "team-map" | "routines" | "files" | "team-files" | "web-panel" | "collab";
+  activeView: "chat" | "team-map" | "routines" | "files" | "team-files" | "web-panel" | "collab" | "market";
+  marketPublishBotId?: string | null;
   /** Folders a finished move left on this computer, for Files to offer sharing. */
   filesSuggest: string[] | null; webPanelId?: string;
   routines: Routine[];
@@ -654,7 +655,7 @@ export type Action =
   | { type: "sectionDeleted"; section: string; sections: string[] }
   | { type: "showRoutines"; section?: "schedule" | "logs"; view?: "calendar" | "list"; botId?: string; routineId?: string; runStatus?: RoutineRunStatusFilter }
   | { type: "showTeamMap" } | { type: "showWebPanel"; id: string }
-  | { type: "showFiles"; suggest?: string[] } | { type: "showTeamFiles" } | { type: "showCollab" }
+  | { type: "showFiles"; suggest?: string[] } | { type: "showTeamFiles" } | { type: "showCollab" } | { type: "showMarket"; publishBotId?: string } | { type: "clearMarketPublishBot" }
   | { type: "showChat" }
   | { type: "routinesHydrated"; routines: Routine[]; runs: RoutineRun[]; since?: number }
   | { type: "routinesLoadFailed" } | { type: "routineRunsLoaded"; runs: RoutineRun[]; from?: number; to?: number }
@@ -1008,14 +1009,17 @@ export function reducer(state: AppState, action: Action): AppState {
     case "forkPanelMessage": case "forkPanelActive": case "closeForkPanel":
       return reduceForkPanel(state, action);
     case "showTeamMap":
-    case "showFiles": case "showTeamFiles": case "showWebPanel": case "showCollab":
+    case "showFiles": case "showTeamFiles": case "showWebPanel": case "showCollab": case "showMarket":
       if (action.type === "showTeamFiles" && state.config?.team?.sharedFiles !== true) return state;
       return {
         ...state,
-        activeView: action.type === "showFiles" ? "files" : action.type === "showTeamFiles" ? "team-files" : action.type === "showWebPanel" ? "web-panel" : action.type === "showCollab" ? "collab" : "team-map",
+        activeView: action.type === "showFiles" ? "files" : action.type === "showTeamFiles" ? "team-files" : action.type === "showWebPanel" ? "web-panel" : action.type === "showCollab" ? "collab" : action.type === "showMarket" ? "market" : "team-map",
+        ...(action.type === "showMarket" ? { marketPublishBotId: action.publishBotId ?? null } : {}),
         filesSuggest: action.type === "showFiles" && action.suggest?.length ? action.suggest : null, webPanelId: action.type === "showWebPanel" ? action.id : state.webPanelId,
         settingsOpen: false, computerOpen: false, inspectorOpen: false, activityOpen: false, appSettingsOpen: false, pluginsOpen: false,
       };
+    case "clearMarketPublishBot":
+      return state.marketPublishBotId ? { ...state, marketPublishBotId: null } : state;
     case "routinesHydrated":
       return { ...state, routines: action.routines, routineRuns: trimRoutineRuns(action.runs), routineRunsSince: action.since ?? null, routinesLoadState: "ready" };
     case "routinesLoadFailed":

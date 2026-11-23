@@ -1,4 +1,4 @@
-import { AppWindow, FolderOpen, Globe, Puzzle, UsersRound, Zap } from "lucide-react";
+import { AppWindow, FolderOpen, Globe, Puzzle, Store, UsersRound, Zap } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
 import { useAppTriggers } from "@/lib/app-triggers";
@@ -193,6 +193,16 @@ export function SidebarFooterNav({
           active={state.activeView === "team-map"}
           icon={(active) => <UsersRound size={iconSize} className={tone(active)} />}
           onClick={() => dispatch({ type: "showTeamMap" })}
+        />
+      )}
+      {state.config?.donebot?.enabled === true && !state.config?.team && window.ogb?.remoteClient?.active !== true && (
+        <NavRow
+          id="bot-market"
+          label="Bot 广场"
+          iconsOnly={iconsOnly || toolbar}
+          active={state.activeView === "market"}
+          icon={(active) => <Store size={iconSize} className={tone(active)} />}
+          onClick={() => dispatch({ type: "showMarket" })}
         />
       )}
       {filesRow}

@@ -47,6 +47,7 @@ import { NewLocalFromMenu } from "@/components/PlaceAddSheet";
 import { DoneBotCloudDialog } from "@/donebot/CloudDialog";
 import { CollabSyncHost, CollabToastHost } from "@/donebot/CollabNotifications";
 import { CollabWorkspacePage } from "@/donebot/CollabWorkspacePage";
+import { BotMarketPage } from "@/donebot/BotMarketPage";
 import { CloudHowTo } from "@/components/CloudHowTo";
 import { DesktopCapabilitiesProvider, useCaptionChrome, useDesktopCapabilities, WindowDragStrip, windowFramed } from "@/components/DesktopCapabilities";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
@@ -381,6 +382,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       />}
       {state.activeView === "collab" ? (
         <CollabWorkspacePage />
+      ) : state.activeView === "market" ? (
+        <BotMarketPage />
       ) : state.activeView === "team-map" ? (
         <TeamMapPage />
       ) : state.activeView === "team-files" && state.config?.team?.sharedFiles === true ? (

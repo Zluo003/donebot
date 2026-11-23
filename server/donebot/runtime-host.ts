@@ -23,6 +23,7 @@ import { bindDoneBotVoice } from "../tts/index.ts";
 import { createDoneBotVoice } from "./tts.ts";
 import { publicArtifactResponse } from "./media-download.ts";
 import { DoneBotMediaPreferencesStore, createDoneBotMediaSettingsRoute } from "./media-preferences.ts";
+import { DoneBotMarketInstallStore, attachMarketInstallHeader, currentMarketBotId } from "./market-installs.ts";
 import { DoneBotTeamModelGateway } from "./team-model-gateway.ts";
 import { teamRuntimeActor, type DoneBotTeamRuntime } from "./team-runtime.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
@@ -56,10 +57,15 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
   const authenticated = () => team ? team.authenticated() : gateway.authenticated();
   const model = (id: string) => catalog()?.models.find(model => model.id === id);
   const mediaPreferences = new DoneBotMediaPreferencesStore(join(dataDir, "donebot", "media-preferences.json"));
+  const marketInstalls = new DoneBotMarketInstallStore(join(dataDir, "donebot", "bot-market-installs.json"));
   gateway.bindMediaPreferences(() => mediaPreferences.get(gateway.scope()?.accountId));
   const driver = createDoneBotLlmDriver({
     imageCacheDir: join(dataDir, "donebot", "model-images"),
-    request: (path, init, context) => team ? team.request(path, init, context) : gateway.request(path, init),
+    request: (path, init, context) => {
+      const marketToken = team ? undefined : marketInstalls.getActiveToken(currentMarketBotId());
+      const reqInit = marketToken ? attachMarketInstallHeader(init, marketToken) : init;
+      return team ? team.request(path, reqInit, context) : gateway.request(path, reqInit);
+    },
     models: () => doneBotTextModels(catalog()), catalog,
     mediaPreferences: () => gateway.mediaPreferences(),
     protocol: id => doneBotProtocol(id, catalog()), authenticated, requiresExecutionContext: Boolean(team),
@@ -132,7 +138,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     return json(res, 403, { error: "个人账号与账单只能在个人工作空间管理。" });
   };
   return {
-    enabled, localCodingAgentsEnabled, gateway, driver, drivers, allowsDriver, policy, team, authenticated, state,
+    enabled, localCodingAgentsEnabled, gateway, marketInstalls, driver, drivers, allowsDriver, policy, team, authenticated, state,
     onChange(listener: () => void) {
       const unsubGateway = gateway.onChange(listener);
       teamListeners.add(listener);

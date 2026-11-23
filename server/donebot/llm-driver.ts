@@ -7,6 +7,7 @@ import { createDoneBotCompletion, type DoneBotLlmProtocol, type DoneBotLlmReques
 import { guideDoneBotMedia } from "./media-guidance.ts";
 import { createWorkspaceTools } from "./workspace-tools.ts";
 import { createDoneBotImageContext } from "./image-context.ts";
+import { runWithMarketBot } from "./market-installs.ts";
 
 const MEDIA_CAPABILITY_TOOL = "mcp:agents:media_model_capabilities";
 const MEDIA_GENERATION_TOOLS = ["generate_image", "generate_video", "generate_audio"] as const;
@@ -71,7 +72,7 @@ export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDr
         nativeLog: { source: "donebot.native", outgoing: (_turn, messages, model, tools) => ({ model, messageCount: messages.length, tools: tools.map(({ function: fn }) => fn.name) }), incoming: ({ text, reasoning, usage }) => ({ textLength: text.length, reasoningLength: reasoning.length, usage }) },
       });
       return { ...runtime, get models() { return runtime.models; }, adapter: { ...runtime.adapter,
-        sendTurn: turn => runtime.adapter.sendTurn({ ...turn, toolScope: doneBotMediaToolScope(turn.toolScope) }),
+        sendTurn: turn => runWithMarketBot(turn.botId, () => runtime.adapter.sendTurn({ ...turn, toolScope: doneBotMediaToolScope(turn.toolScope) })),
       } };
     },
   };

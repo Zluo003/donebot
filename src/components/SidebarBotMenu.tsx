@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Archive, BellDot, Check, CheckCheck, ChevronRight, ClipboardCopy, Copy, Crown, FolderMinus, FolderOpen, FolderPlus, Loader2, MessagesSquare, MoreHorizontal, Pause, Pencil, Play, Pin, PinOff, SquarePen, Star, Trash2, Users } from "lucide-react";
+import { Archive, BellDot, Check, CheckCheck, ChevronRight, ClipboardCopy, Copy, Crown, FolderMinus, FolderOpen, FolderPlus, Loader2, MessagesSquare, MoreHorizontal, Pause, Pencil, Play, Pin, PinOff, SquarePen, Star, Store, Trash2, Users } from "lucide-react";
+import { isExternalCodingAgentBot } from "../../shared/coding-agents";
 import { api, useStore, openBot, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { useHeldMenuMotion } from "./MenuMotion";
@@ -278,6 +279,9 @@ export function BotContextMenu({
       pause, pauseAll,
       team ? null : chiefItem(),
       member ? null : item(<Copy size={16} className="text-ink-secondary" />, t("sidebar.bot.duplicate"), () => dispatch({ type: "duplicateBot", botId: bot.id })),
+      state.config?.donebot?.enabled === true && !state.config?.team && !isExternalCodingAgentBot(bot)
+        ? item(<Store size={16} className="text-ink-secondary" />, "分享到 Bot 广场", () => dispatch({ type: "showMarket", publishBotId: bot.id }))
+        : null,
       owner,
       ...moveToTeam.items(bot, item),
       ...moveToCloud.items(bot, item),
@@ -436,6 +440,11 @@ export function BotContextMenu({
         }),
         !member && item(<Copy size={16} className="text-ink-secondary" />, t("sidebar.bot.duplicate"), () =>
           dispatch({ type: "duplicateBot", botId: bot.id }),
+        ),
+        state.config?.donebot?.enabled === true && !state.config?.team && !isExternalCodingAgentBot(bot) && item(
+          <Store size={16} className="text-ink-secondary" />,
+          "分享到 Bot 广场",
+          () => dispatch({ type: "showMarket", publishBotId: bot.id }),
         ),
         divider("d2"),
         item(<ClipboardCopy size={16} className="text-ink-secondary" />, t("sidebar.copyConversationId"), () => {

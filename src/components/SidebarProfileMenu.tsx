@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Settings as SettingsIcon,
   Smartphone,
+  Store,
   UserRound,
   UsersRound,
   Zap,
@@ -337,11 +338,12 @@ export function phoneMenuItems({
   ];
 }
 
-export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, onTeamMap, onFiles, onTeamFiles, archived }: {
+export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, onTeamMap, onMarket, onFiles, onTeamFiles, archived }: {
   activeView: string;
   automationsNeedYou: boolean;
   onAutomations: () => void;
   onTeamMap: () => void;
+  onMarket?: () => void;
   /** set once My Cloud's files are ready to open */
   onFiles?: () => void;
   onTeamFiles?: () => void;
@@ -350,6 +352,7 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
   return [
     { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "routines", attention: automationsNeedYou, onSelect: onAutomations },
     { key: "team-map", label: t("sidebar.nav.teamMap"), icon: <UsersRound size={16} />, active: activeView === "team-map", onSelect: onTeamMap },
+    ...(onMarket ? [{ key: "bot-market", label: "Bot 广场", icon: <Store size={16} />, active: activeView === "market", onSelect: onMarket }] : []),
     ...(onFiles ? [{ key: "files", label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
     ...(onTeamFiles ? [{ key: "team-files", label: t("teamFiles.title"), icon: <FolderOpen size={16} />, active: activeView === "team-files", onSelect: onTeamFiles }] : []),
     ...(archived?.count ? [{ key: "archived", label: t("sidebar.archived.title"), icon: <Archive size={16} />, value: String(archived.count), onSelect: archived.open }] : []),
@@ -642,6 +645,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         automationsNeedYou: account.automationsNeedYou,
         onAutomations: () => dispatch({ type: "showRoutines", view: "list" }),
         onTeamMap: () => dispatch({ type: "showTeamMap" }),
+        onMarket: state.config?.donebot?.enabled === true && !remote && !state.config?.team ? () => dispatch({ type: "showMarket" }) : undefined,
         onFiles: filesReady ? () => dispatch({ type: "showFiles" }) : undefined,
         onTeamFiles: state.config?.team?.sharedFiles === true ? () => dispatch({ type: "showTeamFiles" }) : undefined,
         archived: account.archived,

@@ -42,6 +42,7 @@ interface DoneBotMediaHostDeps {
   canReadThread(auth: RequestAuth, threadId: string): boolean;
   wrote(bot: NonNullable<ReturnType<Store["bot"]>>, threadId: string): void;
   fetchArtifact?: (url: string, signal: AbortSignal) => Promise<Response>;
+  marketInstallToken?: (botId: string) => string | undefined;
 }
 
 export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
@@ -55,6 +56,7 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
     scope: () => donebot.scope(), fetchGateway: (path, init, scope) => donebot.requestForScope(scope, path, init),
     receipt: (id, scope, signal) => donebot.receipt(id, scope, signal),
     ...(deps.fetchArtifact ? { fetchArtifact: deps.fetchArtifact } : {}),
+    ...(deps.marketInstallToken ? { marketInstallToken: deps.marketInstallToken } : {}),
     conversationExists: (botId, threadId) => threadId.startsWith("avatar-") && botId === "donebot-avatar" || Boolean(store.bot(botId) && (store.botByThread(threadId) || store.groupByThread(threadId))),
     resolveModel: async (id, kind) => doneBotMediaModel(doneBotClientMediaCatalog(donebot.models()), id, kind),
     capabilities: async query => doneBotModelCapabilities(doneBotClientMediaCatalog(donebot.models()), query),

@@ -77,7 +77,7 @@ import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
 import { DONEBOT_TEAM_LENDING, teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession, teamRuntimeSessionLive, teamSharedComputersEnabled } from "./donebot/team-runtime.ts";
-import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts"; import { createDoneBotCodingAgentRoutes, externalCodingAgentSwitchRefusal } from "./donebot/coding-agents.ts";
+import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts"; import { createDoneBotMarketRoutes } from "./donebot/market-routes.ts"; import { createDoneBotCodingAgentRoutes, externalCodingAgentSwitchRefusal } from "./donebot/coding-agents.ts";
 import { createTeamFilesRoutes } from "./routes/team-files.ts";
 import { createTeamTemplateRoutes } from "./routes/team-templates.ts";
 import { createShareGithubAccess } from "./host/share-github-access.ts";
@@ -12511,7 +12511,7 @@ ROUTES.push(createTemplateRoutes({ publications: createTemplatePublications(DATA
   refusal: () => CLOUD_TEAM || HOSTED_WORKSPACE ? "Private GitHub template connections are not enabled in shared workspaces." : managedPolicy.appRefusal("github") ?? null,
 }), accessLive: (auth) => ownerOrAdmin(auth) && (auth.kind === "loopback" || sessions.isLive(auth.session.id)) }));
 ROUTES.push(createTeamFilesRoutes({ ...donebotTeamFiles, personName: person => teamHost.personName(person), botName: botId => store.bot(botId)?.name }));
-ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot, syncLocalProfile: (p) => { saveConfig({ profile: { ...cfg.profile, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.avatarUrl !== undefined ? { avatarUrl: p.avatarUrl } : {}), ...(p.email ? { email: p.email } : {}) } }); Object.assign(cfg, loadConfig()); broadcast({ kind: "config", ...configStatus() }); }, currentLocalProfile: () => cfg.profile, startTurn, threadBusy: (botId, threadId) => threadBusy(botId, threadId) || coordinator.awaitingTeammateThreads().has(threadId), isAutomatedTurn: (threadId) => automatedTurnByThread.get(threadId) === true, generateBotText: (botId, prompt, signal) => sideJobs.text("representative", botId)?.generateText(prompt, { signal, timeoutMs: 90_000 }) ?? Promise.resolve(undefined) }));
+ROUTES.push(createTeamTemplateRoutes(donebotTeamFiles)); ROUTES.push(createDoneBotCollabRoutes({ gateway: donebotHost.gateway, store, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot, syncLocalProfile: (p) => { saveConfig({ profile: { ...cfg.profile, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.avatarUrl !== undefined ? { avatarUrl: p.avatarUrl } : {}), ...(p.email ? { email: p.email } : {}) } }); Object.assign(cfg, loadConfig()); broadcast({ kind: "config", ...configStatus() }); }, currentLocalProfile: () => cfg.profile, startTurn, threadBusy: (botId, threadId) => threadBusy(botId, threadId) || coordinator.awaitingTeammateThreads().has(threadId), isAutomatedTurn: (threadId) => automatedTurnByThread.get(threadId) === true, generateBotText: (botId, prompt, signal) => sideJobs.text("representative", botId)?.generateText(prompt, { signal, timeoutMs: 90_000 }) ?? Promise.resolve(undefined) })); ROUTES.push(createDoneBotMarketRoutes({ gateway: donebotHost.gateway, store, marketInstalls: donebotHost.marketInstalls, listBotSkills: listSkills, removeBotSkill: removeSkill, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, defaultSelection, packageImportDeps, broadcast, publicBot }));
 ROUTES.push(createTeamRoutes({
   store,
   cfg,
@@ -12665,7 +12665,7 @@ const donebotMediaHost = createDoneBotMediaHost({
   store, gateway: donebot, dataDir: DATA_DIR, attachmentsDir: ATTACHMENTS_DIR, enabled: DONEBOT_GATEWAY,
   fullAccess: fullAccessForSource, messageFileRootsForThread,
   canReadThread: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId),
-  wrote: (bot, threadId) => { markTaskContextExternallyUpdated(bot, threadId); handoffTicks.kick(); }, fetchArtifact: donebotHost.fetchArtifact,
+  wrote: (bot, threadId) => { markTaskContextExternallyUpdated(bot, threadId); handoffTicks.kick(); }, fetchArtifact: donebotHost.fetchArtifact, marketInstallToken: (botId) => donebotHost.marketInstalls.getActiveToken(botId),
 });
 mediaFollowups = donebotMediaHost;
 const handoffAttachments = createHandoffAttachments({

@@ -156,7 +156,7 @@ export async function handleDoneBotOpcWorkflowInternal(deps: {
       const targetSec = target?.section?.trim() || "";
       if (!target || !allowedSections.has(targetSec)) {
         const targetLabel = target ? `${target.name}（${targetSec || generalDept}）` : id;
-        return `你是「${senderSection}」部门负责人，仅可编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门固定工作流（涉及「${targetLabel}」）请汇报给系统总协调或由老板在「组织与流程」创建。`;
+        return `你是「${senderSection}」部门负责人，仅可编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门固定工作流（涉及「${targetLabel}」）请汇报给系统总协调或在「组织与流程」中由负责人创建。`;
       }
     }
     return null;

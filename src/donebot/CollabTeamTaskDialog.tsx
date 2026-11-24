@@ -359,10 +359,10 @@ export function CollabTeamTaskDialog({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-task-reviewer" className="text-[12.5px] font-medium text-ink-secondary">验收人（拍板确认）</label>
+              <label htmlFor="collab-task-reviewer" className="text-[12.5px] font-medium text-ink-secondary">验收人（最终确认）</label>
               <CollabSelect
                 id="collab-task-reviewer"
-                ariaLabel="验收人（拍板确认）"
+                ariaLabel="验收人（最终确认）"
                 testAttr="data-collab-task-reviewer-select"
                 value={reviewerId}
                 options={reviewerOptions}

@@ -43,7 +43,7 @@ function formattedToday(): string {
 }
 
 /**
- * Editorial, borderless-first Boss Console ("老板台") inspired by Paperclip's plain MetricCard
+ * Editorial, borderless-first Workspace Console ("工作台") inspired by Paperclip's plain MetricCard
  * hierarchy and Linear's hairline layout. Adapts cleanly to all 16 light/dark DoneBot skins.
  */
 export function OpcBossConsolePage() {
@@ -73,7 +73,7 @@ export function OpcBossConsolePage() {
       if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
         setRuntimeNotice("当前连接的云端实例镜像版本较旧；升级云端服务镜像后将自动启用正式汇报审批与算力明细。");
       } else {
-        setRuntimeNotice(msg || "暂时无法读取老板台运行状态，请稍后重试。");
+        setRuntimeNotice(msg || "暂时无法读取工作台运行状态，请稍后重试。");
       }
     } finally {
       setLoading(false);
@@ -177,7 +177,7 @@ export function OpcBossConsolePage() {
     : 0;
 
   const statusLine = pendingCount > 0
-    ? `${pendingCount} 份正式汇报等待拍板 · ${visibleBots.length} 位员工在岗`
+    ? `${pendingCount} 份正式汇报等待审批 · ${visibleBots.length} 位员工在岗`
     : `运行平稳 · ${visibleBots.length} 位 AI 员工在岗`;
 
   return (
@@ -192,7 +192,7 @@ export function OpcBossConsolePage() {
             <header className="flex flex-wrap items-end justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[12px] font-medium tracking-wide text-ink-tertiary">
-                  {formattedToday()} · 老板台
+                  {formattedToday()} · 工作台
                 </p>
                 <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.025em] text-ink">
                   {greetingByHour()}
@@ -226,7 +226,7 @@ export function OpcBossConsolePage() {
                 <button
                   type="button"
                   onClick={() => void loadAll()}
-                  aria-label="刷新老板台"
+                  aria-label="刷新工作台"
                   title="刷新"
                   className="flex size-9 items-center justify-center rounded-full bg-ink/[0.05] text-ink-secondary transition-colors hover:bg-ink/[0.1] hover:text-ink"
                 >
@@ -252,7 +252,7 @@ export function OpcBossConsolePage() {
               </div>
 
               <div className="pl-4 sm:px-6">
-                <div className="text-[12px] font-medium text-ink-tertiary">待我拍板</div>
+                <div className="text-[12px] font-medium text-ink-tertiary">待我审批</div>
                 <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", pendingCount > 0 ? "text-ink" : "text-ink/50")}>
                   {pendingCount}
                 </div>
@@ -293,12 +293,12 @@ export function OpcBossConsolePage() {
             </section>
 
             {/* Pending Formal Reports — one click to approve, click header to expand full report & attachments */}
-            <section aria-label="待我拍板">
+            <section aria-label="待我审批">
               {pendingReports.length === 0 ? (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink/[0.03] px-4 py-3">
                   <div className="flex items-center gap-2.5 text-[13px] text-ink-secondary">
                     <span aria-hidden="true" className="size-2 rounded-full bg-emerald-500/80" />
-                    <span>所有汇报与工作流均已拍板，当前无需人工介入。</span>
+                    <span>所有汇报与工作流均已审批，当前无需人工介入。</span>
                   </div>
                   {approvedCount > 0 && (
                     <button
@@ -314,7 +314,7 @@ export function OpcBossConsolePage() {
                 <div>
                   <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline/50 pb-3">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-[13px] font-semibold tracking-wide text-ink">待我拍板</h2>
+                      <h2 className="text-[13px] font-semibold tracking-wide text-ink">待我审批</h2>
                       <span className="text-[12px] tabular-nums text-ink-tertiary">{pendingCount}</span>
                     </div>
                     <span className="text-[12px] text-ink-tertiary">点击汇报展开正文与附件，一键通过或打回返工</span>

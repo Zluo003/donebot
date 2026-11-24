@@ -6,7 +6,7 @@ import { useStore } from "@/state/store";
 import { OPC_OVERVIEW_CHANGED_EVENT, opcApi } from "./opc-api";
 
 /**
- * Primary top-of-sidebar entry for the OPC Boss Console ("老板台").
+ * Primary top-of-sidebar entry for the OPC Workspace Console ("工作台").
  * Mirrors SidebarInboxRow's exact geometry across Simple, Advanced, and Icon-rail modes.
  */
 export function OpcBossSidebarRow({
@@ -59,8 +59,8 @@ export function OpcBossSidebarRow({
       <button
         type="button"
         data-sidebar-boss={count}
-        aria-label={count > 0 ? `老板台（${count} 项待拍板）` : "老板台"}
-        title={count > 0 ? `老板台（${count} 项待拍板）` : "老板台"}
+        aria-label={count > 0 ? `工作台（${count} 项待审批）` : "工作台"}
+        title={count > 0 ? `工作台（${count} 项待审批）` : "工作台"}
         aria-current={active ? "page" : undefined}
         onClick={openBoss}
         className={cn(
@@ -115,7 +115,7 @@ export function OpcBossSidebarRow({
           )}
         </span>
         <span className={cn("min-w-0 flex-1 truncate text-ink", large ? "text-[14px] font-medium leading-5" : "text-[15px] font-semibold leading-5")}>
-          老板台
+          工作台
         </span>
         {count > 0 && (
           <span

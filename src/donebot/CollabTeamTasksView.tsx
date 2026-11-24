@@ -62,7 +62,7 @@ const BOARD_COLUMNS: ReadonlyArray<{
 const STATUS_FILTER_OPTIONS: readonly CollabSelectOption[] = [
   { value: "all", label: "全部状态" },
   { value: "open", label: "未完成" },
-  { value: "ready_for_review", label: "待终审拍板", dotClass: TASK_STATUS_DOT.ready_for_review },
+  { value: "ready_for_review", label: "待终审确认", dotClass: TASK_STATUS_DOT.ready_for_review },
   { value: "bot_reviewing", label: "助手二审中", dotClass: TASK_STATUS_DOT.bot_reviewing },
   { value: "bot_revising", label: "Bot 自动返工", dotClass: TASK_STATUS_DOT.bot_revising },
   { value: "in_review", label: "待验收", dotClass: TASK_STATUS_DOT.in_review },
@@ -250,7 +250,7 @@ export function CollabTeamTasksView({
           <div className="flex flex-wrap gap-1.5">
             {needsMyReview && (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/16 px-2 py-0 text-[10.5px] font-medium leading-5 text-amber-500 ring-1 ring-inset ring-amber-500/30">
-                {task.status === "ready_for_review" ? "二审通过，待你终审" : "待你终审拍板"}
+                {task.status === "ready_for_review" ? "二审通过，待你终审" : "待你终审确认"}
               </span>
             )}
             {isBotReviewing && (

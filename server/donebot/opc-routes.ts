@@ -143,7 +143,7 @@ function captureBotSnapshot(deps: DoneBotOpcRouteDeps, bot: BotRecord) {
 
 function buildHeartbeatInstruction(hb: OpcHeartbeatConfig, goalPrompt?: string): string {
   const silentRule = hb.silentWhenOk
-    ? `重要规则：本次为后台静默巡检。如果没有发现需要老板注意的异常、高价值线索或待拍板事项，请直接以 "[SILENT_OK]" 开头并附一句 20 字以内的简报（系统将静默记账不打扰老板）。如果确实需要老板介入，请不要输出 "[SILENT_OK]"，直接给出清晰结论与建议行动。`
+    ? `重要规则：本次为后台静默巡检。如果没有发现需要关注的异常、高价值线索或待审批事项，请直接以 "[SILENT_OK]" 开头并附一句 20 字以内的简报（系统将静默记录不打扰用户）。如果确实需要人工介入，请不要输出 "[SILENT_OK]"，直接给出清晰结论与建议行动。`
     : `请直接给出本次巡检的简明结论与下一步建议。`;
   return [
     `【后台定时巡检 · ${hb.name}】`,
@@ -272,7 +272,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
       hist.progressIds.add(runId);
       recentSilentRuns.set(hb.id, hist);
       // Surface actionable alert into the Bot's conversation thread.
-      const noticePrompt = `【24h 巡检发现待关注事项 · ${hb.name}】\n巡检简报：\n${trimmed}\n\n请简洁整理向老板汇报，并给出可直接确认的下一步动作。`;
+      const noticePrompt = `【24h 巡检发现待关注事项 · ${hb.name}】\n巡检简报：\n${trimmed}\n\n请简洁整理正式汇报，并给出可直接确认的下一步动作。`;
       try {
         await Promise.resolve(deps.startTurn(bot.id, noticePrompt, { threadId: bot.threadId, unattended: true }));
       } catch {
@@ -471,9 +471,9 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
         if (parsed.data.status === "changes_requested" && parsed.data.dispatchRevision) {
           const titleLabel = parsed.data.reportTitle?.trim() || "最新汇报";
           const noteLine = parsed.data.note?.trim()
-            ? `老板批注修改意见：\n${parsed.data.note.trim()}`
+            ? `审批修改意见：\n${parsed.data.note.trim()}`
             : "请重新检查质量并输出优化后的新版正式汇报与交付物。";
-          const revisionPrompt = `【汇报打回修改 · ${titleLabel}】\n${noteLine}\n\n请据此修改并按正式汇报格式重新呈报。`;
+          const revisionPrompt = `【汇报打回修改 · ${titleLabel}】\n${noteLine}\n\n请据此修改并按正式汇报格式重新提交。`;
           try {
             await Promise.resolve(deps.startTurn(bot.id, revisionPrompt, {
               threadId: parsed.data.threadId || bot.threadId,
@@ -529,7 +529,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
         if (parsed.data.status === "changes_requested" && parsed.data.dispatchRevision) {
           const titleLabel = parsed.data.artifactTitle?.trim() || "最新交付物";
           const noteLine = parsed.data.note?.trim()
-            ? `老板批注修改意见：\n${parsed.data.note.trim()}`
+            ? `审批修改意见：\n${parsed.data.note.trim()}`
             : "请重新检查质量并输出优化后的新版本。";
           const revisionPrompt = `【交付物打回修改 · ${titleLabel}】\n${noteLine}\n\n请直接据此完成修改并交付新版成品。`;
           try {

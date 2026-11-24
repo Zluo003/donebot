@@ -7773,7 +7773,7 @@
   "chiefSetup.name": "Bot 名称",
   "chiefSetup.nameHelp": "不填写则使用「多宝」。",
   "chiefSetup.address": "Bot 怎么称呼你",
-  "chiefSetup.addressPlaceholder": "例如：小林、老板、Alex",
+  "chiefSetup.addressPlaceholder": "例如：小林、Alex",
   "chiefSetup.addressDefault": "自然称呼",
   "chiefSetup.traits": "性格标签",
   "chiefSetup.custom": "补充偏好（可选）",

@@ -338,7 +338,7 @@ export function OpcArtifactsPane({ bot }: { bot: Bot }) {
             {artifacts.length === 0 ? "还没有交付作品" : "当前筛选下暂无作品"}
           </p>
           <p className="mt-1 text-[12px] text-ink-tertiary">
-            {bot.name} 生成的图片、视频、音频和文档会自动收录在这里，供你随时拍板。
+            {bot.name} 生成的图片、视频、音频和文档会自动收录在这里，供你随时审阅。
           </p>
         </div>
       ) : (

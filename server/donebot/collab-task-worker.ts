@@ -219,7 +219,7 @@ export function buildTaskEventPrompt(
       "",
       ...formatSpecialistsBlock(opts?.availableSpecialists),
       "",
-      `【当前主协调代人审批提交配置】${autoSubmitEnabled ? "已开启（一审通过后可直接代主人自动提交团队验收）" : "未开启（默认：一审通过后必须先呈报主人确认，待主人回复同意后再提交团队验收）"}`,
+      `【当前主协调代人审批提交配置】${autoSubmitEnabled ? "已开启（一审通过后可直接代本人自动提交团队验收）" : "未开启（默认：一审通过后必须先提交本人确认，待回复同意后再提交团队验收）"}`,
       "",
       "请严格按以下「主协调编排 + 子助手执行 + 一审质检」闭环执行：",
       "1. 【角色铁律：严禁主协调助手亲自干活】你只负责需求拆解、匹配/创建专长子助手、派发执行、一审质检与对外提交；严禁你自己亲自调用 generate_image / generate_video / generate_music 或亲自编写交付成品。",
@@ -237,7 +237,7 @@ export function buildTaskEventPrompt(
       "     * 若发现硬性缺陷或未达标项：严禁自己替子助手重做！直接调用 coordinate_bots(bot_ids=[子助手id], thread=原工作线程id, rework=true, message=具体不符合项与局部修改要求) 驳回给子助手修改（保留已合格成果，严禁重做已合格部分；本地一审自动返工最多 2 轮，超过 2 轮仍不达标则停止循环并升级汇报给主人）。",
       "     * 若一审全部合格：以 collab_get_team_task().task_prefs.chief_auto_submit_on_approve 实时值为准（提交时必须提交专长子助手产出的全部原始交付文件，严禁擅自用汇总宫格图/拼图替代原始文件）：",
       "       - 为 true（主人已开启代人审批提交）：直接调用 collab_submit_team_task 提交结构化交付简报与全部原始交付文件给团队验收，然后简洁告知主人「已一审通过并代为提交团队验收」；",
-      "       - 为 false（默认关闭）：绝不私自提交！向主人呈报一审通过结论、交付物清单与效果摘要，等主人回复确认（如「可以/提交任务」）后，再调用 collab_submit_team_task 提交既有原始成果（严禁在主人确认后重新生成或重做已确认成果）。",
+      "       - 为 false（默认关闭）：绝不私自提交！向本人汇报一审通过结论、交付物清单与效果摘要，等回复确认（如「可以/提交任务」）后，再调用 collab_submit_team_task 提交既有原始成果（严禁在确认后重新生成或重做已确认成果）。",
     ].filter(Boolean).join("\n");
     return { display, full };
   }
@@ -248,7 +248,7 @@ export function buildTaskEventPrompt(
     const remainingAuto = Math.max(0, maxRounds - currentRound);
     const display = `[团队待二审 · ${ev.team_name}] ${ev.assignee_name || "负责人"} 提交了任务「${task.title}」的交付成果`;
     const full = [
-      `你是派发人/验收人的主协调助手。团队「${ev.team_name}」中的任务「${task.title}」刚刚提交了新交付批次，请你自动执行「二审质检」（只允许驳回或呈报待终审，绝对不能终审通过），然后向主人汇报。`,
+      `你是派发人/验收人的主协调助手。团队「${ev.team_name}」中的任务「${task.title}」刚刚提交了新交付批次，请你自动执行「二审质检」（只允许驳回或转入待终审，绝对不能终审通过），然后汇报结果。`,
       `【team_id】${ev.team_id}`,
       `【task_id】${task.id}`,
       `【负责人】${ev.assignee_name || "团队成员"}`,
@@ -261,17 +261,17 @@ export function buildTaskEventPrompt(
       ...formatDeliverablesBlock(downloadedFiles),
       "",
       "请严格按以下步骤与铁律执行二审：",
-      "1. 【终审权限铁律】派发方主协调助手只能做「二审」：发现硬性不符允许驳回，二审合格只能流转到待终审（ready_for_review）呈报主人，**绝对禁止在本轮执行终审通过（done），严禁调用 mode='human_decision'**！终审通过必须由派发人本人决定。",
+      "1. 【终审权限铁律】派发方主协调助手只能做「二审」：发现硬性不符允许驳回，二审合格只能流转到待终审（ready_for_review）提交验收人确认，**绝对禁止在本轮执行终审通过（done），严禁调用 mode='human_decision'**！终审通过必须由派发人本人决定。",
       "2. 【原始交付物保真铁律】下游提交的全部原始交付文件已由系统自动附带到本对话并归档到你的「产物」面板供主人直接查看与下载：**严禁对这些原文件重复调用 attach_file**，更**严禁自作主张把原图拼接/裁剪成汇总宫格图、对比拼图或合图并附带给主人**（除非任务要求或主人明确要求拼图）。如需对比多个角色或往期批次，只需在文字汇报中逐条说明差异即可。",
       "3. 如本批次包含图片或视频抽帧图，请结合已附带的原始图片与尺寸/比例数据逐项核查画面质量、物种/元素准确性与是否无文字乱码/水印；如含文档/代码请阅读核对；若包含视频/音频，请在审阅意见中诚实提醒主人动态流畅度与声音情绪需本人播放终审。",
       "4. 严格区分「硬性不符」与「主观审美」：",
       "   - 只有存在明确、客观的硬性违背（如缺失文件、张数不够、画幅比例错误、文字明显乱码/严重崩图、遗漏核心要求）时，才判 hard_fail；",
-      "   - 主观审美偏好或二选一方案绝对禁止自动驳回，必须判 pass 并把建议关注点写入 attention_items 交由主人终审拍板。",
+      "   - 主观审美偏好或二选一方案绝对禁止自动驳回，必须判 pass 并把建议关注点写入 attention_items 交由验收人终审确认。",
       "5. 必须调用工具 collab_review_team_task（mode='bot_review'）写入你的二审结论：",
-      "   - 二审合格或仅需主人主观拍板：verdict='pass'，填好 summary、passed_items、attention_items（状态将进入待终审拍板 ready_for_review，不会直接完成）；",
+      "   - 二审合格或仅需验收人主观确认：verdict='pass'，填好 summary、passed_items、attention_items（状态将进入待终审确认 ready_for_review，不会直接完成）；",
       "   - 明显硬性不符：verdict='hard_fail'，填好 summary、failed_criteria 与具体可执行的 actionable_fixes（网关会在未超上限时自动驳回给对方主协调助手安排子助手局部修改，超限则升级给双方真人）。",
-      "6. 调用完工具后，用简洁明了的中文在当前对话向主人汇报：",
-      "   - 如果 verdict='pass'：总结交付亮点、已核验通过项、建议主人重点关注/拍板的点，并提示主人可在任务详情页点击「验收通过 / 退回修改」，或直接在本对话明确回复「通过」/「指出修改意见退回」由你代为执行终审；",
+      "6. 调用完工具后，用简洁明了的中文在当前对话汇报结果：",
+      "   - 如果 verdict='pass'：总结交付亮点、已核验通过项、建议重点关注与确认的点，并提示可在任务详情页点击「验收通过 / 退回修改」，或直接在本对话明确回复「通过」/「指出修改意见退回」由你代为执行终审；",
       "   - 如果 verdict='hard_fail'：简短告知主人发现了哪些硬性问题，已二审驳回给对方返工（或因达到轮次上限已升级为人工介入）。",
     ].filter(Boolean).join("\n");
     return { display, full };
@@ -332,7 +332,7 @@ export function buildTaskEventPrompt(
           "2. 待子助手修改回传并自动唤醒你后，先调用 collab_get_team_task() 进行一审核验：",
           autoSubmitEnabled
             ? "   当前主人已开启「主协调助手代人审批提交」，一审合格后可直接调用 collab_submit_team_task（用 reuse_file_ids 保留未改动原文件 + file_paths 提交新版）重新提交复审并告知主人；若仍有歧义或重大变更请先请主人确认。"
-            : "   当前未开启代人审批提交，一审合格后请将新版成果与修改说明呈报主人，等主人确认后再调用 collab_submit_team_task（用 reuse_file_ids 保留未改动原文件 + file_paths 提交新版）重新提交，严禁在主人确认后再次重新生成。",
+            : "   当前未开启代人审批提交，一审合格后请将新版成果与修改说明提交给本人确认，待确认后再调用 collab_submit_team_task（用 reuse_file_ids 保留未改动原文件 + file_paths 提交新版）重新提交，严禁在确认后再次重新生成。",
         ].join("\n")
       : "请结合本对话历史，立刻向主人汇报这条修改意见并给出具体修改方案或草稿；若只需局部返工（无论是图片、视频、音乐/音频还是文档/代码），只修改被要求改动的部分，其余未改动成果保留原版。修改完成后等待主人点头审批，审批后直接调用 collab_submit_team_task（通过 file_paths 与 reuse_file_ids 保留未改动原文件并替换新版）重新提交，严禁在主人确认后再次重新生成或重做已确认版本。",
   ].join("\n");

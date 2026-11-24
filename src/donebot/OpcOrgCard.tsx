@@ -217,7 +217,7 @@ export function OpcOrgNodeCard({
               <span className="truncate">{modelLabel || "默认模型"}</span>
             </button>
             {cfg?.requireBossApproval && (
-              <span title="产物须老板拍板" className="inline-flex shrink-0 items-center text-accent">
+              <span title="产物须审批" className="inline-flex shrink-0 items-center text-accent">
                 <ShieldCheck size={11.5} />
               </span>
             )}

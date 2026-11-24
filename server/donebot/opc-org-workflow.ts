@@ -177,7 +177,7 @@ export class DoneBotOrgWorkflowStore {
   assertNoCycle(botId: string, reportsToBotId: string | null | undefined): void {
     if (!reportsToBotId) return;
     if (reportsToBotId === botId) {
-      throw new Error("员工不能向自己汇报，请选择其他上级或直接向老板汇报。");
+      throw new Error("员工不能向自己汇报，请选择其他上级或直接向你汇报。");
     }
     this.ensureLoaded();
     const visited = new Set<string>([botId]);

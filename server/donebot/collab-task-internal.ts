@@ -713,7 +713,7 @@ export async function handleDoneBotCollabTaskInternal(
         const allowedAutoResubmit = existingTaskDetail.task.status === "bot_revising"
           && existingTaskDetail.task.assignee_auto_resubmit !== false;
         if (!allowedAutoResubmit) {
-          json(res, 403, { error: "当前未开启「主协调助手代人审批提交」，不能在自动审阅轮次直接提交团队验收。请先将一审通过的成果与简报呈报给主人确认，待主人回复同意后再提交（主人也可在团队任务面板开启「主协调助手代人审批提交」开关）。" });
+          json(res, 403, { error: "当前未开启「主协调助手代人审批提交」，不能在自动审阅轮次直接提交团队验收。请先将一审通过的成果与简报提交给本人确认，待回复同意后再提交（也可在团队任务面板开启「主协调助手代人审批提交」开关）。" });
           return true;
         }
       }

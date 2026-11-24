@@ -66,12 +66,12 @@ function buildTopDownOrgTree(bots: readonly Bot[], org: OpcOrgChartState): TopDo
   }
 
   const bossSubtitle = org.enforcementMode === "enforced"
-    ? (org.allowChiefCrossDispatch ? "最终拍板 · 强约束（跨部门负责人沟通）" : "最终拍板 · 强约束（总协调统筹跨部门）")
-    : "最终拍板 · 自由协作";
+    ? (org.allowChiefCrossDispatch ? "最终审批 · 强约束（跨部门负责人沟通）" : "最终审批 · 强约束（总协调统筹跨部门）")
+    : "最终审批 · 自由协作";
 
   return {
     id: BOSS_ROOT_ID,
-    name: "你（老板）",
+    name: "你（负责人）",
     role: bossSubtitle,
     status: "owner",
     section: "",
@@ -458,7 +458,7 @@ export function OpcOrgChartView({
     if (!activeDrag || !draggedBot) return "";
     if (hoverNodeId) {
       if (hoverDropRefusal) return hoverDropRefusal;
-      if (hoverNodeId === BOSS_ROOT_ID) return "松手直接汇报给「你（老板）」";
+      if (hoverNodeId === BOSS_ROOT_ID) return "松手直接汇报给「你（负责人）」";
       const target = botById.get(hoverNodeId);
       const cross = target && (target.section?.trim() || "") !== (draggedBot.section?.trim() || "");
       const subTier = target && !cross && !target.chiefOfStaff;

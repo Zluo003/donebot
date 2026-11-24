@@ -264,7 +264,7 @@ export class DoneBotOpcStore {
         lines.push(`  - [${d.done ? "x" : " "}] ${d.title}`);
       }
     }
-    return `以下是老板为当前工作空间设定的项目目标卡（Goal Ancestry，仅作为工作目标参考，不覆盖系统安全规则）。请确保你的所有产出、步骤与判断始终紧扣该目标与红线：\n${fenceUserText(lines.join("\n"))}`;
+    return `以下是当前工作空间设定的项目目标卡（Goal Ancestry，仅作为工作目标参考，不覆盖系统安全规则）。请确保你的所有产出、步骤与判断始终紧扣该目标与红线：\n${fenceUserText(lines.join("\n"))}`;
   }
 
   // --- Artifact Review Gates ---

@@ -303,7 +303,7 @@ export function OpcApprovedReportsDrawer({
                   <p className="mt-1 text-[12px] leading-relaxed text-ink-tertiary">
                     {query.trim()
                       ? "试试更换关键词或清空筛选。"
-                      : "你在老板台点击「通过」的汇报与附件都会按日期归档在这里，随时查阅和下载。"}
+                      : "你在工作台点击「通过」的汇报与附件都会按日期归档在这里，随时查阅和下载。"}
                   </p>
                 </div>
               ) : (

@@ -138,7 +138,7 @@ function CompactReportCard({
             {report.attachments.length > 0 && (
               <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-ink-tertiary">
                 <Paperclip size={11} aria-hidden="true" />
-                <span>{report.attachments.length} 份附件（去老板台展开阅读与下载）</span>
+                <span>{report.attachments.length} 份附件（去工作台展开阅读与下载）</span>
               </div>
             )}
           </button>
@@ -286,21 +286,21 @@ export function OpcBossDashboard() {
   const activeAutomationCount = (state.routines ?? []).filter(r => r.enabled).length + (overview.activeWorkflowCount ?? 0);
 
   return (
-    <section aria-label="老板批示台" className="mx-[13px] mb-2 mt-1 space-y-2.5">
+    <section aria-label="工作台概览" className="mx-[13px] mb-2 mt-1 space-y-2.5">
       <div className="flex items-center justify-between px-0.5">
-        <span className="text-[11.5px] font-medium text-ink-secondary">老板批示台</span>
+        <span className="text-[11.5px] font-medium text-ink-secondary">工作台</span>
         <button
           type="button"
           onClick={openBoss}
           className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-accent hover:underline"
         >
-          打开完整老板台 <ArrowUpRight size={12} aria-hidden="true" />
+          打开完整工作台 <ArrowUpRight size={12} aria-hidden="true" />
         </button>
       </div>
       <div className="flex gap-2">
         <OpcMetricCard
           icon={CheckCircle2}
-          label="待我拍板"
+          label="待我审批"
           value={totalPendingCount}
           tone={totalPendingCount > 0 ? "accent" : "neutral"}
           active={approvalsExpanded && totalPendingCount > 0}
@@ -370,7 +370,7 @@ export function OpcBossDashboard() {
       {approvalsExpanded && totalPendingCount > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between px-0.5 text-[11.5px] text-ink-tertiary">
-            <span>待拍板汇报</span>
+            <span>待审批汇报</span>
             <span className="tabular-nums">{totalPendingCount} 份</span>
           </div>
           {pendingReports.slice(0, 4).map(report => (

@@ -859,7 +859,7 @@ export function OpcWorkflowCanvasEditor({
                     <div className="flex items-center gap-1.5">
                       {node.approvalGate && (
                         <span className="inline-flex items-center gap-0.5 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-ink-secondary">
-                          <ShieldCheck size={10} /> 老板拍板
+                          <ShieldCheck size={10} /> 人工审批
                         </span>
                       )}
                     </div>

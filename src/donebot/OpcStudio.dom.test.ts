@@ -110,7 +110,7 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     root = createRoot(container);
     await act(async () => { root!.render(createElement(OpcBossDashboard)); });
 
-    expect(container.textContent).toContain("待我拍板");
+    expect(container.textContent).toContain("待我审批");
     expect(container.textContent).toContain("¥14.50");
     expect(container.textContent).toContain("小红书首图");
 
@@ -178,14 +178,14 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     await act(async () => {
       root!.render(createElement(OpcBossSidebarRow, { icons: false, large: true }));
     });
-    expect(container.textContent).toContain("老板台");
+    expect(container.textContent).toContain("工作台");
 
     // 2. Inbox compact dashboard does not vanish when all counts are zero
     await act(async () => {
       root!.render(createElement(OpcBossDashboard));
     });
-    expect(container.textContent).toContain("老板批示台");
-    expect(container.textContent).toContain("打开完整老板台");
+    expect(container.textContent).toContain("工作台");
+    expect(container.textContent).toContain("打开完整工作台");
 
     // 3. Full Boss Console renders KPI strip, employee table, and no duplicate nav/hire buttons or removed Goal Card / 24h Heartbeat
     await act(async () => {
@@ -288,7 +288,7 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
       "/api/donebot/opc/reports/review",
       expect.objectContaining({ method: "POST" }),
     );
-    expect(container.textContent).toContain("所有汇报与工作流均已拍板");
+    expect(container.textContent).toContain("所有汇报与工作流均已审批");
 
     // Open the right-hand approved reports sidebar drawer
     const archiveTrigger = [...container.querySelectorAll("button")].find(b => b.textContent?.includes("已通过汇报") && b.hasAttribute("aria-expanded"))!;
@@ -313,8 +313,8 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     const block = layoutOrganization([
       {
         id: "__boss__",
-        name: "你（老板）",
-        role: "最终拍板",
+        name: "你（负责人）",
+        role: "最终审批",
         status: "owner",
         reports: [
           {
@@ -333,8 +333,8 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     // Top-down straight center-to-center orthogonal layout & department clusters
     const topDown = layoutTopDownOrgChart({
       id: "__boss__",
-      name: "你（老板）",
-      role: "最终拍板",
+      name: "你（负责人）",
+      role: "最终审批",
       status: "owner",
       section: "",
       reports: [
@@ -402,7 +402,7 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
         onDeleteTeam: vi.fn(),
       }));
     });
-    expect(container.textContent).toContain("你（老板）");
+    expect(container.textContent).toContain("你（负责人）");
     expect(container.textContent).toContain("总控主编");
     expect(container.textContent).toContain("总控中心");
     expect(container.textContent).toContain("设计部");
@@ -559,8 +559,8 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
   it("encloses the system chief and all unassigned general-department bots inside one unified general box without overlapping other departments", () => {
     const tree = layoutTopDownOrgChart({
       id: "__boss__",
-      name: "你（老板）",
-      role: "最终拍板",
+      name: "你（负责人）",
+      role: "最终审批",
       status: "owner",
       section: "",
       reports: [
@@ -606,8 +606,8 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     // When general only has the system chief and no other general bots, chief stays in one general box above Dev.
     const chiefOnlyTree = layoutTopDownOrgChart({
       id: "__boss__",
-      name: "你（老板）",
-      role: "最终拍板",
+      name: "你（负责人）",
+      role: "最终审批",
       status: "owner",
       section: "",
       reports: [

@@ -96,19 +96,19 @@ export function evaluateOrgCoordination(
       ? `直属上级「${nameOf(senderNode.reportsToBotId)}」`
       : ownDeptChief
         ? `本部门负责人「${ownDeptChief.name}」`
-        : "老板（直接回复即可）";
+        : "工作空间负责人（直接回复即可）";
     const consultHint = (senderNode.allowCrossConsult ?? true) ? "，或使用 consult=true 发起轻量咨询" : "";
 
     if (crossDept) {
       if (isDeptChief(senderBot) && isDeptChief(targetBot)) {
         return systemCoordinator
-          ? `组织架构约束已拦截：当前未开启「跨部门沟通」，部门负责人不能直接跨部门对接「${nameOf(targetId)}（${deptName(targetSection)}）」。请先交由系统总协调「${systemCoordinator.name}」统一协调，或请老板在「组织与流程 → 组织架构」开启「跨部门沟通」。`
-          : `组织架构约束已拦截：当前未开启「跨部门沟通」，部门负责人不能直接跨部门对接「${nameOf(targetId)}（${deptName(targetSection)}）」。请向老板汇报协调，或请老板指定系统总协调或在「组织与流程 → 组织架构」开启「跨部门沟通」。`;
+          ? `组织架构约束已拦截：当前未开启「跨部门沟通」，部门负责人不能直接跨部门对接「${nameOf(targetId)}（${deptName(targetSection)}）」。请先交由系统总协调「${systemCoordinator.name}」统一协调，或在「组织与流程 → 组织架构」开启「跨部门沟通」。`
+          : `组织架构约束已拦截：当前未开启「跨部门沟通」，部门负责人不能直接跨部门对接「${nameOf(targetId)}（${deptName(targetSection)}）」。请先汇报协调，或由负责人在「组织与流程 → 组织架构」指定系统总协调或开启「跨部门沟通」。`;
       }
       if (isDeptChief(senderBot) && targetDeptChief) {
         return orgChart.allowChiefCrossDispatch
           ? `组织架构约束已拦截：部门内的对话与文件交接由对方部门负责人决定，请直接与「${deptName(targetSection)}」负责人「${targetDeptChief.name}」沟通对接，不要绕过负责人直接派单给「${nameOf(targetId)}」。`
-          : `组织架构约束已拦截：当前未开启「跨部门沟通」，请交由${systemCoordinator ? `系统总协调「${systemCoordinator.name}」` : "老板"}统一协调「${deptName(targetSection)}」，不要直接跨部门派单给「${nameOf(targetId)}」。`;
+          : `组织架构约束已拦截：当前未开启「跨部门沟通」，请交由${systemCoordinator ? `系统总协调「${systemCoordinator.name}」` : "工作空间负责人"}统一协调「${deptName(targetSection)}」，不要直接跨部门派单给「${nameOf(targetId)}」。`;
       }
       return `组织架构约束已拦截：「${nameOf(senderId)}」无权直接向跨部门的「${nameOf(targetId)}（${deptName(targetSection)}）」派发任务。请先汇报给${managerLabel}，由其按跨部门协作规则统筹对接${consultHint}。`;
     }
@@ -119,7 +119,7 @@ export function evaluateOrgCoordination(
 }
 
 export const BOSS_FORMAL_REPORT_RULE =
-  "向老板汇报规范：凡是向老板正式汇报阶段成果、呈送工作流门禁产出或请求老板拍板确认时，必须使用清晰的正式汇报格式（Markdown 排版）：① 一级或二级标题写明汇报主题；② 「核心结论」先行（1–3 句概括结论与关键产出）；③ 「执行摘要」列出关键数据、完成项或风险；④ 「待老板拍板」（如有需决断事项，给出明确选项与建议方案）；⑤ 「交付附件」（如有产出文件，逐项说明文件用途并确保文件真实已生成）。严禁将零散过程日志、思维草稿或未整理的原始输出直接当作正式汇报呈交老板。";
+  "正式汇报规范：凡是正式汇报阶段成果、提交工作流门禁产出或请求人工审批确认时，必须使用清晰的正式汇报格式（Markdown 排版）：① 一级或二级标题写明汇报主题；② 「核心结论」先行（1–3 句概括结论与关键产出）；③ 「执行摘要」列出关键数据、完成项或风险；④ 「待确认事项」（如有需决断事项，给出明确选项与建议方案）；⑤ 「交付附件」（如有产出文件，逐项说明文件用途并确保文件真实已生成）。严禁将零散过程日志、思维草稿或未整理的原始输出直接当作正式汇报提交。";
 
 /** Renders concise fenced Org & Workflow Discipline instructions for LLM system prompt injection. */
 export function buildOrgPromptForBot(
@@ -157,7 +157,7 @@ export function buildOrgPromptForBot(
   const crossOpen = Boolean(orgChart.allowChiefCrossDispatch);
   const chiefCrossText = crossOpen
     ? "（已开启「跨部门沟通」：跨部门协作由各部门负责人直接沟通对接）"
-    : `（未开启「跨部门沟通」：跨部门协作统一由${systemCoordinator ? `系统总协调「${systemCoordinator.name}」` : "系统总协调或老板"}协调）`;
+    : `（未开启「跨部门沟通」：跨部门协作统一由${systemCoordinator ? `系统总协调「${systemCoordinator.name}」` : "系统总协调或工作空间负责人"}协调）`;
 
   const intraDeptRule = myDeptChief
     ? myDeptChief.id === botId
@@ -172,21 +172,21 @@ export function buildOrgPromptForBot(
     : bot?.chiefOfStaff && mySection
       ? crossOpen
         ? "跨部门协作：已开启「跨部门沟通」，需要其他部门配合时请直接与对方部门负责人沟通对接（不要绕过对方负责人直接派单给其下属）。"
-        : `跨部门协作：当前未开启「跨部门沟通」，需要其他部门配合时请提交给${systemCoordinator ? `系统总协调「${systemCoordinator.name}」` : "老板"}统一协调，不要直接跨部门派单。`
+        : `跨部门协作：当前未开启「跨部门沟通」，需要其他部门配合时请提交给${systemCoordinator ? `系统总协调「${systemCoordinator.name}」` : "工作空间负责人"}统一协调，不要直接跨部门派单。`
       : `跨部门协作：如需其他部门配合，请先汇报本部门负责人${myDeptChief ? `「${myDeptChief.name}」` : ""}，由其按组织规则对外沟通或交由总协调统筹。`;
 
   const lines: string[] = [
     `协作模式：${orgChart.enforcementMode === "enforced" ? `按组织架构强约束${chiefCrossText}` : "自由协作（优先按组织架构与部门职责协作）"}`,
     `所属部门：${deptName(mySection)}${bot?.chiefOfStaff ? (mySection ? "（你是本部门负责人，负责本部门拆解派单、验收汇总与对外对接）" : "（你是系统总协调，负责全局统筹、跨部门协调与汇总交付）") : ""}`,
     node.roleTitle ? `岗位头衔：${node.roleTitle}` : "",
-    `直属上级：${node.reportsToBotId ? `${labelWithDept(node.reportsToBotId)}（任务完成、遇阻或需跨部门统筹时优先向其汇报）` : "老板（直接对最终结果负责）"}`,
+    `直属上级：${node.reportsToBotId ? `${labelWithDept(node.reportsToBotId)}（任务完成、遇阻或需跨部门统筹时优先向其汇报）` : "工作空间负责人（直接对最终结果负责）"}`,
     directReports.length ? `直属下属：${directReports.join("、")}（你负责拆解派单、验收返工并汇总结果）` : "",
     intraDeptRule,
     crossDeptRule,
-    node.requireBossApproval ? "审批纪律：你的关键交付物需提交老板拍板确认后再对外流转或收尾。" : "",
+    node.requireBossApproval ? "审批纪律：你的关键交付物需提交工作台审批确认后再对外流转或收尾。" : "",
     BOSS_FORMAL_REPORT_RULE,
     "固定工作流优先级：固定/定时工作流优先于日常组织架构约束，跨部门工作流节点直接按编排执行。",
-    bot?.chiefOfStaff ? (!mySection ? "系统总协调编排权限：当老板要求建立固定或定时工作流（含跨部门流程）时，可直接调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 创建、修改或启动。" : "部门负责人编排权限：仅可调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门工作流请汇报给系统总协调或由老板编排。") : "",
+    bot?.chiefOfStaff ? (!mySection ? "系统总协调编排权限：当用户要求建立固定或定时工作流（含跨部门流程）时，可直接调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 创建、修改或启动。" : "部门负责人编排权限：仅可调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门工作流请汇报给系统总协调或在工作空间「组织与流程」编排。") : "",
   ].filter(Boolean);
 
   const body = lines.join("\n");

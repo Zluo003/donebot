@@ -212,7 +212,7 @@ export function OpcWorkflowInspector({
 
             <div className="flex items-center justify-between gap-3 border-t border-hairline/40 pt-4">
               <div>
-                <div className="text-[12.5px] font-medium text-ink">完成后等老板拍板</div>
+                <div className="text-[12.5px] font-medium text-ink">完成后等待审批</div>
                 <div className="text-[11.5px] text-ink-tertiary">暂停流水线，通过后才流向下一节点</div>
               </div>
               <Switch

@@ -32,7 +32,7 @@ function scheduleLabel(wf: OpcWorkflowDefinition): string {
 
 function runStatusMeta(status: OpcWorkflowRun["status"]): { label: string; tone: string } {
   switch (status) {
-    case "waiting_approval": return { label: "待老板拍板", tone: "text-ink" };
+    case "waiting_approval": return { label: "待审批", tone: "text-ink" };
     case "completed": return { label: "已完成", tone: "text-emerald-500" };
     case "failed": return { label: "执行失败", tone: "text-danger" };
     case "cancelled": return { label: "已终止", tone: "text-ink-tertiary" };
@@ -242,7 +242,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
           ) : workflows.length === 0 ? (
             <div className="py-6">
               <p className="text-[13.5px] text-ink-secondary">
-                还没有固定工作流。点击下方按钮打开画布，把「触发器 → 选题员工 → 写手员工 → 老板拍板 → 视觉出图」连成自动流水线。
+                还没有固定工作流。点击下方按钮打开画布，把「触发器 → 选题员工 → 写手员工 → 人工审批 → 视觉出图」连成自动流水线。
               </p>
               <button
                 type="button"
@@ -280,7 +280,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                                 <span className="font-medium text-ink">{step.name}</span>
                                 <span className="text-[11px] text-ink-tertiary">({botNameById.get(step.botId) ?? "员工"})</span>
                                 {step.approvalGate && (
-                                  <ShieldCheck size={12} className="text-accent" aria-label="需老板拍板" />
+                                  <ShieldCheck size={12} className="text-accent" aria-label="需人工审批" />
                                 )}
                               </span>
                               {idx < ordered.length - 1 && (
@@ -409,7 +409,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                                   </button>
                                 )}
                                 <span className="text-[11px] text-ink-tertiary">
-                                  {sr.status === "completed" ? "已完成" : sr.status === "waiting_approval" ? "等老板拍板" : sr.status === "running" ? "对话执行中…" : sr.status === "failed" ? "失败" : "待执行"}
+                                  {sr.status === "completed" ? "已完成" : sr.status === "waiting_approval" ? "待审批" : sr.status === "running" ? "对话执行中…" : sr.status === "failed" ? "失败" : "待执行"}
                                 </span>
                               </div>
                             </summary>
@@ -436,7 +436,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                         )}
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-[12px] text-ink-secondary">
-                            第 {run.currentStepIndex + 1} 步「{currentStep.stepName}」已产出结果，等待老板拍板
+                            第 {run.currentStepIndex + 1} 步「{currentStep.stepName}」已产出结果，等待审批
                           </span>
                           <div className="flex items-center gap-1.5">
                             <button

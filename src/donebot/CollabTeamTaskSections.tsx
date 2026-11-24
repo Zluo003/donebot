@@ -287,7 +287,7 @@ export function CollabTaskBotReviewCard({ task }: { task: DoneBotTeamTask }) {
         <div className="min-w-0 flex-1 text-[12.5px]">
           <div className="font-medium text-ink">派发方主协调助手正在自动二审本批次交付物…</div>
           <p className="mt-0.5 text-[11.5px] text-ink-secondary">
-            二审仅负责核验硬性要求与驳回，绝不代替终审；你也可以随时直接人工拍板通过或退回。
+            二审仅负责核验硬性要求与驳回，绝不代替终审；你也可以随时直接人工审批通过或退回。
           </p>
         </div>
       </div>
@@ -338,7 +338,7 @@ export function CollabTaskBotReviewCard({ task }: { task: DoneBotTeamTask }) {
       )}
       {review.attention_items && review.attention_items.length > 0 && (
         <div className="flex flex-col gap-1">
-          <div className="text-[11px] font-medium text-amber-500">建议你重点关注 / 拍板</div>
+          <div className="text-[11px] font-medium text-amber-500">建议你重点关注与确认</div>
           {review.attention_items.map((item, idx) => (
             <div key={idx} className="flex items-start gap-1.5 text-[12px] text-ink">
               <Eye size={12.5} className="mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />

@@ -202,7 +202,7 @@ export function validateOrgReportsTo(
 ): string | null {
   const targetId = nextReportsToBotId ? nextReportsToBotId.trim() : null;
   if (targetId === botId) {
-    return "员工不能向自己汇报，请选择其他上级或直接向老板汇报。";
+    return "员工不能向自己汇报，请选择其他上级或直接向你汇报。";
   }
 
   if (targetId) {
@@ -234,7 +234,7 @@ export function validateOrgReportsTo(
     return `「${deptName}」暂无负责人，成员保持平级；请先指定部门负责人后再建立多级汇报。`;
   }
   if (deptChief && deptChief.id === bot.id && sameSection) {
-    return `「${bot.name}」是「${deptName}」负责人，不能向同部门成员汇报；可拖至老板或其他部门上级。`;
+    return `「${bot.name}」是「${deptName}」负责人，不能向同部门成员汇报；可拖至你（负责人）或其他部门上级。`;
   }
   if (deptChief && deptChief.id !== bot.id && !sameSection) {
     return `「${deptName}」已设负责人「${deptChief.name}」，成员须归属其下级（可拖到本部门同事名下建多级，或拖入其他部门框转岗）。`;

@@ -48,7 +48,7 @@ export function OpcOrgInspector({
   const reportsHelpText = !deptChief
     ? `「${deptLabelOf(bot)}」暂无负责人，成员保持平级；指定部门负责人后，全员自动归属其下级并支持拖拽建多级结构。`
     : deptChief.id === bot.id
-      ? `作为「${deptLabelOf(bot)}」${botSection ? "负责人" : "总协调"}，可向老板或其他部门上级汇报，本部门成员自动归属你的下级体系。`
+      ? `作为「${deptLabelOf(bot)}」${botSection ? "负责人" : "总协调"}，可直接向你或其他部门上级汇报，本部门成员自动归属你的下级体系。`
       : `「${deptLabelOf(bot)}」由「${deptChief.name}」负责，可在本部门内选择上级形成多级结构（如 负责人 → 主管 → 员工）；如需跨部门直报请先切换所属部门。`;
 
   return (
@@ -149,7 +149,7 @@ export function OpcOrgInspector({
             className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[12.5px] text-ink outline-none focus:border-ink/40"
           >
             <option value={BOSS_ROOT_ID} disabled={Boolean(bossRefusal)}>
-              你（老板 · 直接汇报）{bossRefusal ? " · 须归属部门负责人下级" : ""}
+              你（直接汇报）{bossRefusal ? " · 须归属部门负责人下级" : ""}
             </option>
             {bots.filter(b => b.id !== bot.id).map(b => {
               const refusal = validateOrgReportsTo(bot.id, b.id, org, bots);
@@ -194,7 +194,7 @@ export function OpcOrgInspector({
                   ? "已开启「跨部门沟通」，跨部门协作由双方部门负责人直接沟通对接。"
                   : (() => {
                     const sysChief = bots.find(b => !b.hidden && b.chiefOfStaff && !(b.section?.trim()));
-                    return `未开启「跨部门沟通」，跨部门协作统一由${sysChief ? `总协调人「${sysChief.name}」` : "总协调人（或老板）"}协调。`;
+                    return `未开启「跨部门沟通」，跨部门协作统一由${sysChief ? `总协调人「${sysChief.name}」` : "总协调人（或由你）"}协调。`;
                   })()}
             </div>
           </div>
@@ -204,8 +204,8 @@ export function OpcOrgInspector({
         <div className="space-y-3 border-t border-hairline/40 pt-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[12.5px] font-medium text-ink">产物须老板拍板</div>
-              <div className="text-[11.5px] text-ink-tertiary">关键产出提醒先送老板台审核</div>
+              <div className="text-[12.5px] font-medium text-ink">产物须审批</div>
+              <div className="text-[11.5px] text-ink-tertiary">关键产出提醒先送工作台审核</div>
             </div>
             <Switch
               checked={Boolean(cfg.requireBossApproval)}

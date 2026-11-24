@@ -50,20 +50,20 @@ export function buildWorkflowStepPrompt(params: {
 
   if (revisionNote) {
     const prompt = [
-      `【老板打回返工 · 工作流「${wf.name}」第 ${stepIndex + 1}/${totalSteps} 步「${step.name}」】`,
-      `老板修改意见：\n${revisionNote}`,
+      `【审批打回修订 · 工作流「${wf.name}」第 ${stepIndex + 1}/${totalSteps} 步「${step.name}」】`,
+      `审批修改意见：\n${revisionNote}`,
       "请结合本对话中的上一版产出与上述修改意见，直接在本对话中输出完善后的完整新版结果（切勿调用 coordinate_bots / start_thread 转发）。",
     ].join("\n\n");
     return { prompt };
   }
 
-  const reportRequirement = "请严格按正式商业汇报格式（Markdown）撰写本回复：首行用标题点明主题，依次给出「核心结论」「执行摘要」「待老板拍板（如有）」与「交付附件说明（如有真实产出文件）」，避免只输出零散过程记录。";
+  const reportRequirement = "请严格按正式汇报格式（Markdown）撰写本回复：首行用标题点明主题，依次给出「核心结论」「执行摘要」「待确认事项（如有）」与「交付附件说明（如有真实产出文件）」，避免只输出零散过程记录。";
   const footer = isFinalStep
     ? (step.approvalGate
-      ? `这是本工作流的最后一步，完成后将呈送老板台拍板确认；${reportRequirement}请直接在本对话中输出最终正式汇报（切勿调用 coordinate_bots / start_thread 转发）。`
-      : `这是本工作流的最后一步，${reportRequirement}请直接在本对话中向老板输出完整最终成果（切勿调用 coordinate_bots / start_thread 转发）。`)
+      ? `这是本工作流的最后一步，完成后将送至工作台审批确认；${reportRequirement}请直接在本对话中输出最终正式汇报（切勿调用 coordinate_bots / start_thread 转发）。`
+      : `这是本工作流的最后一步，${reportRequirement}请直接在本对话中输出完整最终成果（切勿调用 coordinate_bots / start_thread 转发）。`)
     : (step.approvalGate
-      ? `完成后将呈送老板台拍板，通过后系统会自动交接给下一节点员工；${reportRequirement}请直接在本对话中输出本环节正式汇报与完整交付内容（切勿手动调用 coordinate_bots / start_thread 转发）。`
+      ? `完成后将送至工作台审批，通过后系统会自动交接给下一节点员工；${reportRequirement}请直接在本对话中输出本环节正式汇报与完整交付内容（切勿手动调用 coordinate_bots / start_thread 转发）。`
       : "请直接在本对话中输出本环节完整交付内容；完成后系统会自动把你的回复交接给下一节点员工（切勿手动调用 coordinate_bots / start_thread 转发）。");
 
   if (completedSteps.length === 0) {

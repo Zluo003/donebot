@@ -364,14 +364,14 @@ export class DoneBotOrgWorkflowStore {
 
     const lines: string[] = [
       `协作模式：${this.state.orgChart.enforcementMode === "enforced" ? `按组织架构强约束${chiefCrossText}` : "自由协作（优先按组织架构与部门职责协作）"}`,
-      `所属部门：${deptName(mySection)}${bot?.chiefOfStaff ? "（你是本部门主 Bot，负责本部门拆解派单、验收汇总与跨部门对接）" : ""}`,
+      `所属部门：${deptName(mySection)}${bot?.chiefOfStaff ? (mySection ? "（你是本部门负责人，负责本部门拆解派单、验收汇总与对外对接）" : "（你是系统总协调，负责全局统筹、跨部门协调与汇总交付）") : ""}`,
       node.roleTitle ? `岗位头衔：${node.roleTitle}` : "",
       `直属上级：${node.reportsToBotId ? `${labelWithDept(node.reportsToBotId)}（任务完成、遇阻或需跨部门统筹时优先向其汇报）` : "老板（直接对最终结果负责）"}`,
       directReports.length ? `直属下属：${directReports.join("、")}（你负责拆解派单、验收返工并汇总结果）` : "",
       handoffs.length ? `已授权交接下一棒：${handoffs.join("、")}（完成本环节后可直接向其交接）` : "",
       node.requireBossApproval ? "审批纪律：你的关键交付物需提交老板拍板确认后再对外流转或收尾。" : "",
       "固定工作流优先级：固定/定时工作流优先于日常组织架构约束，跨部门工作流节点直接按编排执行。",
-      bot?.chiefOfStaff ? "主协调编排权限：当老板要求建立固定或定时跨部门工作流时，可直接调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 创建、修改或启动。" : "",
+      bot?.chiefOfStaff ? (!mySection ? "系统总协调编排权限：当老板要求建立固定或定时工作流（含跨部门流程）时，可直接调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 创建、修改或启动。" : "部门负责人编排权限：仅可调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门工作流请汇报给系统总协调或由老板编排。") : "",
     ].filter(Boolean);
 
     const body = lines.join("\n");

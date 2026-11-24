@@ -179,7 +179,7 @@ export function OpcOrgNodeCard({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-[13.5px] font-semibold">{node.name}</span>
-                {bot.chiefOfStaff && <Crown size={11.5} className="shrink-0 text-warning" aria-label="部门主 Bot" />}
+                {bot.chiefOfStaff && <Crown size={11.5} className="shrink-0 text-warning" aria-label={node.section ? "部门负责人" : "系统总协调"} />}
                 {status && status.tone !== "idle" && (
                   <span
                     title={status.label}

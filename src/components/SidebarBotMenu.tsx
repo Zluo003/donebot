@@ -5,7 +5,7 @@ import { isExternalCodingAgentBot } from "../../shared/coding-agents";
 import { api, useStore, openBot, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { useHeldMenuMotion } from "./MenuMotion";
-import { t } from "@/lib/i18n";
+import { activeLocale, t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import { allThreadRows, BotDeleteMenuItem, useDeleteAllThreads } from "./BotMenuDelete";
 import { HideDefaultBotItem } from "./DefaultBotControls";
@@ -170,9 +170,17 @@ export function BotContextMenu({
     : visibleBotCount <= 1
       ? t("sidebar.bot.archiveBlockedLast")
       : undefined;
+  const inNamedDept = Boolean(bot.section?.trim());
+  const chiefActionLabel = inNamedDept
+    ? (activeLocale() === "zh-tw"
+      ? (bot.chiefOfStaff ? "取消部門負責人" : "設為部門負責人")
+      : activeLocale() === "zh"
+        ? (bot.chiefOfStaff ? "取消部门负责人" : "设为部门负责人")
+        : (bot.chiefOfStaff ? "Remove department lead" : "Make department lead"))
+    : (bot.chiefOfStaff ? t("sidebar.bot.removeChief") : t("sidebar.bot.makeChief"));
   const chiefItem = () => item(
     <Crown size={16} className={bot.chiefOfStaff ? "text-accent" : "text-ink-secondary"} />,
-    bot.chiefOfStaff ? t("sidebar.bot.removeChief") : t("sidebar.bot.makeChief"),
+    chiefActionLabel,
     () => dispatch({ type: "updateBot", botId: bot.id, patch: { chiefOfStaff: !bot.chiefOfStaff } }),
     member ? { disabled: true, hint: t("sidebar.bot.chiefAdminOnly") }
       : { disabled: !bot.chiefOfStaff && !canCoordinate, hint: !bot.chiefOfStaff && !canCoordinate ? t("sidebar.bot.chiefNeedsEngine") : undefined },

@@ -404,16 +404,7 @@ export function TeamMapPage() {
 
   const toggleBotChief = async (bot: Bot, chiefOfStaff: boolean) => {
     setError(null);
-    try {
-      const patched: Bot = await api(`/api/bots/${encodeURIComponent(bot.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ chiefOfStaff }),
-      });
-      dispatch({ type: "botPatched", bot: patched });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      throw cause;
-    }
+    dispatch({ type: "updateBot", botId: bot.id, patch: { chiefOfStaff } });
   };
 
   const alignOrgByDepartments = async () => {

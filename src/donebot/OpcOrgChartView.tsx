@@ -52,7 +52,7 @@ function buildTopDownOrgTree(bots: readonly Bot[], org: OpcOrgChartState): TopDo
     return {
       id: bot.id,
       name: bot.name,
-      role: org.nodes[bot.id]?.roleTitle || bot.title || (bot.chiefOfStaff ? "部门主 Bot" : "AI 员工"),
+      role: org.nodes[bot.id]?.roleTitle || bot.title || (bot.chiefOfStaff ? (bot.section?.trim() ? "部门负责人" : "系统总协调") : "AI 员工"),
       status: bot.busy ? "working" : "idle",
       section: bot.section?.trim() || "",
       reports: children.map(toNode),

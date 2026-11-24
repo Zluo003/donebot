@@ -21,7 +21,7 @@ export const DONEBOT_OPC_WORKFLOW_TOOL_DEFINITIONS = [
   },
   {
     name: "opc_save_workflow",
-    description: "Chief of Staff only: create or update a fixed/scheduled multi-bot workflow (supports cross-department steps, daily/interval/manual schedules, {{variable}} placeholders, optional Boss approval gates, and DAG branching via step id + next_step_ids). Automatically lays out clean infinite-canvas node coordinates so the Boss can inspect or edit it visually under 组织与流程 -> 固定工作流. Fixed workflows always override org-chart enforcement.",
+    description: "Chief / Department Lead only: create or update a fixed/scheduled multi-bot workflow (supports daily/interval/manual schedules, {{variable}} placeholders, optional Boss approval gates, and DAG branching via step id + next_step_ids). System Chief (General section) may create cross-department workflows; a named department's Chief may only create or modify workflows whose steps stay within its own department (and managedSections). Automatically lays out clean infinite-canvas coordinates. Fixed workflows always override org-chart enforcement.",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const,
     inputSchema: {
       type: "object",
@@ -59,7 +59,7 @@ export const DONEBOT_OPC_WORKFLOW_TOOL_DEFINITIONS = [
   },
   {
     name: "opc_run_workflow",
-    description: "Chief of Staff only: trigger an existing fixed workflow immediately with optional {{variable}} values. Runs cross-department steps directly, taking priority over org-chart constraints.",
+    description: "Chief / Department Lead only: trigger an existing fixed workflow immediately with optional {{variable}} values. System Chief may run any workflow; a named department's Chief may only run workflows within its own department (and managedSections). Fixed workflows override org-chart enforcement.",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const,
     inputSchema: {
       type: "object",
@@ -142,6 +142,26 @@ export async function handleDoneBotOpcWorkflowInternal(deps: {
   const sender = deps.store.bot(deps.botId);
   const org = deps.orgStore.getOrgChart(deps.store.bots);
   const generalDept = org.generalDepartmentName || "通用";
+  const senderSection = sender?.section?.trim() || "";
+  const isGlobalChief = Boolean(sender?.chiefOfStaff && !senderSection);
+  const isDeptLead = Boolean(sender?.chiefOfStaff && senderSection);
+  const allowedSections = new Set<string>(
+    isDeptLead ? [senderSection, ...(sender?.managedSections ?? []).map(s => s.trim()).filter(Boolean)] : [],
+  );
+  const workflowScope = isGlobalChief ? "global" : isDeptLead ? "department" : "none";
+
+  const checkBotsWithinDeptScope = (botIds: readonly string[]): string | null => {
+    if (!isDeptLead) return null;
+    for (const id of botIds) {
+      const target = deps.store.bot(id);
+      const targetSec = target?.section?.trim() || "";
+      if (!target || !allowedSections.has(targetSec)) {
+        const targetLabel = target ? `${target.name}（${targetSec || generalDept}）` : id;
+        return `你是「${senderSection}」部门负责人，仅可编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门固定工作流（涉及「${targetLabel}」）请汇报给系统总协调或由老板在「组织与流程」创建。`;
+      }
+    }
+    return null;
+  };
 
   if (deps.path === "/api/internal/donebot/opc/workflows/list") {
     const bots = deps.store.bots
@@ -152,18 +172,21 @@ export async function handleDoneBotOpcWorkflowInternal(deps: {
         title: b.title ?? "",
         department: b.section?.trim() || generalDept,
         chief_of_staff: Boolean(b.chiefOfStaff),
+        chief_scope: b.chiefOfStaff ? (b.section?.trim() ? "department" : "global") : "none",
       }));
     deps.json(deps.res, 200, {
-      can_manage_workflows: Boolean(sender?.chiefOfStaff),
+      can_manage_workflows: workflowScope !== "none",
+      workflow_scope: workflowScope,
+      ...(isDeptLead ? { managed_departments: [...allowedSections] } : {}),
       workflows: deps.orgStore.listWorkflows(),
       bots,
     });
     return true;
   }
 
-  if (!sender?.chiefOfStaff) {
+  if (workflowScope === "none") {
     deps.json(deps.res, 403, {
-      error: "只有主协调 Bot（总控主管或部门主 Bot）才能创建、修改或启动固定工作流，请向主协调 Bot 汇报并由其编排。",
+      error: "只有系统总协调或部门负责人才能创建、修改或启动固定工作流，请向直属上级或系统总协调汇报。",
     });
     return true;
   }
@@ -182,6 +205,21 @@ export async function handleDoneBotOpcWorkflowInternal(deps: {
           deps.json(deps.res, 404, { error: `未找到员工 bot_id="${step.bot_id}"，请先调用 opc_list_workflows 核对准确的 bot_id。` });
           return true;
         }
+      }
+      if (data.workflow_id) {
+        const existingWf = deps.orgStore.getWorkflow(data.workflow_id);
+        if (existingWf) {
+          const existingDeny = checkBotsWithinDeptScope(existingWf.steps.map(s => s.botId));
+          if (existingDeny) {
+            deps.json(deps.res, 403, { error: existingDeny });
+            return true;
+          }
+        }
+      }
+      const stepDeny = checkBotsWithinDeptScope(data.steps.map(s => s.bot_id));
+      if (stepDeny) {
+        deps.json(deps.res, 403, { error: stepDeny });
+        return true;
       }
 
       const assigned = data.steps.map((step, idx) => ({
@@ -244,6 +282,11 @@ export async function handleDoneBotOpcWorkflowInternal(deps: {
       const wf = deps.orgStore.getWorkflow(parsed.data.workflow_id);
       if (!wf) {
         deps.json(deps.res, 404, { error: "指定的工作流不存在。" });
+        return true;
+      }
+      const runDeny = checkBotsWithinDeptScope(wf.steps.map(s => s.botId));
+      if (runDeny) {
+        deps.json(deps.res, 403, { error: runDeny });
         return true;
       }
       const run = await deps.triggerWorkflow(wf, "manual", parsed.data.variables ?? {});

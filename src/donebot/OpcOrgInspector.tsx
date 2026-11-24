@@ -49,7 +49,7 @@ export function OpcOrgInspector({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="truncate text-[14px] font-semibold text-ink">{bot.name}</span>
-              {bot.chiefOfStaff && <Crown size={12} className="shrink-0 text-warning" aria-label="部门主 Bot" />}
+              {bot.chiefOfStaff && <Crown size={12} className="shrink-0 text-warning" aria-label={botSection ? "部门负责人" : "系统总协调"} />}
             </div>
             <div className="text-[11.5px] text-ink-tertiary">岗位、部门与协作规则</div>
           </div>
@@ -102,8 +102,14 @@ export function OpcOrgInspector({
 
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[12.5px] font-medium text-ink">设为本部门主 Bot</div>
-              <div className="text-[11.5px] text-ink-tertiary">统筹「{deptLabelOf(bot)}」成员分工与对外对接</div>
+              <div className="text-[12.5px] font-medium text-ink">
+                {botSection ? "设为部门负责人" : "设为系统总协调"}
+              </div>
+              <div className="text-[11.5px] text-ink-tertiary">
+                {botSection
+                  ? `负责「${deptLabelOf(bot)}」内分工调度与本部门工作流编排`
+                  : "统筹全局分工与跨部门固定工作流编排"}
+              </div>
             </div>
             <Switch
               checked={Boolean(bot.chiefOfStaff)}
@@ -128,7 +134,7 @@ export function OpcOrgInspector({
             <option value={BOSS_ROOT_ID}>你（老板 · 直接汇报）</option>
             {bots.filter(b => b.id !== bot.id).map(b => (
               <option key={b.id} value={b.id}>
-                {b.name}（{deptLabelOf(b)}{b.chiefOfStaff ? " · 主 Bot" : ""}）
+                {b.name}（{deptLabelOf(b)}{b.chiefOfStaff ? (b.section?.trim() ? " · 负责人" : " · 总协调") : ""}）
               </option>
             ))}
           </select>

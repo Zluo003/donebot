@@ -295,11 +295,16 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("设计部");
     expect(container.textContent).toContain("跨部门交接");
 
-    // Click an employee node to open the right inspector drawer
+    // Click system chief (General section) -> shows "设为系统总协调"
     const empCard = container.querySelector<HTMLElement>('[data-org-node="b1"]')!;
     await act(async () => { empCard.click(); });
     expect(container.textContent).toContain("岗位、部门与协作规则");
-    expect(container.textContent).toContain("设为本部门主 Bot");
+    expect(container.textContent).toContain("设为系统总协调");
+
+    // Click named department bot -> shows "设为部门负责人"
+    const deptBotCard = container.querySelector<HTMLElement>('[data-org-node="b2"]')!;
+    await act(async () => { deptBotCard.click(); });
+    expect(container.textContent).toContain("设为部门负责人");
 
     // Workflows list -> open full-workspace infinite-canvas node-graph editor
     mockApi.mockImplementation(async (path, init) => {

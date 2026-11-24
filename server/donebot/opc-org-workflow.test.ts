@@ -358,7 +358,29 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     });
     expect(deniedCreate.status).toBe(403);
 
-    // 5. Chief bot creates a cross-department fixed workflow (auto-generates canvas coords)
+    // 4b. Department lead CAN create intra-department workflow, but CANNOT create cross-department workflow
+    const deptOwnWf = await callInternal(contentChief.id, "/api/internal/donebot/opc/workflows/save", {
+      name: "内容部内部审核流",
+      schedule_kind: "manual",
+      steps: [
+        { name: "初稿", bot_id: contentWriter.id, instruction: "写稿" },
+        { name: "主编定稿", bot_id: contentChief.id, instruction: "审核" },
+      ],
+    });
+    expect(deptOwnWf.status).toBe(201);
+
+    const deptCrossDenied = await callInternal(contentChief.id, "/api/internal/donebot/opc/workflows/save", {
+      name: "越权跨部门流",
+      schedule_kind: "manual",
+      steps: [
+        { name: "内容写稿", bot_id: contentWriter.id, instruction: "写稿" },
+        { name: "设计出图", bot_id: designChief.id, instruction: "配图" },
+      ],
+    });
+    expect(deptCrossDenied.status).toBe(403);
+    expect(String(deptCrossDenied.payload.error)).toContain("部门负责人");
+
+    // 5. System Chief (default General section) creates a cross-department fixed workflow (auto-generates canvas coords)
     const saved = await callInternal(generalBot.id, "/api/internal/donebot/opc/workflows/save", {
       name: "跨部门爆款生产流",
       schedule_kind: "daily",
@@ -373,7 +395,13 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     expect(createdWf.triggerPosition).toBeDefined();
     expect(typeof createdWf.steps[0]?.x).toBe("number");
 
-    // 6. Running this cross-department fixed workflow succeeds EVEN under strict org enforcement with zero handoff edges
+    // 5b. Department lead cannot trigger or overwrite a cross-department workflow
+    const deptRunCrossDenied = await callInternal(contentChief.id, "/api/internal/donebot/opc/workflows/run", {
+      workflow_id: createdWf.id,
+    });
+    expect(deptRunCrossDenied.status).toBe(403);
+
+    // 6. System Chief running this cross-department fixed workflow succeeds EVEN under strict org enforcement with zero handoff edges
     const ran = await callInternal(generalBot.id, "/api/internal/donebot/opc/workflows/run", {
       workflow_id: createdWf.id,
     });

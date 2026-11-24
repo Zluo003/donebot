@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,11 +27,36 @@ describe("DoneBot selected workspace tools", () => {
     const outside = await mkdtemp(join(tmpdir(), "donebot-outside-fixture-")); directories.push(outside);
     await writeFile(join(outside, "receipt.txt"), "outside");
     await symlink(outside, join(cwd, "shortcut"), "dir");
-    for (const path of ["../receipt.txt", join(outside, "receipt.txt"), "shortcut/receipt.txt"]) {
+    for (const path of ["../receipt.txt", join(outside, "receipt.txt"), join(cwd, "..", "outside.txt"), join(cwd, "shortcut", "receipt.txt"), "shortcut/receipt.txt"]) {
       await expect(execute("workspace_read", { path })).rejects.toThrow();
       await expect(execute("workspace_write", { path, text: "forbidden" })).rejects.toThrow();
     }
     expect(await readFile(join(outside, "receipt.txt"), "utf8")).toBe("outside");
+  });
+
+  it("accepts absolute paths strictly inside the selected working folder and normalizes them to relative paths", async () => {
+    const { cwd, execute } = await fixture();
+    await mkdir(join(cwd, "memory", "log"), { recursive: true });
+    await writeFile(join(cwd, "memory", "log", "2026-11-24.md"), "daily summary");
+    const canonicalCwd = await realpath(cwd);
+
+    for (const abs of [join(cwd, "memory", "log", "2026-11-24.md"), join(canonicalCwd, "memory", "log", "2026-11-24.md")]) {
+      const read = JSON.parse((await execute("workspace_read", { path: abs })).text);
+      expect(read).toMatchObject({ path: join("memory", "log", "2026-11-24.md"), text: "daily summary", sha256: sha("daily summary") });
+    }
+    const listed = JSON.parse((await execute("workspace_list", { path: join(cwd, "memory", "log") })).text);
+    expect(listed.entries.map((entry: { name: string }) => entry.name)).toEqual(["2026-11-24.md"]);
+
+    const searched = JSON.parse((await execute("workspace_search", { path: join(cwd, "memory"), query: "daily" })).text);
+    expect(searched.matches).toEqual([{ path: join("memory", "log", "2026-11-24.md"), line: 1, text: "daily summary" }]);
+
+    await execute("workspace_patch", {
+      path: join(cwd, "memory", "log", "2026-11-24.md"),
+      old_text: "daily",
+      new_text: "verified",
+      expected_sha256: sha("daily summary"),
+    });
+    expect(await readFile(join(cwd, "memory", "log", "2026-11-24.md"), "utf8")).toBe("verified summary");
   });
 
   it("respects tool scope and guest confinement even for an unadvertised direct call", async () => {

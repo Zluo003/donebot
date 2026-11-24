@@ -41,13 +41,22 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
   const offered = !folder ? [] : definitions.filter(({ function: fn }) => allowsTool(turn.toolScope, { kind: "native", name: fn.name }) && (!turn.guestConfined || ["workspace_list", "workspace_read", "workspace_search"].includes(fn.name)));
   const available = new Set(offered.map(({ function: fn }) => fn.name));
   const root = folder ? await realpath(folder) : "";
+  const resolvedFolder = folder ? resolve(folder) : "";
   const running = new Set<ReturnType<typeof spawnCli>>();
   let closed = false;
   const live = (callSignal: AbortSignal) => { signal.throwIfAborted(); callSignal.throwIfAborted(); if (closed) throw new Error("Workspace tools are closed"); };
+  const normalizeRelative = (path: string) => {
+    if (!root) throw new Error("Use a relative path inside the selected working folder");
+    if (!isAbsolute(path)) return path;
+    const candidate = resolve(path);
+    if (within(root, candidate)) return relative(root, candidate) || ".";
+    if (resolvedFolder && within(resolvedFolder, candidate)) return relative(resolvedFolder, candidate) || ".";
+    throw new Error("Path leaves the selected working folder");
+  };
   const checked = async (path: string, creating = false) => {
-    if (!root || isAbsolute(path)) throw new Error("Use a relative path inside the selected working folder");
+    const rel = normalizeRelative(path);
     if (await realpath(folder!) !== root) throw new Error("The selected working folder changed");
-    const target = resolve(root, path);
+    const target = resolve(root, rel);
     if (!within(root, target)) throw new Error("Path leaves the selected working folder");
     let current = root;
     const components = relative(root, target).split(sep).filter(Boolean);
@@ -76,7 +85,8 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
   };
   const write = async (path: string, text: string, callSignal: AbortSignal, expected?: string) => {
     if (Buffer.byteLength(text) > MAX_FILE) throw new Error("Text exceeds the 1 MiB file limit");
-    const target = await checked(path, true);
+    const rel = normalizeRelative(path);
+    const target = await checked(rel, true);
     let before: string | undefined;
     try { before = await textAt(target); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     if (before !== undefined ? expected !== sha(before) : expected !== undefined) throw new Error("File changed or overwrite was not authorized: read it again first");
@@ -85,7 +95,7 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
       const file = await open(temporary, "wx", 0o600);
       try { await file.writeFile(text, "utf8"); await file.sync(); } finally { await file.close(); }
       live(callSignal);
-      await checked(path, true);
+      await checked(rel, true);
       if (before === undefined) {
         live(callSignal);
         await link(temporary, target);
@@ -95,7 +105,7 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
         await rename(temporary, target);
       }
     } finally { await unlink(temporary).catch(() => {}); }
-    return { ok: true, text: JSON.stringify({ path, sha256: sha(text), bytes: Buffer.byteLength(text) }) };
+    return { ok: true, text: JSON.stringify({ path: rel, sha256: sha(text), bytes: Buffer.byteLength(text) }) };
   };
   const run = async (args: z.infer<typeof schemas.workspace_run>, callSignal: AbortSignal): Promise<ChatToolResult> => {
     const cwd = await checked(".");
@@ -145,9 +155,9 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
         return write(args.path, text.replace(args.old_text, () => args.new_text), callSignal, args.expected_sha256);
       }
       if (name === "workspace_read") {
-        const args = schemas.workspace_read.parse(raw), text = await textAt(await checked(args.path));
+        const args = schemas.workspace_read.parse(raw), rel = normalizeRelative(args.path), text = await textAt(await checked(rel));
         const offset = args.offset ?? 0, end = offset + (args.limit ?? 24_000);
-        return { ok: true, text: JSON.stringify({ path: args.path, sha256: sha(text), text: text.slice(offset, end), offset, totalCharacters: text.length, truncated: end < text.length }) };
+        return { ok: true, text: JSON.stringify({ path: rel, sha256: sha(text), text: text.slice(offset, end), offset, totalCharacters: text.length, truncated: end < text.length }) };
       }
       if (name === "workspace_list") {
         const args = schemas.workspace_list.parse(raw), entries = await readdir(await checked(args.path ?? "."), { withFileTypes: true });
@@ -171,7 +181,7 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
           for (const [index, line] of text.split("\n").entries()) if (line.includes(args.query)) { matches.push({ path, line: index + 1, text: line.slice(0, 500) }); if (matches.length >= 100) { truncated = true; break; } }
         }
       };
-      await visit(args.path ?? ".");
+      await visit(normalizeRelative(args.path ?? "."));
       return { ok: true, text: JSON.stringify({ matches, truncated, scanned }) };
     },
     async close() { closed = true; const results = await Promise.all([...running].map((child) => killCliTree(child))); if (results.some((stopped) => !stopped)) throw new Error("Workspace process shutdown could not be confirmed"); },

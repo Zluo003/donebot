@@ -21,10 +21,9 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import {
-  extractWorkflowVariables,
-  type OpcWorkflowDefinition,
-  type OpcWorkflowScheduleKind,
+import type {
+  OpcWorkflowDefinition,
+  OpcWorkflowScheduleKind,
 } from "../../shared/donebot-opc";
 import {
   autoLayoutWorkflowGraph,
@@ -123,7 +122,7 @@ function buildInitialDraft(
           id: id1,
           name: "信息收集与大纲",
           botId: firstBot,
-          instruction: "围绕「{{主题}}」整理今日关键信息、切入点与执行大纲。",
+          instruction: "梳理今日重点方向、关键信息与切入角度，整理成结构清晰的执行大纲。",
           approvalGate: false,
           x: 412,
           y: 196,
@@ -133,7 +132,7 @@ function buildInitialDraft(
           id: id2,
           name: "内容与成品输出",
           botId: secondBot,
-          instruction: "基于上游大纲完成正式交付初稿，给出可直接发布的完整版本。",
+          instruction: "基于上游交接的大纲润色成完整定稿，直接在对话中输出最终结果。",
           approvalGate: true,
           x: 752,
           y: 196,
@@ -242,7 +241,6 @@ export function OpcWorkflowCanvasEditor({
   triggerPosRef.current = triggerPos;
 
   const botById = useMemo(() => new Map(bots.map(b => [b.id, b])), [bots]);
-  const detectedVars = useMemo(() => extractWorkflowVariables(nodes), [nodes]);
 
   const executionOrderMap = useMemo(() => {
     const plan = resolveWorkflowExecutionPlan({ steps: nodes, entryStepIds });
@@ -785,9 +783,7 @@ export function OpcWorkflowCanvasEditor({
               <div>
                 <div className="truncate text-[14px] font-semibold">{triggerSummary}</div>
                 <div className="mt-0.5 truncate text-[11.5px] text-app/70">
-                  {detectedVars.length > 0
-                    ? `参数：${detectedVars.map(v => `{{${v}}}`).join(" ")}`
-                    : "从右侧圆点拉线连接到首位员工"}
+                  从右侧圆点拉线连接到首位员工
                 </div>
               </div>
 
@@ -918,7 +914,6 @@ export function OpcWorkflowCanvasEditor({
           intervalMinutes={intervalMinutes}
           entryStepIds={entryStepIds}
           nodes={nodes}
-          detectedVars={detectedVars}
           onNameChange={setName}
           onDescriptionChange={setDescription}
           onScheduleKindChange={setScheduleKind}

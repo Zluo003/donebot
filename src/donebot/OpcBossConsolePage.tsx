@@ -398,6 +398,7 @@ export function OpcBossConsolePage() {
                 <div className="divide-y divide-hairline/40 border-b border-hairline/50">
                   {waitingWorkflowRuns.map(run => {
                     const step = run.stepResults[run.currentStepIndex];
+                    const isLastStep = run.currentStepIndex + 1 >= run.stepResults.length;
                     const busy = wfBusyId === run.id;
                     return (
                       <article key={run.id} className="py-3.5 space-y-2.5">
@@ -409,8 +410,17 @@ export function OpcBossConsolePage() {
                                 {run.workflowName} · 第 {run.currentStepIndex + 1}/{run.stepResults.length} 步「{step?.stepName}」
                               </span>
                             </div>
-                            <div className="mt-0.5 text-[12px] text-ink-tertiary">
-                              执行员工：{step?.botName}
+                            <div className="mt-0.5 flex items-center gap-2.5 text-[12px] text-ink-tertiary">
+                              <span>执行员工：{step?.botName}</span>
+                              {step?.botId && (
+                                <button
+                                  type="button"
+                                  onClick={() => dispatch({ type: "select", id: step.botId })}
+                                  className="text-[11.5px] font-medium text-accent hover:underline"
+                                >
+                                  查看对话
+                                </button>
+                              )}
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5">
@@ -436,15 +446,13 @@ export function OpcBossConsolePage() {
                               className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[12.5px] font-medium text-app hover:opacity-85 disabled:opacity-45"
                             >
                               {busy ? <Loader2 size={12.5} className="animate-spin" /> : <Check size={12.5} />}
-                              通过并继续
+                              {isLastStep ? "批准定稿" : "通过并继续"}
                             </button>
                           </div>
                         </div>
-                        {step?.output && (
-                          <div className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl bg-ink/[0.03] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-secondary">
-                            {step.output}
-                          </div>
-                        )}
+                        <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-xl bg-ink/[0.03] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-secondary">
+                          {step?.output?.trim() || "（正在同步员工对话产出内容…）"}
+                        </div>
                         {wfReviseId === run.id && (
                           <textarea
                             value={wfReviseNote}

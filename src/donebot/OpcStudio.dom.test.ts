@@ -319,7 +319,7 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
             id: "wf-new",
             ...body,
             enabled: true,
-            variables: ["主题"],
+            variables: [],
             maxConsecutiveFailures: 3,
             consecutiveFailures: 0,
             pausedByCircuitBreaker: false,

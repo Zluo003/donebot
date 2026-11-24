@@ -21,7 +21,7 @@ export const DONEBOT_OPC_WORKFLOW_TOOL_DEFINITIONS = [
   },
   {
     name: "opc_save_workflow",
-    description: "Chief / Department Lead only: create or update a fixed/scheduled multi-bot workflow (supports daily/interval/manual schedules, {{variable}} placeholders, optional Boss approval gates, and DAG branching via step id + next_step_ids). System Chief (General section) may create cross-department workflows; a named department's Chief may only create or modify workflows whose steps stay within its own department (and managedSections). Automatically lays out clean infinite-canvas coordinates. Fixed workflows always override org-chart enforcement.",
+    description: "Chief / Department Lead only: create or update a fixed/scheduled multi-bot workflow using plain natural-language instructions per step (supports daily/interval/manual schedules, optional Boss approval gates, and DAG branching via step id + next_step_ids). Upstream step outputs are automatically passed into downstream bots' chat threads, and the final step outputs directly in its bot's chat. System Chief (General section) may create cross-department workflows; a named department's Chief may only create or modify workflows within its own department (and managedSections). Fixed workflows always override org-chart enforcement.",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const,
     inputSchema: {
       type: "object",
@@ -46,7 +46,7 @@ export const DONEBOT_OPC_WORKFLOW_TOOL_DEFINITIONS = [
               id: { type: "string", maxLength: 80 },
               name: { type: "string", minLength: 1, maxLength: 80 },
               bot_id: { type: "string", minLength: 1, maxLength: 128 },
-              instruction: { type: "string", minLength: 1, maxLength: 4000 },
+              instruction: { type: "string", minLength: 1, maxLength: 4000, description: "Natural-language task instruction for this bot (do not use template variables)." },
               approval_gate: { type: "boolean", description: "Pause after this step and wait for Boss approval before continuing." },
               next_step_ids: { type: "array", items: { type: "string", maxLength: 80 }, maxItems: 12 },
             },
@@ -59,14 +59,13 @@ export const DONEBOT_OPC_WORKFLOW_TOOL_DEFINITIONS = [
   },
   {
     name: "opc_run_workflow",
-    description: "Chief / Department Lead only: trigger an existing fixed workflow immediately with optional {{variable}} values. System Chief may run any workflow; a named department's Chief may only run workflows within its own department (and managedSections). Fixed workflows override org-chart enforcement.",
+    description: "Chief / Department Lead only: trigger an existing fixed workflow immediately. System Chief may run any workflow; a named department's Chief may only run workflows within its own department (and managedSections). Fixed workflows override org-chart enforcement.",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const,
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         workflow_id: { type: "string", minLength: 1, maxLength: 128 },
-        variables: { type: "object", additionalProperties: { type: "string", maxLength: 2000 } },
       },
       required: ["workflow_id"],
     },
@@ -127,7 +126,7 @@ const runWorkflowInputSchema = z.object({
 export async function handleDoneBotOpcWorkflowInternal(deps: {
   orgStore: DoneBotOrgWorkflowStore;
   store: Store;
-  triggerWorkflow: (wf: OpcWorkflowDefinition, trigger: "manual" | "schedule", variables: Record<string, string>) => Promise<OpcWorkflowRun>;
+  triggerWorkflow: (wf: OpcWorkflowDefinition, trigger: "manual" | "schedule", variables?: Record<string, string>) => Promise<OpcWorkflowRun>;
   method: string;
   path: string;
   res: ServerResponse;

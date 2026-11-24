@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUpRight,
   Check,
   Clock,
   GitBranch,
@@ -11,16 +12,14 @@ import {
   RotateCcw,
   ShieldCheck,
   Trash2,
-  X,
 } from "lucide-react";
 import type { OpcWorkflowDefinition, OpcWorkflowRun } from "../../shared/donebot-opc";
 import { resolveWorkflowExecutionPlan } from "../../shared/donebot-opc-graph";
 import { Switch } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
-import type { Bot } from "@/state/store";
+import { useStore, type Bot } from "@/state/store";
 import { opcApi } from "./opc-api";
 import { OpcWorkflowCanvasEditor, type WorkflowCanvasPayload } from "./OpcWorkflowCanvasEditor";
-import { OpcNativeDialog } from "./paperclip-ui";
 
 function scheduleLabel(wf: OpcWorkflowDefinition): string {
   if (wf.scheduleKind === "daily") return `每天 ${wf.dailyTime || "09:00"}`;
@@ -42,6 +41,7 @@ function runStatusMeta(status: OpcWorkflowRun["status"]): { label: string; tone:
 }
 
 export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
+  const { dispatch } = useStore();
   const [workflows, setWorkflows] = useState<OpcWorkflowDefinition[]>([]);
   const [runs, setRuns] = useState<OpcWorkflowRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,33 +54,38 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Run with variables dialog
-  const [runModalWf, setRunModalWf] = useState<OpcWorkflowDefinition | null>(null);
-  const [varValues, setVarValues] = useState<Record<string, string>>({});
-
   // Approval revision note by runId
   const [reviseNotes, setReviseNotes] = useState<Record<string, string>>({});
   const [revisingRunId, setRevisingRunId] = useState<string | null>(null);
 
   const botNameById = useMemo(() => new Map(bots.map(b => [b.id, b.name])), [bots]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const res = await opcApi.listWorkflows();
       setWorkflows(res.workflows);
       setRuns(res.runs);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取工作流失败。");
+      if (!silent) setError(err instanceof Error ? err.message : "读取工作流失败。");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const hasRunning = useMemo(() => runs.some(r => r.status === "running"), [runs]);
+  useEffect(() => {
+    if (!hasRunning) return;
+    const timer = window.setInterval(() => {
+      void load(true);
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [hasRunning, load]);
 
   const openCreateCanvas = () => {
     setEditingWf(null);
@@ -94,30 +99,18 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
     setEditorMode("canvas");
   };
 
-  const triggerRun = useCallback(async (wf: OpcWorkflowDefinition, vars: Record<string, string>) => {
+  const triggerRun = useCallback(async (wf: OpcWorkflowDefinition) => {
     setBusyId(`run:${wf.id}`);
     setError("");
     try {
-      const run = await opcApi.runWorkflow(wf.id, vars);
+      const run = await opcApi.runWorkflow(wf.id, {});
       setRuns(prev => [run, ...prev.filter(r => r.id !== run.id)]);
-      setRunModalWf(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "运行工作流失败。");
     } finally {
       setBusyId(null);
     }
   }, []);
-
-  const handleRunClick = useCallback((wf: OpcWorkflowDefinition) => {
-    if (wf.variables.length > 0) {
-      const initial: Record<string, string> = {};
-      for (const v of wf.variables) initial[v] = "";
-      setVarValues(initial);
-      setRunModalWf(wf);
-      return;
-    }
-    void triggerRun(wf, {});
-  }, [triggerRun]);
 
   const handleCanvasSave = async (payload: WorkflowCanvasPayload, runAfterSave: boolean) => {
     setSaving(true);
@@ -134,7 +127,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
       setEditorMode("list");
       setEditingWf(null);
       if (runAfterSave) {
-        handleRunClick(saved);
+        void triggerRun(saved);
       }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "保存失败。");
@@ -273,11 +266,6 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                           <span className="inline-flex items-center gap-1 rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary">
                             <Clock size={11} /> {scheduleLabel(wf)}
                           </span>
-                          {wf.variables.length > 0 && (
-                            <span className="text-[11px] text-ink-tertiary">
-                              变量：{wf.variables.map(v => `{{${v}}}`).join(" ")}
-                            </span>
-                          )}
                         </div>
                         {wf.description && (
                           <p className="mt-1 text-[12.5px] text-ink-secondary">{wf.description}</p>
@@ -322,7 +310,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                         <button
                           type="button"
                           disabled={busyId !== null}
-                          onClick={() => handleRunClick(wf)}
+                          onClick={() => void triggerRun(wf)}
                           className="inline-flex h-8 items-center gap-1 rounded-full bg-ink/[0.06] px-3 text-[12px] font-medium text-ink hover:bg-ink/[0.11] disabled:opacity-45"
                         >
                           {busyId === `run:${wf.id}` ? <Loader2 size={12.5} className="animate-spin" /> : <Play size={12.5} />}
@@ -370,17 +358,21 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
             </div>
 
             <div className="divide-y divide-hairline/40">
-              {runs.slice(0, 12).map(run => {
+              {runs.slice(0, 12).map((run, runIdx) => {
                 const meta = runStatusMeta(run.status);
                 const waiting = run.status === "waiting_approval";
                 const currentStep = run.stepResults[run.currentStepIndex];
+                const isLastStep = run.currentStepIndex + 1 >= run.stepResults.length;
 
                 return (
                   <article key={run.id} className="py-4 space-y-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
                         <span className="text-[14px] font-medium text-ink">{run.workflowName}</span>
-                        <span className={cn("text-[12px] font-medium", meta.tone)}>{meta.label}</span>
+                        <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", meta.tone)}>
+                          {run.status === "running" && <Loader2 size={12} className="animate-spin" />}
+                          {meta.label}
+                        </span>
                         <span className="text-[11.5px] text-ink-tertiary">
                           {run.trigger === "schedule" ? "定时触发" : "手动触发"}
                         </span>
@@ -391,23 +383,44 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                     </div>
 
                     <div className="space-y-1.5 pl-1">
-                      {run.stepResults.map((sr, idx) => (
-                        <details key={`${run.id}:${sr.stepId}`} open={sr.status === "waiting_approval" || sr.status === "failed"} className="text-[12.5px]">
-                          <summary className="flex cursor-pointer select-none items-center gap-2 py-0.5 text-ink-secondary hover:text-ink">
-                            <span className="tabular-nums text-ink-tertiary">{idx + 1}.</span>
-                            <span className="font-medium text-ink">{sr.stepName}</span>
-                            <span className="text-[11.5px] text-ink-tertiary">{sr.botName}</span>
-                            <span className="ml-auto text-[11px] text-ink-tertiary">
-                              {sr.status === "completed" ? "已完成" : sr.status === "waiting_approval" ? "等老板拍板" : sr.status === "running" ? "执行中" : sr.status === "failed" ? "失败" : "待执行"}
-                            </span>
-                          </summary>
-                          {(sr.output || sr.error) && (
-                            <div className={cn("mt-1.5 whitespace-pre-wrap rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed", sr.error ? "bg-danger/10 text-danger" : "bg-ink/[0.03] text-ink-secondary")}>
-                              {sr.error || sr.output}
-                            </div>
-                          )}
-                        </details>
-                      ))}
+                      {run.stepResults.map((sr, idx) => {
+                        const isFinal = idx === run.stepResults.length - 1;
+                        const defaultOpen = sr.status === "waiting_approval"
+                          || sr.status === "failed"
+                          || (runIdx === 0 && isFinal && Boolean(sr.output));
+                        return (
+                          <details key={`${run.id}:${sr.stepId}`} open={defaultOpen} className="text-[12.5px]">
+                            <summary className="flex cursor-pointer select-none items-center gap-2 py-0.5 text-ink-secondary hover:text-ink">
+                              <span className="tabular-nums text-ink-tertiary">{idx + 1}.</span>
+                              <span className="font-medium text-ink">{sr.stepName}</span>
+                              <span className="text-[11.5px] text-ink-tertiary">{sr.botName}</span>
+                              <div className="ml-auto flex items-center gap-2.5">
+                                {(sr.status === "completed" || sr.status === "waiting_approval" || sr.status === "running") && (
+                                  <button
+                                    type="button"
+                                    onClick={e => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      dispatch({ type: "select", id: sr.botId });
+                                    }}
+                                    className="inline-flex items-center gap-0.5 text-[11px] font-medium text-accent hover:underline"
+                                  >
+                                    查看对话 <ArrowUpRight size={11} />
+                                  </button>
+                                )}
+                                <span className="text-[11px] text-ink-tertiary">
+                                  {sr.status === "completed" ? "已完成" : sr.status === "waiting_approval" ? "等老板拍板" : sr.status === "running" ? "对话执行中…" : sr.status === "failed" ? "失败" : "待执行"}
+                                </span>
+                              </div>
+                            </summary>
+                            {(sr.output || sr.error) && (
+                              <div className={cn("mt-1.5 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed", sr.error ? "bg-danger/10 text-danger" : "bg-ink/[0.03] text-ink-secondary")}>
+                                {sr.error || sr.output}
+                              </div>
+                            )}
+                          </details>
+                        );
+                      })}
                     </div>
 
                     {waiting && currentStep && (
@@ -423,7 +436,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                         )}
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-[12px] text-ink-secondary">
-                            第 {run.currentStepIndex + 1} 步「{currentStep.stepName}」已完成，等待老板拍板推进
+                            第 {run.currentStepIndex + 1} 步「{currentStep.stepName}」已产出结果，等待老板拍板
                           </span>
                           <div className="flex items-center gap-1.5">
                             <button
@@ -455,7 +468,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                               className="inline-flex h-7 items-center gap-1 rounded-full bg-ink px-3 text-[12px] font-medium text-app hover:opacity-85"
                             >
                               {busyId === `dec:${run.id}` ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                              通过并继续
+                              {isLastStep ? "批准定稿" : "通过并继续"}
                             </button>
                           </div>
                         </div>
@@ -468,52 +481,6 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
           </section>
         )}
       </div>
-
-      {/* Run with Variables Native Dialog */}
-      <OpcNativeDialog
-        open={runModalWf !== null}
-        onClose={() => setRunModalWf(null)}
-        ariaLabel="填写工作流运行参数"
-        className="w-[min(92vw,440px)]"
-      >
-        {runModalWf && (
-          <>
-            <div className="flex items-center justify-between border-b border-hairline/60 px-5 py-3.5">
-              <h3 className="text-[14.5px] font-semibold text-ink">运行「{runModalWf.name}」</h3>
-              <button type="button" onClick={() => setRunModalWf(null)} aria-label="关闭" className="rounded-full p-1 text-ink-tertiary hover:bg-ink/[0.06]">
-                <X size={15} />
-              </button>
-            </div>
-            <div className="space-y-3 px-5 py-4">
-              {runModalWf.variables.map(v => (
-                <label key={v} className="block space-y-1">
-                  <span className="text-[12px] text-ink-secondary">{v}</span>
-                  <input
-                    value={varValues[v] ?? ""}
-                    onChange={e => setVarValues(prev => ({ ...prev, [v]: e.target.value }))}
-                    placeholder={`请输入 ${v}`}
-                    className="h-9 w-full rounded-xl border border-hairline/70 bg-inset px-3 text-[13px] text-ink outline-none focus:border-ink/40"
-                  />
-                </label>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2 border-t border-hairline/60 px-5 py-3.5">
-              <button type="button" onClick={() => setRunModalWf(null)} className="h-8 rounded-full px-3 text-[12.5px] text-ink-secondary hover:bg-ink/[0.06]">
-                取消
-              </button>
-              <button
-                type="button"
-                disabled={busyId !== null}
-                onClick={() => void triggerRun(runModalWf, varValues)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink px-4 text-[12.5px] font-medium text-app hover:opacity-85 disabled:opacity-45"
-              >
-                {busyId === `run:${runModalWf.id}` ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-                立即启动
-              </button>
-            </div>
-          </>
-        )}
-      </OpcNativeDialog>
     </div>
   );
 }

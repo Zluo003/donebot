@@ -235,6 +235,7 @@ export interface OpcWorkflowStepRun {
   stepName: string;
   botId: string;
   botName: string;
+  threadId?: string;
   status: "pending" | "running" | "waiting_approval" | "completed" | "failed" | "skipped";
   output?: string;
   error?: string;

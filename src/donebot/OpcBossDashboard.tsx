@@ -13,7 +13,7 @@ import {
   Music,
   RotateCcw,
 } from "lucide-react";
-import type { OpcArtifactItem, OpcBossOverview } from "../../shared/donebot-opc";
+import type { OpcArtifactItem, OpcBossOverview, OpcWorkflowRun } from "../../shared/donebot-opc";
 import { closeInbox } from "@/state/inbox";
 import { useStore } from "@/state/store";
 import { formatCny } from "./market-api";
@@ -186,6 +186,7 @@ export function OpcBossDashboard() {
   const [overview, setOverview] = useState<OpcBossOverview | null>(null);
   const [spendOpen, setSpendOpen] = useState(false);
   const [approvalsExpanded, setApprovalsExpanded] = useState(true);
+  const [wfBusyId, setWfBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -220,6 +221,19 @@ export function OpcBossDashboard() {
     dispatch({ type: "focusMessage", threadId: item.threadId, messageId: item.reportMessageId });
   };
 
+  const waitingWorkflowRuns: OpcWorkflowRun[] = overview.waitingWorkflowRuns ?? [];
+  const totalPendingCount = overview.pendingArtifactCount + waitingWorkflowRuns.length;
+
+  const approveWorkflowRun = async (runId: string) => {
+    setWfBusyId(runId);
+    try {
+      await opcApi.decideWorkflowRun(runId, { action: "approve" });
+      await load();
+    } finally {
+      setWfBusyId(null);
+    }
+  };
+
   return (
     <section aria-label="老板批示台" className="mx-[13px] mb-2 mt-1 space-y-2.5">
       <div className="flex items-center justify-between px-0.5">
@@ -239,10 +253,10 @@ export function OpcBossDashboard() {
         <OpcMetricCard
           icon={CheckCircle2}
           label="待我拍板"
-          value={overview.pendingArtifactCount}
-          tone={overview.pendingArtifactCount > 0 ? "accent" : "neutral"}
-          active={approvalsExpanded && overview.pendingArtifactCount > 0}
-          onClick={overview.pendingArtifactCount > 0 ? () => setApprovalsExpanded(v => !v) : undefined}
+          value={totalPendingCount}
+          tone={totalPendingCount > 0 ? "accent" : "neutral"}
+          active={approvalsExpanded && totalPendingCount > 0}
+          onClick={totalPendingCount > 0 ? () => setApprovalsExpanded(v => !v) : undefined}
         />
         <OpcMetricCard
           icon={overview.trippedCircuitBreakerCount > 0 ? AlertTriangle : Activity}
@@ -305,12 +319,61 @@ export function OpcBossDashboard() {
         </div>
       )}
 
-      {approvalsExpanded && overview.pendingArtifacts.length > 0 && (
+      {approvalsExpanded && totalPendingCount > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between px-0.5 text-[11.5px] text-ink-tertiary">
-            <span>待拍板交付物</span>
-            <span className="tabular-nums">{overview.pendingArtifacts.length} 项</span>
+            <span>待拍板项目</span>
+            <span className="tabular-nums">{totalPendingCount} 项</span>
           </div>
+          {waitingWorkflowRuns.slice(0, 3).map(run => {
+            const step = run.stepResults[run.currentStepIndex];
+            const isLast = run.currentStepIndex + 1 >= run.stepResults.length;
+            return (
+              <article key={run.id} className="flex flex-col gap-2 rounded-xl bg-card p-3 ring-[0.5px] ring-hairline/60">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-[12px] font-medium text-ink">
+                    {run.workflowName} · {step?.stepName}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-ink-tertiary">{step?.botName}</span>
+                </div>
+                {step?.output && (
+                  <div className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg bg-raised/60 px-2.5 py-2 text-[11.5px] leading-relaxed text-ink-secondary">
+                    {step.output}
+                  </div>
+                )}
+                <OpcDecisionCardFooter
+                  leading={
+                    step?.botId ? (
+                      <button
+                        type="button"
+                        onClick={() => { closeInbox(); dispatch({ type: "select", id: step.botId }); }}
+                        className="text-[11.5px] text-accent hover:underline"
+                      >
+                        查看对话
+                      </button>
+                    ) : null
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => { closeInbox(); dispatch({ type: "showBoss" }); }}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-raised px-2.5 text-[12px] font-medium text-ink-secondary hover:bg-control hover:text-ink"
+                  >
+                    批注返工
+                  </button>
+                  <button
+                    type="button"
+                    disabled={wfBusyId === run.id}
+                    onClick={() => void approveWorkflowRun(run.id)}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-accent px-2.5 text-[12px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
+                  >
+                    {wfBusyId === run.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                    {isLast ? "批准定稿" : "通过"}
+                  </button>
+                </OpcDecisionCardFooter>
+              </article>
+            );
+          })}
           {overview.pendingArtifacts.slice(0, 4).map(item => (
             <BossApprovalCard
               key={item.id}

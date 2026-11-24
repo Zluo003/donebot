@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
-  extractWorkflowVariables,
   type OpcOrgBlueprint,
   type OpcOrgChartState,
   type OpcOrgEnforcementMode,
@@ -13,7 +12,6 @@ import {
   type OpcWorkflowDefinition,
   type OpcWorkflowRun,
   type OpcWorkflowScheduleKind,
-  type OpcWorkflowStep,
   type OpcWorkflowStepRun,
 } from "../../shared/donebot-opc.ts";
 import {
@@ -26,6 +24,11 @@ import {
   reconcileOrgChartWithBots,
   validateOrgReportsTo,
 } from "../../shared/donebot-opc-org-sync.ts";
+import {
+  buildWorkflowStepPrompt,
+  type WorkflowTurnInput,
+  type WorkflowTurnOutput,
+} from "./opc-workflow-runner.ts";
 export { resolveWorkflowExecutionPlan } from "../../shared/donebot-opc-graph.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
@@ -460,7 +463,7 @@ export class DoneBotOrgWorkflowStore {
       ...(triggerPosition ? { triggerPosition } : {}),
       ...(entryStepIds !== undefined ? { entryStepIds } : {}),
       steps,
-      variables: extractWorkflowVariables(steps),
+      variables: [],
       maxConsecutiveFailures: Math.max(2, Math.min(10, Math.round(input.maxConsecutiveFailures ?? 3))),
       consecutiveFailures: 0,
       pausedByCircuitBreaker: false,
@@ -523,7 +526,7 @@ export class DoneBotOrgWorkflowStore {
       ...(triggerPosition ? { triggerPosition } : {}),
       ...(normalized.entryStepIds !== undefined ? { entryStepIds: normalized.entryStepIds } : {}),
       steps: normalized.steps,
-      variables: extractWorkflowVariables(normalized.steps),
+      variables: [],
       ...(patch.maxConsecutiveFailures !== undefined ? { maxConsecutiveFailures: Math.max(2, Math.min(10, Math.round(patch.maxConsecutiveFailures))) } : {}),
       ...(patch.pausedByCircuitBreaker !== undefined ? { pausedByCircuitBreaker: patch.pausedByCircuitBreaker } : {}),
       ...(patch.consecutiveFailures !== undefined ? { consecutiveFailures: patch.consecutiveFailures } : {}),
@@ -592,57 +595,34 @@ export class DoneBotOrgWorkflowStore {
   }
 }
 
-function interpolateTemplate(template: string, variables: Record<string, string>): string {
-  return template.replace(/\{\{\s*([a-zA-Z0-9_\u4e00-\u9fa5-]+)\s*\}\}/g, (_m, key: string) => {
-    const val = variables[key];
-    return val !== undefined && val !== "" ? val : `{{${key}}}`;
-  });
-}
-
-function buildStepPrompt(
-  wf: OpcWorkflowDefinition,
-  step: OpcWorkflowStep,
-  stepIndex: number,
-  totalSteps: number,
-  variables: Record<string, string>,
-  completedSteps: readonly OpcWorkflowStepRun[],
-  revisionNote?: string,
-): string {
-  const rendered = interpolateTemplate(step.instruction, variables);
-  const sections: string[] = [
-    `[固定工作流执行] 工作流「${wf.name}」· 第 ${stepIndex + 1}/${totalSteps} 步「${step.name}」（固定工作流优先于日常组织架构约束，可跨部门直接交付本环节产出）`,
-  ];
-  if (completedSteps.length > 0) {
-    const prevBlock = completedSteps
-      .map((s, idx) => `### 上游节点 ${idx + 1} · ${s.stepName}（${s.botName}）\n${s.output || "(无文本输出)"}`)
-      .join("\n\n");
-    const fence = safeFence(prevBlock);
-    sections.push(`上游阶段已完成产出：\n${fence}\n${prevBlock}\n${fence}`);
-  }
-  sections.push(`本步执行任务：\n${rendered}`);
-  if (revisionNote) {
-    sections.push(`老板打回返工意见（请针对性修正并给出新版产出）：\n${revisionNote}`);
-  }
-  if (step.approvalGate) {
-    sections.push("提示：本步完成后将暂停并提交给老板拍板确认，请输出结构清晰、便于审阅的完整结果。");
-  }
-  return sections.join("\n\n");
-}
-
 export interface DoneBotOrgWorkflowRouteDeps {
   orgStore: DoneBotOrgWorkflowStore;
   store: Store;
+  runBotTurn?: (input: WorkflowTurnInput) => Promise<WorkflowTurnOutput>;
   generateBotText?: (botId: string, prompt: string, signal?: AbortSignal) => Promise<string | undefined>;
   startTurn?: (botId: string, text: string, opts?: { threadId?: string; automated?: boolean }) => Promise<unknown>;
   enableScheduler?: boolean;
 }
 
 export type DoneBotOrgWorkflowRouteHandler = RouteHandler & {
-  triggerWorkflow: (wf: OpcWorkflowDefinition, trigger: "manual" | "schedule", variables: Record<string, string>) => Promise<OpcWorkflowRun>;
+  triggerWorkflow: (wf: OpcWorkflowDefinition, trigger: "manual" | "schedule", variables?: Record<string, string>) => Promise<OpcWorkflowRun>;
 };
 
 export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps): DoneBotOrgWorkflowRouteHandler {
   const activeRunByWorkflow = new Set<string>();
+
+  async function settleOrReturnRunning(
+    execPromise: Promise<OpcWorkflowRun>,
+    runId: string,
+    fallback: OpcWorkflowRun,
+  ): Promise<OpcWorkflowRun> {
+    const fast = await Promise.race([
+      execPromise,
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 800)),
+    ]);
+    if (fast) return fast;
+    return deps.orgStore.getWorkflowRun(runId) ?? fallback;
+  }
 
   async function executeFromStep(
     wf: OpcWorkflowDefinition,
@@ -697,20 +677,39 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
         const completedPrev = plan.isExplicitGraph
           ? priorCompleted.filter(s => directParentIds.includes(s.stepId))
           : priorCompleted;
-        const prompt = buildStepPrompt(
+        const hasDownstream = plan.isExplicitGraph
+          ? plan.orderedSteps.some(other => (plan.parentsByStepId.get(other.id) ?? []).includes(step.id))
+          : i < totalSteps - 1;
+        const { prompt, peerFrom } = buildWorkflowStepPrompt({
           wf,
           step,
-          i,
+          stepIndex: i,
           totalSteps,
-          current.variables,
-          completedPrev,
-          i === startIndex ? revisionNote : undefined,
-        );
+          completedSteps: completedPrev,
+          isFinalStep: !hasDownstream,
+          revisionNote: i === startIndex ? revisionNote : undefined,
+        });
 
         try {
           let output = "";
-          if (deps.generateBotText) {
+          if (deps.runBotTurn) {
+            const turnRes = await deps.runBotTurn({
+              botId: bot.id,
+              prompt,
+              threadId: i === startIndex && revisionNote ? stepRun.threadId : undefined,
+              workflowTitle: `${wf.name} · ${step.name}`,
+              peerFrom,
+            });
+            if (turnRes.threadId) stepRun.threadId = turnRes.threadId;
+            if (!turnRes.ok) {
+              throw new Error(turnRes.text || "员工执行该步骤失败。");
+            }
+            output = turnRes.text.trim();
+          } else if (deps.generateBotText) {
             output = (await deps.generateBotText(bot.id, prompt))?.trim() ?? "";
+            if (!output) {
+              throw new Error("模型未返回有效文本内容。");
+            }
           } else if (deps.startTurn) {
             await deps.startTurn(bot.id, prompt, { automated: true });
             output = `已派发至「${bot.name}」会话执行。`;
@@ -718,7 +717,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
             throw new Error("当前环境暂不支持执行工作流步骤。");
           }
 
-          stepRun.output = output || "（本步已完成）";
+          stepRun.output = output;
           stepRun.finishedAt = Date.now();
 
           if (step.approvalGate) {
@@ -774,7 +773,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
   async function triggerWorkflow(
     wf: OpcWorkflowDefinition,
     trigger: "manual" | "schedule",
-    variables: Record<string, string>,
+    variables: Record<string, string> = {},
   ): Promise<OpcWorkflowRun> {
     const plan = resolveWorkflowExecutionPlan(wf);
     const run: OpcWorkflowRun = {
@@ -795,7 +794,8 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
       startedAt: Date.now(),
     };
     deps.orgStore.saveWorkflowRun(run);
-    return executeFromStep(wf, run, 0);
+    const execPromise = executeFromStep(wf, run, 0);
+    return trigger === "manual" ? settleOrReturnRunning(execPromise, run.id, run) : execPromise;
   }
 
   if (deps.enableScheduler !== false) {
@@ -937,7 +937,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
 
         if (body.action === "revise") {
           const note = body.note?.trim() || "请按要求重新完善本步骤产出。";
-          const next = await executeFromStep(wf, run, idx, note);
+          const next = await settleOrReturnRunning(executeFromStep(wf, run, idx, note), run.id, run);
           json(res, 200, { run: next });
           return;
         }
@@ -952,7 +952,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
             json(res, 200, { run: done });
             return;
           }
-          const next = await executeFromStep(wf, run, idx + 1);
+          const next = await settleOrReturnRunning(executeFromStep(wf, run, idx + 1), run.id, run);
           json(res, 200, { run: next });
           return;
         }

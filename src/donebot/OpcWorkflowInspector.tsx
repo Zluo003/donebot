@@ -28,7 +28,6 @@ export function OpcWorkflowInspector({
   intervalMinutes,
   entryStepIds,
   nodes,
-  detectedVars,
   onNameChange,
   onDescriptionChange,
   onScheduleKindChange,
@@ -49,7 +48,6 @@ export function OpcWorkflowInspector({
   intervalMinutes: number;
   entryStepIds: string[];
   nodes: WorkflowDraftNode[];
-  detectedVars: string[];
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onScheduleKindChange: (value: OpcWorkflowScheduleKind) => void;
@@ -151,19 +149,6 @@ export function OpcWorkflowInspector({
                 })}
               </div>
             </div>
-
-            {detectedVars.length > 0 && (
-              <div className="space-y-1.5 border-t border-hairline/40 pt-4">
-                <div className="text-[11.5px] font-medium text-ink-tertiary">已识别运行变量</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {detectedVars.map(v => (
-                    <span key={v} className="rounded-full bg-ink/[0.06] px-2.5 py-0.5 text-[11.5px] text-ink-secondary">
-                      {`{{${v}}}`}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </>
       ) : (
@@ -209,15 +194,20 @@ export function OpcWorkflowInspector({
 
             <label className="block space-y-1.5">
               <span className="text-[11.5px] text-ink-tertiary">
-                执行指令（支持 <code className="rounded bg-ink/[0.06] px-1">{"{{变量名}}"}</code>）
+                任务指令（自然语言）
               </span>
               <textarea
                 value={selectedNode.instruction}
                 onChange={e => onPatchNode(selectedNode.id, { instruction: e.target.value })}
                 rows={5}
-                placeholder="写明本节点要交付的内容。系统会自动把上游连线节点的产出注入上下文。"
+                placeholder="直接用自然语言写明本节点要完成的任务；上游连线机器人的真实回复会自动通过对话交接给当前机器人。"
                 className="w-full resize-none rounded-lg border border-hairline/70 bg-inset px-2.5 py-2 leading-relaxed text-ink outline-none focus:border-ink/40"
               />
+              <span className="block text-[11px] leading-relaxed text-ink-tertiary">
+                {selectedNode.nextStepIds.length === 0
+                  ? "此节点为最终步骤，完成后将在该机器人的聊天窗口直接输出最终结果。"
+                  : "完成后，当前机器人的真实回复将自动交接给下游连线机器人。"}
+              </span>
             </label>
 
             <div className="flex items-center justify-between gap-3 border-t border-hairline/40 pt-4">

@@ -8,6 +8,7 @@ import { createDoneBotAccountRoutes } from "./routes.ts";
 import { DoneBotOpcStore } from "./opc-store.ts";
 import { createDoneBotOpcRoutes } from "./opc-routes.ts";
 import { createDoneBotOrgWorkflowRoutes, DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
+import { createWorkflowTurnRunner } from "./opc-workflow-runner.ts";
 import { handleDoneBotOpcWorkflowInternal } from "./opc-workflow-tools.ts";
 
 const tempDirs: string[] = [];
@@ -107,22 +108,22 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
       return { status, payload: payload as Record<string, unknown> };
     };
 
-    // 1. Create workflow with {{主题}} variable and approval gate on step 1
+    // 1. Create workflow with plain natural-language instructions (no template variables) and approval gate on step 1
     const created = await call("POST", "/api/donebot/opc/workflows", {
       name: "每日小红书流水线",
       scheduleKind: "daily",
       dailyTime: "09:00",
       steps: [
-        { name: "写爆款脚本", botId: writer.id, instruction: "围绕「{{主题}}」写一篇爆款脚本", approvalGate: true },
+        { name: "写爆款脚本", botId: writer.id, instruction: "围绕一人公司效率主题写一篇爆款脚本", approvalGate: true },
         { name: "配封面视觉", botId: designer.id, instruction: "根据上游脚本设计封面方案", approvalGate: false },
       ],
     });
     expect(created.status).toBe(201);
     const wf = created.payload.workflow as { id: string; variables: string[] };
-    expect(wf.variables).toEqual(["主题"]);
+    expect(wf.variables).toEqual([]);
 
     // 2. Run workflow -> stops at step 1 approval gate
-    const started = await call("POST", `/api/donebot/opc/workflows/${wf.id}/run`, { variables: { 主题: "一人公司效率" } });
+    const started = await call("POST", `/api/donebot/opc/workflows/${wf.id}/run`, {});
     expect(started.status).toBe(200);
     const run1 = started.payload.run as { id: string; status: string; stepResults: Array<{ output?: string; status: string }> };
     expect(run1.status).toBe("waiting_approval");
@@ -327,7 +328,7 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
       orgStore,
       store,
       generateBotText: async (botId, prompt) => {
-        executed.push(`${botId}:${prompt.includes("固定工作流优先于日常组织架构约束") ? "priority" : "plain"}`);
+        executed.push(`${botId}:${prompt.includes("跨部门爆款生产流") ? "priority" : "plain"}`);
         return `完成-${botId}`;
       },
       enableScheduler: false,
@@ -477,5 +478,96 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     expect(chart.nodes[botB.id]?.reportsToBotId).toBe(botA.id);
     expect(chart.nodes[botC.id]?.reportsToBotId).toBe(botA.id);
     expect(chart.nodes[botD.id]?.reportsToBotId).toBe(botA.id);
+  });
+
+  it("drives real bot chat turns with peerAsk handoff between nodes, outputs final reply in last bot's chat, and exposes real content to Boss approval", async () => {
+    const orgStore = new DoneBotOrgWorkflowStore(makeTempFile());
+    const majiang = makeBot("b-majiang", "码匠");
+    const deepseek = makeBot("b-deepseek", "DeepSeek");
+    const bots = [majiang, deepseek];
+
+    const chatMessages = new Map<string, Array<{ role: string; kind: string; text?: string; peerAsk?: { botId: string; name: string; unattended?: boolean } }>>();
+    for (const b of bots) chatMessages.set(b.threadId, []);
+
+    const store = {
+      bots,
+      bot: (id: string) => bots.find(b => b.id === id),
+      taskByThread: (botId: string, threadId: string) => (bots.some(b => b.id === botId && b.threadId === threadId) ? { threadId } : null),
+      messagesFor: (threadId: string) => chatMessages.get(threadId) ?? [],
+      createTask: (botId: string, title: string) => {
+        const tid = `task-${botId}-${title}`;
+        chatMessages.set(tid, []);
+        return { threadId: tid };
+      },
+    } as unknown as Store;
+
+    const runBotTurn = createWorkflowTurnRunner({
+      store,
+      threadBusy: () => false,
+      startTurn: async (botId, text, opts) => {
+        const tid = opts?.threadId ?? "";
+        const list = chatMessages.get(tid) ?? [];
+        list.push({ role: "user", kind: "text", text, ...(opts?.peerAsk ? { peerAsk: opts.peerAsk } : {}) });
+        const reply = botId === majiang.id
+          ? "老板中午好！今日研发进展顺利，核心接口均已稳定上线。"
+          : text.includes("语气再亲切一点")
+            ? "老板中午好呀！汇报一下今日好消息：核心功能已稳稳上线，请您放心！"
+            : "老板中午好！为您汇总今日进展：核心接口全部稳定运行，祝您用餐愉快！";
+        list.push({ role: "bot", kind: "text", text: reply });
+        chatMessages.set(tid, list);
+        opts?.onSettled?.({ ok: true, text: reply });
+        return {};
+      },
+    });
+
+    const route = createDoneBotOrgWorkflowRoutes({ orgStore, store, runBotTurn, enableScheduler: false });
+    const wf = orgStore.createWorkflow({
+      name: "向老板请安",
+      scheduleKind: "daily",
+      dailyTime: "15:00",
+      steps: [
+        { id: "s1", name: "码匠文案", botId: majiang.id, instruction: "起草一段今日研发进展向老板请安的草稿", approvalGate: false, nextStepIds: ["s2"] },
+        { id: "s2", name: "优化", botId: deepseek.id, instruction: "润色上游草稿并在对话中向老板输出温暖正式的问候", approvalGate: true, nextStepIds: [] },
+      ],
+      entryStepIds: ["s1"],
+    });
+
+    const run1 = await route.triggerWorkflow(wf, "manual");
+    expect(run1.status).toBe("waiting_approval");
+    expect(run1.stepResults[0]?.output).toContain("今日研发进展顺利");
+    expect(run1.stepResults[1]?.output).toContain("祝您用餐愉快");
+    expect(run1.stepResults[1]?.output).not.toBe("（本步已完成）");
+
+    // Verify peer-to-peer chat handoff in DeepSeek's conversation thread + final bot output in chat!
+    const deepseekChat = chatMessages.get(deepseek.threadId) ?? [];
+    expect(deepseekChat).toHaveLength(2);
+    expect(deepseekChat[0]?.peerAsk).toEqual({ botId: majiang.id, name: "码匠", unattended: true });
+    expect(deepseekChat[0]?.text).toContain("今日研发进展顺利");
+    expect(deepseekChat[1]?.role).toBe("bot");
+    expect(deepseekChat[1]?.text).toContain("祝您用餐愉快");
+
+    // Boss Console waiting runs receive the exact real generated content
+    const waiting = orgStore.listWaitingWorkflowRuns();
+    expect(waiting).toHaveLength(1);
+    expect(waiting[0]?.stepResults[1]?.output).toContain("祝您用餐愉快");
+
+    // Boss requests revision on step 2 -> continues in DeepSeek's same thread and updates approval content
+    let revStatus = 0;
+    let revPayload: Record<string, unknown> = {};
+    await route({
+      req: {} as never,
+      res: { setHeader: vi.fn() } as never,
+      url: new URL(`http://127.0.0.1/api/donebot/opc/workflow-runs/${run1.id}/decision`),
+      path: `/api/donebot/opc/workflow-runs/${run1.id}/decision`,
+      method: "POST",
+      auth: { kind: "loopback", scopes: ["admin"] } as never,
+      json: (_r: unknown, code: number, val: unknown) => { revStatus = code; revPayload = val as Record<string, unknown>; },
+      readBody: async () => ({ action: "revise", note: "语气再亲切一点" }),
+    } as never);
+    expect(revStatus).toBe(200);
+    const revisedRun = revPayload.run as { status: string; stepResults: Array<{ output?: string }> };
+    expect(revisedRun.status).toBe("waiting_approval");
+    expect(revisedRun.stepResults[1]?.output).toContain("请您放心");
+    expect((chatMessages.get(deepseek.threadId) ?? []).at(-1)?.text).toContain("请您放心");
   });
 });

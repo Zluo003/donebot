@@ -232,7 +232,7 @@ export function OpcOrgChartView({
     const tree = layoutTopDownOrgChart(rootInput);
     const nodeById = new Map(tree.nodes.map(n => [n.id, n]));
     const deptBoxes: DepartmentClusterBox[] = hasNamedDepartments
-      ? computeDepartmentClusters(tree.nodes, sections.map(s => s.key), tree.width)
+      ? computeDepartmentClusters(tree.nodes, [...new Set(["", ...sections.map(s => s.key)])], tree.width)
       : [];
     const maxBoxRight = deptBoxes.length
       ? Math.max(...deptBoxes.map(b => b.x + b.width + 64))

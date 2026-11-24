@@ -440,4 +440,78 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(chiefOpt.disabled).toBe(false);
     expect(leadOpt.disabled).toBe(false);
   });
+
+  it("encloses the system chief and all unassigned general-department bots inside one unified general box without overlapping other departments", () => {
+    const tree = layoutTopDownOrgChart({
+      id: "__boss__",
+      name: "你（老板）",
+      role: "最终拍板",
+      status: "owner",
+      section: "",
+      reports: [
+        {
+          id: "g-chief",
+          name: "多宝",
+          role: "系统总协调",
+          status: "idle",
+          section: "",
+          reports: [
+            {
+              id: "dev-1",
+              name: "码匠",
+              role: "部门负责人",
+              status: "idle",
+              section: "开发部",
+              reports: [
+                { id: "dev-2", name: "前端", role: "AI 员工", status: "idle", section: "开发部", reports: [] },
+                { id: "dev-3", name: "后端", role: "AI 员工", status: "idle", section: "开发部", reports: [] },
+              ],
+            },
+            { id: "gen-1", name: "DeepSeek", role: "AI 员工", status: "idle", section: "", reports: [] },
+            { id: "gen-2", name: "通用助理", role: "AI 员工", status: "idle", section: "", reports: [] },
+          ],
+        },
+      ],
+    });
+
+    const boxes = computeDepartmentClusters(tree.nodes, ["", "开发部"], tree.width);
+    const generalBoxes = boxes.filter(b => b.sectionKey === "");
+    const devBoxes = boxes.filter(b => b.sectionKey === "开发部");
+    expect(generalBoxes).toHaveLength(1);
+    expect(generalBoxes[0]!.empty).toBe(false);
+    expect(generalBoxes[0]!.nodeIds).toEqual(["g-chief", "gen-1", "gen-2"]);
+    expect(devBoxes).toHaveLength(1);
+    expect(devBoxes[0]!.nodeIds).toEqual(["dev-1", "dev-2", "dev-3"]);
+    // General box and Dev box must remain horizontally disjoint (non-overlapping)
+    expect(generalBoxes[0]!.x + generalBoxes[0]!.width).toBeLessThan(devBoxes[0]!.x);
+    // Edge from general chief to Dev chief is cross-department; edges to general members are intra-department
+    expect(tree.edges.find(e => e.parent.id === "g-chief" && e.child.id === "dev-1")?.crossDepartment).toBe(true);
+    expect(tree.edges.find(e => e.parent.id === "g-chief" && e.child.id === "gen-1")?.crossDepartment).toBe(false);
+
+    // When general only has the system chief and no other general bots, chief stays in one general box above Dev.
+    const chiefOnlyTree = layoutTopDownOrgChart({
+      id: "__boss__",
+      name: "你（老板）",
+      role: "最终拍板",
+      status: "owner",
+      section: "",
+      reports: [
+        {
+          id: "g-chief",
+          name: "多宝",
+          role: "系统总协调",
+          status: "idle",
+          section: "",
+          reports: [
+            { id: "dev-1", name: "码匠", role: "部门负责人", status: "idle", section: "开发部", reports: [] },
+          ],
+        },
+      ],
+    });
+    const chiefOnlyBoxes = computeDepartmentClusters(chiefOnlyTree.nodes, ["", "开发部"], chiefOnlyTree.width);
+    const chiefOnlyGeneral = chiefOnlyBoxes.filter(b => b.sectionKey === "");
+    expect(chiefOnlyGeneral).toHaveLength(1);
+    expect(chiefOnlyGeneral[0]!.empty).toBe(false);
+    expect(chiefOnlyGeneral[0]!.nodeIds).toEqual(["g-chief"]);
+  });
 });

@@ -489,17 +489,23 @@ export function TeamMapPage() {
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-app text-ink">
-      <header {...dragProps} className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline/40 px-6 py-3.5 max-md:pl-12">
-        <div>
+      <header
+        {...dragProps}
+        className={cn(
+          "flex shrink-0 items-center justify-between gap-4 border-b border-hairline/40 px-6 py-3.5 max-md:pl-12",
+          !opcOrgEnabled && "flex-wrap",
+        )}
+      >
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
-            <UsersRound size={17} className="text-ink-secondary" />
-            <h1 className="text-[16px] font-semibold">{opcOrgEnabled ? "组织与流程" : t("canvas.title")}</h1>
-            <span className="ml-0.5 text-[11.5px] tabular-nums text-ink-tertiary">{teamMapBotCount(bots.length)}</span>
+            <UsersRound size={17} className="shrink-0 text-ink-secondary" />
+            <h1 className="truncate text-[16px] font-semibold">{opcOrgEnabled ? "组织与流程" : t("canvas.title")}</h1>
+            <span className="ml-0.5 shrink-0 text-[11.5px] tabular-nums text-ink-tertiary">{teamMapBotCount(bots.length)}</span>
           </div>
-          <p className="mt-0.5 text-[12px] text-ink-tertiary">
+          <p className="mt-0.5 truncate text-[12px] text-ink-tertiary">
             {opcOrgEnabled
               ? opcTab === "org"
-                ? "扁平与部门组织统一视图 · 拖卡片调汇报或部门，右侧圆点拉跨部门交接线"
+                ? "拖卡片调汇报或部门，右侧圆点拉跨部门交接线"
                 : "固定工作流优先于组织架构约束直接跨部门执行，可画布编排或让主协调 Bot 创建"
               : t("canvas.description")}
           </p>
@@ -508,21 +514,32 @@ export function TeamMapPage() {
         {teamPeople ? (
           <MapModeToggle />
         ) : opcOrgEnabled ? (
-          <div role="tablist" aria-label="组织与流程视图" className="inline-flex items-center rounded-full bg-ink/[0.05] p-0.5">
+          <div
+            role="tablist"
+            aria-label="组织与流程视图"
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Home" || e.key === "End") {
+                e.preventDefault();
+                const next = e.key === "Home" ? "org" : e.key === "End" ? "workflows" : (opcTab === "org" ? "workflows" : "org");
+                setOpcTab(next);
+                document.getElementById(`opc-tab-${next}`)?.focus();
+              }
+            }}
+            className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-ink/[0.06] p-0.5 ring-[0.5px] ring-hairline/60"
+          >
             {([
               { id: "org", label: "组织架构" },
               { id: "workflows", label: "固定工作流" },
             ] as const).map(item => (
               <button
                 key={item.id}
+                id={`opc-tab-${item.id}`}
                 type="button"
                 role="tab"
+                tabIndex={opcTab === item.id ? 0 : -1}
                 aria-selected={opcTab === item.id}
                 onClick={() => setOpcTab(item.id)}
-                className={cn(
-                  "rounded-full px-3.5 py-1 text-[12px] font-medium transition-colors",
-                  opcTab === item.id ? "bg-ink text-app" : "text-ink-secondary hover:text-ink",
-                )}
+                className="rounded-full border border-transparent px-3.5 py-1 text-[12px] font-medium text-ink-secondary transition-colors hover:text-ink aria-[selected=true]:border-ink/15 aria-[selected=true]:bg-ink aria-[selected=true]:text-app aria-[selected=true]:shadow-2xs focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
               >
                 {item.label}
               </button>
@@ -530,96 +547,127 @@ export function TeamMapPage() {
           </div>
         ) : null}
 
-        {!remoteClient && (
+        {!remoteClient && !opcOrgEnabled && (
           <div className="flex flex-wrap items-center gap-2.5">
-            {opcOrgEnabled && opcTab === "org" && (
-              <>
-                <label
-                  title="关闭：自由协作（架构仅作提示参考）。开启：服务端硬拦截越级派单与未授权跨部门派单。"
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-hairline/70 bg-panel/80 px-3 py-1 text-[12px] text-ink-secondary hover:border-ink/30"
-                >
-                  <span className="font-medium text-ink">按架构约束</span>
-                  <Switch
-                    checked={orgState.enforcementMode === "enforced"}
-                    disabled={orgModeBusy}
-                    aria-label="开启按架构约束"
-                    onClick={() => void patchOrgSettings({ enforcementMode: orgState.enforcementMode === "enforced" ? "free" : "enforced" })}
-                  />
-                </label>
-
-                {orgState.enforcementMode === "enforced" && (
-                  <label
-                    title="默认严格模式关闭。开启后，各部门负责人之间无需拉交接线即可跨部门直通派单。"
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-hairline/70 bg-panel/80 px-3 py-1 text-[12px] text-ink-secondary hover:border-ink/30"
-                  >
-                    <span>部门负责人直通</span>
-                    <Switch
-                      checked={Boolean(orgState.allowChiefCrossDispatch)}
-                      disabled={orgModeBusy}
-                      aria-label="开启部门负责人跨部门直通"
-                      onClick={() => void patchOrgSettings({ allowChiefCrossDispatch: !orgState.allowChiefCrossDispatch })}
-                    />
-                  </label>
-                )}
-
-                {hasNamedDepartments && (
-                  <button
-                    type="button"
-                    disabled={orgModeBusy}
-                    onClick={() => void alignOrgByDepartments()}
-                    title="将各部门成员汇报线一键归入本部门负责人（无负责人部门自动平级），之后仍可拖拽建多级结构"
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-3 text-[12px] font-medium text-ink-secondary hover:bg-ink/[0.1] hover:text-ink disabled:opacity-45"
-                  >
-                    <GitBranch size={12.5} /> 按部门对齐
-                  </button>
-                )}
-
-                {admin !== false && (
-                  <button
-                    type="button"
-                    onClick={() => setTeamEditor({})}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink px-3.5 text-[12px] font-medium text-app hover:opacity-85"
-                  >
-                    <Plus size={13} /> 新建部门
-                  </button>
-                )}
-              </>
-            )}
-
-            {!opcOrgEnabled && (
-              <>
-                <button onClick={() => setShowComputers(!showComputers)} aria-pressed={showComputers} title={t("canvas.showComputersHint")}
-                  className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium transition-colors", showComputers ? "border-accent/40 bg-accent/10 text-ink" : "border-hairline/60 bg-panel text-ink-secondary hover:bg-control hover:text-ink")}>
-                  <span aria-hidden className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", showComputers ? "bg-accent" : "bg-control")}>
-                    <span className={cn("absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-[left]", showComputers ? "left-3.5" : "left-0.5")} />
-                  </span>
-                  {t("canvas.showComputers")}
-                </button>
-                {UPSTREAM_SERVICES.boat && <button onClick={() => setComputersOpen((value) => !value)} aria-label={t("canvas.computers")} aria-expanded={computersOpen} className="rounded-lg p-2 text-ink-secondary hover:bg-control hover:text-ink"><Monitor size={17} /></button>}
-                {admin !== false && <details className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.removeAttribute("open"); }} onKeyDown={(event) => {
-                  if (event.key === "Escape") { event.currentTarget.removeAttribute("open"); event.currentTarget.querySelector("summary")?.focus(); }
-                }}>
-                  <summary aria-label={t("canvas.addToMap")} className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-hairline/60 bg-panel px-3 py-2 text-[12px] font-medium hover:bg-control [&::-webkit-details-marker]:hidden"><Plus size={14} /> {t("common.add")}</summary>
-                  <div className="absolute right-0 top-full z-40 mt-2 w-52 rounded-xl border border-hairline/60 bg-panel p-1.5 shadow-xl" onClick={(event) => {
-                    const details = event.currentTarget.closest("details"); details?.querySelector("summary")?.focus(); details?.removeAttribute("open");
-                  }}>
-                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => setTeamEditor({})}><Users size={14} />{t("team.create")}</button>
-                    {UPSTREAM_SERVICES.boat && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => { setComputersOpen(true); setCreateComputerRequest((value) => value + 1); }}><Box size={14} />{t("canvas.cloudComputer")}</button>}
-                    {placeOffered("vm", state.config) && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => dispatch({ type: "toggleAppSettings", section: "computer", open: true })}><Monitor size={14} />{t("canvas.localVm")}</button>}
-                  </div>
-                </details>}
-              </>
-            )}
+            <button onClick={() => setShowComputers(!showComputers)} aria-pressed={showComputers} title={t("canvas.showComputersHint")}
+              className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium transition-colors", showComputers ? "border-accent/40 bg-accent/10 text-ink" : "border-hairline/60 bg-panel text-ink-secondary hover:bg-control hover:text-ink")}>
+              <span aria-hidden className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", showComputers ? "bg-accent" : "bg-control")}>
+                <span className={cn("absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-[left]", showComputers ? "left-3.5" : "left-0.5")} />
+              </span>
+              {t("canvas.showComputers")}
+            </button>
+            {UPSTREAM_SERVICES.boat && <button onClick={() => setComputersOpen((value) => !value)} aria-label={t("canvas.computers")} aria-expanded={computersOpen} className="rounded-lg p-2 text-ink-secondary hover:bg-control hover:text-ink"><Monitor size={17} /></button>}
+            {admin !== false && <details className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.removeAttribute("open"); }} onKeyDown={(event) => {
+              if (event.key === "Escape") { event.currentTarget.removeAttribute("open"); event.currentTarget.querySelector("summary")?.focus(); }
+            }}>
+              <summary aria-label={t("canvas.addToMap")} className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-hairline/60 bg-panel px-3 py-2 text-[12px] font-medium hover:bg-control [&::-webkit-details-marker]:hidden"><Plus size={14} /> {t("common.add")}</summary>
+              <div className="absolute right-0 top-full z-40 mt-2 w-52 rounded-xl border border-hairline/60 bg-panel p-1.5 shadow-xl" onClick={(event) => {
+                const details = event.currentTarget.closest("details"); details?.querySelector("summary")?.focus(); details?.removeAttribute("open");
+              }}>
+                <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => setTeamEditor({})}><Users size={14} />{t("team.create")}</button>
+                {UPSTREAM_SERVICES.boat && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => { setComputersOpen(true); setCreateComputerRequest((value) => value + 1); }}><Box size={14} />{t("canvas.cloudComputer")}</button>}
+                {placeOffered("vm", state.config) && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] hover:bg-control" onClick={() => dispatch({ type: "toggleAppSettings", section: "computer", open: true })}><Monitor size={14} />{t("canvas.localVm")}</button>}
+              </div>
+            </details>}
           </div>
         )}
       </header>
+      {opcOrgEnabled && !remoteClient && opcTab === "org" && (
+        <div
+          role="toolbar"
+          aria-label="组织架构控制栏"
+          {...({ focusgroup: "toolbar wrap" } as Record<string, string>)}
+          onKeyDown={(e) => {
+            if ("focusGroup" in HTMLElement.prototype) return;
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+            const controls = [...e.currentTarget.querySelectorAll<HTMLElement>("button")];
+            const idx = controls.indexOf(document.activeElement as HTMLElement);
+            if (idx < 0 || controls.length < 2) return;
+            e.preventDefault();
+            const nextIdx = e.key === "Home"
+              ? 0
+              : e.key === "End"
+                ? controls.length - 1
+                : (idx + (e.key === "ArrowRight" ? 1 : -1) + controls.length) % controls.length;
+            controls[nextIdx]?.focus();
+          }}
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline/35 bg-panel/45 px-6 py-2"
+        >
+          <div role="group" aria-label="架构协作规则" className="flex min-w-0 items-center gap-2.5 overflow-x-auto [scrollbar-width:none]">
+            <label
+              title="关闭：自由协作（架构仅作提示参考）。开启：服务端硬拦截越级派单与未授权跨部门派单。"
+              className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-full border border-hairline/70 bg-panel/90 px-3 text-[12px] text-ink-secondary transition-colors hover:border-ink/30"
+            >
+              <span className="whitespace-nowrap font-medium text-ink">按架构约束</span>
+              <Switch
+                checked={orgState.enforcementMode === "enforced"}
+                aria-disabled={orgModeBusy || undefined}
+                aria-label="开启按架构约束"
+                onClick={() => {
+                  if (orgModeBusy) return;
+                  void patchOrgSettings({ enforcementMode: orgState.enforcementMode === "enforced" ? "free" : "enforced" });
+                }}
+              />
+            </label>
+
+            <span role="separator" aria-orientation="vertical" className="h-4 shrink-0 border-l border-hairline/75" />
+
+            <label
+              title={
+                orgState.enforcementMode === "enforced"
+                  ? "默认严格模式关闭。开启后，各部门负责人之间无需拉交接线即可跨部门直通派单。"
+                  : "需先开启「按架构约束」后启用；开启后各部门负责人可直接跨部门派单。"
+              }
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-2 rounded-full border border-hairline/70 bg-panel/90 px-3 text-[12px] text-ink-secondary transition-opacity",
+                orgState.enforcementMode === "enforced" ? "cursor-pointer hover:border-ink/30" : "cursor-not-allowed opacity-45",
+              )}
+            >
+              <span className="whitespace-nowrap">部门负责人直通</span>
+              <Switch
+                checked={orgState.enforcementMode === "enforced" && Boolean(orgState.allowChiefCrossDispatch)}
+                aria-disabled={orgModeBusy || orgState.enforcementMode !== "enforced" || undefined}
+                aria-label="开启部门负责人跨部门直通"
+                onClick={() => {
+                  if (orgModeBusy || orgState.enforcementMode !== "enforced") return;
+                  void patchOrgSettings({ allowChiefCrossDispatch: !orgState.allowChiefCrossDispatch });
+                }}
+              />
+            </label>
+          </div>
+
+          <div role="group" aria-label="部门管理操作" className="flex shrink-0 items-center gap-2">
+            {hasNamedDepartments && (
+              <button
+                type="button"
+                aria-disabled={orgModeBusy || undefined}
+                onClick={() => { if (!orgModeBusy) void alignOrgByDepartments(); }}
+                title="将各部门成员汇报线一键归入本部门负责人（无负责人部门自动平级），之后仍可拖拽建多级结构"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-ink/[0.06] px-3 text-[12px] font-medium text-ink-secondary hover:bg-ink/[0.1] hover:text-ink aria-[disabled=true]:cursor-not-allowed aria-[disabled=true]:opacity-45"
+              >
+                <GitBranch size={12.5} aria-hidden="true" /> 按部门对齐
+              </button>
+            )}
+
+            {admin !== false && (
+              <button
+                type="button"
+                onClick={() => setTeamEditor({})}
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-ink px-3.5 text-[12px] font-medium text-app hover:opacity-85"
+              >
+                <Plus size={13} aria-hidden="true" /> 新建部门
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {(error || refreshError) && <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-danger/20 bg-danger/10 px-6 py-2 text-[12px] text-danger">
         {error || refreshError}
         <button aria-label={t("common.close")} className="rounded p-1 hover:bg-danger/10" onClick={() => { setError(null); setRefreshError(null); }}><X size={14} /></button>
       </div>}
       <div className="relative flex min-h-0 flex-1">
       {opcOrgEnabled && opcTab === "org" ? (
-        <div className="relative flex min-h-0 min-w-0 flex-1">
+        <div role="tabpanel" aria-labelledby="opc-tab-org" className="relative flex min-h-0 min-w-0 flex-1">
           <OpcOrgChartView
             bots={bots}
             sections={sections}
@@ -642,7 +690,9 @@ export function TeamMapPage() {
           {bots.length > 0 && <MapComposer bots={bots} teams={composerTeams} onTagged={setTaggedBotIds} onSent={acknowledgeSent} />}
         </div>
       ) : opcOrgEnabled && opcTab === "workflows" ? (
-        <OpcWorkflowsView bots={bots} />
+        <div role="tabpanel" aria-labelledby="opc-tab-workflows" className="flex min-h-0 min-w-0 flex-1">
+          <OpcWorkflowsView bots={bots} />
+        </div>
       ) : (
         <>
           <div className="relative flex min-h-0 min-w-0 flex-1">

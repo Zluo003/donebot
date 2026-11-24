@@ -328,8 +328,12 @@ export function layoutTopDownOrgChart(root: TopDownOrgInputNode): {
     const width = depth === 0 ? TD_BOSS_W : TD_BOT_W;
     const height = depth === 0 ? TD_BOSS_H : TD_BOT_H;
 
-    // Group siblings by section while preserving first-seen department order.
+    // Keep same-department reports first so a department lead/system chief and all same-department
+    // subordinates stay contiguous and enclosed in one unified department box without touching other departments.
     const sectionOrder: string[] = [];
+    if (depth > 0 && input.reports.some(c => c.section === input.section)) {
+      sectionOrder.push(input.section);
+    }
     for (const child of input.reports) {
       if (!sectionOrder.includes(child.section)) sectionOrder.push(child.section);
     }
@@ -361,6 +365,8 @@ export function layoutTopDownOrgChart(root: TopDownOrgInputNode): {
 
     let cursorX = 0;
     let maxChildHeight = 0;
+    let sameSectionRight = 0;
+    const sameDeptChildren: MeasuredSubtree[] = [];
     measuredChildren.forEach((child, idx) => {
       if (idx > 0) {
         const prevSec = measuredChildren[idx - 1]!.node.section;
@@ -368,14 +374,27 @@ export function layoutTopDownOrgChart(root: TopDownOrgInputNode): {
       }
       shiftTopDown(child.node, cursorX, height + TD_LEVEL_GAP);
       cursorX += child.width;
+      if (depth > 0 && child.node.section === input.section) {
+        sameDeptChildren.push(child);
+        sameSectionRight = cursorX;
+      }
       maxChildHeight = Math.max(maxChildHeight, child.height);
     });
 
     const childrenWidth = cursorX;
-    const firstCenter = measuredChildren[0]!.node.x + measuredChildren[0]!.node.width / 2;
-    const lastChild = measuredChildren[measuredChildren.length - 1]!.node;
-    const lastCenter = lastChild.x + lastChild.width / 2;
-    const targetParentX = (firstCenter + lastCenter) / 2 - width / 2;
+    let targetParentX: number;
+    if (depth > 0 && sameDeptChildren.length > 0 && sameDeptChildren.length < measuredChildren.length) {
+      const firstSame = sameDeptChildren[0]!.node;
+      const lastSame = sameDeptChildren[sameDeptChildren.length - 1]!.node;
+      const firstCenter = firstSame.x + firstSame.width / 2;
+      const lastCenter = lastSame.x + lastSame.width / 2;
+      targetParentX = Math.max(0, Math.min((firstCenter + lastCenter) / 2 - width / 2, sameSectionRight - width));
+    } else {
+      const firstCenter = measuredChildren[0]!.node.x + measuredChildren[0]!.node.width / 2;
+      const lastChild = measuredChildren[measuredChildren.length - 1]!.node;
+      const lastCenter = lastChild.x + lastChild.width / 2;
+      targetParentX = (firstCenter + lastCenter) / 2 - width / 2;
+    }
 
     let parentX = targetParentX;
     let blockWidth = Math.max(childrenWidth, parentX + width);
@@ -526,15 +545,17 @@ export function computeDepartmentClusters(
     });
   }
 
-  // Place empty named departments neatly to the right of the tree so users can drop bots into them.
+  // Place empty departments (including general when only the system chief resides there) to the right.
   let emptyX = Math.max(layoutWidth - TD_PAD_X + 24, TD_PAD_X + TD_BOSS_W + 64);
   const emptyY = TD_PAD_Y + TD_BOSS_H + TD_LEVEL_GAP - padTop;
+  const seenEmpty = new Set<string>();
   for (const sectionKey of allSectionKeys) {
-    if (!sectionKey || grouped.has(sectionKey)) continue;
+    if (grouped.has(sectionKey) || seenEmpty.has(sectionKey)) continue;
+    seenEmpty.add(sectionKey);
     const width = TD_BOT_W + padX * 2;
     const height = TD_BOT_H + padTop + padBottom;
     boxes.push({
-      id: `dept:${sectionKey}:empty`,
+      id: `dept:${sectionKey || "__general__"}:empty`,
       sectionKey,
       x: emptyX,
       y: emptyY,

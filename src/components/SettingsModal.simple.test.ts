@@ -350,13 +350,14 @@ describe("Settings in Simple mode", () => {
     expect(html).toContain('aria-label="Enable the built-in browser"');
   });
 
-  it("leads Usage & billing with one usage block, folds the limits, then shows the plan", () => {
+  it("leads Usage & billing directly with usage details, then shows the plan", () => {
     fixture.section = "cloudAccount";
     const html = render();
     expect(currentPage(html)).toBe("billing");
     expect(blocks(html)).toEqual(["usage", "cloudAccount"]);
-    expect(html.indexOf("See all limits")).toBeLessThan(html.indexOf("MARKER:cloudAccount;"));
-    expect(placement(html, "MARKER:usage;")).toBe("folded");
+    expect(html).not.toContain("See all limits");
+    expect(html.indexOf("MARKER:usage;")).toBeLessThan(html.indexOf("MARKER:cloudAccount;"));
+    expect(placement(html, "MARKER:usage;")).toBe("shown");
     expect(groupLabels(html)).toContain("Plan");
   });
 

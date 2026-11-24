@@ -28,18 +28,24 @@ export function LiveBadge() {
 
 export function StatStrip({ items }: { items: Array<{ label: string; value: string; tone?: "danger"; hint?: string }> }) {
   return (
-    <dl className="grid grid-cols-3 sm:grid-cols-6">
-      {items.map((item, index) => (
-        <div
-          key={item.label}
-          className={cn("min-w-0 px-4 py-3.5 sm:px-5", index % 3 !== 0 && "border-l border-hairline/40", index >= 3 && "border-t border-hairline/40 sm:border-t-0", index === 3 && "sm:border-l")}
-          title={item.hint}
-        >
-          <dt className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-ink-secondary">{item.label}</dt>
-          <dd className={cn("mt-1 font-medium tabular-nums [overflow-wrap:anywhere]", item.value.length > 6 ? "text-[17px] sm:text-[18px]" : "text-[20px] sm:text-[22px]", item.tone === "danger" ? "text-danger" : "text-ink")}>{item.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="@container">
+      <dl className="grid grid-cols-2 gap-px bg-hairline/40 @[420px]:grid-cols-3 @[720px]:grid-cols-6">
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0 bg-card px-4 py-3.5" title={item.hint}>
+            <dt className="truncate text-[11px] font-medium tracking-[0.04em] text-ink-tertiary">{item.label}</dt>
+            <dd
+              className={cn(
+                "mt-1.5 whitespace-nowrap font-semibold leading-tight tracking-tight tabular-nums",
+                item.value.length > 8 ? "text-[16px]" : item.value.length > 6 ? "text-[18px]" : "text-[20px]",
+                item.tone === "danger" ? "text-danger" : "text-ink",
+              )}
+            >
+              {item.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 

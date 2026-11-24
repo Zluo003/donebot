@@ -25,7 +25,6 @@ import { CloudPlanRow, CloudPlanFootnote, useCloudPlan } from "./ProIntroduction
 import { CloudUsageDetails, CloudUsageSummaryView, useCloudUsageSettings } from "./CloudUsageMeter";
 import { Card, SettingRow, SettingsDisclosureRow, SettingsGroup, SettingsRows } from "./SettingsPrimitives";
 import { UsageSection } from "./UsageSection";
-import { PlanUsageSummary } from "./PlanUsage";
 import { SkinPicker } from "./SkinPicker";
 import { useSkinChoice } from "./ThemeRow";
 import { resolveSkin, SKINS } from "@/lib/skins";
@@ -240,20 +239,18 @@ export function SimpleComputerPage({ has, remoteAccess, servers, disclose }: { h
   );
 }
 
-export function SimpleBillingPage({ has, disclose, cloudAccount }: { has: Has; disclose: Disclose; cloudAccount: ReactNode }) {
+export function SimpleBillingPage({ has, cloudAccount }: { has: Has; disclose?: Disclose; cloudAccount: ReactNode }) {
   const { usage, upgrade, dialog } = useCloudUsageSettings();
   const plan = useCloudPlan();
   const signedOut = plan?.view.kind === "signed-out" || plan?.view.kind === "removed";
   return (
     <>
-      <div data-settings-block="usage" className="scroll-mt-4">
-        {usage ? <CloudUsageSummaryView usage={usage} upgrade={upgrade}>{dialog}</CloudUsageSummaryView> : <AdminOnly note="settings.adminOnly.usage"><PlanUsageSummary /></AdminOnly>}
-      </div>
       {(usage || has("usage")) && (
-        <SettingsDisclosureRow title={t("settings.simple.billing.limits")} {...disclose("billing-limits")}>
+        <div data-settings-block="usage" className="flex scroll-mt-4 flex-col gap-4">
+          {usage && <CloudUsageSummaryView usage={usage} upgrade={upgrade}>{dialog}</CloudUsageSummaryView>}
           {usage && <CloudUsageDetails usage={usage} upgrade={upgrade} />}
           {has("usage") && <AdminOnly note="settings.adminOnly.usage"><UsageSection /></AdminOnly>}
-        </SettingsDisclosureRow>
+        </div>
       )}
       {has("cloudAccount") && (
         <SettingsGroup label={t("settings.simple.billing.plan")} block="cloudAccount" footnote={<CloudPlanFootnote />}>

@@ -20,7 +20,7 @@ afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: tru
 const SCOUT = { id: "scout", name: "Scout", threadId: "scout-main", modelSelection: { instanceId: "claude", model: "claude-opus-5-5" }, composio: true };
 const ROVER = { id: "rover", name: "Rover", threadId: "rover-main", modelSelection: { instanceId: "codex", model: "gpt-5.5", effort: "high" } };
 
-function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: SendOutcome[]; sessions?: PublicSession[]; ownerKey?: string | null; team?: boolean;
+function fixture(options: { enabled?: boolean; dataDir?: string; sections?: string[]; outcomes?: SendOutcome[]; sessions?: PublicSession[]; ownerKey?: string | null; team?: boolean;
   profileEmail?: string; automated?: boolean; lineLanguage?: DevsReportsDeps["lineLanguage"]; appVersion?: string; clock?: number;
   /** The conversations, kept across a restart (another fixture on the same data). */
   threads?: Map<string, Message[]>;
@@ -62,6 +62,7 @@ function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: Se
   const outcomes = [...(options.outcomes ?? [])];
   const asked: ReportStatusQuestion[] = [], told: Array<{ threadId: string; text: string; person?: string }> = [];
   const deps: DevsReportsDeps = {
+    ...(options.enabled === undefined ? {} : { enabled: options.enabled }),
     dataDir, store: store as never, installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", appVersion: options.appVersion ?? "0.1.128", runsOn: "desktop app",
     working: (threadId) => busy.has(threadId), automated: () => options.automated === true,
     engine: (instanceId) => ({ name: instanceId === "claude" ? "Claude Code" : "Codex", snapshot: { state: "available", authenticated: true } }),
@@ -626,6 +627,28 @@ describe("closing the loop on a report", () => {
     expect(fixedLines(fx)).toEqual([`notice: ${fixedLine("0.1.128")}`]);
     expect(fx.told).toEqual([{ threadId: "scout-main", text: fixedLine("0.1.128"), person: "p_bob_bob_bob_bob_bob_bob_bob" }]);
     expect(fx.reports.note("scout-main", true)).toContain('("pictures never load")');
+    fx.stop();
+  });
+
+  it("does nothing and refuses report_bug when disabled", async () => {
+    const fx = fixture({ enabled: false, profileEmail: "ada@example.com", answer: team({ status: "fixed", fixedIn: "0.1.128", notify: true }) });
+    const message = fx.person("scout-main", "@devs pictures never load");
+    expect(fx.reports.note("scout-main", true)).toBe("");
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    fx.advance(STATUS_FIRST_MS);
+    await fx.settle();
+    expect(fx.sent).toEqual([]);
+    expect(fx.asked).toEqual([]);
+    expect(fx.told).toEqual([]);
+    expect(fx.notices("scout-main")).toEqual([]);
+    expect(fx.line("scout-main", message.id)?.bugReport).toBeUndefined();
+    expect(() => readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).toThrow();
+    expect(await fx.call("scout", "scout-main", { went_wrong: "Pictures never load" })).toEqual({
+      status: 403,
+      body: { error: "Bug reporting via @devs is disabled." },
+    });
+    expect(fx.sent).toEqual([]);
     fx.stop();
   });
 });

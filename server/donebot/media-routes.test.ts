@@ -104,7 +104,18 @@ describe("DoneBot media capability routes", () => {
     expect(donebot.map(tool => tool.name)).not.toContain("media_center");
     expect(donebot.map(tool => tool.name)).not.toContain("model_capabilities");
     expect(donebot.map(tool => tool.name)).not.toContain("generate_music");
+    expect(donebot.map(tool => tool.name)).not.toContain("report_bug");
     for (const tool of added) expect((tool as { annotations?: typeof READ_ONLY_ANNOTATIONS }).annotations).toEqual(["media_job_status", "media_model_capabilities"].includes(tool.name) ? READ_ONLY_ANNOTATIONS : undefined);
+  });
+
+  it("refuses upstream report_bug calls in the DoneBot product context", async () => {
+    const apiResponse = vi.fn(async () => ({ ok: true, status: 200, body: { text: "unexpected" } }));
+    const result = await callTool("report_bug", { went_wrong: "test" }, {
+      botId: trusted.botId, threadId: trusted.threadId, depth: 0, externalRuntime: false,
+      sharedComputers: false, donebotMedia: true, client: { api: async () => ({}), apiResponse },
+    });
+    expect(result).toEqual({ text: "Bug reporting via @devs is disabled.", isError: true });
+    expect(apiResponse).not.toHaveBeenCalled();
   });
 
   it("selects exactly one image tool and its matching schema when both capability flags are present", () => {

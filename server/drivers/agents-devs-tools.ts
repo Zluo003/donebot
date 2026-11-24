@@ -7,6 +7,7 @@ export const DEVS_TOOL_NAMES: ReadonlySet<string> = new Set(["report_bug"]);
 export const DEVS_REPORT_PATH = "/api/internal/devs/report";
 
 export async function callDevsTool(_name: string, args: Json, context: ToolCallContext): Promise<ToolCallResult> {
+  if (context.donebotMedia) return { text: "Bug reporting via @devs is disabled.", isError: true };
   const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
   const wentWrong = text(args.went_wrong);
   if (!wentWrong) return { text: "report_bug needs went_wrong: what the person says went wrong.", isError: true };

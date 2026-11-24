@@ -88,6 +88,7 @@ type Told = { ok: boolean; line: string; marker: string };
 type Author = { bot: BotRecord; summary: BotSummary } | { why: string };
 
 export interface DevsReportsDeps {
+  enabled?: boolean;
   dataDir: string;
   store: Pick<Store, "bots" | "sections" | "bot" | "botByThread" | "groupByThread" | "projectBotForTask" | "activePath" | "appendMessage" | "patchMessage" | "onChange">;
   installId: string;
@@ -202,6 +203,19 @@ function health(snapshot: ProviderSnapshot | undefined): string {
 }
 
 export function createDevsReports(deps: DevsReportsDeps) {
+  if (deps.enabled === false) {
+    return {
+      note: () => "",
+      forget: () => {},
+      async internal(ctx: DevsReportContext): Promise<typeof PASS | void> {
+        if (ctx.path !== DEVS_REPORT_PATH) return PASS;
+        return ctx.json(ctx.res, 403, { error: "Bug reporting via @devs is disabled." });
+      },
+      tick: async () => {},
+      idle: async () => {},
+      stop: () => {},
+    };
+  }
   const { store } = deps;
   const now = deps.now ?? Date.now;
   const file = join(deps.dataDir, DEVS_REPORTS_FILE);

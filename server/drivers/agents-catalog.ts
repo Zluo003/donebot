@@ -6,7 +6,7 @@ import { OPTIONS_CARD_LIMITS, WATCHER_OPTIONS_CARD_BOT_ID } from "../../shared/o
 import { FILE_MAX_BYTES, limitMegabytes } from "../../shared/upload-limits.ts";
 import { agentToolAnnotations } from "../agent-tool-policy.ts";
 import { CHAT_CARD_TOOL_DEFINITIONS } from "./agents-chat-card-tools.ts";
-import { DEVS_TOOL_DEFINITIONS } from "./agents-devs-tools.ts";
+import { DEVS_TOOL_DEFINITIONS, DEVS_TOOL_NAMES } from "./agents-devs-tools.ts";
 import { HELPER_TOOL_DEFINITIONS } from "./agents-helper-tools.ts";
 import { USAGE_LIMITS_TOOL_DEFINITION } from "./agents-usage-tool.ts";
 import { CHECK_BACK_TOOL_DEFINITIONS, CHECK_BACK_TOOL_NAMES } from "./agents-check-back-tool.ts";
@@ -981,7 +981,7 @@ export function fullInputSchema(name: string, donebotMedia = false, donebotColla
 }
 
 function catalogTools(profile: CatalogProfile) {
-  const definitions = [...(profile.donebotMedia ? [...TOOL_DEFINITIONS.filter(tool => !DONEBOT_MEDIA_TOOL_NAMES.has(tool.name)).map(doneBotCredentialTool), ...DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => ({ ...tool, annotations: agentToolAnnotations(tool.name) }))] : TOOL_DEFINITIONS), ...(profile.donebotCollab ? DONEBOT_COLLAB_TOOL_DEFINITIONS.map(tool => ({ ...tool, annotations: tool.annotations ?? agentToolAnnotations(tool.name) })) : [])];
+  const definitions = [...(profile.donebotMedia ? [...TOOL_DEFINITIONS.filter(tool => !DONEBOT_MEDIA_TOOL_NAMES.has(tool.name) && !DEVS_TOOL_NAMES.has(tool.name)).map(doneBotCredentialTool), ...DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => ({ ...tool, annotations: agentToolAnnotations(tool.name) }))] : TOOL_DEFINITIONS), ...(profile.donebotCollab ? DONEBOT_COLLAB_TOOL_DEFINITIONS.map(tool => ({ ...tool, annotations: tool.annotations ?? agentToolAnnotations(tool.name) })) : [])];
   const BOT_SCOPED_TOOLS = definitions.filter((tool) =>
     (profile.botId === WATCHER_OPTIONS_CARD_BOT_ID || !WATCHER_TOOL_NAMES.has(tool.name)) &&
     (profile.memoryEnabled !== false || (tool.name !== "memory_update" && tool.name !== "memory_log")) &&

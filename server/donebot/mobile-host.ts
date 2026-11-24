@@ -35,6 +35,19 @@ export function mobileChatRoute(method: string, raw: string): boolean {
   if (raw.split("?")[0] !== path) return false;
   if (method === "GET" && path === "/api/bots") return [...url.searchParams].every(([key,value]) => key === "messages" && (value === "1" || value === "20"));
   if (method === "GET" && !url.search && ["/api/routines", "/api/webhooks", "/api/app-triggers", "/api/connectors/connected"].includes(path)) return true;
+  if (method === "GET" && path === "/api/donebot/opc/overview") {
+    return [...url.searchParams].every(([key, value]) => key === "days" && /^\d{1,3}$/.test(value) && Number(value) >= 1 && Number(value) <= 365);
+  }
+  if (method === "GET" && /^\/api\/bots\/[\w-]+\/browser\/live$/.test(path)) {
+    return [...url.searchParams].every(([key, value]) =>
+      (key === "threadId" && /^[\w-]+$/.test(value))
+      || (key === "resume" && /^[\w-]+$/.test(value))
+      || ((key === "width" || key === "height") && /^\d{2,4}$/.test(value)),
+    );
+  }
+  if (method === "POST" && /^\/api\/bots\/[\w-]+\/browser\/action$/.test(path)) {
+    return [...url.searchParams].every(([key, value]) => key === "threadId" && /^[\w-]+$/.test(value));
+  }
   if (method === "PATCH" && !url.search && /^\/api\/routines\/[\w-]+$/.test(path)) return true;
   if (method === "POST" && !url.search && /^\/api\/(webhooks|app-triggers)\/[\w-]+\/enabled$/.test(path)) return true;
   if (method === "GET" && /^\/api\/threads\/[\w-]+\/messages$/.test(path)) return [...url.searchParams].every(([key,value]) => key === "limit" ? /^\d{1,2}$/.test(value) && Number(value) <= 50 : key === "before" && /^[\w-]+$/.test(value));
@@ -47,7 +60,16 @@ export function mobileChatRoute(method: string, raw: string): boolean {
       && name.length >= 1 && name.length <= 180 && !name.includes("/") && !name.includes("\\")
       && ![...name].some(character => character.charCodeAt(0) < 32) && name !== "." && name !== "..";
   }
-  return method === "POST" && !url.search && (/^\/api\/(bots|groups)\/[\w-]+\/(messages|read)$/.test(path) || /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/file$/.test(path));
+  return method === "POST" && !url.search && (
+    /^\/api\/(bots|groups)\/[\w-]+\/(messages|read|interrupt|tasks)$/.test(path)
+    || /^\/api\/bots\/[\w-]+\/respond$/.test(path)
+    || /^\/api\/threads\/[\w-]+\/respond$/.test(path)
+    || /^\/api\/bots\/[\w-]+\/sign-in-cards\/[\w-]+\/(done|cancel)$/.test(path)
+    || /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/file$/.test(path)
+    || path === "/api/donebot/opc/reports/review"
+    || /^\/api\/donebot\/opc\/artifacts\/[\w-]+\/review$/.test(path)
+    || /^\/api\/donebot\/opc\/workflow-runs\/[\w-]+\/decision$/.test(path)
+  );
 }
 export function createDoneBotMobileHost(options: HostOptions) {
   let dir = "", stateFile = "";

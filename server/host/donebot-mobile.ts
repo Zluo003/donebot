@@ -24,7 +24,11 @@ export function createDoneBotMobileRuntime(deps: MobileRuntimeDeps) {
   return {
     ...host,
     messageChanged(change: StoreChange) {
-      if (change.type !== "message" || change.message.role !== "bot" || change.message.kind !== "text" || change.message.turnId) return;
+      if (change.type !== "message" || change.message.role !== "bot") return;
+      const pushableText = change.message.kind === "text" && !change.message.turnId;
+      const pushablePrompt = change.message.kind === "signin"
+        || (change.message.kind === "options" && Boolean(change.message.card?.requestId));
+      if (!pushableText && !pushablePrompt) return;
       const bot = store.botByThread(change.threadId);
       if (bot) host.message({ botId: bot.id, threadId: change.threadId, messageId: change.message.id });
     },

@@ -320,9 +320,21 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
     };
   };
 
+  const isPersonalMobileOwner = (auth: Parameters<typeof ownerOrAdmin>[0]): boolean =>
+    process.env.DONEBOT_TEAM_RUNTIME !== "1"
+    && auth.kind === "session"
+    && /^mobile-[a-f0-9]{64}$/.test(auth.session.id);
+
+  const isMobileBossRoute = (method: string, reqPath: string): boolean =>
+    (method === "GET" && reqPath === "/api/donebot/opc/overview")
+    || (method === "POST" && reqPath === "/api/donebot/opc/reports/review")
+    || (method === "POST" && /^\/api\/donebot\/opc\/artifacts\/[\w-]+\/review$/.test(reqPath));
+
   const handler: RouteHandler = async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
     if (!reqPath.startsWith("/api/donebot/opc/") || reqPath.startsWith("/api/donebot/opc/org") || reqPath.startsWith("/api/donebot/opc/workflow")) return PASS;
-    if (!ownerOrAdmin(auth)) return json(res, 403, { error: "仅工作空间所有者可使用工作室管理功能。" });
+    if (!ownerOrAdmin(auth) && !(isPersonalMobileOwner(auth) && isMobileBossRoute(method, reqPath))) {
+      return json(res, 403, { error: "仅工作空间所有者可使用工作室管理功能。" });
+    }
     res.setHeader("Cache-Control", "no-store");
 
     try {

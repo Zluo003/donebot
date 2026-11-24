@@ -472,6 +472,11 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/bot-api\/new-key$/ },
   // asking to chat with a team bot one can view: the handler puts a card in the inbox of whoever can let them in
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/access-request$/ },
+  // DoneBot Boss Desk routes: handlers enforce owner/admin or a personal workspace's verified owner mobile lease.
+  { methods: ["GET"], path: /^\/api\/donebot\/opc\/overview$/ },
+  { methods: ["POST"], path: /^\/api\/donebot\/opc\/reports\/review$/ },
+  { methods: ["POST"], path: /^\/api\/donebot\/opc\/artifacts\/[\w-]+\/review$/ },
+  { methods: ["POST"], path: /^\/api\/donebot\/opc\/workflow-runs\/[\w-]+\/decision$/ },
 ];
 
 export function requiredScope(method: string, path: string, features: { sharedComputers?: boolean } = {}): Scope {

@@ -697,11 +697,17 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
     timer.unref?.();
   }
 
+  const isPersonalMobileOwner = (auth: Parameters<typeof ownerOrAdmin>[0]): boolean =>
+    process.env.DONEBOT_TEAM_RUNTIME !== "1"
+    && auth.kind === "session"
+    && /^mobile-[a-f0-9]{64}$/.test(auth.session.id);
+
   const handler: RouteHandler = async ({ req, res, url, path, method, auth, json, readBody }) => {
     if (!path.startsWith("/api/donebot/opc/org") && !path.startsWith("/api/donebot/opc/workflow")) {
       return PASS;
     }
-    if (!ownerOrAdmin(auth)) {
+    const mobileDecisionRoute = method === "POST" && /^\/api\/donebot\/opc\/workflow-runs\/[\w-]+\/decision$/.test(path);
+    if (!ownerOrAdmin(auth) && !(isPersonalMobileOwner(auth) && mobileDecisionRoute)) {
       return json(res, 403, { error: "仅工作空间所有者可管理组织架构与固定工作流。" });
     }
     res.setHeader("Cache-Control", "no-store");

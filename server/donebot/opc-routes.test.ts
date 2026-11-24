@@ -28,6 +28,7 @@ async function callRoute(
   method: string,
   path: string,
   body?: unknown,
+  auth: unknown = { kind: "loopback", scopes: ["admin"] },
 ) {
   let status = 0;
   let payload: unknown;
@@ -43,7 +44,7 @@ async function callRoute(
     url,
     path: url.pathname,
     method,
-    auth: { kind: "loopback", scopes: ["admin"] },
+    auth,
     json(_res: unknown, code: number, value: unknown) { status = code; payload = value; },
     readBody: async () => body ?? {},
   } as unknown as Parameters<typeof handler>[0]);
@@ -476,6 +477,57 @@ describe("OPC Store, Studio Attribution & Routes", () => {
       "品牌视觉升级方案",
       "独立站第 47 周经营复盘",
     ]);
+
+    opcHandler.stopScheduler();
+  });
+
+  it("allows verified personal mobile owner sessions on bounded Boss Desk routes while rejecting other client sessions and team runtime", async () => {
+    const dir = makeTempDir();
+    const opcStore = new DoneBotOpcStore(join(dir, "opc-state.json"));
+    const orgStore = new DoneBotOrgWorkflowStore(join(dir, "opc-org.json"));
+    const bot = { id: "bot-m", name: "小助理", color: "blue", threadId: "t-m", tasks: [{ threadId: "t-m", title: "汇报" }] } as unknown as BotRecord;
+    const store = {
+      bots: [bot],
+      bot: (id: string) => (id === bot.id ? bot : undefined),
+      messagesFor: () => [],
+      updateBot: () => {},
+    } as unknown as Store;
+    const gateway = { collabCtx: () => null } as unknown as DoneBotGateway;
+    const opcHandler = createDoneBotOpcRoutes({
+      opcStore, orgStore, gateway, store,
+      listBotSkills: () => [], readBotSkill: () => null, installBotSkill: () => ({ name: "x", enabled: true }) as never,
+      setBotSkillEnabled: () => ({ name: "x", enabled: true }) as never, removeBotSkill: () => {},
+      generateBotText: async () => "", startTurn: vi.fn(), broadcast: vi.fn(), publicBot: b => b, startScheduler: false,
+    });
+    const wfHandler = createDoneBotOrgWorkflowRoutes({
+      orgStore, opcStore, store, runBotTurn: vi.fn(async () => ({ output: "", threadId: "t-m" })), startScheduler: false,
+    });
+
+    const mobileOwnerAuth = { kind: "session", via: "bearer", scopes: ["client"], session: { id: "mobile-" + "a".repeat(64) } };
+    const regularClientAuth = { kind: "session", via: "bearer", scopes: ["client"], session: { id: "team-member-session-1" } };
+
+    // Personal mobile owner can read Boss overview, but cannot touch goals/heartbeats/org
+    expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30", undefined, mobileOwnerAuth)).status).toBe(200);
+    expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/goals", undefined, mobileOwnerAuth)).status).toBe(403);
+    expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/heartbeats", undefined, mobileOwnerAuth)).status).toBe(403);
+    expect((await callRoute(wfHandler, "GET", "/api/donebot/opc/org", undefined, mobileOwnerAuth)).status).toBe(403);
+    // Workflow decision route passes auth gate (returns 404 for unknown run instead of 403)
+    expect((await callRoute(wfHandler, "POST", "/api/donebot/opc/workflow-runs/missing-run/decision", { action: "approve" }, mobileOwnerAuth)).status).toBe(404);
+
+    // Regular client session is always 403 on Boss Desk
+    expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30", undefined, regularClientAuth)).status).toBe(403);
+    expect((await callRoute(wfHandler, "POST", "/api/donebot/opc/workflow-runs/missing-run/decision", { action: "approve" }, regularClientAuth)).status).toBe(403);
+
+    // Under team runtime, even a mobile-* client session is 403
+    const prev = process.env.DONEBOT_TEAM_RUNTIME;
+    process.env.DONEBOT_TEAM_RUNTIME = "1";
+    try {
+      expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30", undefined, mobileOwnerAuth)).status).toBe(403);
+      expect((await callRoute(wfHandler, "POST", "/api/donebot/opc/workflow-runs/missing-run/decision", { action: "approve" }, mobileOwnerAuth)).status).toBe(403);
+    } finally {
+      if (prev === undefined) delete process.env.DONEBOT_TEAM_RUNTIME;
+      else process.env.DONEBOT_TEAM_RUNTIME = prev;
+    }
 
     opcHandler.stopScheduler();
   });

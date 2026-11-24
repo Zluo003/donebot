@@ -36,3 +36,41 @@ it("admits named document uploads without arbitrary file access or extra query p
   for (const suffix of ["&admin=1", "&name=another.pdf", "#fragment"]) expect(mobileChatRoute("POST", path + "note.pdf" + suffix)).toBe(false);
   expect(mobileChatRoute("GET", path + "note.pdf")).toBe(false);
 });
+
+it("admits bounded remote browser takeover, chat controls, and Boss Desk review routes", () => {
+  for (const [method, path] of [
+    ["GET", "/api/bots/bot-1/browser/live"],
+    ["GET", "/api/bots/bot-1/browser/live?threadId=thread-1&width=390&height=700"],
+    ["POST", "/api/bots/bot-1/browser/action"],
+    ["POST", "/api/bots/bot-1/browser/action?threadId=thread-1"],
+    ["POST", "/api/bots/bot-1/sign-in-cards/msg-1/done"],
+    ["POST", "/api/bots/bot-1/sign-in-cards/msg-1/cancel"],
+    ["POST", "/api/bots/bot-1/interrupt"],
+    ["POST", "/api/groups/group-1/interrupt"],
+    ["POST", "/api/bots/bot-1/tasks"],
+    ["POST", "/api/groups/group-1/tasks"],
+    ["POST", "/api/bots/bot-1/respond"],
+    ["POST", "/api/threads/thread-1/respond"],
+    ["GET", "/api/donebot/opc/overview"],
+    ["GET", "/api/donebot/opc/overview?days=30"],
+    ["POST", "/api/donebot/opc/reports/review"],
+    ["POST", "/api/donebot/opc/artifacts/abc123def/review"],
+    ["POST", "/api/donebot/opc/workflow-runs/run-1/decision"],
+  ]) expect(mobileChatRoute(method, path)).toBe(true);
+
+  for (const [method, path] of [
+    ["GET", "/api/bots/bot-1/browser/live?admin=1"],
+    ["GET", "/api/bots/bot-1/browser/live?width=99999"],
+    ["GET", "/api/bots/bot-1/browser/stream"],
+    ["POST", "/api/bots/bot-1/browser/upload"],
+    ["POST", "/api/bots/bot-1/sign-in-cards/msg-1/save-login"],
+    ["POST", "/api/bots/bot-1/sign-in-cards/msg-1/use-login"],
+    ["GET", "/api/donebot/opc/overview?days=999"],
+    ["GET", "/api/donebot/opc/overview?days=0"],
+    ["GET", "/api/donebot/opc/org"],
+    ["POST", "/api/donebot/opc/workflows"],
+    ["DELETE", "/api/donebot/opc/goals/g-1"],
+    ["POST", "/api/bots/bot-1/tasks/delete"],
+    ["POST", "/api/bots/bot-1/respond?admin=1"],
+  ]) expect(mobileChatRoute(method, path)).toBe(false);
+});

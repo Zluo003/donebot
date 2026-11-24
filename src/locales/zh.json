@@ -3871,7 +3871,7 @@
   "usage.prices.hint": "名为 default 的数据行会套用到所有未列出的模型。缓存输入留空时，会沿用输入费率。对于不报告费用的提供方，这里设置的模型价格也会取代费用估算和支出上限中的标价。",
   "usage.prices.invalid": "请检查 {model} 的数字：价格必须为 0 以上。",
   "usage.prices.currencyInvalid": "币别必须是三个字母的代码，例如 USD。",
-  "usage.page.subtitle": "时间和费用都花在了哪里：每次运行、参与其中的机器人，以及它们完成的每一步。",
+  "usage.page.subtitle": "详细的算力使用明细，计费不包含外部 Agent。",
   "usage.page.today": "今天",
   "usage.page.week": "最近 7 天",
   "usage.page.where": "花在哪里",

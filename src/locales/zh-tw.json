@@ -4003,7 +4003,7 @@
   "usage.prices.hint": "名為 default 的資料列會套用到所有未列出的模型。快取輸入留空時，會沿用輸入費率。對於不回報費用的供應商，這裡設定的模型價格也會取代費用估算和支出上限中的標價。",
   "usage.prices.invalid": "請檢查 {model} 的數字：價格必須為 0 以上。",
   "usage.prices.currencyInvalid": "幣別必須是三個字母的代碼，例如 USD。",
-  "usage.page.subtitle": "時間和費用都花在哪裡：每次執行、參與其中的機器人，以及它們完成的每個步驟。",
+  "usage.page.subtitle": "詳細的算力使用明細，計費不包含外部 Agent。",
   "usage.page.today": "今天",
   "usage.page.week": "最近 7 天",
   "usage.page.where": "花在哪裡",

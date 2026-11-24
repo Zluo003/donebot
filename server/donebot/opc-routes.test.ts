@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BotRecord, Store } from "../store.ts";
+import type { RouteHandler } from "../routes/table.ts";
 import type { DoneBotGateway } from "./gateway.ts";
 import { DoneBotMarketInstallStore, attachMarketHeaders, MARKET_BOT_ID_HEADER, MARKET_INSTALL_HEADER } from "./market-installs.ts";
 import { createDoneBotOpcRoutes } from "./opc-routes.ts";
@@ -24,7 +25,7 @@ afterEach(() => {
 });
 
 async function callRoute(
-  handler: ReturnType<typeof createDoneBotOpcRoutes>,
+  handler: RouteHandler,
   method: string,
   path: string,
   body?: unknown,
@@ -500,7 +501,7 @@ describe("OPC Store, Studio Attribution & Routes", () => {
       generateBotText: async () => "", startTurn: vi.fn(), broadcast: vi.fn(), publicBot: b => b, startScheduler: false,
     });
     const wfHandler = createDoneBotOrgWorkflowRoutes({
-      orgStore, opcStore, store, runBotTurn: vi.fn(async () => ({ output: "", threadId: "t-m" })), startScheduler: false,
+      orgStore, opcStore, store, runBotTurn: vi.fn(async () => ({ ok: true, text: "", threadId: "t-m" })),
     });
 
     const mobileOwnerAuth = { kind: "session", via: "bearer", scopes: ["client"], session: { id: "mobile-" + "a".repeat(64) } };

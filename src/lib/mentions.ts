@@ -4,6 +4,7 @@ import { isMentionBoundary, isMentionNameContinuation } from "../../shared/menti
 import { personTagAt, personTagNames } from "../../shared/person-mention";
 import { devsTagAt } from "../../shared/devs-mention";
 import { blankCode } from "../../shared/skill-command";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 
 /** A name the @ list offers: a bot's, or (`person`) a teammate's on a Team Cloud. */
 export type MentionPeer = { name: string; hidden?: boolean; color?: MausColor; person?: true };
@@ -76,7 +77,7 @@ export function mentionRanges(text: string, peers: readonly MentionPeer[], every
       at += you;
       continue;
     }
-    const length = all ? 8 : peer?.name.length ?? devsTagAt(rest, botNames);
+    const length = all ? 8 : peer?.name.length ?? (UPSTREAM_SERVICES.bugReports ? devsTagAt(rest, botNames) : undefined);
     if (length === undefined) continue;
     // Only palette values enter CSS.
     const color = !all && peer?.color && Object.hasOwn(MAUS_COLORS, peer.color) ? MAUS_COLORS[peer.color] : undefined;

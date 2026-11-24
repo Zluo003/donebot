@@ -117,4 +117,12 @@ describe("a one-to-one chat's @ list", () => {
     send();
     expect(sent()).toEqual([expect.objectContaining({ type: "send", botId: scout.id, text: "ask @Quill", mentions: [analyst.id] })]);
   });
+
+  it("omits upstream @devs from the @ list by default", () => {
+    flushSync(() => root.render(createElement(Composer, { bot: scout })));
+    type(drafts[1]!, "@");
+    expect(options().map((one) => one.textContent)).not.toContainEqual(expect.stringContaining("devs"));
+    type(drafts[1]!, "@devs");
+    expect(options()).toEqual([]);
+  });
 });

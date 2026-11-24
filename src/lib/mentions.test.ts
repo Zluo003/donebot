@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mentionChoicesForQuery, mentionClassName, mentionQueryAt, mentionRanges, mentionRowDescription } from "./mentions";
+import { UPSTREAM_SERVICES } from "@/donebot/services";
 
 const peers = [{ name: "Atlas" }, { name: "New Bot" }, { name: "New Bot 2" }, { name: "調査担当" }, { name: "Hidden", hidden: true }];
 const matches = (text: string, everyone = false) => mentionRanges(text, peers, everyone).map(({ start, end }) => text.slice(start, end));
@@ -64,9 +65,20 @@ describe("mention display ranges", () => {
 });
 
 describe("the @devs tag in display ranges", () => {
-  it("is drawn like a tag, in any chat, unless a bot has that name", () => {
-    expect(matches("@devs the page froze, @Devs! but not ops@devs.test or @devsite")).toEqual(["@devs", "@Devs"]);
+  it("is disabled by default unless a bot has that name", () => {
+    expect(matches("@devs the page froze, @Devs!")).toEqual([]);
     expect(mentionRanges("@devs hi", [{ name: "Devs", color: "blue" }]).map((range) => range.color)).toEqual(["#377FE6"]);
+  });
+
+  it("is drawn like a tag when upstream bugReports is enabled, unless a bot has that name", () => {
+    const prev = UPSTREAM_SERVICES.bugReports;
+    UPSTREAM_SERVICES.bugReports = true;
+    try {
+      expect(matches("@devs the page froze, @Devs! but not ops@devs.test or @devsite")).toEqual(["@devs", "@Devs"]);
+      expect(mentionRanges("@devs hi", [{ name: "Devs", color: "blue" }]).map((range) => range.color)).toEqual(["#377FE6"]);
+    } finally {
+      UPSTREAM_SERVICES.bugReports = prev;
+    }
   });
 });
 

@@ -52,6 +52,7 @@ export const UPSTREAM_SERVICES = {
   mobileApps: false,
   updatesEmail: false,
   liveCalls: false,
+  bugReports: false,
 };
 
 export function doneBotKeyVisible(id: string): boolean {

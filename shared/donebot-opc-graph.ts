@@ -229,3 +229,48 @@ export function autoLayoutWorkflowGraph<T extends Pick<OpcWorkflowStep, "id" | "
     positions,
   };
 }
+
+export function normalizeTriggerPosition(pos?: { x: number; y: number }): { x: number; y: number } | undefined {
+  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return undefined;
+  return { x: Math.round(pos.x), y: Math.round(pos.y) };
+}
+
+export function normalizeWorkflowGraph(
+  rawSteps: readonly OpcWorkflowStepInput[],
+  rawEntryStepIds?: readonly string[],
+  makeStepId: (index: number) => string = (index) => `step-${index + 1}`,
+): { steps: OpcWorkflowStep[]; entryStepIds?: string[] } {
+  const baseSteps: OpcWorkflowStep[] = rawSteps
+    .map((step, index) => ({
+      id: step.id?.trim() || makeStepId(index),
+      name: step.name.trim() || `步骤 ${index + 1}`,
+      botId: step.botId.trim(),
+      instruction: step.instruction.trim(),
+      approvalGate: Boolean(step.approvalGate),
+      ...(Number.isFinite(step.x) ? { x: Math.round(step.x!) } : {}),
+      ...(Number.isFinite(step.y) ? { y: Math.round(step.y!) } : {}),
+      ...(Array.isArray(step.nextStepIds) ? { nextStepIds: step.nextStepIds } : {}),
+    }))
+    .filter(s => s.botId && s.instruction);
+
+  if (baseSteps.length === 0) {
+    throw new Error("工作流至少需要 1 个有效步骤（指定员工和任务指令）。");
+  }
+
+  const validIds = new Set(baseSteps.map(s => s.id));
+  const steps: OpcWorkflowStep[] = baseSteps.map(step => {
+    if (!step.nextStepIds) return step;
+    const cleanNext = [...new Set(step.nextStepIds.map(id => id.trim()).filter(id => id && id !== step.id && validIds.has(id)))];
+    return { ...step, nextStepIds: cleanNext };
+  });
+
+  if (hasWorkflowCycle(steps)) {
+    throw new Error("工作流节点连线不能形成循环回路，请断开环形连线后再保存。");
+  }
+
+  const entryStepIds = Array.isArray(rawEntryStepIds)
+    ? [...new Set(rawEntryStepIds.map(id => id.trim()).filter(id => validIds.has(id)))]
+    : undefined;
+
+  return { steps, entryStepIds };
+}

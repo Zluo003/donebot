@@ -234,7 +234,8 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
       // Execution-boundary edits skip the debounce: work must never start under stale permissions or revoked tools.
       const immediate = Object.prototype.hasOwnProperty.call(patch, "approvalMode") ||
         Object.prototype.hasOwnProperty.call(patch, "modelSelection") ||
-        Object.prototype.hasOwnProperty.call(patch, "connectorTools");
+        Object.prototype.hasOwnProperty.call(patch, "connectorTools") ||
+        Object.prototype.hasOwnProperty.call(patch, "chiefOfStaff");
       if (immediate) {
         if (entry.timer !== null) clearTimeout(entry.timer);
         entry.timer = null;

@@ -1,5 +1,7 @@
+import { useId } from "react";
 import { Crown, FlaskConical, MessageSquare, Settings, X } from "lucide-react";
-import type { OpcOrgNodeConfig } from "../../shared/donebot-opc";
+import type { OpcOrgChartState, OpcOrgNodeConfig } from "../../shared/donebot-opc";
+import { validateOrgReportsTo } from "../../shared/donebot-opc-org-sync";
 import { BotAvatar } from "@/components/Avatar";
 import { openBotSettings } from "@/components/bot-panel/panel-link";
 import { Switch } from "@/components/SettingsPrimitives";
@@ -11,6 +13,7 @@ const BOSS_ROOT_ID = "__boss__";
 export function OpcOrgInspector({
   bot,
   cfg,
+  org,
   bots,
   sectionOptions,
   generalDeptLabel,
@@ -23,6 +26,7 @@ export function OpcOrgInspector({
 }: {
   bot: Bot;
   cfg: OpcOrgNodeConfig;
+  org: OpcOrgChartState;
   bots: Bot[];
   sectionOptions: Array<{ key: string; label: string }>;
   generalDeptLabel: string;
@@ -35,8 +39,17 @@ export function OpcOrgInspector({
 }) {
   const { dispatch } = useStore();
   const showThreads = useShowThreads();
+  const reportsSelectId = useId();
+  const reportsHelpId = useId();
   const botSection = bot.section?.trim() || "";
   const deptLabelOf = (candidate: Bot) => candidate.section?.trim() || generalDeptLabel;
+  const deptChief = bots.find(b => !b.hidden && (b.section?.trim() || "") === botSection && b.chiefOfStaff) ?? null;
+  const bossRefusal = validateOrgReportsTo(bot.id, null, org, bots);
+  const reportsHelpText = !deptChief
+    ? `「${deptLabelOf(bot)}」暂无负责人，成员保持平级；指定部门负责人后，全员自动归属其下级并支持拖拽建多级结构。`
+    : deptChief.id === bot.id
+      ? `作为「${deptLabelOf(bot)}」${botSection ? "负责人" : "总协调"}，可向老板或其他部门上级汇报，本部门成员自动归属你的下级体系。`
+      : `「${deptLabelOf(bot)}」由「${deptChief.name}」负责，可在本部门内选择上级形成多级结构（如 负责人 → 主管 → 员工）；如需跨部门直报请先切换所属部门。`;
 
   return (
     <aside
@@ -120,9 +133,13 @@ export function OpcOrgInspector({
         </div>
 
         {/* Reporting hierarchy */}
-        <label className="block space-y-1.5 border-t border-hairline/40 pt-4">
-          <span className="text-[11.5px] font-medium text-ink-tertiary">直属上级（汇报对象 · 支持跨部门）</span>
+        <div className="space-y-1.5 border-t border-hairline/40 pt-4">
+          <label htmlFor={reportsSelectId} className="block text-[11.5px] font-medium text-ink-tertiary">
+            直属上级（汇报对象 · 支持部门内多级）
+          </label>
           <select
+            id={reportsSelectId}
+            aria-describedby={reportsHelpId}
             value={cfg.reportsToBotId ?? BOSS_ROOT_ID}
             disabled={saving}
             onChange={e => {
@@ -131,17 +148,31 @@ export function OpcOrgInspector({
             }}
             className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[12.5px] text-ink outline-none focus:border-ink/40"
           >
-            <option value={BOSS_ROOT_ID}>你（老板 · 直接汇报）</option>
-            {bots.filter(b => b.id !== bot.id).map(b => (
-              <option key={b.id} value={b.id}>
-                {b.name}（{deptLabelOf(b)}{b.chiefOfStaff ? (b.section?.trim() ? " · 负责人" : " · 总协调") : ""}）
-              </option>
-            ))}
+            <option value={BOSS_ROOT_ID} disabled={Boolean(bossRefusal)}>
+              你（老板 · 直接汇报）{bossRefusal ? " · 须归属部门负责人下级" : ""}
+            </option>
+            {bots.filter(b => b.id !== bot.id).map(b => {
+              const refusal = validateOrgReportsTo(bot.id, b.id, org, bots);
+              const disabledReason = refusal
+                ? (refusal.includes("循环汇报")
+                  ? " · 当前下属"
+                  : refusal.includes("暂无负责人")
+                    ? " · 无负责人平级"
+                    : refusal.includes("不能向同部门成员汇报")
+                      ? " · 本部门成员"
+                      : " · 须归属本部门")
+                : "";
+              return (
+                <option key={b.id} value={b.id} disabled={Boolean(refusal)}>
+                  {b.name}（{deptLabelOf(b)}{b.chiefOfStaff ? (b.section?.trim() ? " · 负责人" : " · 总协调") : ""}）{disabledReason}
+                </option>
+              );
+            })}
           </select>
-          <p className="text-[11.5px] leading-relaxed text-ink-tertiary">
-            开启「按架构约束」后，上级可向下属派单与打回返工，下属可向上汇报；跨部门汇报同样生效。
+          <p id={reportsHelpId} className="text-[11.5px] leading-relaxed text-ink-tertiary">
+            {reportsHelpText}
           </p>
-        </label>
+        </div>
 
         {/* Cross-department or same-department handoff pipeline */}
         <div className="space-y-2 border-t border-hairline/40 pt-4">

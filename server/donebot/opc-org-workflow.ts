@@ -17,10 +17,15 @@ import {
   type OpcWorkflowStepRun,
 } from "../../shared/donebot-opc.ts";
 import {
-  hasWorkflowCycle,
+  normalizeTriggerPosition,
+  normalizeWorkflowGraph,
   resolveWorkflowExecutionPlan,
   type OpcWorkflowStepInput,
 } from "../../shared/donebot-opc-graph.ts";
+import {
+  reconcileOrgChartWithBots,
+  validateOrgReportsTo,
+} from "../../shared/donebot-opc-org-sync.ts";
 export { resolveWorkflowExecutionPlan } from "../../shared/donebot-opc-graph.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
@@ -35,50 +40,6 @@ interface OrgWorkflowFileState {
 }
 
 const MAX_WORKFLOW_RUNS = 60;
-
-function normalizeTriggerPosition(pos?: { x: number; y: number }): { x: number; y: number } | undefined {
-  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return undefined;
-  return { x: Math.round(pos.x), y: Math.round(pos.y) };
-}
-
-function normalizeWorkflowGraph(
-  rawSteps: readonly OpcWorkflowStepInput[],
-  rawEntryStepIds?: readonly string[],
-): { steps: OpcWorkflowStep[]; entryStepIds?: string[] } {
-  const baseSteps: OpcWorkflowStep[] = rawSteps
-    .map((step, index) => ({
-      id: step.id?.trim() || `step-${index + 1}-${randomUUID().slice(0, 6)}`,
-      name: step.name.trim() || `步骤 ${index + 1}`,
-      botId: step.botId.trim(),
-      instruction: step.instruction.trim(),
-      approvalGate: Boolean(step.approvalGate),
-      ...(Number.isFinite(step.x) ? { x: Math.round(step.x!) } : {}),
-      ...(Number.isFinite(step.y) ? { y: Math.round(step.y!) } : {}),
-      ...(Array.isArray(step.nextStepIds) ? { nextStepIds: step.nextStepIds } : {}),
-    }))
-    .filter(s => s.botId && s.instruction);
-
-  if (baseSteps.length === 0) {
-    throw new Error("工作流至少需要 1 个有效步骤（指定员工和任务指令）。");
-  }
-
-  const validIds = new Set(baseSteps.map(s => s.id));
-  const steps: OpcWorkflowStep[] = baseSteps.map(step => {
-    if (!step.nextStepIds) return step;
-    const cleanNext = [...new Set(step.nextStepIds.map(id => id.trim()).filter(id => id && id !== step.id && validIds.has(id)))];
-    return { ...step, nextStepIds: cleanNext };
-  });
-
-  if (hasWorkflowCycle(steps)) {
-    throw new Error("工作流节点连线不能形成循环回路，请断开环形连线后再保存。");
-  }
-
-  const entryStepIds = Array.isArray(rawEntryStepIds)
-    ? [...new Set(rawEntryStepIds.map(id => id.trim()).filter(id => validIds.has(id)))]
-    : undefined;
-
-  return { steps, entryStepIds };
-}
 
 function emptyState(): OrgWorkflowFileState {
   return {
@@ -153,22 +114,28 @@ export class DoneBotOrgWorkflowStore {
 
   // --- Org Chart & Reporting Cycle Guard ---
 
+  private syncWithBots(bots: readonly BotRecord[]): OpcOrgChartState {
+    const result = reconcileOrgChartWithBots(this.state.orgChart, bots);
+    if (result.changed) {
+      this.state.orgChart.nodes = result.org.nodes;
+      this.state.orgChart.updatedAt = Date.now();
+      this.persist();
+    }
+    return {
+      enforcementMode: this.state.orgChart.enforcementMode,
+      allowChiefCrossDispatch: Boolean(this.state.orgChart.allowChiefCrossDispatch),
+      ...(this.state.orgChart.generalDepartmentName ? { generalDepartmentName: this.state.orgChart.generalDepartmentName } : {}),
+      nodes: result.org.nodes,
+      updatedAt: this.state.orgChart.updatedAt,
+    };
+  }
+
   getOrgChart(bots?: readonly BotRecord[]): OpcOrgChartState {
     this.ensureLoaded();
+    if (bots) return this.syncWithBots(bots);
     const nodes: Record<string, OpcOrgNodeConfig> = {};
     for (const [id, node] of Object.entries(this.state.orgChart.nodes)) {
       nodes[id] = { ...defaultNode(id), ...node, handoffToBotIds: [...(node.handoffToBotIds ?? [])] };
-    }
-    if (bots) {
-      for (const bot of bots) {
-        if (bot.hidden) continue;
-        if (!nodes[bot.id]) {
-          nodes[bot.id] = {
-            ...defaultNode(bot.id),
-            roleTitle: bot.title || (bot.chiefOfStaff ? "总控主管" : undefined),
-          };
-        }
-      }
     }
     return {
       enforcementMode: this.state.orgChart.enforcementMode,
@@ -226,13 +193,20 @@ export class DoneBotOrgWorkflowStore {
   upsertOrgNode(
     botId: string,
     patch: Partial<Omit<OpcOrgNodeConfig, "botId">>,
+    bots?: readonly BotRecord[],
   ): OpcOrgNodeConfig {
     this.ensureLoaded();
+    if (bots) this.syncWithBots(bots);
     const prev = this.state.orgChart.nodes[botId] ?? defaultNode(botId);
     const nextReportsTo = patch.reportsToBotId !== undefined
       ? (patch.reportsToBotId ? patch.reportsToBotId.trim() : null)
       : prev.reportsToBotId;
-    this.assertNoCycle(botId, nextReportsTo);
+    if (patch.reportsToBotId !== undefined) {
+      const refusal = validateOrgReportsTo(botId, nextReportsTo, this.state.orgChart, bots);
+      if (refusal) throw new Error(refusal);
+    } else {
+      this.assertNoCycle(botId, nextReportsTo);
+    }
 
     const nextHandoffs = patch.handoffToBotIds !== undefined
       ? [...new Set(patch.handoffToBotIds.map(id => id.trim()).filter(id => id && id !== botId))]
@@ -275,6 +249,7 @@ export class DoneBotOrgWorkflowStore {
     bots: readonly BotRecord[],
   ): string | null {
     this.ensureLoaded();
+    this.syncWithBots(bots);
     if (this.state.orgChart.enforcementMode !== "enforced") return null;
 
     const senderNode = this.state.orgChart.nodes[senderId] ?? defaultNode(senderId);
@@ -319,7 +294,7 @@ export class DoneBotOrgWorkflowStore {
       const managerLabel = senderNode.reportsToBotId
         ? `直属上级「${nameOf(senderNode.reportsToBotId)}」`
         : ownDeptChief
-          ? `本部门主 Bot「${ownDeptChief.name}」`
+          ? `本部门负责人「${ownDeptChief.name}」`
           : "老板（直接回复即可）";
       const handoffLabels = senderNode.handoffToBotIds.map(nameOf);
       const bothChiefs = Boolean(senderBot?.chiefOfStaff && targetBot?.chiefOfStaff);
@@ -338,6 +313,7 @@ export class DoneBotOrgWorkflowStore {
   /** Renders concise fenced Org & Workflow Discipline instructions for LLM system prompt injection. */
   orgPromptForBot(botId: string, bots: readonly BotRecord[]): string | undefined {
     this.ensureLoaded();
+    this.syncWithBots(bots);
     const bot = bots.find(b => b.id === botId);
     const hasDepartments = bots.some(b => !b.hidden && Boolean(b.section?.trim()));
     const hasConfigured = Object.keys(this.state.orgChart.nodes).length > 0
@@ -467,7 +443,7 @@ export class DoneBotOrgWorkflowStore {
   }): OpcWorkflowDefinition {
     this.ensureLoaded();
     const now = Date.now();
-    const { steps, entryStepIds } = normalizeWorkflowGraph(input.steps, input.entryStepIds);
+    const { steps, entryStepIds } = normalizeWorkflowGraph(input.steps, input.entryStepIds, idx => `step-${idx + 1}-${randomUUID().slice(0, 6)}`);
     const triggerPosition = normalizeTriggerPosition(input.triggerPosition);
     const scheduleKind: OpcWorkflowScheduleKind = input.scheduleKind === "interval" || input.scheduleKind === "daily"
       ? input.scheduleKind
@@ -520,7 +496,7 @@ export class DoneBotOrgWorkflowStore {
     const existing = this.state.workflows[id];
     if (!existing) return null;
     const normalized = patch.steps
-      ? normalizeWorkflowGraph(patch.steps, patch.entryStepIds !== undefined ? patch.entryStepIds : existing.entryStepIds)
+      ? normalizeWorkflowGraph(patch.steps, patch.entryStepIds !== undefined ? patch.entryStepIds : existing.entryStepIds, idx => `step-${idx + 1}-${randomUUID().slice(0, 6)}`)
       : {
         steps: existing.steps,
         entryStepIds: patch.entryStepIds !== undefined
@@ -867,7 +843,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
       if (nodeMatch && method === "PUT") {
         const botId = decodeURIComponent(nodeMatch[1]!);
         const body = await readBody(req) as Partial<Omit<OpcOrgNodeConfig, "botId">>;
-        const node = deps.orgStore.upsertOrgNode(botId, body);
+        const node = deps.orgStore.upsertOrgNode(botId, body, deps.store.bots);
         json(res, 200, { node, org: deps.orgStore.getOrgChart(deps.store.bots) });
         return;
       }

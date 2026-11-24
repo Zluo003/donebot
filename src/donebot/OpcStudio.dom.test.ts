@@ -40,6 +40,7 @@ const {
   computeDepartmentClusters,
   DEFAULT_ORG_GEOMETRY,
 } = await import("./paperclip-org-layout");
+const { reconcileOrgChartWithBots } = await import("../../shared/donebot-opc-org-sync");
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -345,5 +346,98 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     const addNodeBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.includes("添加员工节点"))!;
     await act(async () => { addNodeBtn.click(); });
     expect(container.querySelectorAll("[data-wf-node]").length).toBe(4);
+  });
+
+  it("renders peer layout for chief-less departments and allows multi-tier selection inside headed departments", async () => {
+    mockApi.mockImplementation(async (path) => {
+      if (path.startsWith("/api/donebot/opc/spend")) return { available: true, days: 30, totalCost: 0, llmCost: 0, imageCost: 0, videoCost: 0, musicCost: 0, bots: [] };
+      return {};
+    });
+
+    const duobao = { id: "g1", name: "多宝", color: "amber", hidden: false, chiefOfStaff: true, section: "", modelSelection: { instanceId: "i1", model: "m" } };
+    const devA = { id: "d1", name: "码匠", color: "blue", hidden: false, chiefOfStaff: false, section: "开发部", modelSelection: { instanceId: "i1", model: "m" } };
+    const devB = { id: "d2", name: "DeepSeek", color: "cyan", hidden: false, chiefOfStaff: false, section: "开发部", modelSelection: { instanceId: "i1", model: "m" } };
+    const devC = { id: "d3", name: "前端C", color: "green", hidden: false, chiefOfStaff: false, section: "开发部", modelSelection: { instanceId: "i1", model: "m" } };
+
+    // 1. Chief-less department flattens stale d2 -> d1 into peers under g1 and disables same-dept manager options.
+    const flatOrg = reconcileOrgChartWithBots({
+      enforcementMode: "enforced",
+      nodes: {
+        g1: { botId: "g1", reportsToBotId: null, handoffToBotIds: [] },
+        d1: { botId: "d1", reportsToBotId: "g1", handoffToBotIds: [] },
+        d2: { botId: "d2", reportsToBotId: "d1", handoffToBotIds: [] },
+      },
+      updatedAt: 1,
+    }, [duobao, devA, devB]).org;
+    expect(flatOrg.nodes.d1?.reportsToBotId).toBe("g1");
+    expect(flatOrg.nodes.d2?.reportsToBotId).toBe("g1");
+
+    const flatSections = [
+      { key: "", name: "通用", chiefs: [duobao], members: [] },
+      { key: "开发部", name: "开发部", chiefs: [], members: [devA, devB] },
+    ] as never;
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root!.render(createElement(OpcOrgChartView, {
+        bots: [duobao, devA, devB] as never,
+        sections: flatSections,
+        org: flatOrg,
+        onOrgChange: vi.fn(),
+        onMoveToDepartment: vi.fn(async () => {}),
+        onToggleChief: vi.fn(async () => {}),
+        onRenameGeneralDepartment: vi.fn(),
+        onEditTeam: vi.fn(),
+        onInstructions: vi.fn(),
+        onMemory: vi.fn(),
+        onDeleteTeam: vi.fn(),
+      }));
+    });
+
+    const d2Card = container.querySelector<HTMLElement>('[data-org-node="d2"]')!;
+    await act(async () => { d2Card.click(); });
+    const flatSelects = container.querySelectorAll("select");
+    const flatReportsSelect = flatSelects[1]!;
+    const peerOpt = [...flatReportsSelect.querySelectorAll("option")].find(o => o.value === "d1")!;
+    expect(peerOpt.disabled).toBe(true);
+    expect(container.textContent).toContain("暂无负责人，成员保持平级");
+
+    // 2. Designating d1 as department chief lets d3 pick either d1 (chief) or d2 (sub-lead) while disabling Boss root.
+    const headedBots = [duobao, { ...devA, chiefOfStaff: true }, devB, devC];
+    const headedOrg = reconcileOrgChartWithBots(flatOrg, headedBots).org;
+    expect(headedOrg.nodes.d2?.reportsToBotId).toBe("d1");
+    expect(headedOrg.nodes.d3?.reportsToBotId).toBe("d1");
+
+    await act(async () => {
+      root!.render(createElement(OpcOrgChartView, {
+        bots: headedBots as never,
+        sections: [
+          { key: "", name: "通用", chiefs: [duobao], members: [] },
+          { key: "开发部", name: "开发部", chiefs: [headedBots[1]], members: [devB, devC] },
+        ] as never,
+        org: headedOrg,
+        onOrgChange: vi.fn(),
+        onMoveToDepartment: vi.fn(async () => {}),
+        onToggleChief: vi.fn(async () => {}),
+        onRenameGeneralDepartment: vi.fn(),
+        onEditTeam: vi.fn(),
+        onInstructions: vi.fn(),
+        onMemory: vi.fn(),
+        onDeleteTeam: vi.fn(),
+      }));
+    });
+
+    const d3Card = container.querySelector<HTMLElement>('[data-org-node="d3"]')!;
+    await act(async () => { d3Card.click(); });
+    const headedReportsSelect = container.querySelectorAll("select")[1]!;
+    const bossOpt = [...headedReportsSelect.querySelectorAll("option")].find(o => o.value === "__boss__")!;
+    const chiefOpt = [...headedReportsSelect.querySelectorAll("option")].find(o => o.value === "d1")!;
+    const leadOpt = [...headedReportsSelect.querySelectorAll("option")].find(o => o.value === "d2")!;
+    expect(bossOpt.disabled).toBe(true);
+    expect(chiefOpt.disabled).toBe(false);
+    expect(leadOpt.disabled).toBe(false);
   });
 });

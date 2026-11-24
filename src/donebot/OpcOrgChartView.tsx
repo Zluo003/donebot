@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type { OpcOrgChartState, OpcOrgNodeConfig } from "../../shared/donebot-opc";
+import { validateOrgReportsTo } from "../../shared/donebot-opc-org-sync";
 import { BotAvatar } from "@/components/Avatar";
 import { cn } from "@/lib/cn";
 import type { TeamMapSection } from "@/lib/team-map";
@@ -105,18 +106,6 @@ function handoffCurve(from: TopDownLayoutNode, to: TopDownLayoutNode): { d: stri
   };
 }
 
-function isDescendantInOrg(org: OpcOrgChartState, ancestorId: string, candidateId: string): boolean {
-  if (candidateId === BOSS_ROOT_ID) return false;
-  const visited = new Set<string>();
-  let cursor: string | null = candidateId;
-  while (cursor && !visited.has(cursor)) {
-    if (cursor === ancestorId) return true;
-    visited.add(cursor);
-    cursor = org.nodes[cursor]?.reportsToBotId ?? null;
-  }
-  return false;
-}
-
 interface ActiveDragState {
   botId: string;
   startClientX: number;
@@ -187,6 +176,8 @@ export function OpcOrgChartView({
 
   const orgRef = useRef(org);
   orgRef.current = org;
+  const botsRef = useRef(bots);
+  botsRef.current = bots;
   const panRef = useRef(pan);
   panRef.current = pan;
   const zoomRef = useRef(zoom);
@@ -354,7 +345,7 @@ export function OpcOrgChartView({
     try {
       await onToggleChief(bot, nextChief);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "更新部门主 Bot 失败。");
+      setError(err instanceof Error ? err.message : "更新部门负责人失败。");
     } finally {
       setSaving(false);
     }
@@ -414,10 +405,15 @@ export function OpcOrgChartView({
       }
     };
 
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") cleanup();
+    };
+
     const cleanup = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", cleanup);
+      window.removeEventListener("keydown", onKeyDown);
       setActiveDrag(null);
       setHoverNodeId(null);
       setHoverDeptKey(null);
@@ -435,11 +431,12 @@ export function OpcOrgChartView({
       window.setTimeout(() => { justDraggedRef.current = false; }, 0);
 
       if (hit.nodeId && hit.nodeId !== finished.botId) {
-        if (isDescendantInOrg(orgRef.current, finished.botId, hit.nodeId)) {
-          setError("不能把员工拖到自己的下属名下（会形成循环汇报）。");
+        const nextReportsTo = hit.nodeId === BOSS_ROOT_ID ? null : hit.nodeId;
+        const refusal = validateOrgReportsTo(finished.botId, nextReportsTo, orgRef.current, botsRef.current);
+        if (refusal) {
+          setError(refusal);
           return;
         }
-        const nextReportsTo = hit.nodeId === BOSS_ROOT_ID ? null : hit.nodeId;
         if ((orgRef.current.nodes[finished.botId]?.reportsToBotId ?? null) !== nextReportsTo) {
           void updateNode(finished.botId, { reportsToBotId: nextReportsTo });
         }
@@ -456,6 +453,7 @@ export function OpcOrgChartView({
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", cleanup);
+    window.addEventListener("keydown", onKeyDown);
   }, [botById, handleMoveDept, hitTestDrop, updateNode]);
 
   const handleHandoffPortDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>, node: TopDownLayoutNode) => {
@@ -573,18 +571,22 @@ export function OpcOrgChartView({
     : null;
 
   const draggedBot = activeDrag ? botById.get(activeDrag.botId) ?? null : null;
-  const hoverInvalid = activeDrag && hoverNodeId ? isDescendantInOrg(org, activeDrag.botId, hoverNodeId) : false;
+  const hoverDropRefusal = activeDrag && hoverNodeId
+    ? validateOrgReportsTo(activeDrag.botId, hoverNodeId === BOSS_ROOT_ID ? null : hoverNodeId, org, bots)
+    : null;
+  const hoverInvalid = Boolean(hoverDropRefusal);
   const dragHint = (() => {
     if (!activeDrag || !draggedBot) return "";
     if (hoverNodeId) {
-      if (hoverInvalid) return "不能汇报给自己的下属";
+      if (hoverDropRefusal) return hoverDropRefusal;
       if (hoverNodeId === BOSS_ROOT_ID) return "松手直接汇报给「你（老板）」";
       const target = botById.get(hoverNodeId);
       const cross = target && (target.section?.trim() || "") !== (draggedBot.section?.trim() || "");
-      return `松手${cross ? "跨部门" : ""}汇报给「${target?.name ?? "上级"}」`;
+      const subTier = target && !cross && !target.chiefOfStaff;
+      return `松手${cross ? "跨部门" : ""}汇报给「${target?.name ?? "上级"}」${subTier ? "（建立多级汇报）" : ""}`;
     }
     if (hoverDeptKey !== null) return `松手移入「${deptLabelOfKey(hoverDeptKey)}」部门`;
-    return "拖到其他卡片改汇报线，或拖到部门框换部门";
+    return "拖到其他卡片改汇报线，或拖到部门框换部门（Esc 取消）";
   })();
 
   return (
@@ -824,7 +826,7 @@ export function OpcOrgChartView({
               <BotAvatar bot={draggedBot} size={30} motion="none" motionKey={0} animated={false} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13.5px] font-semibold">{draggedBot.name}</div>
-                <div className="truncate text-[11px] text-ink-tertiary">{dragHint}</div>
+                <div className={cn("line-clamp-2 text-[11px]", hoverInvalid ? "text-danger" : "text-ink-tertiary")}>{dragHint}</div>
               </div>
             </div>
           </div>
@@ -854,6 +856,7 @@ export function OpcOrgChartView({
         <OpcOrgInspector
           bot={selectedBot}
           cfg={selectedCfg}
+          org={org}
           bots={bots}
           sectionOptions={sectionOptions}
           generalDeptLabel={generalDeptLabel}

@@ -28,7 +28,7 @@ function makeBot(id: string, name: string): BotRecord {
 describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
   it("prevents reporting cycles and enforces org-chart coordination rules cleanly", () => {
     const orgStore = new DoneBotOrgWorkflowStore(makeTempFile());
-    const chief = makeBot("b-chief", "多宝主编");
+    const chief = { ...makeBot("b-chief", "多宝主编"), chiefOfStaff: true } as BotRecord;
     const writer = makeBot("b-writer", "文案写手");
     const designer = makeBot("b-design", "视觉设计");
     const qa = makeBot("b-qa", "质检专员");
@@ -408,5 +408,74 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     expect(ran.status).toBe(200);
     expect((ran.payload.run as { status: string }).status).toBe("completed");
     expect(executed).toEqual([`${contentWriter.id}:priority`, `${designChief.id}:priority`]);
+  });
+
+  it("auto-flattens chief-less departments, auto-subordinates under a department chief, and preserves multi-tier sub-hierarchies", () => {
+    const orgStore = new DoneBotOrgWorkflowStore(makeTempFile());
+    const duobao = { ...makeBot("b-duobao", "多宝"), section: "", chiefOfStaff: true } as BotRecord;
+    const botA = { ...makeBot("b-a", "码匠"), section: "开发部", chiefOfStaff: true } as BotRecord;
+    const botB = { ...makeBot("b-b", "主管B"), section: "开发部", chiefOfStaff: false } as BotRecord;
+    const botC = { ...makeBot("b-c", "员工C"), section: "开发部", chiefOfStaff: false } as BotRecord;
+    const botD = { ...makeBot("b-d", "员工D"), section: "开发部", chiefOfStaff: false } as BotRecord;
+    const bots = [duobao, botA, botB, botC, botD];
+
+    // 1. Place department chief A under system chief 多宝; B/C/D automatically attach under A.
+    orgStore.upsertOrgNode(botA.id, { reportsToBotId: duobao.id }, bots);
+    let chart = orgStore.getOrgChart(bots);
+    expect(chart.nodes[botA.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[botB.id]?.reportsToBotId).toBe(botA.id);
+    expect(chart.nodes[botC.id]?.reportsToBotId).toBe(botA.id);
+    expect(chart.nodes[botD.id]?.reportsToBotId).toBe(botA.id);
+
+    // 2. Allow dragging C and D under B to create 3-tier hierarchy (A -> B -> C, D) and preserve across reloads.
+    orgStore.upsertOrgNode(botC.id, { reportsToBotId: botB.id }, bots);
+    orgStore.upsertOrgNode(botD.id, { reportsToBotId: botB.id }, bots);
+    chart = orgStore.getOrgChart(bots);
+    expect(chart.nodes[botB.id]?.reportsToBotId).toBe(botA.id);
+    expect(chart.nodes[botC.id]?.reportsToBotId).toBe(botB.id);
+    expect(chart.nodes[botD.id]?.reportsToBotId).toBe(botB.id);
+
+    // Enforced coordination respects A -> B -> C, D multi-tier delegation while blocking lateral C -> D.
+    orgStore.setEnforcementMode("enforced");
+    expect(orgStore.evaluateCoordination(botA.id, [botB.id, botC.id, botD.id], false, bots)).toBeNull();
+    expect(orgStore.evaluateCoordination(botB.id, [botC.id, botD.id], false, bots)).toBeNull();
+    expect(orgStore.evaluateCoordination(botC.id, [botB.id], false, bots)).toBeNull();
+    expect(orgStore.evaluateCoordination(botC.id, [botD.id], false, bots)).toContain("组织架构约束已拦截");
+
+    // Non-chief member C cannot bypass chief A to report directly to Boss or 多宝; chief A can report to Boss.
+    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: null }, bots)).toThrow(/已设负责人/);
+    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: duobao.id }, bots)).toThrow(/已设负责人/);
+    orgStore.upsertOrgNode(botA.id, { reportsToBotId: null }, bots);
+    expect(orgStore.getOrgChart(bots).nodes[botA.id]?.reportsToBotId).toBeNull();
+    orgStore.upsertOrgNode(botA.id, { reportsToBotId: duobao.id }, bots);
+
+    // 3. Switching department chief from A to B lifts B to 多宝 without cycles, attaches A under B, and keeps C & D under B.
+    botA.chiefOfStaff = false;
+    botB.chiefOfStaff = true;
+    chart = orgStore.getOrgChart(bots);
+    expect(chart.nodes[botB.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[botA.id]?.reportsToBotId).toBe(botB.id);
+    expect(chart.nodes[botC.id]?.reportsToBotId).toBe(botB.id);
+    expect(chart.nodes[botD.id]?.reportsToBotId).toBe(botB.id);
+
+    // 4. Clearing department chief automatically flattens A/B/C/D into peers under 多宝.
+    botB.chiefOfStaff = false;
+    chart = orgStore.getOrgChart(bots);
+    expect(chart.nodes[botA.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[botB.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[botC.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[botD.id]?.reportsToBotId).toBe(duobao.id);
+    // In a chief-less department, former chief B can no longer dispatch laterally to peer A under enforced mode.
+    expect(orgStore.evaluateCoordination(botB.id, [botA.id], false, bots)).toContain("组织架构约束已拦截");
+    // Manual same-department subordination is blocked until a department chief is designated.
+    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: botA.id }, bots)).toThrow(/暂无负责人/);
+
+    // 5. Re-assigning A as department chief automatically subordinates B/C/D under A again.
+    botA.chiefOfStaff = true;
+    chart = orgStore.getOrgChart(bots);
+    expect(chart.nodes[botA.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[botB.id]?.reportsToBotId).toBe(botA.id);
+    expect(chart.nodes[botC.id]?.reportsToBotId).toBe(botA.id);
+    expect(chart.nodes[botD.id]?.reportsToBotId).toBe(botA.id);
   });
 });

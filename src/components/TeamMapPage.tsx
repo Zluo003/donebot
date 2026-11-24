@@ -4,6 +4,7 @@ import { OpcWorkflowsView } from "@/donebot/OpcWorkflowsView";
 import { OpcNativeDialog } from "@/donebot/paperclip-ui";
 import { opcApi } from "@/donebot/opc-api";
 import type { OpcOrgChartState, OpcOrgEnforcementMode } from "../../shared/donebot-opc";
+import { pickDepartmentFallbackManager, reconcileOrgChartWithBots } from "../../shared/donebot-opc-org-sync";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, BookOpen, Box, GitBranch, Loader2, Monitor, Plus, Save, Users, UsersRound, X } from "lucide-react";
@@ -341,7 +342,23 @@ export function TeamMapPage() {
   pendingMoveRef.current = pendingMove;
   useEffect(() => () => pendingMoveRef.current?.resolve(false), []);
   const bots = useMemo(() => state.bots.filter((bot) => !bot.hidden), [state.bots]);
-  const generalDeptLabel = orgState.generalDepartmentName?.trim() || t("teamSettings.general");
+  const effectiveOrgState = useMemo(
+    () => (opcOrgEnabled ? reconcileOrgChartWithBots(orgState, bots).org : orgState),
+    [opcOrgEnabled, orgState, bots],
+  );
+  const botsOrgTopologyKey = useMemo(
+    () => bots.map(b => `${b.id}:${b.section?.trim() || ""}:${b.chiefOfStaff ? 1 : 0}`).join("|"),
+    [bots],
+  );
+  const prevTopologyKeyRef = useRef(botsOrgTopologyKey);
+  useEffect(() => {
+    if (!opcOrgEnabled) return;
+    if (prevTopologyKeyRef.current === botsOrgTopologyKey) return;
+    prevTopologyKeyRef.current = botsOrgTopologyKey;
+    const timer = window.setTimeout(() => { void loadOrg(); }, 450);
+    return () => window.clearTimeout(timer);
+  }, [opcOrgEnabled, botsOrgTopologyKey, loadOrg]);
+  const generalDeptLabel = effectiveOrgState.generalDepartmentName?.trim() || t("teamSettings.general");
   const sections = useMemo(() => {
     const names = [...new Set([...(state.sections ?? []), ...state.groups.flatMap((group) => group.section ? [group.section] : [])])];
     const order = (key: string) => key === "" ? -1 : names.includes(key) ? names.indexOf(key) : names.length;
@@ -390,12 +407,29 @@ export function TeamMapPage() {
 
   const moveBot = async (bot: Bot, destination: string) => {
     setError(null);
+    const oldSection = bot.section?.trim() || "";
+    const oldParentId = effectiveOrgState.nodes[bot.id]?.reportsToBotId ?? null;
+    const oldParent = oldParentId ? bots.find(b => b.id === oldParentId) : null;
     try {
       const result: { sections: string[]; bots: Bot[] } = await api("/api/sidebar-sections", {
         method: "POST", body: JSON.stringify({ name: destination, botIds: [bot.id] }),
       });
       dispatch({ type: "sections", sections: result.sections });
       for (const patched of result.bots) dispatch({ type: "botPatched", bot: patched });
+      if (opcOrgEnabled) {
+        const patchedById = new Map(result.bots.map(b => [b.id, b]));
+        const nextBots = bots.map(b => patchedById.get(b.id) ?? b);
+        const destKey = destination.trim();
+        const destHasChief = nextBots.some(b => !b.hidden && (b.section?.trim() || "") === destKey && b.chiefOfStaff);
+        const wasUnderOldDept = Boolean(oldParent && (oldParent.section?.trim() || "") === oldSection);
+        if (!destHasChief && wasUnderOldDept) {
+          const fallbackManager = pickDepartmentFallbackManager(bot.id, destKey, effectiveOrgState, nextBots);
+          const saved = await opcApi.saveOrgNode(bot.id, { reportsToBotId: fallbackManager });
+          setOrgState(saved.org);
+        } else {
+          await loadOrg();
+        }
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       throw cause;
@@ -417,7 +451,7 @@ export function TeamMapPage() {
         if (bot.chiefOfStaff) chiefBySection.set(bot.section?.trim() || "", bot);
       }
       const generalChief = chiefBySection.get("");
-      let latest = orgState;
+      let latest = effectiveOrgState;
       // Clear chiefs' parents first so reparenting never trips transient cycles.
       for (const bot of bots) {
         const sec = bot.section?.trim() || "";
@@ -515,7 +549,7 @@ export function TeamMapPage() {
 
                 {orgState.enforcementMode === "enforced" && (
                   <label
-                    title="默认严格模式关闭。开启后，各部门主 Bot 之间无需拉交接线即可跨部门直通派单。"
+                    title="默认严格模式关闭。开启后，各部门负责人之间无需拉交接线即可跨部门直通派单。"
                     className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-hairline/70 bg-panel/80 px-3 py-1 text-[12px] text-ink-secondary hover:border-ink/30"
                   >
                     <span>部门负责人直通</span>
@@ -533,7 +567,7 @@ export function TeamMapPage() {
                     type="button"
                     disabled={orgModeBusy}
                     onClick={() => void alignOrgByDepartments()}
-                    title="将各部门成员汇报线一键归入本部门主 Bot 名下，之后仍可自由拖拽做跨部门调整"
+                    title="将各部门成员汇报线一键归入本部门负责人（无负责人部门自动平级），之后仍可拖拽建多级结构"
                     className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-3 text-[12px] font-medium text-ink-secondary hover:bg-ink/[0.1] hover:text-ink disabled:opacity-45"
                   >
                     <GitBranch size={12.5} /> 按部门对齐
@@ -589,7 +623,7 @@ export function TeamMapPage() {
           <OpcOrgChartView
             bots={bots}
             sections={sections}
-            org={orgState}
+            org={effectiveOrgState}
             taggedBotIds={taggedBotIds}
             sent={sent}
             bottomInset={bots.length ? 92 : 0}

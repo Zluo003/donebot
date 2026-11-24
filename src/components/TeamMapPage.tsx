@@ -505,7 +505,7 @@ export function TeamMapPage() {
           <p className="mt-0.5 truncate text-[12px] text-ink-tertiary">
             {opcOrgEnabled
               ? opcTab === "org"
-                ? "拖卡片调汇报或部门，右侧圆点拉跨部门交接线"
+                ? "拖卡片调汇报或部门；部门内由负责人统筹交接，跨部门按「跨部门沟通」开关协同"
                 : "固定工作流优先于组织架构约束直接跨部门执行，可画布编排或让主协调 Bot 创建"
               : t("canvas.description")}
           </p>
@@ -615,19 +615,19 @@ export function TeamMapPage() {
             <label
               title={
                 orgState.enforcementMode === "enforced"
-                  ? "默认严格模式关闭。开启后，各部门负责人之间无需拉交接线即可跨部门直通派单。"
-                  : "需先开启「按架构约束」后启用；开启后各部门负责人可直接跨部门派单。"
+                  ? "开启：跨部门协作由双方部门负责人直接沟通对接；关闭：跨部门协作统一由系统总协调人协调。"
+                  : "需先开启「按架构约束」后生效；开启后由部门负责人直接跨部门沟通，关闭则由总协调人统一协调。"
               }
               className={cn(
                 "inline-flex h-8 shrink-0 items-center gap-2 rounded-full border border-hairline/70 bg-panel/90 px-3 text-[12px] text-ink-secondary transition-opacity",
                 orgState.enforcementMode === "enforced" ? "cursor-pointer hover:border-ink/30" : "cursor-not-allowed opacity-45",
               )}
             >
-              <span className="whitespace-nowrap">部门负责人直通</span>
+              <span className="whitespace-nowrap">跨部门沟通</span>
               <Switch
                 checked={orgState.enforcementMode === "enforced" && Boolean(orgState.allowChiefCrossDispatch)}
                 aria-disabled={orgModeBusy || orgState.enforcementMode !== "enforced" || undefined}
-                aria-label="开启部门负责人跨部门直通"
+                aria-label="开启跨部门沟通"
                 onClick={() => {
                   if (orgModeBusy || orgState.enforcementMode !== "enforced") return;
                   void patchOrgSettings({ allowChiefCrossDispatch: !orgState.allowChiefCrossDispatch });

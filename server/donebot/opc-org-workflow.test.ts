@@ -35,8 +35,8 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     const qa = makeBot("b-qa", "质检专员");
     const bots = [chief, writer, designer, qa];
 
-    orgStore.upsertOrgNode(writer.id, { reportsToBotId: chief.id, handoffToBotIds: [designer.id], roleTitle: "内容写手" });
-    orgStore.upsertOrgNode(designer.id, { reportsToBotId: chief.id, handoffToBotIds: [qa.id], roleTitle: "封面视觉" });
+    orgStore.upsertOrgNode(writer.id, { reportsToBotId: chief.id, roleTitle: "内容写手" });
+    orgStore.upsertOrgNode(designer.id, { reportsToBotId: chief.id, roleTitle: "封面视觉" });
     orgStore.upsertOrgNode(qa.id, { reportsToBotId: chief.id, roleTitle: "质检" });
 
     // Cycle prevention (self & indirect ancestor)
@@ -46,17 +46,15 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     // Free mode allows any coordination
     expect(orgStore.evaluateCoordination(writer.id, [qa.id], false, bots)).toBeNull();
 
-    // Enforced mode applies deterministic hierarchy & handoff gates
+    // Enforced mode delegates intra-department handoff decisions to the lead/manager (no lateral pipeline wires)
     orgStore.setEnforcementMode("enforced");
-    // 1. Manager -> subordinate allowed
-    expect(orgStore.evaluateCoordination(chief.id, [writer.id, designer.id], false, bots)).toBeNull();
-    // 2. Explicit handoff pipeline (Writer -> Designer) allowed
-    expect(orgStore.evaluateCoordination(writer.id, [designer.id], false, bots)).toBeNull();
-    // 3. Direct upward report (Writer -> Chief) allowed
+    // 1. Manager -> subordinates allowed
+    expect(orgStore.evaluateCoordination(chief.id, [writer.id, designer.id, qa.id], false, bots)).toBeNull();
+    // 2. Direct upward report (Writer -> Chief) allowed
     expect(orgStore.evaluateCoordination(writer.id, [chief.id], false, bots)).toBeNull();
-    // 4. Cross-branch consultation allowed when consult=true
+    // 3. Cross-branch consultation allowed when consult=true
     expect(orgStore.evaluateCoordination(writer.id, [qa.id], true, bots)).toBeNull();
-    // 5. Unauthorized lateral task dispatch (Writer -> QA without handoff edge) BLOCKED
+    // 4. Lateral peer task dispatch (Writer -> Designer or QA) BLOCKED — decided by department lead
     const denied = orgStore.evaluateCoordination(writer.id, [qa.id], false, bots);
     expect(denied).toContain("组织架构约束已拦截");
     expect(denied).toContain("多宝主编");
@@ -69,7 +67,7 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     const importedOrg = importedStore.getOrgChart();
     expect(importedOrg.enforcementMode).toBe("enforced");
     expect(importedOrg.nodes["n2"]?.reportsToBotId).toBe("n1");
-    expect(importedOrg.nodes["n2"]?.handoffToBotIds).toEqual(["n3"]);
+    expect(importedOrg.nodes["n2"]?.handoffToBotIds).toEqual([]);
   });
 
   it("executes multi-step workflows with variable interpolation, approval gate pause, revision, and continuation", async () => {
@@ -303,23 +301,37 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     const contentChief = { ...makeBot("b-c1", "内容主编"), section: "内容部", chiefOfStaff: true } as BotRecord;
     const contentWriter = { ...makeBot("b-w1", "文案写手"), section: "内容部" } as BotRecord;
     const designChief = { ...makeBot("b-d1", "设计主管"), section: "设计部", chiefOfStaff: true } as BotRecord;
+    const designMember = { ...makeBot("b-d2", "美工"), section: "设计部" } as BotRecord;
     const generalBot = { ...makeBot("b-g1", "多宝"), section: "", chiefOfStaff: true } as BotRecord;
-    const bots = [generalBot, contentChief, contentWriter, designChief];
+    const bots = [generalBot, contentChief, contentWriter, designChief, designMember];
     const store = { bots, bot: (id: string) => bots.find(b => b.id === id) } as unknown as Store;
 
     orgStore.updateOrgSettings({ enforcementMode: "enforced", generalDepartmentName: "总控中心" });
+    // Even if both department chiefs report directly to Boss, System Coordinator can still coordinate them when cross-dept is off.
+    orgStore.upsertOrgNode(contentChief.id, { reportsToBotId: null }, bots);
+    orgStore.upsertOrgNode(designChief.id, { reportsToBotId: null }, bots);
     expect(orgStore.getOrgChart(bots).generalDepartmentName).toBe("总控中心");
     expect(orgStore.orgPromptForBot(generalBot.id, bots)).toContain("总控中心");
     expect(orgStore.orgPromptForBot(generalBot.id, bots)).toContain("opc_save_workflow");
+    expect(orgStore.orgPromptForBot(contentChief.id, bots)).toContain("部门内的成员对话、任务分工与文件交接");
+    expect(orgStore.orgPromptForBot(contentChief.id, bots)).toContain("未开启「跨部门沟通」");
 
     // 1. Department Chief can dispatch own department members without explicit manual reportsTo
     expect(orgStore.evaluateCoordination(contentChief.id, [contentWriter.id], false, bots)).toBeNull();
-    // 2. Default strict mode blocks peer department Chiefs from dispatching directly without a wire
+    // 2. Default strict mode (跨部门沟通关闭): blocks peer department Chiefs from dispatching directly,
+    //    and routes cross-department coordination through System Coordinator (多宝)
     const strictDenied = orgStore.evaluateCoordination(contentChief.id, [designChief.id], false, bots);
-    expect(strictDenied).toContain("部门负责人直通");
-    // 3. Enabling allowChiefCrossDispatch opens direct cross-department Chief dispatch
+    expect(strictDenied).toContain("跨部门沟通");
+    expect(strictDenied).toContain("多宝");
+    expect(orgStore.evaluateCoordination(contentChief.id, [generalBot.id], false, bots)).toBeNull();
+    expect(orgStore.evaluateCoordination(generalBot.id, [designChief.id], false, bots)).toBeNull();
+    // 3. Enabling allowChiefCrossDispatch ("跨部门沟通") opens direct cross-department Chief <-> Chief communication,
+    //    while still preventing bypassing the other department's Chief to dispatch directly to its member.
     orgStore.updateOrgSettings({ allowChiefCrossDispatch: true });
     expect(orgStore.evaluateCoordination(contentChief.id, [designChief.id], false, bots)).toBeNull();
+    expect(orgStore.evaluateCoordination(contentChief.id, [designMember.id], false, bots)).toContain("对方部门负责人决定");
+    expect(orgStore.evaluateCoordination(contentWriter.id, [designChief.id], false, bots)).toContain("组织架构约束已拦截");
+    expect(orgStore.orgPromptForBot(contentChief.id, bots)).toContain("已开启「跨部门沟通」");
     // Re-lock strict mode to verify fixed workflow STILL overrides org chart!
     orgStore.updateOrgSettings({ allowChiefCrossDispatch: false });
 

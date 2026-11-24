@@ -66,7 +66,7 @@ function buildTopDownOrgTree(bots: readonly Bot[], org: OpcOrgChartState): TopDo
   }
 
   const bossSubtitle = org.enforcementMode === "enforced"
-    ? (org.allowChiefCrossDispatch ? "最终拍板 · 强约束（负责人直通）" : "最终拍板 · 按架构强约束")
+    ? (org.allowChiefCrossDispatch ? "最终拍板 · 强约束（跨部门负责人沟通）" : "最终拍板 · 强约束（总协调统筹跨部门）")
     : "最终拍板 · 自由协作";
 
   return {
@@ -76,33 +76,6 @@ function buildTopDownOrgTree(bots: readonly Bot[], org: OpcOrgChartState): TopDo
     status: "owner",
     section: "",
     reports: bossChildren,
-  };
-}
-
-function handoffCurve(from: TopDownLayoutNode, to: TopDownLayoutNode): { d: string; midX: number; midY: number } {
-  const rightToLeft = to.x >= from.x;
-  const x1 = rightToLeft ? from.x + from.width : from.x;
-  const y1 = from.y + from.height / 2;
-  const x2 = rightToLeft ? to.x : to.x + to.width;
-  const y2 = to.y + to.height / 2;
-  const span = Math.abs(x2 - x1);
-  if (span >= 24) {
-    const bend = Math.max(48, Math.min(160, span * 0.45));
-    const cx1 = rightToLeft ? x1 + bend : x1 - bend;
-    const cx2 = rightToLeft ? x2 - bend : x2 + bend;
-    const d = `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`;
-    return {
-      d,
-      midX: Math.round(0.125 * x1 + 0.375 * cx1 + 0.375 * cx2 + 0.125 * x2),
-      midY: Math.round(0.125 * y1 + 0.375 * y1 + 0.375 * y2 + 0.125 * y2),
-    };
-  }
-  const archX = Math.max(from.x + from.width, to.x + to.width) + 46;
-  const d = `M ${from.x + from.width} ${y1} C ${archX} ${y1}, ${archX} ${y2}, ${to.x + to.width} ${y2}`;
-  return {
-    d,
-    midX: Math.round(0.25 * (from.x + from.width) + 0.75 * archX),
-    midY: Math.round((y1 + y2) / 2),
   };
 }
 
@@ -116,15 +89,6 @@ interface ActiveDragState {
   offsetY: number;
   width: number;
   moved: boolean;
-}
-
-interface ActiveWireState {
-  fromId: string;
-  startX: number;
-  startY: number;
-  curX: number;
-  curY: number;
-  hoverTargetId: string | null;
 }
 
 export function OpcOrgChartView({
@@ -167,8 +131,6 @@ export function OpcOrgChartView({
   const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null);
   const [hoverNodeId, setHoverNodeId] = useState<string | null>(null);
   const [hoverDeptKey, setHoverDeptKey] = useState<string | null>(null);
-  const [wiring, setWiring] = useState<ActiveWireState | null>(null);
-  const [hoveredHandoffKey, setHoveredHandoffKey] = useState<string | null>(null);
   const [spendByBot, setSpendByBot] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -238,33 +200,7 @@ export function OpcOrgChartView({
       ? Math.max(...deptBoxes.map(b => b.x + b.width + 64))
       : 0;
     const totalWidth = Math.max(tree.width, maxBoxRight);
-
-    const handoffEdges: Array<{
-      id: string;
-      fromId: string;
-      toId: string;
-      d: string;
-      midX: number;
-      midY: number;
-      crossDepartment: boolean;
-    }> = [];
-    for (const bot of bots) {
-      const from = nodeById.get(bot.id);
-      if (!from) continue;
-      for (const targetId of org.nodes[bot.id]?.handoffToBotIds ?? []) {
-        const to = nodeById.get(targetId);
-        if (!to || targetId === bot.id) continue;
-        const curve = handoffCurve(from, to);
-        handoffEdges.push({
-          id: `${bot.id}->${targetId}`,
-          fromId: bot.id,
-          toId: targetId,
-          ...curve,
-          crossDepartment: from.section !== to.section,
-        });
-      }
-    }
-    return { ...tree, width: totalWidth, nodeById, deptBoxes, handoffEdges };
+    return { ...tree, width: totalWidth, nodeById, deptBoxes };
   }, [bots, org, hasNamedDepartments, sections]);
 
   const layoutNodesRef = useRef(layout.nodes);
@@ -456,63 +392,6 @@ export function OpcOrgChartView({
     window.addEventListener("keydown", onKeyDown);
   }, [botById, handleMoveDept, hitTestDrop, updateNode]);
 
-  const handleHandoffPortDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>, node: TopDownLayoutNode) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    const startX = node.x + node.width;
-    const startY = node.y + node.height / 2;
-    let targetId: string | null = null;
-    const pt0 = clientToWorld(e.clientX, e.clientY);
-    setWiring({ fromId: node.id, startX, startY, curX: pt0.x, curY: pt0.y, hoverTargetId: null });
-
-    const onMove = (ev: PointerEvent) => {
-      const pt = clientToWorld(ev.clientX, ev.clientY);
-      const hit = layoutNodesRef.current.find(n =>
-        n.depth > 0
-        && n.id !== node.id
-        && pt.x >= n.x - 16
-        && pt.x <= n.x + n.width + 16
-        && pt.y >= n.y - 12
-        && pt.y <= n.y + n.height + 12,
-      );
-      targetId = hit?.id ?? null;
-      setWiring({
-        fromId: node.id,
-        startX,
-        startY,
-        curX: hit ? hit.x : pt.x,
-        curY: hit ? hit.y + hit.height / 2 : pt.y,
-        hoverTargetId: targetId,
-      });
-    };
-
-    const cleanup = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", cleanup);
-      setWiring(null);
-    };
-
-    const onUp = () => {
-      const chosen = targetId;
-      cleanup();
-      if (!chosen || chosen === node.id) return;
-      const existing = orgRef.current.nodes[node.id]?.handoffToBotIds ?? [];
-      if (!existing.includes(chosen)) {
-        void updateNode(node.id, { handoffToBotIds: [...existing, chosen] });
-      }
-    };
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", cleanup);
-  }, [clientToWorld, updateNode]);
-
-  const removeHandoffEdge = useCallback((fromId: string, toId: string) => {
-    const existing = orgRef.current.nodes[fromId]?.handoffToBotIds ?? [];
-    void updateNode(fromId, { handoffToBotIds: existing.filter(id => id !== toId) });
-  }, [updateNode]);
-
   const handleCanvasPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button, details, input, select")) return;
     const startX = e.clientX;
@@ -681,19 +560,13 @@ export function OpcOrgChartView({
             );
           })}
 
-          {/* Straight top-down reporting lines & dashed cross/same-department handoff arcs */}
+          {/* Straight top-down reporting lines */}
           <svg
             aria-hidden="true"
             width={Math.max(layout.width, 800)}
             height={Math.max(layout.height, 600)}
             className="pointer-events-none absolute inset-0 overflow-visible"
           >
-            <defs>
-              <marker id="opc-handoff-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--color-accent)" fillOpacity="0.8" />
-              </marker>
-            </defs>
-
             {layout.edges.map(edge => (
               <path
                 key={`${edge.parent.id}->${edge.child.id}`}
@@ -705,46 +578,6 @@ export function OpcOrgChartView({
                 strokeLinejoin="miter"
               />
             ))}
-
-            {layout.handoffEdges.map(edge => {
-              const hovered = hoveredHandoffKey === edge.id;
-              return (
-                <g key={edge.id}>
-                  <path
-                    d={edge.d}
-                    fill="none"
-                    stroke="transparent"
-                    strokeWidth="16"
-                    className="pointer-events-auto cursor-pointer"
-                    onMouseEnter={() => setHoveredHandoffKey(edge.id)}
-                    onMouseLeave={() => setHoveredHandoffKey(prev => (prev === edge.id ? null : prev))}
-                    onClick={e => {
-                      e.stopPropagation();
-                      removeHandoffEdge(edge.fromId, edge.toId);
-                    }}
-                  />
-                  <path
-                    d={edge.d}
-                    fill="none"
-                    stroke="var(--color-accent)"
-                    strokeOpacity={hovered ? 0.95 : 0.7}
-                    strokeWidth={hovered ? "2.1" : "1.5"}
-                    strokeDasharray="5 4"
-                    markerEnd="url(#opc-handoff-arrow)"
-                  />
-                </g>
-              );
-            })}
-
-            {wiring && (
-              <path
-                d={`M ${wiring.startX} ${wiring.startY} C ${wiring.startX + 60} ${wiring.startY}, ${wiring.curX - 60} ${wiring.curY}, ${wiring.curX} ${wiring.curY}`}
-                fill="none"
-                stroke="var(--color-accent)"
-                strokeWidth="2"
-                strokeDasharray="6 4"
-              />
-            )}
           </svg>
 
           {/* Subtle cross-department reporting pills */}
@@ -757,34 +590,6 @@ export function OpcOrgChartView({
               跨部门
             </span>
           ))}
-
-          {/* Handoff midpoint badges (cross-department label + hover disconnect button) */}
-          {layout.handoffEdges.map(edge => {
-            const hovered = hoveredHandoffKey === edge.id;
-            return (
-              <button
-                key={`cut:${edge.id}`}
-                type="button"
-                aria-label="断开交接连线"
-                title="点击断开交接连线"
-                onMouseEnter={() => setHoveredHandoffKey(edge.id)}
-                onMouseLeave={() => setHoveredHandoffKey(prev => (prev === edge.id ? null : prev))}
-                onPointerDown={e => e.stopPropagation()}
-                onClick={e => {
-                  e.stopPropagation();
-                  removeHandoffEdge(edge.fromId, edge.toId);
-                }}
-                style={{ left: edge.midX, top: edge.midY }}
-                className={cn(
-                  "absolute -translate-x-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded-full border border-hairline/80 bg-panel px-2 py-0.5 text-[10px] text-accent shadow-xs transition-opacity hover:border-danger hover:text-danger",
-                  hovered || edge.crossDepartment ? "opacity-100" : "opacity-0 hover:opacity-100",
-                )}
-              >
-                {edge.crossDepartment && <span>跨部门交接</span>}
-                <X size={10} />
-              </button>
-            );
-          })}
 
           {/* Boss & Employee cards */}
           {layout.nodes.map(node => {
@@ -804,13 +609,10 @@ export function OpcOrgChartView({
                 isDraggingSource={activeDrag?.botId === node.id && activeDrag.moved}
                 isDropTarget={hoverNodeId === node.id && Boolean(activeDrag?.moved)}
                 hoverInvalid={hoverInvalid}
-                isWireTarget={wiring?.hoverTargetId === node.id}
-                wiringActive={Boolean(wiring)}
                 hasNamedDepartments={hasNamedDepartments}
                 deptLabel={deptLabelOfKey(node.section)}
                 onPointerDown={e => handleNodePointerDown(e, node)}
                 onSelect={() => { if (!justDraggedRef.current) setSelectedBotId(node.id); }}
-                onHandoffPortDown={e => handleHandoffPortDown(e, node)}
               />
             );
           })}
@@ -840,9 +642,6 @@ export function OpcOrgChartView({
         >
           <span className="hidden items-center gap-1.5 sm:inline-flex">
             <span className="h-px w-4 bg-hairline" /> 拖卡片改汇报/部门
-          </span>
-          <span className="hidden items-center gap-1.5 md:inline-flex">
-            <span className="h-px w-4 border-t border-dashed border-accent" /> 右圆点拉交接线
           </span>
           <span className="hidden h-3 w-px bg-hairline/60 sm:inline-block" />
           <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.1).toFixed(2)))} aria-label="缩小" className="p-0.5 hover:text-ink"><Minus size={12.5} /></button>

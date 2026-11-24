@@ -174,49 +174,29 @@ export function OpcOrgInspector({
           </p>
         </div>
 
-        {/* Cross-department or same-department handoff pipeline */}
-        <div className="space-y-2 border-t border-hairline/40 pt-4">
-          <div className="text-[11.5px] font-medium text-ink-tertiary">流水线交接下一棒（支持跨部门）</div>
-          <p className="text-[11.5px] text-ink-tertiary">
-            也可直接从画布卡片右侧圆点拖线连接，授权本岗位完成后直接向其交接任务。
-          </p>
-          <div className="space-y-1 pt-1">
-            {bots.filter(b => b.id !== bot.id).length === 0 ? (
-              <p className="text-[12px] text-ink-tertiary">暂无其他员工可配置交接。</p>
-            ) : (
-              bots.filter(b => b.id !== bot.id).map(candidate => {
-                const checked = cfg.handoffToBotIds.includes(candidate.id);
-                const crossDept = (candidate.section?.trim() || "") !== botSection;
-                return (
-                  <label
-                    key={candidate.id}
-                    className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-ink/[0.04]"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <BotAvatar bot={candidate} size={20} motion="none" motionKey={0} animated={false} />
-                      <span className="truncate text-[12.5px] text-ink">{candidate.name}</span>
-                      {crossDept && (
-                        <span className="shrink-0 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[10px] text-ink-tertiary">
-                          {deptLabelOf(candidate)}
-                        </span>
-                      )}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={saving}
-                      onChange={e => {
-                        const next = e.target.checked
-                          ? [...cfg.handoffToBotIds, candidate.id]
-                          : cfg.handoffToBotIds.filter(id => id !== candidate.id);
-                        void onUpdateNode(bot.id, { handoffToBotIds: next });
-                      }}
-                      className="size-3.5 shrink-0 rounded accent-ink"
-                    />
-                  </label>
-                );
-              })
-            )}
+        {/* Collaboration & handoff rule summary */}
+        <div className="space-y-1.5 border-t border-hairline/40 pt-4">
+          <div className="text-[11.5px] font-medium text-ink-tertiary">协作与交接规则</div>
+          <div className="space-y-1 rounded-xl bg-inset/70 px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-secondary">
+            <div>
+              <span className="font-medium text-ink">部门内：</span>
+              {!deptChief
+                ? `「${deptLabelOf(bot)}」暂无负责人，成员保持平级协作。`
+                : deptChief.id === bot.id
+                  ? "由你统筹决定本部门内的成员对话、任务分工与文件交接。"
+                  : `部门内的对话与文件交接由部门负责人「${deptChief.name}」统筹决定。`}
+            </div>
+            <div>
+              <span className="font-medium text-ink">跨部门：</span>
+              {org.enforcementMode !== "enforced"
+                ? "当前为自由协作模式；开启「按架构约束」后生效。"
+                : org.allowChiefCrossDispatch
+                  ? "已开启「跨部门沟通」，跨部门协作由双方部门负责人直接沟通对接。"
+                  : (() => {
+                    const sysChief = bots.find(b => !b.hidden && b.chiefOfStaff && !(b.section?.trim()));
+                    return `未开启「跨部门沟通」，跨部门协作统一由${sysChief ? `总协调人「${sysChief.name}」` : "总协调人（或老板）"}协调。`;
+                  })()}
+            </div>
           </div>
         </div>
 

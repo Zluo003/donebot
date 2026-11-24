@@ -92,13 +92,10 @@ export function OpcOrgNodeCard({
   isDraggingSource,
   isDropTarget,
   hoverInvalid,
-  isWireTarget,
-  wiringActive,
   hasNamedDepartments,
   deptLabel,
   onPointerDown,
   onSelect,
-  onHandoffPortDown,
 }: {
   node: TopDownLayoutNode;
   isBoss: boolean;
@@ -111,13 +108,10 @@ export function OpcOrgNodeCard({
   isDraggingSource: boolean;
   isDropTarget: boolean;
   hoverInvalid: boolean;
-  isWireTarget: boolean;
-  wiringActive: boolean;
   hasNamedDepartments: boolean;
   deptLabel: string;
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onSelect: () => void;
-  onHandoffPortDown: (e: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
   const { state, dispatch } = useStore();
   const showThreads = useShowThreads();
@@ -155,7 +149,6 @@ export function OpcOrgNodeCard({
         isDraggingSource && "opacity-35 ring-1 ring-ink/30",
         isDropTarget && !hoverInvalid && "scale-[1.03] ring-2 ring-accent shadow-lg",
         isDropTarget && hoverInvalid && "ring-2 ring-danger",
-        isWireTarget && "ring-2 ring-accent shadow-lg",
       )}
     >
       {sentKey !== undefined && (
@@ -230,17 +223,6 @@ export function OpcOrgNodeCard({
             )}
             <span className="ml-auto shrink-0 tabular-nums">{formatCny(spend)}</span>
           </div>
-
-          <button
-            type="button"
-            aria-label={`从「${bot.name}」拉出交接连线`}
-            title="按住拖向另一员工建立交接连线（支持跨部门）"
-            onPointerDown={onHandoffPortDown}
-            className={cn(
-              "absolute -right-2 top-1/2 flex size-4 -translate-y-1/2 cursor-crosshair items-center justify-center rounded-full border-2 border-panel bg-accent shadow-xs transition-all hover:scale-125",
-              wiringActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-            )}
-          />
         </>
       ) : null}
     </div>

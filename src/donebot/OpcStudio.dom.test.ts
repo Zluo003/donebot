@@ -294,13 +294,16 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("总控主编");
     expect(container.textContent).toContain("总控中心");
     expect(container.textContent).toContain("设计部");
-    expect(container.textContent).toContain("跨部门交接");
+    expect(container.textContent).not.toContain("跨部门交接");
+    expect(container.textContent).not.toContain("右圆点拉交接线");
 
-    // Click system chief (General section) -> shows "设为系统总协调"
+    // Click system chief (General section) -> shows "设为系统总协调" and collaboration summary (no pipeline handoff checkboxes)
     const empCard = container.querySelector<HTMLElement>('[data-org-node="b1"]')!;
     await act(async () => { empCard.click(); });
     expect(container.textContent).toContain("岗位、部门与协作规则");
     expect(container.textContent).toContain("设为系统总协调");
+    expect(container.textContent).toContain("协作与交接规则");
+    expect(container.textContent).not.toContain("流水线交接下一棒");
 
     // Click named department bot -> shows "设为部门负责人"
     const deptBotCard = container.querySelector<HTMLElement>('[data-org-node="b2"]')!;

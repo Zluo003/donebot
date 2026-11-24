@@ -6,9 +6,11 @@ import type {
   OpcHeartbeatConfig,
   OpcSpendResponse,
 } from "../../shared/donebot-opc.ts";
+import { admitSkillFiles } from "../../shared/skill-files.ts";
 import { collectBotArtifacts, type ArtifactThread } from "../bot-artifacts.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
+import type { StoredSkillFiles } from "../skill-side-files.ts";
 import type { SkillListing } from "../skills.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
@@ -97,6 +99,7 @@ export interface DoneBotOpcRouteDeps {
   store: Store;
   listBotSkills(botId: string): SkillListing[];
   readBotSkill(botId: string, name: string): string | null;
+  readBotSkillFiles?(botId: string, name: string): StoredSkillFiles;
   installBotSkill(botId: string, source: string, files: readonly { path: string; content: string }[]): SkillListing | { error: string };
   setBotSkillEnabled(botId: string, name: string, enabled: boolean): SkillListing | { error: string };
   removeBotSkill(botId: string, name: string): unknown;
@@ -177,12 +180,17 @@ function enrichArtifacts(store: Store, opcStore: DoneBotOpcStore, targetBotId?: 
 
 function captureBotSnapshot(deps: DoneBotOpcRouteDeps, bot: BotRecord) {
   const listed = deps.listBotSkills(bot.id);
-  const skills = listed.map(sk => ({
-    name: sk.name,
-    description: sk.description ?? "",
-    instructions: deps.readBotSkill(bot.id, sk.name) ?? "",
-    enabled: Boolean(sk.enabled),
-  })).filter(sk => sk.instructions.length > 0);
+  const skills = listed.map(sk => {
+    const rawFiles = deps.readBotSkillFiles?.(bot.id, sk.name);
+    const admitted = Array.isArray(rawFiles) && rawFiles.length > 0 ? admitSkillFiles(rawFiles).files : [];
+    return {
+      name: sk.name,
+      description: sk.description ?? "",
+      instructions: deps.readBotSkill(bot.id, sk.name) ?? "",
+      enabled: Boolean(sk.enabled),
+      ...(admitted.length > 0 ? { files: admitted } : {}),
+    };
+  }).filter(sk => sk.instructions.length > 0);
   return {
     botId: bot.id,
     title: bot.title ?? "",
@@ -589,6 +597,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
           }
           const installed = deps.installBotSkill(bot.id, `snapshot:${target.id}`, [
             { path: "SKILL.md", content: sk.instructions },
+            ...(sk.files ?? []).map(file => ({ path: file.path, content: file.content })),
           ]);
           if (!("error" in installed)) {
             deps.setBotSkillEnabled(bot.id, installed.name, sk.enabled);

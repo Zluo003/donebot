@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  ChevronRight,
   FlaskConical,
   History,
   Loader2,
@@ -305,7 +306,10 @@ export function OpcSkillStudioModal({
                           快照「{selectedSnap.label}」vs 当前 SOUL.md
                         </div>
                         <div className="text-[11.5px] text-ink-tertiary">
-                          包含 {selectedSnap.skills.length} 个 SKILL.md · 回滚前将自动保存当前状态备份
+                          {(() => {
+                            const supportCount = selectedSnap.skills.reduce((sum, sk) => sum + (sk.files?.length ?? 0), 0);
+                            return `包含 ${selectedSnap.skills.length} 个 Skill${supportCount > 0 ? `（含 ${supportCount} 个附属文件）` : ""} · 回滚前将自动保存当前状态备份`;
+                          })()}
                         </div>
                       </div>
                       <button
@@ -349,6 +353,55 @@ export function OpcSkillStudioModal({
                         ))
                       )}
                     </div>
+
+                    {selectedSnap.skills.length > 0 && (
+                      <div className="space-y-1.5 border-t border-hairline/40 pt-2.5">
+                        <div className="text-[11.5px] font-medium text-ink-secondary">
+                          快照包含的技能（{selectedSnap.skills.length}）
+                        </div>
+                        <div className="space-y-1">
+                          {selectedSnap.skills.map(sk => {
+                            const supportFiles = sk.files ?? [];
+                            return (
+                              <details
+                                key={sk.name}
+                                className="group rounded-lg bg-app/70 px-2.5 py-1.5 text-[11.5px]"
+                              >
+                                <summary className="flex cursor-pointer list-none items-center gap-1.5 text-ink [&::-webkit-details-marker]:hidden">
+                                  <ChevronRight
+                                    size={12}
+                                    aria-hidden="true"
+                                    className="shrink-0 text-ink-tertiary transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none"
+                                  />
+                                  <span className="font-mono font-medium">{sk.name}</span>
+                                  <span className="text-ink-tertiary">
+                                    {sk.enabled ? "启用" : "停用"}
+                                    {supportFiles.length > 0 ? ` · ${supportFiles.length} 个附属文件` : ""}
+                                  </span>
+                                </summary>
+                                <div className="mt-1.5 space-y-1.5 border-t border-hairline/40 pt-1.5 pl-4">
+                                  {supportFiles.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                      {supportFiles.map(file => (
+                                        <span
+                                          key={file.path}
+                                          className="rounded bg-card px-1.5 py-0.5 font-mono text-[10.5px] text-ink-secondary ring-[0.5px] ring-hairline/60"
+                                        >
+                                          {file.path}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-ink-secondary">
+                                    {sk.instructions}
+                                  </pre>
+                                </div>
+                              </details>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { EXTERNAL_CODING_AGENT_SHARE_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import type { MarketLocalBotOption, MarketSkillDoc } from "../../shared/donebot-market.ts";
+import { admitSkillFiles } from "../../shared/skill-files.ts";
 import { parsePackageDocument } from "../bot-package.ts";
 import type { ModelSelection } from "../contracts.ts";
 import { createTeamPackageExport, TeamExportError, type ExportablePackageSkill, type TeamExportSkip } from "../package-export.ts";
 import { importPackageDocument, PackageImportError, type PackageImportDeps } from "../package-import.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
+import { ownSkillFiles } from "../skill-side-files.ts";
 import type { SkillListing } from "../skills.ts";
 import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import type { Routine } from "../../shared/routines.ts";
@@ -142,11 +144,22 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           .filter(bot => !bot.hidden && !isExternalCodingAgentBot(bot))
           .map(bot => {
             const soul = (bot.soul ?? "").trim();
-            const skills = deps.listBotSkills(bot.id).map(sk => ({
-              name: sk.name,
-              description: sk.description ?? "",
-              enabled: Boolean(sk.enabled),
-            }));
+            const skills = deps.listBotSkills(bot.id).map(sk => {
+              let files = sk.files?.length ? [...sk.files] : undefined;
+              if (!files) {
+                const rawSide = ownSkillFiles(bot.id, sk.name);
+                if (Array.isArray(rawSide) && rawSide.length > 0) {
+                  const admitted = admitSkillFiles(rawSide).files.map(f => f.path);
+                  if (admitted.length > 0) files = admitted;
+                }
+              }
+              return {
+                name: sk.name,
+                description: sk.description ?? "",
+                enabled: Boolean(sk.enabled),
+                ...(files?.length ? { files } : {}),
+              };
+            });
             return {
               id: bot.id,
               name: bot.name,
@@ -315,6 +328,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           name: entry.name,
           description: entry.description ?? "",
           instructions: entry.instructions,
+          ...(entry.files?.length ? { files: entry.files.map(f => ({ path: f.path, content: f.content })) } : {}),
         }));
 
         const appearance = {
@@ -430,6 +444,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           name: entry.name,
           description: entry.description ?? "",
           instructions: entry.instructions,
+          ...(entry.files?.length ? { files: entry.files.map(f => ({ path: f.path, content: f.content })) } : {}),
         }));
         const appearance = {
           color: primaryBot.color,

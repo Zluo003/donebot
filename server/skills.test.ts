@@ -21,6 +21,7 @@ import { DATA_DIR } from "./config.ts";
 import {
   applyStagedSkillWrite,
   applySkillWriteWithReceipt,
+  installOrgSkill,
   installSkill,
   INDEX_MAX_BYTES,
   listSkills,
@@ -233,7 +234,7 @@ describe("install → review → enable lifecycle", () => {
       { path: "SKILL.md", content: SKILL("code-review") },
     ]);
     expect(installed).toMatchObject({ name: "code-review", enabled: false });
-    expect(installed).toMatchObject({ editable: false });
+    expect(installed).toMatchObject({ editable: true });
     expect(skillsSystemPrompt(bot)).toBe("");
 
     const enabled = setSkillEnabled(bot, "code-review", true);
@@ -675,26 +676,36 @@ describe("staged skill writes", () => {
     expect(listStagedSkillWrites(bot)).toEqual([]);
   });
 
-  it("requires an exact learned target and rejects imported, renamed, or no-op updates", () => {
+  it("requires an exact editable target and rejects org-managed, renamed, or no-op updates", () => {
     const imported = installSkill(bot, "github.com/example/review", [
       { path: "SKILL.md", content: SKILL("imported-skill", "Imported instructions.") },
     ]);
-    expect(imported).toMatchObject({ name: "imported-skill" });
-    expect(stageSkillWrite(bot, {
+    expect(imported).toMatchObject({ name: "imported-skill", editable: true });
+    const importedStage = stageSkillWrite(bot, {
       action: "update",
       targetName: "imported-skill",
-      files: [{ path: "SKILL.md", content: SKILL("imported-skill", "Replacement.") }],
-    })).toMatchObject({ error: expect.stringContaining("was imported") });
+      files: [{ path: "SKILL.md", content: SKILL("imported-skill", "Tailored instructions.") }],
+    });
+    if ("error" in importedStage) throw new Error(importedStage.error);
+    expect(applyStagedSkillWrite(bot, importedStage.id)).toMatchObject({
+      name: "imported-skill",
+      description: "Tailored instructions.",
+      editable: true,
+    });
 
-    const legacyLearned = installSkill(bot, "learn:legacy conversation", [
-      { path: "SKILL.md", content: SKILL("legacy-learned", "Legacy learned instructions.") },
-    ]);
-    expect(legacyLearned).toMatchObject({ editable: false });
+    const orgManaged = installOrgSkill(bot, "org:team-policy", SKILL("org-managed", "Org policy."), {
+      installId: "a".repeat(32),
+      key: "org-managed",
+      release: "1.0.0",
+      r: "b".repeat(64),
+      w: "c".repeat(64),
+    });
+    expect(orgManaged).toMatchObject({ editable: false });
     expect(stageSkillWrite(bot, {
       action: "update",
-      targetName: "legacy-learned",
-      files: [{ path: "SKILL.md", content: SKILL("legacy-learned", "Replacement.") }],
-    })).toMatchObject({ error: expect.stringContaining("predates reviewed updates") });
+      targetName: "org-managed",
+      files: [{ path: "SKILL.md", content: SKILL("org-managed", "Replacement.") }],
+    })).toMatchObject({ error: expect.stringContaining("cannot be rewritten") });
 
     const created = stageSkillWrite(bot, {
       action: "create",

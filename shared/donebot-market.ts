@@ -54,10 +54,16 @@ export interface MarketCategory {
   updated_at?: string;
 }
 
+export interface MarketSkillSupportFile {
+  path: string;
+  content: string;
+}
+
 export interface MarketSkillDoc {
   name: string;
   description?: string;
   instructions: string;
+  files?: MarketSkillSupportFile[];
 }
 
 export interface MarketAIReviewDimension {
@@ -172,6 +178,7 @@ export interface MarketLocalSkillOption {
   name: string;
   description: string;
   enabled: boolean;
+  files?: string[];
 }
 
 export interface MarketLocalBotOption {

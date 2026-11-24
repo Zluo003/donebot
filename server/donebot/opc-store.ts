@@ -62,6 +62,10 @@ const snapshotSchema = z.object({
     description: z.string().max(2000),
     instructions: z.string().max(262_144),
     enabled: z.boolean(),
+    files: z.array(z.object({
+      path: z.string().min(1).max(300),
+      content: z.string().max(131_072),
+    })).max(30).optional(),
   })).max(50),
   createdAt: z.number().finite(),
 });

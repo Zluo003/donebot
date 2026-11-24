@@ -282,7 +282,7 @@ export function BotMarketPublishModal({
                 <ShieldCheck size={16} className="mt-0.5 shrink-0 text-accent" />
                 <div>
                   <span className="font-medium text-ink">自动隐私脱敏：</span>
-                  仅发布所选 Bot 的 <code className="rounded bg-raised px-1">SOUL.md</code>、勾选的 <code className="rounded bg-raised px-1">SKILL.md</code> 与基础介绍；自动剔除聊天记录、私有 <code className="rounded bg-raised px-1">MEMORY.md</code>、密钥与本机工具权限，且无需上传截图。
+                  仅发布所选 Bot 的 <code className="rounded bg-raised px-1">SOUL.md</code>、勾选的 <code className="rounded bg-raised px-1">Skill</code>（含 <code className="rounded bg-raised px-1">SKILL.md</code> 及附属文本脚本/参考文件）与基础介绍；自动剔除聊天记录、私有 <code className="rounded bg-raised px-1">MEMORY.md</code>、密钥与本机工具权限，且无需上传截图。
                 </div>
               </div>
 
@@ -440,6 +440,11 @@ export function BotMarketPublishModal({
                                 className="accent-accent"
                               />
                               <span>{sk.name}</span>
+                              {sk.files && sk.files.length > 0 && (
+                                <span className="rounded bg-raised px-1 py-0.5 text-[10.5px] text-ink-tertiary">
+                                  +{sk.files.length} 文件
+                                </span>
+                              )}
                             </label>
                           );
                         })}

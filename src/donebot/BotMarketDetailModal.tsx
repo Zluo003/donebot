@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Download, Flag, FlaskConical, Loader2, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, Download, Flag, FlaskConical, Loader2, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import type { MarketInstalledBotInfo } from "../../shared/donebot-market";
 import { BotAvatar } from "@/components/Avatar";
 import { cn } from "@/lib/cn";
@@ -32,7 +32,6 @@ export function BotMarketDetailModal({
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState<"install" | "update" | "report" | null>(null);
   const [notice, setNotice] = useState("");
-  const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<string>("token_abuse");
   const [reportDetail, setReportDetail] = useState("");
@@ -279,37 +278,69 @@ export function BotMarketDetailModal({
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
                     <Sparkles size={14} className="text-accent" />
-                    内置 SKILL.md（{detail.skills?.length ?? 0}）
+                    内置 Skill（{detail.skills?.length ?? 0}）
                   </span>
-                  <span className="text-[11.5px] text-emerald-500">安装后默认启用</span>
+                  <span className="text-[11.5px] text-emerald-500">安装后默认启用 · 可对话优化</span>
                 </div>
                 {!detail.skills?.length ? (
                   <p className="text-[12px] text-ink-secondary">该 Bot 未附带额外 Skill，纯 SOUL 驱动。</p>
                 ) : (
                   <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline">
                     {detail.skills.map(sk => {
-                      const open = expandedSkill === sk.name;
+                      const supportFiles = sk.files ?? [];
                       return (
-                        <div key={sk.name} className="bg-app/50">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedSkill(open ? null : sk.name)}
-                            className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-raised/60"
-                          >
-                            <div className="min-w-0">
-                              <div className="text-[12.5px] font-medium text-ink">{sk.name}</div>
+                        <details key={sk.name} className="group bg-app/50">
+                          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 hover:bg-raised/60 [&::-webkit-details-marker]:hidden">
+                            <ChevronRight
+                              size={14}
+                              aria-hidden="true"
+                              className="shrink-0 text-ink-secondary transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[12.5px] font-medium text-ink">{sk.name}</span>
+                                {supportFiles.length > 0 && (
+                                  <span className="rounded bg-raised px-1.5 py-0.5 text-[10.5px] text-ink-tertiary">
+                                    +{supportFiles.length} 个附属文件
+                                  </span>
+                                )}
+                              </div>
                               {sk.description && (
                                 <div className="truncate text-[11.5px] text-ink-secondary">{sk.description}</div>
                               )}
                             </div>
-                            {open ? <ChevronDown size={14} className="shrink-0 text-ink-secondary" /> : <ChevronRight size={14} className="shrink-0 text-ink-secondary" />}
-                          </button>
-                          {open && (
-                            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-hairline bg-app px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-secondary">
+                          </summary>
+                          <div className="space-y-2 border-t border-hairline bg-app px-3 py-2.5">
+                            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[11.5px] leading-relaxed text-ink-secondary">
                               {sk.instructions}
                             </pre>
-                          )}
-                        </div>
+                            {supportFiles.length > 0 && (
+                              <div className="space-y-1.5 border-t border-hairline/60 pt-2">
+                                <div className="text-[11px] font-medium text-ink-tertiary">
+                                  附属文件（{supportFiles.length}）
+                                </div>
+                                {supportFiles.map(file => (
+                                  <details
+                                    key={file.path}
+                                    className="group/file rounded-md border border-hairline/60 bg-card/60 px-2.5 py-1.5"
+                                  >
+                                    <summary className="flex cursor-pointer list-none items-center gap-1.5 font-mono text-[11px] font-medium text-ink [&::-webkit-details-marker]:hidden">
+                                      <ChevronRight
+                                        size={12}
+                                        aria-hidden="true"
+                                        className="shrink-0 text-ink-tertiary transition-transform duration-200 group-open/file:rotate-90 motion-reduce:transition-none"
+                                      />
+                                      <span className="truncate">{file.path}</span>
+                                    </summary>
+                                    <pre className="mt-1.5 max-h-44 overflow-auto whitespace-pre-wrap break-words border-t border-hairline/50 pt-1.5 font-mono text-[11px] leading-relaxed text-ink-secondary">
+                                      {file.content}
+                                    </pre>
+                                  </details>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </details>
                       );
                     })}
                   </div>

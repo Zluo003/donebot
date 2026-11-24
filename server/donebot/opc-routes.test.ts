@@ -88,8 +88,16 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     const opcStore = new DoneBotOpcStore(join(dir, "opc.json"));
 
     let botSoul = "你是资深自媒体主编，严格输出爆款标题与结构化大纲。";
-    const skillContents = new Map<string, { description: string; instructions: string; enabled: boolean }>([
-      ["copywriting", { description: "爆款写作", instructions: "# Copywriting\n写出吸睛开头。", enabled: true }],
+    const skillContents = new Map<string, { description: string; instructions: string; enabled: boolean; files?: Array<{ path: string; content: string }> }>([
+      ["copywriting", {
+        description: "爆款写作",
+        instructions: "# Copywriting\n写出吸睛开头。",
+        enabled: true,
+        files: [
+          { path: "scripts/format.py", content: "print('formatted')\n" },
+          { path: "references/hooks.md", content: "# Hooks\n先给反常识结论。\n" },
+        ],
+      }],
     ]);
     const bot: BotRecord = {
       id: "bot-1",
@@ -165,10 +173,16 @@ describe("OPC Store, Studio Attribution & Routes", () => {
       store,
       listBotSkills: () => [...skillContents.entries()].map(([name, s]) => ({ name, description: s.description, enabled: s.enabled }) as never),
       readBotSkill: (_b, name) => skillContents.get(name)?.instructions ?? null,
+      readBotSkillFiles: (_b, name) => skillContents.get(name)?.files ?? [],
       installBotSkill: (_b, _src, files) => {
         const md = files[0]?.content ?? "";
         const name = md.includes("Copywriting") ? "copywriting" : "restored";
-        skillContents.set(name, { description: "", instructions: md, enabled: true });
+        skillContents.set(name, {
+          description: "",
+          instructions: md,
+          enabled: true,
+          files: files.slice(1).map(f => ({ path: f.path, content: String(f.content) })),
+        });
         return { name, enabled: true } as never;
       },
       setBotSkillEnabled: (_b, name, enabled) => {
@@ -215,14 +229,18 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     expect(startTurn).toHaveBeenCalledTimes(1);
     expect(startTurn.mock.calls[0]?.[1]).toContain("字号放大一点，背景更克制");
 
-    // 3. Snapshots & Rollback (with auto before_restore safety snapshot)
+    // 3. Snapshots & Rollback (with auto before_restore safety snapshot & bundled skill support files)
     const snapRes = await callRoute(handler, "POST", "/api/donebot/opc/bots/bot-1/snapshots", { label: "稳定版 v1" });
     expect(snapRes.status).toBe(200);
-    const snapId = (snapRes.payload as { snapshot: { id: string } }).snapshot.id;
+    const snapPayload = snapRes.payload as { snapshot: { id: string; skills: Array<{ name: string; files?: Array<{ path: string; content: string }> }> } };
+    const snapId = snapPayload.snapshot.id;
+    expect(snapPayload.snapshot.skills[0]?.files?.map(f => f.path)).toEqual(["references/hooks.md", "scripts/format.py"]);
     bot.soul = "改坏了的新版 SOUL";
+    skillContents.set("copywriting", { description: "改坏", instructions: "# Copywriting\n改坏了", enabled: true, files: [] });
     const restoreRes = await callRoute(handler, "POST", `/api/donebot/opc/bots/bot-1/snapshots/${snapId}/restore`, {});
     expect(restoreRes.status).toBe(200);
     expect(botSoul).toBe("你是资深自媒体主编，严格输出爆款标题与结构化大纲。");
+    expect(skillContents.get("copywriting")?.files?.map(f => f.path)).toEqual(["references/hooks.md", "scripts/format.py"]);
     expect(opcStore.listSnapshots("bot-1").length).toBe(2); // original + before_restore backup
 
     // 4. Skill Studio Golden Evals (via Paperclip eval-kernel)

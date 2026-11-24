@@ -42,11 +42,17 @@ export interface OpcArtifactItem extends BotArtifact {
   deliverableId?: string;
 }
 
+export interface OpcSnapshotSkillFile {
+  path: string;
+  content: string;
+}
+
 export interface OpcSnapshotSkill {
   name: string;
   description: string;
   instructions: string;
   enabled: boolean;
+  files?: OpcSnapshotSkillFile[];
 }
 
 export interface OpcConfigSnapshot {

@@ -237,11 +237,13 @@ describe("createDoneBotMarketRoutes", () => {
       return Response.json({ code: 0, data: {} });
     }) as unknown as typeof fetch;
 
+    let capturedInstalledFiles: Array<{ path: string; content: string }> = [];
     const packageImportDeps = (): PackageImportDeps => ({
       store,
       routines: { create: vi.fn(), remove: vi.fn() },
       skills: {
         install: (botId, _source, files) => {
+          capturedInstalledFiles = files.map(f => ({ path: f.path, content: String(f.content) }));
           const content = files[0]?.content ?? "";
           const name = /name:\s*([a-z0-9-]+)/.exec(content)?.[1] ?? "xhs-hooks";
           installedSkillStates.set(`${botId}:${name}`, false);
@@ -264,17 +266,25 @@ describe("createDoneBotMarketRoutes", () => {
       store,
       marketInstalls,
       listBotSkills: () => [
-        { name: "xhs-hooks", description: "标题钩子", source: "local", enabled: true } as never,
+        { name: "xhs-hooks", description: "标题钩子", source: "local", enabled: true, files: ["references/hooks.md", "scripts/score.py"] } as never,
         { name: "private-skill", description: "不公开", source: "local", enabled: true } as never,
       ],
       collectTeamSkills: (_bots, selection) => {
         const chosen = Array.isArray(selection) ? selection : ["xhs-hooks", "private-skill"];
-        const map = new Map<string, Array<{ name: string; description: string; instructions: string; source: string }>>();
+        const map = new Map<string, Array<{ name: string; description: string; instructions: string; source: string; files?: Array<{ path: string; content: string }> }>>();
         map.set(bot.id, chosen.map(name => ({
           name: String(name),
           description: "技能说明",
           instructions: `---\nname: ${name}\ndescription: 技能说明\n---\n按步骤执行高质量输出`,
           source: "local",
+          ...(name === "xhs-hooks"
+            ? {
+                files: [
+                  { path: "references/hooks.md", content: "# Hooks\n先抛痛点。\n" },
+                  { path: "scripts/score.py", content: "print('score=95')\n" },
+                ],
+              }
+            : {}),
         })));
         return { ok: true, all: false, skillsByBot: map, skipped: [], available: ["xhs-hooks", "private-skill"] };
       },
@@ -283,6 +293,12 @@ describe("createDoneBotMarketRoutes", () => {
       broadcast: frame => broadcasts.push(frame),
       publicBot: b => b,
     });
+
+    // 0. Local bots listing exposes skill support file paths
+    const localList = await callRoute(handler, "GET", "/api/donebot/market/local-bots");
+    expect(localList.status).toBe(200);
+    const listedBots = (localList.payload as { bots: Array<{ skills: Array<{ name: string; files?: string[] }> }> }).bots;
+    expect(listedBots[0]?.skills.find(s => s.name === "xhs-hooks")?.files).toEqual(["references/hooks.md", "scripts/score.py"]);
 
     // 1. Publish selecting ONLY xhs-hooks
     const pub = await callRoute(handler, "POST", "/api/donebot/market/publish", {
@@ -298,17 +314,20 @@ describe("createDoneBotMarketRoutes", () => {
     expect(pub.status, JSON.stringify(pub.payload)).toBe(200);
     expect(capturedPublishBody).not.toBeNull();
     expect(capturedPublishBody!.skills).toHaveLength(1);
-    expect((capturedPublishBody!.skills as Array<{ name: string }>)[0]!.name).toBe("xhs-hooks");
+    const publishedSkill = (capturedPublishBody!.skills as Array<{ name: string; files?: Array<{ path: string; content: string }> }>)[0]!;
+    expect(publishedSkill.name).toBe("xhs-hooks");
+    expect(publishedSkill.files?.map(f => f.path)).toEqual(["references/hooks.md", "scripts/score.py"]);
     const pkgJson = JSON.stringify(capturedPublishBody!.package);
     expect(pkgJson).not.toContain("MEMORY.md");
     expect(pkgJson).not.toContain("private-skill");
 
-    // 2. Install from marketplace
+    // 2. Install from marketplace restores SKILL.md AND support files
     const inst = await callRoute(handler, "POST", `/api/donebot/market/bots/${listingId}/install`, {});
     expect(inst.status, JSON.stringify(inst.payload)).toBe(200);
     const instPayload = inst.payload as { ok: boolean; bot_id: string; enabled_skills: string[] };
     expect(instPayload.ok).toBe(true);
     expect(instPayload.enabled_skills).toEqual(["xhs-hooks"]);
+    expect(capturedInstalledFiles.map(f => f.path)).toEqual(["SKILL.md", "references/hooks.md", "scripts/score.py"]);
     expect(installedSkillStates.get(`${instPayload.bot_id}:xhs-hooks`)).toBe(true);
     expect(marketInstalls.getActiveToken(instPayload.bot_id)).toBe(installToken);
     expect(broadcasts.some(b => (b as { kind?: string }).kind === "bot")).toBe(true);

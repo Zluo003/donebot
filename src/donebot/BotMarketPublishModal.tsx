@@ -241,7 +241,7 @@ export function BotMarketPublishModal({
                 </div>
               </div>
 
-              {result.latest_release?.ai_report && (
+              {result.status !== "published" && result.latest_release?.ai_report && (
                 <div className="rounded-xl border border-hairline bg-card p-4 text-[12.5px] space-y-2">
                   <div className="font-medium text-ink">
                     AI 审核摘要（风险分：{result.latest_release.ai_risk_score}）

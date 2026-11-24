@@ -5,7 +5,6 @@ import {
   Coins,
   Download,
   Eye,
-  EyeOff,
   Loader2,
   PackagePlus,
   RefreshCw,
@@ -138,16 +137,15 @@ export function BotMarketPage() {
     }
   };
 
-  const handleToggleVisibility = async (item: MarketListingSummary) => {
-    const nextListed = item.status === "unlisted";
+  const handleRelist = async (item: MarketListingSummary) => {
     setBusyId(item.id);
     setError("");
     try {
-      await marketApi.setVisibility(item.id, nextListed);
+      await marketApi.setVisibility(item.id, true);
       await loadMine();
-      showToast(nextListed ? `已重新上架「${item.name}」` : `已下架「${item.name}」`);
+      showToast(`已重新上架「${item.name}」`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "修改上架状态失败。");
+      setError(err instanceof Error ? err.message : "重新上架失败。");
     } finally {
       setBusyId(null);
     }
@@ -531,21 +529,21 @@ export function BotMarketPage() {
                           >
                             发布新版本
                           </button>
-                          {(item.status === "published" || item.status === "unlisted") && (
+                          {item.status === "unlisted" && (
                             <button
                               type="button"
-                              onClick={() => void handleToggleVisibility(item)}
+                              onClick={() => void handleRelist(item)}
                               disabled={busyId === item.id}
                               className="inline-flex items-center gap-1 rounded-xl border border-hairline px-3 py-1.5 text-[12px] text-ink-secondary hover:bg-raised hover:text-ink disabled:opacity-50"
                             >
-                              {item.status === "published" ? <EyeOff size={13} /> : <Eye size={13} />}
-                              {item.status === "published" ? "下架" : "重新上架"}
+                              <Eye size={13} />
+                              重新上架
                             </button>
                           )}
                         </div>
                       </div>
 
-                      {item.last_review_note && (
+                      {item.last_review_note && item.status !== "published" && (
                         <div className={cn(
                           "rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed",
                           item.status === "rejected" ? "bg-danger/10 text-danger" : "bg-app text-ink-secondary",

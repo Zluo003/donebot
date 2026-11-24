@@ -1,7 +1,9 @@
-import { Check, Loader2, ShieldCheck, X } from "lucide-react";
+import { Check, Loader2, ShieldCheck, Store, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { UPSTREAM_SERVICES } from "@/donebot/services";
+import { ShareDepartmentToMarketPanel } from "@/donebot/ShareDepartmentToMarketPanel";
 import { t, tFromServer } from "@/lib/i18n";
 import {
   describePart,
@@ -125,13 +127,16 @@ export function ShareTeamDialog({ team, onClose, publishTarget, onPublished }: {
   publishTarget?: TeamTemplatePublishTarget;
   onPublished?: () => void;
 }) {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const dialogRef = useRef<HTMLDivElement>(null);
   const teamBots = useMemo(
     () => state.bots.filter((bot) => !bot.hidden && (bot.section?.trim() ?? "") === team),
     [state.bots, team],
   );
   const botNames = useMemo(() => new Map(teamBots.map((bot) => [bot.id, bot.name])), [teamBots]);
+  const canPublishMarket = state.config?.donebot?.enabled === true
+    && !state.config?.team
+    && window.ogb?.remoteClient?.active !== true;
   const [name, setName] = useState(team || t("teamLibrary.general"));
   const [tagline, setTagline] = useState("");
   const [summary, setSummary] = useState("");
@@ -151,6 +156,7 @@ export function ShareTeamDialog({ team, onClose, publishTarget, onPublished }: {
   const [published, setPublished] = useState<ShareResponse | null>(null);
   const [publishedTemplate, setPublishedTemplate] = useState<TeamTemplate | null>(null);
   const [githubDocument, setGithubDocument] = useState<PackageDocument | null>(null);
+  const [marketPublishOpen, setMarketPublishOpen] = useState(false);
   const request = useRef(0);
 
   useEffect(() => {
@@ -291,86 +297,130 @@ export function ShareTeamDialog({ team, onClose, publishTarget, onPublished }: {
         }}>
         <header className="flex items-start justify-between gap-3 px-6 pb-2 pt-5">
           <div>
-            <h2 id="share-team-title" className="text-[17px] font-semibold">{t("teamShare.title", { name: team || t("teamLibrary.general") })}</h2>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("teamShare.intro")}</p>
+            <h2 id="share-team-title" className="text-[17px] font-semibold">
+              {marketPublishOpen ? `发布「${team || t("teamLibrary.general")}」到 Bot 广场` : t("teamShare.title", { name: team || t("teamLibrary.general") })}
+            </h2>
+            <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">
+              {marketPublishOpen ? "选择分类并补充简介后提交网关 AI 专项安全审核，审核通过后其他用户即可一键雇佣该部门。" : t("teamShare.intro")}
+            </p>
           </div>
           <button aria-label={t("teamShare.close")} disabled={saving} onClick={onClose} className="rounded-lg p-1.5 text-ink-secondary hover:bg-raised"><X size={18} /></button>
         </header>
 
-        {saved || published ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2">
-            <p className="flex items-center gap-2 text-[14px] font-medium text-ink"><Check size={16} className="text-success" />{published && publishedTemplate ? t("teamTemplates.published", { name: publishedTemplate.name }) : t("teamShare.saved", { filename: saved!.filename })}</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{published ? t("teamTemplates.publishedHint") : t("teamShare.savedHint")}</p>
-            <div className="mt-4">
-              <ShareTeamContents preview={published ?? saved!} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
-            </div>
-          </div>
+        {marketPublishOpen ? (
+          <ShareDepartmentToMarketPanel
+            team={team}
+            teamBots={teamBots}
+            routineCount={preview?.summary.counts.routines ?? 0}
+            selectedSkills={skillChoice === null ? undefined : [...ticked]}
+            avatars={includePictures ? pictures?.avatars : undefined}
+            initialName={name || team || t("teamLibrary.general")}
+            initialTagline={tagline || summary || `${name || team} 协作部门`}
+            initialDescription={summary}
+            initialChangelog={notes}
+            onBack={() => setMarketPublishOpen(false)}
+            onOpenMarket={() => {
+              onClose();
+              dispatch({ type: "showMarket" });
+            }}
+            onClose={onClose}
+            onResultChange={detail => {
+              if (detail) onPublished?.();
+            }}
+          />
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2">
-            {preview
-              ? <ShareTeamContents preview={preview} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
-              : !error && <div className="flex items-center gap-2 py-6 text-[13px] text-ink-secondary"><Loader2 size={15} className="animate-spin" />{t("teamShare.preparing")}</div>}
+          <>
+            {saved || published ? (
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2">
+                <p className="flex items-center gap-2 text-[14px] font-medium text-ink"><Check size={16} className="text-success" />{published && publishedTemplate ? t("teamTemplates.published", { name: publishedTemplate.name }) : t("teamShare.saved", { filename: saved!.filename })}</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{published ? t("teamTemplates.publishedHint") : t("teamShare.savedHint")}</p>
+                <div className="mt-4">
+                  <ShareTeamContents preview={published ?? saved!} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
+                </div>
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2">
+                {preview
+                  ? <ShareTeamContents preview={preview} includeMemory={includeMemory} localSkips={includePictures ? pictures?.skipped ?? [] : []} />
+                  : !error && <div className="flex items-center gap-2 py-6 text-[13px] text-ink-secondary"><Loader2 size={15} className="animate-spin" />{t("teamShare.preparing")}</div>}
 
-            <fieldset className="mt-4 space-y-2 text-[13px]" disabled={saving}>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" className="size-4 accent-accent" checked={includePictures} onChange={(event) => setIncludePictures(event.target.checked)} />
-                {t("teamShare.includePictures")}
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" className="size-4 accent-accent" checked={includeMemory} onChange={(event) => setIncludeMemory(event.target.checked)} />
-                {t("teamShare.includeNotes")}
-              </label>
-              <p className="pl-6 text-[12px] leading-relaxed text-ink-secondary">{notesLine(includeMemory)}</p>
-              <ShareSkillChoices available={available ?? []} ticked={ticked} counted={available !== null} onToggle={toggleSkill} />
-              <label className="flex items-center gap-2 pt-1">
-                <input type="checkbox" className="size-4 accent-accent" checked={includePreset} onChange={(event) => setIncludePreset(event.target.checked)} />
-                {t("teamShare.includePreset")}
-              </label>
-              {includePreset && <p className="pl-6 text-[12px] leading-relaxed text-ink-secondary">{t("teamShare.presetHint")}</p>}
-            </fieldset>
+                <fieldset className="mt-4 space-y-2 text-[13px]" disabled={saving}>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" className="size-4 accent-accent" checked={includePictures} onChange={(event) => setIncludePictures(event.target.checked)} />
+                    {t("teamShare.includePictures")}
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" className="size-4 accent-accent" checked={includeMemory} onChange={(event) => setIncludeMemory(event.target.checked)} />
+                    {t("teamShare.includeNotes")}
+                  </label>
+                  <p className="pl-6 text-[12px] leading-relaxed text-ink-secondary">{notesLine(includeMemory)}</p>
+                  <ShareSkillChoices available={available ?? []} ticked={ticked} counted={available !== null} onToggle={toggleSkill} />
+                  <label className="flex items-center gap-2 pt-1">
+                    <input type="checkbox" className="size-4 accent-accent" checked={includePreset} onChange={(event) => setIncludePreset(event.target.checked)} />
+                    {t("teamShare.includePreset")}
+                  </label>
+                  {includePreset && <p className="pl-6 text-[12px] leading-relaxed text-ink-secondary">{t("teamShare.presetHint")}</p>}
+                </fieldset>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="block text-[13px] text-ink-secondary">{t("teamShare.name")}
-                <input value={name} maxLength={100} disabled={saving} onChange={(event) => setName(event.target.value)} className={field} />
-              </label>
-              <label className="block text-[13px] text-ink-secondary">{t("teamShare.release")}
-                <input value={release} maxLength={20} disabled={saving} placeholder="1.0.0" onChange={(event) => setRelease(event.target.value)} className={field} />
-              </label>
-            </div>
-            <p className="mt-1 text-[12px] text-ink-secondary">{t("teamShare.releaseHint")}</p>
-            <label className="mt-3 block text-[13px] text-ink-secondary">{t("teamShare.notes")}
-              <textarea value={notes} maxLength={4000} rows={2} disabled={saving} onChange={(event) => setNotes(event.target.value)} className={field} />
-            </label>
-            <label className="mt-3 block text-[13px] text-ink-secondary">{t("teamShare.tagline")}
-              <input value={tagline} maxLength={160} disabled={saving} onChange={(event) => setTagline(event.target.value)} className={field} />
-            </label>
-            <label className="mt-3 block text-[13px] text-ink-secondary">{t("teamShare.summary")}
-              <textarea value={summary} maxLength={2000} rows={2} disabled={saving} onChange={(event) => setSummary(event.target.value)} className={field} />
-            </label>
-          </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block text-[13px] text-ink-secondary">{t("teamShare.name")}
+                    <input value={name} maxLength={100} disabled={saving} onChange={(event) => setName(event.target.value)} className={field} />
+                  </label>
+                  <label className="block text-[13px] text-ink-secondary">{t("teamShare.release")}
+                    <input value={release} maxLength={20} disabled={saving} placeholder="1.0.0" onChange={(event) => setRelease(event.target.value)} className={field} />
+                  </label>
+                </div>
+                <p className="mt-1 text-[12px] text-ink-secondary">{t("teamShare.releaseHint")}</p>
+                <label className="mt-3 block text-[13px] text-ink-secondary">{t("teamShare.notes")}
+                  <textarea value={notes} maxLength={4000} rows={2} disabled={saving} onChange={(event) => setNotes(event.target.value)} className={field} />
+                </label>
+                <label className="mt-3 block text-[13px] text-ink-secondary">{t("teamShare.tagline")}
+                  <input value={tagline} maxLength={160} disabled={saving} onChange={(event) => setTagline(event.target.value)} className={field} />
+                </label>
+                <label className="mt-3 block text-[13px] text-ink-secondary">{t("teamShare.summary")}
+                  <textarea value={summary} maxLength={2000} rows={2} disabled={saving} onChange={(event) => setSummary(event.target.value)} className={field} />
+                </label>
+              </div>
+            )}
+
+            {error && <p role="alert" className="mx-6 mb-2 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
+            <footer className="flex justify-end gap-2 border-t border-hairline/35 px-6 py-3">
+              {saved || published ? (
+                <button onClick={onClose} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white">{t("teamShare.done")}</button>
+              ) : (
+                <>
+                  <button disabled={saving} onClick={onClose} className="rounded-lg px-3 py-2 text-[13px] text-ink-secondary hover:bg-raised">{t("common.cancel")}</button>
+                  {UPSTREAM_SERVICES.cloud && (
+                    <button disabled={saving || !preview || !name.trim()} onClick={() => void openGithub()} className="rounded-lg border border-hairline px-3 py-2 text-[13px] disabled:opacity-40">{t("templateRepo.title")}</button>
+                  )}
+                  <button disabled={saving || !preview || !name.trim()} onClick={() => void save()}
+                    className={canPublishMarket && !publishTarget
+                      ? "flex items-center gap-2 rounded-lg border border-hairline px-3.5 py-2 text-[13px] text-ink hover:bg-raised disabled:opacity-40"
+                      : "flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40"}>
+                    {saving && <Loader2 size={14} className="animate-spin" />}
+                    {saving ? t("teamShare.saving") : t("teamShare.save")}
+                  </button>
+                  {canPublishMarket && !publishTarget && (
+                    <button
+                      type="button"
+                      disabled={saving || !preview || !name.trim()}
+                      onClick={() => setMarketPublishOpen(true)}
+                      className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40"
+                    >
+                      <Store size={14} />
+                      发布到 Bot 广场
+                    </button>
+                  )}
+                  {publishTarget && <button disabled={saving || !preview || !name.trim()} onClick={() => void publishToTeamLibrary()}
+                    className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40">
+                    {saving && <Loader2 size={14} className="animate-spin" />}
+                    {saving ? t("teamShare.saving") : t(publishTarget.revision === null ? "teamTemplates.publish" : "teamTemplates.replace")}
+                  </button>}
+                </>
+              )}
+            </footer>
+          </>
         )}
-
-        {error && <p role="alert" className="mx-6 mb-2 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
-        <footer className="flex justify-end gap-2 border-t border-hairline/35 px-6 py-3">
-          {saved || published ? (
-            <button onClick={onClose} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white">{t("teamShare.done")}</button>
-          ) : (
-            <>
-              <button disabled={saving} onClick={onClose} className="rounded-lg px-3 py-2 text-[13px] text-ink-secondary hover:bg-raised">{t("common.cancel")}</button>
-              <button disabled={saving || !preview || !name.trim()} onClick={() => void openGithub()} className="rounded-lg border border-hairline px-3 py-2 text-[13px] disabled:opacity-40">{t("templateRepo.title")}</button>
-              <button disabled={saving || !preview || !name.trim()} onClick={() => void save()}
-                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40">
-                {saving && <Loader2 size={14} className="animate-spin" />}
-                {saving ? t("teamShare.saving") : t("teamShare.save")}
-              </button>
-              {publishTarget && <button disabled={saving || !preview || !name.trim()} onClick={() => void publishToTeamLibrary()}
-                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40">
-                {saving && <Loader2 size={14} className="animate-spin" />}
-                {saving ? t("teamShare.saving") : t(publishTarget.revision === null ? "teamTemplates.publish" : "teamTemplates.replace")}
-              </button>}
-            </>
-          )}
-        </footer>
       </div>
     </div>,
     document.body,

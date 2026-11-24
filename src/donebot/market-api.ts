@@ -2,6 +2,7 @@ import type {
   MarketCategory,
   MarketCostTier,
   MarketCreatorWallet,
+  MarketDepartmentPublishPayload,
   MarketInstalledBotInfo,
   MarketListResponse,
   MarketListingDetail,
@@ -78,6 +79,14 @@ export const marketApi = {
 
   publish(payload: MarketPublishPayload): Promise<MarketListingDetail> {
     return api<MarketListingDetail>("/api/donebot/market/publish", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      timeoutMs: 40_000,
+    });
+  },
+
+  publishDepartment(payload: MarketDepartmentPublishPayload): Promise<MarketListingDetail> {
+    return api<MarketListingDetail>("/api/donebot/market/publish-department", {
       method: "POST",
       body: JSON.stringify(payload),
       timeoutMs: 40_000,

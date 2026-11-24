@@ -5,6 +5,7 @@ import { useStore } from "@/state/store";
 import { cn } from "@/lib/cn";
 import {
   dismissCollabToast,
+  isCollabEligible,
   isHumanTeamCollabVisible,
   openCollabDestination,
   refreshCollabOverview,
@@ -25,10 +26,14 @@ function supportsPopoverApi(): boolean {
 
 export function CollabSyncHost() {
   const { state, dispatch } = useStore();
+  const profileEligible = isCollabEligible(state.config);
   const eligible = isHumanTeamCollabVisible(state.config);
   const authenticated = state.config?.donebot?.authenticated === true;
   const accountId = authenticated ? (state.config?.donebot?.user?.id ?? null) : null;
   const modalOpen = state.appSettingsOpen || state.pluginsOpen || state.shortcutsOpen;
+  const latestConfigRef = useRef(state.config);
+  latestConfigRef.current = state.config;
+  const syncedProfileAccountRef = useRef<string | null>(null);
 
   useEffect(() => {
     setCollabUiContext({ activeView: state.activeView, modalOpen });
@@ -43,6 +48,49 @@ export function CollabSyncHost() {
   useEffect(() => {
     syncCollabAccount(eligible && authenticated ? accountId : null);
   }, [eligible, authenticated, accountId]);
+
+  useEffect(() => {
+    if (!profileEligible || !authenticated || !state.hydrated || !accountId) {
+      syncedProfileAccountRef.current = null;
+      return;
+    }
+    if (syncedProfileAccountRef.current === accountId) return;
+    let active = true;
+    void api<{ email?: string; nickname?: string; avatar_url?: string; local_avatar_url?: string }>("/api/donebot/collab/profile")
+      .then(remote => {
+        if (!active) return;
+        syncedProfileAccountRef.current = accountId;
+        const cfg = latestConfigRef.current;
+        if (!cfg) return;
+        const nextName = remote.nickname?.trim() || cfg.profile?.name || "";
+        const nextEmail = remote.email?.trim() || cfg.profile?.email || "";
+        const nextAvatar = remote.local_avatar_url !== undefined
+          ? (remote.local_avatar_url || undefined)
+          : (remote.avatar_url?.trim() || cfg.profile?.avatarUrl);
+        if (
+          nextName !== (cfg.profile?.name ?? "")
+          || nextEmail !== (cfg.profile?.email ?? "")
+          || nextAvatar !== cfg.profile?.avatarUrl
+        ) {
+          dispatch({
+            type: "configStatus",
+            config: {
+              ...cfg,
+              profile: {
+                ...cfg.profile,
+                name: nextName,
+                email: nextEmail,
+                avatarUrl: nextAvatar,
+              },
+            },
+          });
+        }
+      })
+      .catch(() => {
+        // Retry on next mount/account switch if gateway is transiently unreachable.
+      });
+    return () => { active = false; };
+  }, [profileEligible, authenticated, state.hydrated, accountId, dispatch]);
 
   useEffect(() => {
     if (!eligible || !authenticated || !state.hydrated) return;

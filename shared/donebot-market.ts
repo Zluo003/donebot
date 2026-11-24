@@ -207,6 +207,21 @@ export interface MarketPublishPayload {
   changelog?: string;
 }
 
+export interface MarketDepartmentPublishPayload {
+  team: string;
+  category_id: number;
+  name: string;
+  tagline: string;
+  description?: string;
+  tags?: string[];
+  sample_prompts?: string[];
+  skill_names?: string[];
+  cost_tier?: MarketCostTier;
+  include_routines?: boolean;
+  avatars?: Record<string, string>;
+  changelog?: string;
+}
+
 export interface MarketCreatorWallet {
   user_id: number;
   frozen_amount: number;

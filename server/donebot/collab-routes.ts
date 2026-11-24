@@ -3,10 +3,10 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
-import { botAvatarProfile, botAvatarUrlFromStoredPath, clampAvatarFocus, clampAvatarZoom } from "../../shared/bot-avatar.ts";
+import { botAvatarProfile, clampAvatarFocus, clampAvatarZoom } from "../../shared/bot-avatar.ts";
 import { EXTERNAL_CODING_AGENT_SHARE_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import { DONEBOT_COLLAB_MAX_FILE_BYTES, type DoneBotCollabChatBot } from "../../shared/donebot-collab.ts";
-import { ATTACHMENTS_DIR, saveImage } from "../attachments.ts";
+import { ATTACHMENTS_DIR } from "../attachments.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { parsePackageDocument } from "../bot-package.ts";
@@ -15,6 +15,11 @@ import { importPackageDocument, PackageImportError, type PackageImportDeps } fro
 import type { ModelSelection } from "../contracts.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { boundedResponseText } from "./bounded-response.ts";
+import {
+  createAccountProfileSynchronizer,
+  INLINE_AVATAR_DATA_URL,
+  storeLocalAvatarFromDataUrl,
+} from "./account-profile-sync.ts";
 import { buildCollabChatBotAppearance, chatBotNeedsSync, type CollabChatBotAppearance } from "./collab-bot-avatar.ts";
 import { createCollabChatBotWorker, type CollabBotTurnOptions } from "./collab-chat-bots.ts";
 import { dispatchTeamTaskViaChiefBot } from "./collab-task-dispatch.ts";
@@ -99,8 +104,6 @@ function validChatTarget(scopeType: string, targetId: string): boolean {
   return false;
 }
 
-const INLINE_AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/;
-
 export interface DoneBotCollabRouteDeps {
   gateway: DoneBotGateway;
   store: Pick<Store, "bots" | "bot"> & Partial<Pick<Store, "tasks" | "taskByThread" | "createTask" | "appendMessage" | "messagesFor">>;
@@ -124,21 +127,6 @@ function cleanRelativeFilePath(raw: string | null): string | null {
   if (!value || value.length > 2048 || /[\\:\0]/.test(value)) return null;
   if (value.split("/").some(part => part === "..")) return null;
   return value;
-}
-
-function storeLocalAvatarFromDataUrl(dataUrl: string): string | undefined {
-  if (dataUrl === "") return "";
-  const match = INLINE_AVATAR_DATA_URL.exec(dataUrl.trim());
-  if (!match) return undefined;
-  try {
-    const mime = match[1] === "image/jpg" ? "image/jpeg" : match[1]!;
-    const bytes = Buffer.from(match[2]!, "base64");
-    if (bytes.byteLength === 0 || bytes.byteLength > 512 * 1024) return undefined;
-    const saved = saveImage(bytes, mime);
-    return botAvatarUrlFromStoredPath(saved.path) ?? undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function boundedRequestWebStream(req: IncomingMessage, maxBytes: number): ReadableStream<Uint8Array> {
@@ -248,6 +236,7 @@ function rethrowIfRateLimited(error: unknown): void {
 
 export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHandler {
   const { gateway } = deps;
+  const profileSync = createAccountProfileSynchronizer(deps);
   const botWorker = createCollabChatBotWorker({
     gateway,
     store: deps.store,
@@ -526,10 +515,19 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           gateway.collabIdentity(),
           gateway.collabUserProfile().catch(() => null),
         ]);
+        const nickname = typeof profile?.username === "string" ? profile.username.trim() : "";
+        const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
+        const synced = profileSync.syncFromRemote({
+          email: identity.email,
+          nickname,
+          avatarUrl,
+          profileLoaded: profile !== null,
+        });
         return json(res, 200, {
           email: identity.email,
-          nickname: typeof profile?.username === "string" ? profile.username.trim() : "",
-          avatar_url: typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "",
+          nickname,
+          avatar_url: avatarUrl,
+          ...(synced.localAvatarUrl !== undefined ? { local_avatar_url: synced.localAvatarUrl } : {}),
         });
       }
 
@@ -549,25 +547,12 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         ]);
         const nickname = typeof profile?.username === "string" ? profile.username.trim() : "";
         const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
-        if (deps.syncLocalProfile && deps.currentLocalProfile) {
-          const local = deps.currentLocalProfile();
-          const needName = !local?.name?.trim() && Boolean(nickname);
-          const needAvatar = !local?.avatarUrl?.trim() && Boolean(avatarUrl);
-          if (needName || needAvatar) {
-            const localAvatar = needAvatar
-              ? (/^https?:\/\//i.test(avatarUrl) ? avatarUrl : storeLocalAvatarFromDataUrl(avatarUrl))
-              : undefined;
-            if (needName || localAvatar) {
-              try {
-                deps.syncLocalProfile({
-                  ...(needName ? { name: nickname } : {}),
-                  ...(localAvatar ? { avatarUrl: localAvatar } : {}),
-                  ...(identity.email && !local?.email ? { email: identity.email } : {}),
-                });
-              } catch { /* Best-effort local profile sync */ }
-            }
-          }
-        }
+        profileSync.syncFromRemote({
+          email: identity.email,
+          nickname,
+          avatarUrl,
+          profileLoaded: profile !== null,
+        });
         const teamMembers: Record<string, unknown[]> = {};
         const teamChannels: Record<string, unknown[]> = {};
         const teamMemberProfiles: Record<string, unknown[]> = {};
@@ -787,6 +772,9 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
         const nextNickname = typeof updated?.username === "string" ? updated.username.trim() : (parsed.data.nickname ?? "");
         const nextAvatar = typeof updated?.avatar_url === "string" ? updated.avatar_url.trim() : (parsed.data.avatar_url ?? "");
         const localAvatar = parsed.data.avatar_url !== undefined ? storeLocalAvatarFromDataUrl(parsed.data.avatar_url) : undefined;
+        if (parsed.data.avatar_url && localAvatar) {
+          profileSync.remember(parsed.data.avatar_url, localAvatar);
+        }
         if (deps.syncLocalProfile) {
           try {
             deps.syncLocalProfile({

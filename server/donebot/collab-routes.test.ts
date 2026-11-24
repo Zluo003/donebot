@@ -558,4 +558,69 @@ describe("DoneBot collab routes and bot tools", () => {
     });
     expect(postFailFetcher).toHaveBeenCalledTimes(1);
   });
+
+  it("syncs remote account nickname and avatar to local profile on GET /api/donebot/collab/profile without duplicating avatar files", async () => {
+    let localProfile: { name?: string; avatarUrl?: string; email?: string } | undefined;
+    const syncLocalProfile = vi.fn((patch: { name?: string; avatarUrl?: string; email?: string }) => {
+      localProfile = { ...localProfile, ...patch };
+    });
+    const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2c8AAAAASUVORK5CYII=";
+    const dataUrl = `data:image/png;base64,${pngBase64}`;
+    const gateway = {
+      collabIdentity: vi.fn().mockResolvedValue({ account_id: "101", installation_id: "11111111-1111-4111-8111-111111111111", device_name: "Mac", email: "laoluo@example.invalid" }),
+      collabUserProfile: vi.fn().mockResolvedValue({ username: "老罗", avatar_url: dataUrl }),
+    } as unknown as DoneBotGateway;
+
+    const handler = createDoneBotCollabRoutes({
+      gateway,
+      store: { bots: [], bot: () => null },
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+      defaultSelection: vi.fn(),
+      packageImportDeps: vi.fn(),
+      broadcast: vi.fn(),
+      publicBot: b => b,
+      syncLocalProfile,
+      currentLocalProfile: () => localProfile,
+    });
+
+    const first = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: first.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/profile"),
+      path: "/api/donebot/collab/profile",
+      method: "GET",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: first.json,
+      readBody,
+    });
+    expect(first.status).toBe(200);
+    expect(first.body).toEqual(expect.objectContaining({
+      email: "laoluo@example.invalid",
+      nickname: "老罗",
+      local_avatar_url: expect.stringMatching(/^\/api\/attachments\//),
+    }));
+    expect(syncLocalProfile).toHaveBeenCalledTimes(1);
+    expect(localProfile).toEqual(expect.objectContaining({
+      name: "老罗",
+      email: "laoluo@example.invalid",
+      avatarUrl: (first.body as { local_avatar_url: string }).local_avatar_url,
+    }));
+
+    // Second GET with identical avatar should reuse the cached local attachment and skip redundant disk writes.
+    const second = fakeRes();
+    await handler({
+      req: {} as IncomingMessage,
+      res: second.res,
+      url: new URL("http://127.0.0.1/api/donebot/collab/profile"),
+      path: "/api/donebot/collab/profile",
+      method: "GET",
+      auth: { kind: "loopback", scopes: ["admin"] },
+      json: second.json,
+      readBody,
+    });
+    expect(second.status).toBe(200);
+    expect((second.body as { local_avatar_url: string }).local_avatar_url).toBe(localProfile!.avatarUrl);
+    expect(syncLocalProfile).toHaveBeenCalledTimes(1);
+  });
 });

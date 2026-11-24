@@ -8,7 +8,8 @@ import { importPackageDocument, PackageImportError, type PackageImportDeps } fro
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import type { SkillListing } from "../skills.ts";
-import type { BotRecord, Store } from "../store.ts";
+import type { BotRecord, GroupRecord, Store } from "../store.ts";
+import type { Routine } from "../../shared/routines.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import { createDoneBotMarketClient } from "./market-gateway.ts";
 import type { DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
@@ -41,6 +42,21 @@ const publishSchema = z.object({
   cost_tier: z.enum(["light", "standard", "heavy"]).default("standard"),
   eval_verified: z.boolean().default(false),
   eval_samples: z.array(evalSampleSchema).max(5).default([]),
+  changelog: z.string().trim().max(1000).default(""),
+}).strict();
+
+const publishDepartmentSchema = z.object({
+  team: z.string().max(120),
+  category_id: z.number().int().positive(),
+  name: z.string().trim().min(2).max(60),
+  tagline: z.string().trim().min(4).max(160),
+  description: z.string().trim().max(4000).default(""),
+  tags: z.array(z.string().trim().min(1).max(24)).max(6).default([]),
+  sample_prompts: z.array(z.string().trim().min(1).max(300)).max(3).default([]),
+  skill_names: z.array(z.string().trim().min(1).max(128)).max(90).optional(),
+  cost_tier: z.enum(["light", "standard", "heavy"]).default("standard"),
+  include_routines: z.boolean().default(true),
+  avatars: z.record(z.string(), z.string().max(120_000)).optional(),
   changelog: z.string().trim().max(1000).default(""),
 }).strict();
 
@@ -80,6 +96,10 @@ export interface DoneBotMarketRouteDeps {
   packageImportDeps(selection: ModelSelection): PackageImportDeps;
   broadcast(frame: unknown): void;
   publicBot(bot: BotRecord): unknown;
+  publicGroup?(group: GroupRecord): unknown;
+  listSections?(): string[];
+  readSectionBrief?(team: string): string | undefined;
+  listRoutines?(): Routine[];
   orgStore?: DoneBotOrgWorkflowStore;
 }
 
@@ -331,6 +351,119 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
         return json(res, 200, result);
       }
 
+      if (method === "POST" && reqPath === "/api/donebot/market/publish-department") {
+        const parsed = publishDepartmentSchema.safeParse(body);
+        if (!parsed.success) {
+          return json(res, 400, { error: "请完整填写名称、一句话简介和分类（名称 2–60 字，简介 4–160 字）。" });
+        }
+        const input = parsed.data;
+        const deptTeam = input.team.trim();
+        const deptBots = deps.store.bots.filter(bot => !bot.hidden && (bot.section?.trim() ?? "") === deptTeam);
+        if (deptBots.length === 0) {
+          return json(res, 400, { error: "该部门暂无可发布到 Bot 广场的成员。" });
+        }
+        const externalBots = deptBots.filter(isExternalCodingAgentBot);
+        if (externalBots.length > 0) {
+          const names = externalBots.map(b => b.name).join("、");
+          return json(res, 403, { error: `部门包含暂不支持发布到 Bot 广场的外部编码代理（${names}），请先将其移出该部门后再发布。` });
+        }
+        if (deptBots.length > 8) {
+          return json(res, 400, { error: "发布到 Bot 广场的部门最多包含 8 位成员。" });
+        }
+        for (const bot of deptBots) {
+          if (Array.from((bot.soul ?? "").trim()).length < 20) {
+            return json(res, 400, { error: `部门成员「${bot.name}」的 SOUL.md 内容不足 20 字，请先完善人设与能力设定再发布。` });
+          }
+        }
+        const selection = input.skill_names === undefined
+          ? "all"
+          : input.skill_names.length === 0
+            ? []
+            : input.skill_names;
+        const collected = deps.collectTeamSkills(deptBots, selection);
+        if (!collected.ok) return json(res, collected.status ?? 400, { error: collected.error });
+
+        const isStudio = deptBots.length >= 2;
+        const primaryBot = deptBots.find(b => b.chiefOfStaff) ?? deptBots[0]!;
+        const brief = deps.readSectionBrief?.(deptTeam)?.trim() || undefined;
+        const identity = await deps.gateway.collabIdentity();
+        const exported = createTeamPackageExport({
+          team: deptTeam,
+          name: input.name,
+          tagline: input.tagline,
+          summary: input.description || input.tagline,
+          notes: input.changelog || undefined,
+          authorName: identity.email || undefined,
+          bots: deptBots.map(bot => ({ ...bot, soul: (bot.soul ?? "").trim() })),
+          groups: deps.store.groups ?? [],
+          routines: input.include_routines ? (deps.listRoutines?.() ?? []) : [],
+          brief,
+          skillsByBot: collected.skillsByBot,
+          skillSelection: collected.all ? "all" : "chosen",
+          // Public marketplace packages always strip private starter memory, local MCP servers, and personal defaults.
+          published: null,
+          memoryByBot: undefined,
+          avatars: input.avatars,
+          mcpServers: {},
+          skipped: [...collected.skipped],
+          preset: null,
+        });
+
+        const soulSections: string[] = [];
+        if (brief) soulSections.push(`## 部门共享说明\n${brief}`);
+        deptBots.forEach((bot, idx) => {
+          const roleLabel = [bot.chiefOfStaff ? "部门主 Bot" : "", bot.title?.trim() ?? ""].filter(Boolean).join(" · ");
+          soulSections.push(`## 员工 ${idx + 1}：${bot.name}${roleLabel ? `（${roleLabel}）` : ""}\n${(bot.soul ?? "").trim()}`);
+        });
+        const soulText = isStudio || brief ? soulSections.join("\n\n") : (primaryBot.soul ?? "").trim();
+
+        const botsSummary = isStudio
+          ? deptBots.map(bot => ({
+            name: bot.name,
+            role: (bot.title || bot.description || (bot.chiefOfStaff ? "部门主 Bot" : "")).trim().slice(0, 120),
+            color: bot.color,
+            skill_count: (collected.skillsByBot.get(bot.id) ?? []).length,
+          }))
+          : [];
+
+        const skillsPayload: MarketSkillDoc[] = (exported.document.package.skills?.entries ?? []).map(entry => ({
+          name: entry.name,
+          description: entry.description ?? "",
+          instructions: entry.instructions,
+        }));
+        const appearance = {
+          color: primaryBot.color,
+          ...(primaryBot.mascotBody ? { mascot_body: primaryBot.mascotBody } : {}),
+          ...(primaryBot.mascotFaceColor ? { mascot_face_color: primaryBot.mascotFaceColor } : {}),
+          ...(primaryBot.mascotExpression ? { mascot_expression: primaryBot.mascotExpression } : {}),
+        };
+        const orgBlueprint = deps.orgStore ? deps.orgStore.exportOrgBlueprint(deptBots.map(b => b.id)) : undefined;
+        const packagePayload = orgBlueprint
+          ? { ...(exported.document as unknown as Record<string, unknown>), donebotOrgBlueprint: orgBlueprint }
+          : exported.document;
+
+        const result = await client.publish({
+          listing_type: isStudio ? "studio" : "bot",
+          source_bot_id: primaryBot.id,
+          category_id: input.category_id,
+          name: input.name,
+          tagline: input.tagline,
+          description: input.description,
+          tags: input.tags,
+          sample_prompts: input.sample_prompts,
+          appearance,
+          ...(isStudio ? { bots_summary: botsSummary } : {}),
+          cost_tier: input.cost_tier,
+          eval_verified: false,
+          eval_samples: [],
+          soul_text: soulText,
+          skills: skillsPayload,
+          package: packagePayload,
+          changelog: input.changelog,
+        });
+        return json(res, 200, result);
+      }
+
       const visMatch = reqPath.match(/^\/api\/donebot\/market\/bots\/([0-9a-f-]{36})\/visibility$/);
       if (method === "PATCH" && visMatch) {
         const parsed = visibilitySchema.safeParse(body);
@@ -360,6 +493,8 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
         const enabledSkillsSet = new Set<string>();
         const installedAt = Date.now();
         // Bind every bot in a studio pack to the install token so creator rebates track actual consumption per bot.
+        // Self-installs never carry a rebate attribution token.
+        const effectiveInstallToken = fetched.self_install ? "" : fetched.install_token;
         const installRecords = imported.bots.map(bot => {
           for (const enabledName of enableInstalledSkills(importDeps, bot.id, skillNames)) {
             enabledSkillsSet.add(enabledName);
@@ -370,7 +505,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
             listingId: fetched.listing_id,
             releaseId: fetched.release_id,
             version: fetched.version,
-            installToken: fetched.install_token,
+            installToken: effectiveInstallToken,
             expiresAt: fetched.expires_at,
             installedAt,
           };
@@ -388,6 +523,14 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           const pub = deps.publicBot(full);
           publicBots.push(pub);
           deps.broadcast({ kind: "bot", bot: pub });
+        }
+        if (deps.publicGroup) {
+          for (const group of imported.groups ?? []) {
+            deps.broadcast({ kind: "group", group: deps.publicGroup(group) });
+          }
+        }
+        if (imported.section && deps.listSections) {
+          deps.broadcast({ kind: "sections", sections: deps.listSections() });
         }
         const fullCreated = deps.store.bot(created.id) ?? created;
         return json(res, 200, {
@@ -460,7 +603,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           listingId: fetched.listing_id,
           releaseId: fetched.release_id,
           version: fetched.version,
-          installToken: fetched.install_token,
+          installToken: fetched.self_install ? "" : fetched.install_token,
           expiresAt: fetched.expires_at,
           installedAt: Date.now(),
         };

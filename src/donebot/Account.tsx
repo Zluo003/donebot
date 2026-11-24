@@ -11,7 +11,7 @@ import { DoneBotSignIn } from "./SignIn";
 import { isDoneBotCloudBrowser } from "./services";
 import { DoneBotMediaSettingsPanel } from "./MediaSettings";
 import { CollabAvatar, CollabProfileDialog } from "./CollabAvatar";
-import { isCollabEligible, refreshCollabOverview } from "./collab-store";
+import { isCollabEligible, isHumanTeamCollabVisible, refreshCollabOverview } from "./collab-store";
 
 const buttonClass = "ui-button inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
 const errorText = (error: unknown) => error instanceof Error ? error.message : "请求失败，请稍后重试。";
@@ -48,7 +48,7 @@ export function DoneBotAccountSettings() {
       const [account, remoteProfile] = await Promise.all([
         api<{ balance_cents?: number | string; concurrency?: number }>("/api/donebot/account"),
         canEditProfile
-          ? api<{ nickname?: string; avatar_url?: string }>("/api/donebot/collab/profile").catch(() => null)
+          ? api<{ email?: string; nickname?: string; avatar_url?: string; local_avatar_url?: string }>("/api/donebot/collab/profile").catch(() => null)
           : Promise.resolve(null),
       ]);
       if (generation !== epoch.current) return;
@@ -56,10 +56,34 @@ export function DoneBotAccountSettings() {
       setBalance(Number.isFinite(cents) ? cents / 100 : null);
       setConcurrency(typeof account.concurrency === "number" && doneBotMediaConcurrency(account.concurrency) !== null ? account.concurrency : null);
       if (remoteProfile) {
-        setProfile({
-          nickname: remoteProfile.nickname?.trim() || state.config?.profile?.name || "",
-          avatar_url: remoteProfile.avatar_url?.trim() || state.config?.profile?.avatarUrl || "",
-        });
+        const nextNickname = remoteProfile.nickname?.trim() || state.config?.profile?.name || "";
+        const nextAvatar = remoteProfile.avatar_url?.trim() || state.config?.profile?.avatarUrl || "";
+        setProfile({ nickname: nextNickname, avatar_url: nextAvatar });
+        const nextLocalAvatar = remoteProfile.local_avatar_url !== undefined
+          ? (remoteProfile.local_avatar_url || undefined)
+          : (nextAvatar || undefined);
+        const nextEmail = remoteProfile.email?.trim() || email || state.config?.profile?.email || "";
+        if (
+          state.config
+          && (
+            nextNickname !== (state.config.profile?.name ?? "")
+            || nextLocalAvatar !== state.config.profile?.avatarUrl
+            || nextEmail !== (state.config.profile?.email ?? "")
+          )
+        ) {
+          dispatch({
+            type: "configStatus",
+            config: {
+              ...state.config,
+              profile: {
+                ...state.config.profile,
+                name: nextNickname,
+                email: nextEmail,
+                avatarUrl: nextLocalAvatar,
+              },
+            },
+          });
+        }
       }
     } catch (error) { if (generation === epoch.current) setError(errorText(error)); }
     finally { if (generation === epoch.current) setBusy(false); }
@@ -124,7 +148,9 @@ export function DoneBotAccountSettings() {
         initialAvatarUrl={profile.avatar_url || state.config?.profile?.avatarUrl || ""}
         onSaved={async next => {
           setProfile(next);
-          await refreshCollabOverview({ silent: true });
+          if (isHumanTeamCollabVisible(state.config)) {
+            await refreshCollabOverview({ silent: true });
+          }
         }}
       />
     )}

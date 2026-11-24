@@ -73,6 +73,11 @@ function makeStore(initialBots: BotRecord[]): Store {
       bots[idx] = { ...bots[idx]!, ...patch };
       return bots[idx];
     },
+    setChiefOfStaff(id: string, on: boolean) {
+      const idx = bots.findIndex(b => b.id === id);
+      if (idx >= 0) bots[idx] = { ...bots[idx]!, chiefOfStaff: on };
+    },
+    addSection() {},
   } as unknown as Store;
 }
 
@@ -414,5 +419,133 @@ describe("createDoneBotMarketRoutes", () => {
     expect(withdraw.status).toBe(403);
     // Payout mutations must be rejected locally without hitting the gateway.
     expect(calls).toHaveLength(1);
+  });
+
+  it("publishes a department pack to Bot Market (rejecting external coding agents) and strips attribution token on self-install", async () => {
+    const editor = makeBot({
+      id: "bot-editor",
+      name: "主编",
+      section: "编辑部",
+      chiefOfStaff: true,
+      soul: "你是编辑部主编，负责制定每周选题规划、把关文章结构质量并统筹撰稿交付给老板审阅。",
+    });
+    const writer = makeBot({
+      id: "bot-writer",
+      name: "写手",
+      section: "编辑部",
+      soul: "你是编辑部主笔写手，根据主编给定的选题提纲撰写通顺清晰的中文成稿并标注配图建议。",
+    });
+    const codingBot = makeBot({
+      id: "bot-coding",
+      name: "码匠",
+      section: "研发部",
+      modelSelection: { instanceId: "coding-antigravity", model: "gemini-3.8-flash" },
+      soul: "你是本机编程代理，负责阅读代码库并执行终端测试与修复。",
+    });
+
+    const store = makeStore([editor, writer, codingBot]);
+    const marketInstalls = new DoneBotMarketInstallStore(tempFile("dept-installs.json"));
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    let capturedPublishBody: Record<string, unknown> | null = null;
+
+    const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/donebot/market/bots") && init?.method === "POST") {
+        capturedPublishBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            id: listingId,
+            listing_type: capturedPublishBody.listing_type,
+            name: capturedPublishBody.name,
+            status: "pending_review",
+            latest_version: 1,
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith(`/api/v1/donebot/market/bots/${listingId}/install`) && init?.method === "POST") {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            install_id: "self-inst-1",
+            listing_id: listingId,
+            listing_type: "studio",
+            release_id: "rel-self-1",
+            version: 1,
+            name: "内容编辑部",
+            install_token: "self_signed_token_that_must_not_be_stored",
+            self_install: true,
+            expires_at: new Date(Date.now() + 86400_000).toISOString(),
+            package: capturedPublishBody!.package,
+            skills: [],
+            soul_text: String(capturedPublishBody!.soul_text ?? ""),
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ code: 0, data: {} }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const packageImportDeps = (): PackageImportDeps => ({
+      store,
+      routines: { create: vi.fn(), remove: vi.fn() },
+      skills: {
+        install: () => ({ name: "ok", description: "", source: "package", enabled: false }) as never,
+        setEnabled: () => ({ name: "ok", description: "", source: "package", enabled: true }) as never,
+      },
+      memory: { writeIndex: vi.fn(), writeTopic: vi.fn() },
+      mcp: { servers: () => ({}), refusal: () => undefined, persist: vi.fn() },
+      sections: { writeBrief: vi.fn() },
+      images: { save: () => "/img.png" },
+      defaultSelection: () => ({ instanceId: "donebot", model: "gpt-5.4" }),
+    });
+
+    const handler = createDoneBotMarketRoutes({
+      gateway: mockGateway(fetcher),
+      store,
+      marketInstalls,
+      listBotSkills: () => [],
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+      defaultSelection: async () => ({ instanceId: "donebot", model: "gpt-5.4" }),
+      packageImportDeps,
+      broadcast: () => {},
+      publicBot: (b: BotRecord) => b,
+      readSectionBrief: (team) => (team === "编辑部" ? "所有稿件坚持原创与客观事实，禁止夸大宣传。" : undefined),
+      listRoutines: () => [],
+    });
+
+    // 1. Department with external coding agent is refused clearly.
+    const refused = await callRoute(handler, "POST", "/api/donebot/market/publish-department", {
+      team: "研发部",
+      category_id: 2,
+      name: "研发部",
+      tagline: "研发编程自动化部门",
+    });
+    expect(refused.status).toBe(403);
+    expect(String((refused.payload as { error: string }).error)).toContain("码匠");
+
+    // 2. Clean multi-bot department publishes as studio pack with team brief & stripped private memory.
+    const pub = await callRoute(handler, "POST", "/api/donebot/market/publish-department", {
+      team: "编辑部",
+      category_id: 2,
+      name: "内容编辑部",
+      tagline: "主编与写手协同完成每日选题与高质量成稿",
+      description: "内置部门主 Bot 与共享写作规范。",
+    });
+    expect(pub.status, JSON.stringify(pub.payload)).toBe(200);
+    expect(capturedPublishBody).not.toBeNull();
+    expect(capturedPublishBody!.listing_type).toBe("studio");
+    expect(capturedPublishBody!.bots_summary).toHaveLength(2);
+    expect(String(capturedPublishBody!.soul_text)).toContain("所有稿件坚持原创与客观事实");
+    const exportedPkg = capturedPublishBody!.package as { package: { team?: { brief?: string } } };
+    expect(exportedPkg.package.team?.brief).toBe("所有稿件坚持原创与客观事实，禁止夸大宣传。");
+
+    // 3. Self-install stores empty installToken so self-usage never sends attribution header or accrues rebates.
+    const inst = await callRoute(handler, "POST", `/api/donebot/market/bots/${listingId}/install`, {});
+    expect(inst.status, JSON.stringify(inst.payload)).toBe(200);
+    const botIds = (inst.payload as { bot_ids: string[] }).bot_ids;
+    expect(botIds).toHaveLength(2);
+    for (const id of botIds) {
+      expect(marketInstalls.getActiveToken(id)).toBeUndefined();
+    }
   });
 });

@@ -24,7 +24,7 @@ const recordSchema = z.object({
   listingId: z.string().min(1).max(128),
   releaseId: z.string().min(1).max(128),
   version: z.number().int().positive(),
-  installToken: z.string().min(16).max(1024),
+  installToken: z.string().max(1024),
   expiresAt: z.string().min(1).max(80),
   installedAt: z.number().finite(),
 });

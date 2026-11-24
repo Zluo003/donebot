@@ -24,6 +24,7 @@ export interface GatewayMarketInstallPayload {
   version: number;
   name: string;
   install_token: string;
+  self_install?: boolean;
   expires_at: string;
   package: unknown;
   skills: MarketSkillDoc[];

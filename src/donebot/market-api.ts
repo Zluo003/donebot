@@ -2,6 +2,7 @@ import type {
   MarketCategory,
   MarketCostTier,
   MarketCreatorWallet,
+  MarketDailyRewardSummary,
   MarketDepartmentPublishPayload,
   MarketInstalledBotInfo,
   MarketListResponse,
@@ -131,6 +132,12 @@ export const marketApi = {
   async listLedger(page = 1, pageSize = 20): Promise<{ items: MarketRewardLedgerEntry[]; total: number }> {
     return api<{ items: MarketRewardLedgerEntry[]; total: number }>(
       `/api/donebot/market/creator/ledger?page=${page}&page_size=${pageSize}`,
+    );
+  },
+
+  async listDailySummaries(page = 1, pageSize = 30): Promise<{ items: MarketDailyRewardSummary[]; total: number }> {
+    return api<{ items: MarketDailyRewardSummary[]; total: number }>(
+      `/api/donebot/market/creator/daily-summary?page=${page}&page_size=${pageSize}`,
     );
   },
 

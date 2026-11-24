@@ -253,6 +253,7 @@ export interface MarketRewardLedgerEntry {
   listing_name?: string;
   entry_type: string;
   category: string;
+  tokens?: number;
   base_cost: number;
   rate_percent: number;
   reward_amount: number;
@@ -261,6 +262,22 @@ export interface MarketRewardLedgerEntry {
   available_at?: string | null;
   note?: string;
   created_at: string;
+}
+
+export interface MarketDailyRewardSummary {
+  date: string;
+  installed_count: number;
+  new_installs: number;
+  llm_tokens: number;
+  llm_calls: number;
+  media_count: number;
+  image_count: number;
+  video_count: number;
+  music_count: number;
+  base_cost: number;
+  reward_amount: number;
+  status: string;
+  available_at?: string | null;
 }
 
 export interface MarketWithdrawalRecord {

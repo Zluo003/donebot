@@ -228,6 +228,15 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
         return json(res, 200, await client.listCreatorLedger(params));
       }
 
+      if (method === "GET" && reqPath === "/api/donebot/market/creator/daily-summary") {
+        const params = new URLSearchParams();
+        for (const key of ["page", "page_size"]) {
+          const val = url.searchParams.get(key);
+          if (val && /^\d+$/.test(val)) params.set(key, val);
+        }
+        return json(res, 200, await client.listCreatorDailySummaries(params));
+      }
+
       if (method === "GET" && reqPath === "/api/donebot/market/creator/withdrawals") {
         const params = new URLSearchParams();
         for (const key of ["page", "page_size"]) {

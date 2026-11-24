@@ -501,6 +501,30 @@ describe("createDoneBotMarketRoutes", () => {
           },
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
+      if (url.includes("/api/v1/donebot/market/creator/daily-summary")) {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            items: [{
+              date: "2026-11-23",
+              installed_count: 12,
+              new_installs: 3,
+              llm_tokens: 192000,
+              llm_calls: 24,
+              media_count: 5,
+              image_count: 3,
+              video_count: 1,
+              music_count: 1,
+              base_cost: 18.4,
+              reward_amount: 0.85,
+              status: "frozen",
+            }],
+            total: 1,
+            page: 1,
+            page_size: 30,
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
       return new Response(JSON.stringify({ code: 0, data: {} }), { status: 200 });
     }) as unknown as typeof fetch;
 
@@ -566,5 +590,18 @@ describe("createDoneBotMarketRoutes", () => {
     for (const id of botIds) {
       expect(marketInstalls.getActiveToken(id)).toBeUndefined();
     }
+
+    // 4. Creator daily summary route proxies rolled-up previous-day metrics cleanly.
+    const daily = await callRoute(handler, "GET", "/api/donebot/market/creator/daily-summary?page=1&page_size=30");
+    expect(daily.status).toBe(200);
+    const dailyData = daily.payload as { items: Array<{ date: string; installed_count: number; llm_tokens: number; media_count: number; reward_amount: number }>; total: number };
+    expect(dailyData.total).toBe(1);
+    expect(dailyData.items[0]).toEqual(expect.objectContaining({
+      date: "2026-11-23",
+      installed_count: 12,
+      llm_tokens: 192000,
+      media_count: 5,
+      reward_amount: 0.85,
+    }));
   });
 });

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, ArrowRightLeft, CheckCircle2, Coins, Loader2, RefreshCw, Wallet } from "lucide-react";
 import type {
   MarketCreatorWallet,
-  MarketRewardLedgerEntry,
+  MarketDailyRewardSummary,
   MarketWithdrawalRecord,
 } from "../../shared/donebot-market";
 import { cn } from "@/lib/cn";
-import { formatCny, marketApi, marketCategoryLabel } from "./market-api";
+import { formatCny, marketApi } from "./market-api";
 
 function withdrawalStatusBadge(status: string): { label: string; className: string } {
   switch (status) {
@@ -19,32 +19,26 @@ function withdrawalStatusBadge(status: string): { label: string; className: stri
   }
 }
 
-function ledgerTypeLabel(entry: MarketRewardLedgerEntry): string {
-  switch (entry.entry_type) {
-    case "accrue":
-    case "accrual":
-      return `分润 · ${marketCategoryLabel(entry.category)}`;
-    case "transfer_to_balance":
-      return "转入算力余额";
-    case "withdraw_freeze":
-    case "withdraw_request":
-      return "申请支付宝提现";
-    case "withdraw_paid":
-      return "支付宝提现已打款";
-    case "withdraw_refund":
-      return "提现驳回退回";
-    case "risk_clawback":
-      return "风控核减";
-    default:
-      return entry.entry_type;
-  }
+function formatTokenCount(tokens: number): string {
+  const n = Math.max(0, Math.round(Number(tokens) || 0));
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return n.toLocaleString();
+}
+
+function formatMediaBreakdown(row: MarketDailyRewardSummary): string {
+  const parts: string[] = [];
+  if (row.image_count > 0) parts.push(`图 ${row.image_count}`);
+  if (row.video_count > 0) parts.push(`视 ${row.video_count}`);
+  if (row.music_count > 0) parts.push(`乐 ${row.music_count}`);
+  return parts.join(" · ");
 }
 
 export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?: boolean }) {
   const [wallet, setWallet] = useState<MarketCreatorWallet | null>(null);
-  const [ledger, setLedger] = useState<MarketRewardLedgerEntry[]>([]);
+  const [dailySummaries, setDailySummaries] = useState<MarketDailyRewardSummary[]>([]);
   const [withdrawals, setWithdrawals] = useState<MarketWithdrawalRecord[]>([]);
-  const [subTab, setSubTab] = useState<"ledger" | "withdrawals">("ledger");
+  const [subTab, setSubTab] = useState<"daily" | "withdrawals">("daily");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -61,13 +55,13 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
     setLoading(true);
     setError("");
     try {
-      const [w, l, wd] = await Promise.all([
+      const [w, d, wd] = await Promise.all([
         marketApi.getWallet(),
-        marketApi.listLedger(1, 50),
+        marketApi.listDailySummaries(1, 60),
         marketApi.listWithdrawals(1, 30),
       ]);
       setWallet(w);
-      setLedger(l.items ?? []);
+      setDailySummaries(d.items ?? []);
       setWithdrawals(wd.items ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载创作者收益失败。");
@@ -324,71 +318,98 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
       )}
 
       <div className="rounded-2xl border border-hairline bg-card overflow-hidden">
-        <div className="flex items-center gap-1 border-b border-hairline px-4 pt-3">
-          <button
-            type="button"
-            onClick={() => setSubTab("ledger")}
-            className={cn(
-              "border-b-2 px-3 pb-2.5 text-[13px] font-medium transition-colors",
-              subTab === "ledger" ? "border-accent text-ink" : "border-transparent text-ink-secondary hover:text-ink",
-            )}
-          >
-            收益流水明细（{ledger.length}）
-          </button>
-          <button
-            type="button"
-            onClick={() => setSubTab("withdrawals")}
-            className={cn(
-              "border-b-2 px-3 pb-2.5 text-[13px] font-medium transition-colors",
-              subTab === "withdrawals" ? "border-accent text-ink" : "border-transparent text-ink-secondary hover:text-ink",
-            )}
-          >
-            提现申请记录（{withdrawals.length}）
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 pt-3">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setSubTab("daily")}
+              className={cn(
+                "border-b-2 px-3 pb-2.5 text-[13px] font-medium transition-colors",
+                subTab === "daily" ? "border-accent text-ink" : "border-transparent text-ink-secondary hover:text-ink",
+              )}
+            >
+              每日收益汇总（{dailySummaries.length}）
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubTab("withdrawals")}
+              className={cn(
+                "border-b-2 px-3 pb-2.5 text-[13px] font-medium transition-colors",
+                subTab === "withdrawals" ? "border-accent text-ink" : "border-transparent text-ink-secondary hover:text-ink",
+              )}
+            >
+              提现申请记录（{withdrawals.length}）
+            </button>
+          </div>
+          {subTab === "daily" && (
+            <span className="pb-2.5 text-[11.5px] text-ink-secondary">
+              每天汇总前一日数据（次日生成，不实时刷新）
+            </span>
+          )}
         </div>
 
-        {subTab === "ledger" ? (
-          ledger.length === 0 ? (
+        {subTab === "daily" ? (
+          dailySummaries.length === 0 ? (
             <div className="px-4 py-10 text-center text-[13px] text-ink-secondary">
-              暂无收益流水。分享你调教好的 Bot，其他用户安装并在网关消费后即可获得分润！
+              暂无每日收益记录。分享你调教好的 Bot 或部门，其他用户安装并在网关消费后，次日将自动汇总生成一条记录！
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[12.5px]">
                 <thead className="border-b border-hairline text-ink-secondary">
                   <tr>
-                    <th className="px-4 py-2.5 font-medium">时间</th>
-                    <th className="px-4 py-2.5 font-medium">类型</th>
-                    <th className="px-4 py-2.5 font-medium">关联 Bot</th>
-                    <th className="px-4 py-2.5 font-medium">消费基数 / 比例</th>
-                    <th className="px-4 py-2.5 font-medium">金额变化</th>
-                    <th className="px-4 py-2.5 font-medium">状态</th>
+                    <th className="px-4 py-2.5 font-medium">日期</th>
+                    <th className="px-4 py-2.5 font-medium">已安装数量</th>
+                    <th className="px-4 py-2.5 font-medium">当日消耗 Token（LLM）</th>
+                    <th className="px-4 py-2.5 font-medium">当日媒体生成</th>
+                    <th className="px-4 py-2.5 font-medium">获得分润</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
-                  {ledger.map(row => (
-                    <tr key={row.id} className="hover:bg-raised/40">
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-secondary">
-                        {new Date(row.created_at).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2.5 font-medium text-ink">{ledgerTypeLabel(row)}</td>
-                      <td className="px-4 py-2.5 text-ink-secondary">{row.listing_name || "-"}</td>
-                      <td className="px-4 py-2.5 text-ink-secondary">
-                        {row.entry_type === "accrual" ? `${formatCny(row.base_cost)} × ${row.rate_percent}%` : (row.note || "-")}
-                      </td>
-                      <td className={cn("whitespace-nowrap px-4 py-2.5 font-semibold", row.reward_amount >= 0 ? "text-emerald-500" : "text-ink")}>
-                        {row.reward_amount >= 0 ? "+" : ""}{formatCny(row.reward_amount)}
-                        {row.bonus_amount > 0 ? <span className="ml-1 text-[11px] font-normal text-emerald-500">(+{formatCny(row.bonus_amount)} 加成)</span> : null}
-                      </td>
-                      <td className="px-4 py-2.5 text-ink-secondary">
-                        {row.status === "frozen"
-                          ? `冻结中${row.available_at ? `（${new Date(row.available_at).toLocaleDateString()} 解冻）` : ""}`
-                          : row.status === "available"
-                            ? "已解冻"
-                            : "已结算"}
-                      </td>
-                    </tr>
-                  ))}
+                  {dailySummaries.map(row => {
+                    const mediaDetail = formatMediaBreakdown(row);
+                    return (
+                      <tr key={row.date} className="hover:bg-raised/40">
+                        <td className="whitespace-nowrap px-4 py-2.5 font-medium text-ink">
+                          {row.date}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-ink">
+                          {row.installed_count}
+                          {row.new_installs > 0 ? (
+                            <span className="ml-1.5 text-[11px] text-emerald-500">+{row.new_installs}</span>
+                          ) : null}
+                        </td>
+                        <td
+                          className="whitespace-nowrap px-4 py-2.5 text-ink"
+                          title={row.llm_tokens > 0 ? `${row.llm_tokens.toLocaleString()} tokens` : undefined}
+                        >
+                          {formatTokenCount(row.llm_tokens)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-ink">
+                          {row.media_count > 0 ? (
+                            <>
+                              <span>{row.media_count} 次</span>
+                              {mediaDetail ? (
+                                <span className="ml-1.5 text-[11px] text-ink-secondary">（{mediaDetail}）</span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-ink-secondary">0</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5">
+                          <span className={cn("font-semibold", row.reward_amount > 0 ? "text-emerald-500" : "text-ink-secondary")}>
+                            {row.reward_amount > 0 ? `+${formatCny(row.reward_amount)}` : formatCny(0)}
+                          </span>
+                          {row.reward_amount > 0 ? (
+                            <span className="ml-2 text-[11px] text-ink-secondary">
+                              {row.status === "frozen" ? "冻结中" : "已解冻"}
+                            </span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

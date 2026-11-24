@@ -2,6 +2,7 @@ import type {
   MarketBotSpendSummary,
   MarketCategory,
   MarketCreatorWallet,
+  MarketDailyRewardSummary,
   MarketListingDetail,
   MarketListingSummary,
   MarketListingType,
@@ -130,6 +131,10 @@ export function createDoneBotMarketClient(ctx: () => CollabGatewayTransport) {
     async listCreatorLedger(params: URLSearchParams): Promise<{ items: MarketRewardLedgerEntry[]; total: number; page: number; page_size: number }> {
       const qs = params.toString();
       return marketJsonCall(ctx(), `/creator/ledger${qs ? `?${qs}` : ""}`, "GET");
+    },
+    async listCreatorDailySummaries(params: URLSearchParams): Promise<{ items: MarketDailyRewardSummary[]; total: number; page: number; page_size: number }> {
+      const qs = params.toString();
+      return marketJsonCall(ctx(), `/creator/daily-summary${qs ? `?${qs}` : ""}`, "GET");
     },
     async transferToBalance(amount?: number): Promise<MarketTransferResult> {
       return marketJsonCall(ctx(), "/creator/transfer", "POST", amount !== undefined ? { amount } : {}, 20_000, { requireUserLogin: true });

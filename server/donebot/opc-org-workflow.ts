@@ -127,6 +127,10 @@ export class DoneBotOrgWorkflowStore {
         version: 1,
         orgChart: {
           enforcementMode: raw.orgChart?.enforcementMode === "enforced" ? "enforced" : "free",
+          allowChiefCrossDispatch: Boolean(raw.orgChart?.allowChiefCrossDispatch),
+          ...(typeof raw.orgChart?.generalDepartmentName === "string" && raw.orgChart.generalDepartmentName.trim()
+            ? { generalDepartmentName: raw.orgChart.generalDepartmentName.trim().slice(0, 60) }
+            : {}),
           nodes: raw.orgChart?.nodes && typeof raw.orgChart.nodes === "object" ? raw.orgChart.nodes : {},
           updatedAt: typeof raw.orgChart?.updatedAt === "number" ? raw.orgChart.updatedAt : 0,
         },
@@ -168,17 +172,37 @@ export class DoneBotOrgWorkflowStore {
     }
     return {
       enforcementMode: this.state.orgChart.enforcementMode,
+      allowChiefCrossDispatch: Boolean(this.state.orgChart.allowChiefCrossDispatch),
+      ...(this.state.orgChart.generalDepartmentName ? { generalDepartmentName: this.state.orgChart.generalDepartmentName } : {}),
       nodes,
       updatedAt: this.state.orgChart.updatedAt,
     };
   }
 
-  setEnforcementMode(mode: OpcOrgEnforcementMode): OpcOrgChartState {
+  updateOrgSettings(patch: {
+    enforcementMode?: OpcOrgEnforcementMode;
+    allowChiefCrossDispatch?: boolean;
+    generalDepartmentName?: string | null;
+  }): OpcOrgChartState {
     this.ensureLoaded();
-    this.state.orgChart.enforcementMode = mode === "enforced" ? "enforced" : "free";
+    if (patch.enforcementMode !== undefined) {
+      this.state.orgChart.enforcementMode = patch.enforcementMode === "enforced" ? "enforced" : "free";
+    }
+    if (patch.allowChiefCrossDispatch !== undefined) {
+      this.state.orgChart.allowChiefCrossDispatch = Boolean(patch.allowChiefCrossDispatch);
+    }
+    if (patch.generalDepartmentName !== undefined) {
+      const cleaned = typeof patch.generalDepartmentName === "string" ? patch.generalDepartmentName.trim().slice(0, 60) : "";
+      if (cleaned && cleaned !== "通用") this.state.orgChart.generalDepartmentName = cleaned;
+      else delete this.state.orgChart.generalDepartmentName;
+    }
     this.state.orgChart.updatedAt = Date.now();
     this.persist();
     return this.getOrgChart();
+  }
+
+  setEnforcementMode(mode: OpcOrgEnforcementMode): OpcOrgChartState {
+    return this.updateOrgSettings({ enforcementMode: mode });
   }
 
   /** Prevents direct self-reporting or ancestor cycles in the reporting tree. */
@@ -254,40 +278,59 @@ export class DoneBotOrgWorkflowStore {
     if (this.state.orgChart.enforcementMode !== "enforced") return null;
 
     const senderNode = this.state.orgChart.nodes[senderId] ?? defaultNode(senderId);
+    const senderBot = bots.find(b => b.id === senderId);
+    const sectionOf = (bot?: BotRecord) => bot?.section?.trim() || "";
+    const deptName = (section: string) => section || (this.state.orgChart.generalDepartmentName || "通用");
     const nameOf = (id: string) => bots.find(b => b.id === id)?.name ?? id;
+    const senderSection = sectionOf(senderBot);
+    const senderManaged = new Set((senderBot?.managedSections ?? []).map(s => s.trim()));
 
     for (const targetId of targetBotIds) {
       if (targetId === senderId) continue;
       const targetNode = this.state.orgChart.nodes[targetId] ?? defaultNode(targetId);
+      const targetBot = bots.find(b => b.id === targetId);
+      const targetSection = sectionOf(targetBot);
 
-      // 1. Lightweight consultation across branches if both allow cross-consult.
-      if (consult && (senderNode.allowCrossConsult ?? true) && (targetNode.allowCrossConsult ?? true)) {
+      // 1. Lightweight consultation across branches/departments if both allow cross-consult.
+      if (consult && (senderNode.allowCrossConsult ?? true) && (targetNode.allowCrossConsult ?? true)) continue;
+      // 2. Top-down delegation from manager/ancestor to subordinate (same or cross-department).
+      if (this.isAncestor(senderId, targetId)) continue;
+      // 3. Department Chief supervising own or managed department members unless explicitly placed under another manager.
+      if (
+        senderBot?.chiefOfStaff
+        && targetBot
+        && (senderSection === targetSection || senderManaged.has(targetSection))
+        && (!targetNode.reportsToBotId || targetNode.reportsToBotId === senderId)
+      ) {
         continue;
       }
-      // 2. Top-down delegation from manager/ancestor to subordinate.
-      if (this.isAncestor(senderId, targetId)) {
-        continue;
-      }
-      // 3. Explicit workflow handoff edge (e.g. Writer -> Designer).
-      if (senderNode.handoffToBotIds.includes(targetId)) {
-        continue;
-      }
-      // 4. Upward reporting/escalation to direct manager.
-      if (senderNode.reportsToBotId === targetId) {
-        continue;
-      }
+      // 4. Explicit workflow handoff edge (same-department or cross-department).
+      if (senderNode.handoffToBotIds.includes(targetId)) continue;
+      // 5. Upward reporting to direct manager, or to own department Chief when no explicit manager is set.
+      if (senderNode.reportsToBotId === targetId) continue;
+      if (!senderNode.reportsToBotId && targetBot?.chiefOfStaff && senderBot && senderSection === targetSection) continue;
+      // 6. Optional peer department-Chief direct cross-dispatch toggle.
+      if (this.state.orgChart.allowChiefCrossDispatch && senderBot?.chiefOfStaff && targetBot?.chiefOfStaff) continue;
 
+      const crossDept = senderBot && targetBot && senderSection !== targetSection;
+      const ownDeptChief = !senderNode.reportsToBotId && senderBot && !senderBot.chiefOfStaff
+        ? bots.find(b => !b.hidden && b.chiefOfStaff && sectionOf(b) === senderSection && b.id !== senderId)
+        : undefined;
       const managerLabel = senderNode.reportsToBotId
         ? `直属上级「${nameOf(senderNode.reportsToBotId)}」`
-        : "老板（直接回复即可）";
+        : ownDeptChief
+          ? `本部门主 Bot「${ownDeptChief.name}」`
+          : "老板（直接回复即可）";
       const handoffLabels = senderNode.handoffToBotIds.map(nameOf);
+      const bothChiefs = Boolean(senderBot?.chiefOfStaff && targetBot?.chiefOfStaff);
       const allowedSummary = [
         `向上汇报给${managerLabel}`,
         handoffLabels.length ? `向流水线下一棒（${handoffLabels.join("、")}）交接` : "",
         (senderNode.allowCrossConsult ?? true) ? "或使用 consult=true 发起跨岗咨询" : "",
+        bothChiefs ? "或请老板在组织架构开启「部门负责人直通」" : "",
       ].filter(Boolean).join("，");
-
-      return `组织架构约束已拦截：当前开启了「按架构约束」模式，「${nameOf(senderId)}」无权直接向「${nameOf(targetId)}」派发任务。请${allowedSummary}，或在「组织架构」页面调整汇报/交接线。`;
+      const targetDesc = crossDept ? `「${nameOf(targetId)}（${deptName(targetSection)}）」跨部门` : `「${nameOf(targetId)}」`;
+      return `组织架构约束已拦截：当前开启了「按架构约束」模式，「${nameOf(senderId)}」无权直接向${targetDesc}派发任务。请${allowedSummary}，或在「组织与流程 → 组织架构」调整汇报/交接线。`;
     }
     return null;
   }
@@ -295,24 +338,40 @@ export class DoneBotOrgWorkflowStore {
   /** Renders concise fenced Org & Workflow Discipline instructions for LLM system prompt injection. */
   orgPromptForBot(botId: string, bots: readonly BotRecord[]): string | undefined {
     this.ensureLoaded();
+    const bot = bots.find(b => b.id === botId);
+    const hasDepartments = bots.some(b => !b.hidden && Boolean(b.section?.trim()));
     const hasConfigured = Object.keys(this.state.orgChart.nodes).length > 0
-      || this.state.orgChart.enforcementMode === "enforced";
+      || this.state.orgChart.enforcementMode === "enforced"
+      || hasDepartments
+      || Boolean(this.state.orgChart.generalDepartmentName);
     if (!hasConfigured) return undefined;
 
     const node = this.state.orgChart.nodes[botId] ?? defaultNode(botId);
-    const nameOf = (id: string) => bots.find(b => b.id === id)?.name ?? id;
+    const sectionOf = (b?: BotRecord) => b?.section?.trim() || "";
+    const deptName = (section: string) => section || (this.state.orgChart.generalDepartmentName || "通用");
+    const mySection = sectionOf(bot);
+    const labelWithDept = (id: string) => {
+      const target = bots.find(b => b.id === id);
+      if (!target) return id;
+      const tSec = sectionOf(target);
+      return tSec !== mySection ? `${target.name}（${deptName(tSec)}·跨部门）` : target.name;
+    };
     const directReports = bots
       .filter(b => !b.hidden && this.state.orgChart.nodes[b.id]?.reportsToBotId === botId)
-      .map(b => b.name);
-    const handoffs = node.handoffToBotIds.filter(id => bots.some(b => b.id === id && !b.hidden)).map(nameOf);
+      .map(b => labelWithDept(b.id));
+    const handoffs = node.handoffToBotIds.filter(id => bots.some(b => b.id === id && !b.hidden)).map(labelWithDept);
+    const chiefCrossText = this.state.orgChart.allowChiefCrossDispatch ? "（已开启部门负责人跨部门直通）" : "（严格模式：跨部门派单须经已连线通道或上级统筹）";
 
     const lines: string[] = [
-      `协作模式：${this.state.orgChart.enforcementMode === "enforced" ? "按组织架构强约束（越级派单将被系统拦截）" : "自由协作（按架构指引执行）"}`,
+      `协作模式：${this.state.orgChart.enforcementMode === "enforced" ? `按组织架构强约束${chiefCrossText}` : "自由协作（优先按组织架构与部门职责协作）"}`,
+      `所属部门：${deptName(mySection)}${bot?.chiefOfStaff ? "（你是本部门主 Bot，负责本部门拆解派单、验收汇总与跨部门对接）" : ""}`,
       node.roleTitle ? `岗位头衔：${node.roleTitle}` : "",
-      `直属上级：${node.reportsToBotId ? `${nameOf(node.reportsToBotId)}（任务完成、遇阻或异常时优先向其汇报）` : "老板（直接对最终结果负责）"}`,
+      `直属上级：${node.reportsToBotId ? `${labelWithDept(node.reportsToBotId)}（任务完成、遇阻或需跨部门统筹时优先向其汇报）` : "老板（直接对最终结果负责）"}`,
       directReports.length ? `直属下属：${directReports.join("、")}（你负责拆解派单、验收返工并汇总结果）` : "",
-      handoffs.length ? `流水线下一棒：${handoffs.join("、")}（完成本环节后按规范交接）` : "",
+      handoffs.length ? `已授权交接下一棒：${handoffs.join("、")}（完成本环节后可直接向其交接）` : "",
       node.requireBossApproval ? "审批纪律：你的关键交付物需提交老板拍板确认后再对外流转或收尾。" : "",
+      "固定工作流优先级：固定/定时工作流优先于日常组织架构约束，跨部门工作流节点直接按编排执行。",
+      bot?.chiefOfStaff ? "主协调编排权限：当老板要求建立固定或定时跨部门工作流时，可直接调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 创建、修改或启动。" : "",
     ].filter(Boolean);
 
     const body = lines.join("\n");
@@ -344,6 +403,7 @@ export class DoneBotOrgWorkflowStore {
     if (!hasRelations && this.state.orgChart.enforcementMode === "free") return undefined;
     return {
       enforcementMode: this.state.orgChart.enforcementMode,
+      ...(this.state.orgChart.allowChiefCrossDispatch ? { allowChiefCrossDispatch: true } : {}),
       entries,
     };
   }
@@ -372,8 +432,11 @@ export class DoneBotOrgWorkflowStore {
         // Ignore malformed external cycle entries cleanly.
       }
     }
-    if (blueprint.enforcementMode === "enforced") {
-      this.setEnforcementMode("enforced");
+    if (blueprint.enforcementMode === "enforced" || blueprint.allowChiefCrossDispatch) {
+      this.updateOrgSettings({
+        enforcementMode: blueprint.enforcementMode,
+        allowChiefCrossDispatch: blueprint.allowChiefCrossDispatch,
+      });
     }
   }
 
@@ -571,7 +634,7 @@ function buildStepPrompt(
 ): string {
   const rendered = interpolateTemplate(step.instruction, variables);
   const sections: string[] = [
-    `[固定工作流执行] 工作流「${wf.name}」· 第 ${stepIndex + 1}/${totalSteps} 步「${step.name}」`,
+    `[固定工作流执行] 工作流「${wf.name}」· 第 ${stepIndex + 1}/${totalSteps} 步「${step.name}」（固定工作流优先于日常组织架构约束，可跨部门直接交付本环节产出）`,
   ];
   if (completedSteps.length > 0) {
     const prevBlock = completedSteps
@@ -598,7 +661,11 @@ export interface DoneBotOrgWorkflowRouteDeps {
   enableScheduler?: boolean;
 }
 
-export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps): RouteHandler {
+export type DoneBotOrgWorkflowRouteHandler = RouteHandler & {
+  triggerWorkflow: (wf: OpcWorkflowDefinition, trigger: "manual" | "schedule", variables: Record<string, string>) => Promise<OpcWorkflowRun>;
+};
+
+export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps): DoneBotOrgWorkflowRouteHandler {
   const activeRunByWorkflow = new Set<string>();
 
   async function executeFromStep(
@@ -767,7 +834,7 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
     timer.unref?.();
   }
 
-  return async ({ req, res, url, path, method, auth, json, readBody }) => {
+  const handler: RouteHandler = async ({ req, res, url, path, method, auth, json, readBody }) => {
     if (!path.startsWith("/api/donebot/opc/org") && !path.startsWith("/api/donebot/opc/workflow")) {
       return PASS;
     }
@@ -783,9 +850,16 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
       }
 
       if (method === "PUT" && path === "/api/donebot/opc/org/mode") {
-        const body = await readBody(req) as { enforcementMode?: OpcOrgEnforcementMode };
-        const mode = body.enforcementMode === "enforced" ? "enforced" : "free";
-        json(res, 200, deps.orgStore.setEnforcementMode(mode));
+        const body = await readBody(req) as {
+          enforcementMode?: OpcOrgEnforcementMode;
+          allowChiefCrossDispatch?: boolean;
+          generalDepartmentName?: string | null;
+        };
+        json(res, 200, deps.orgStore.updateOrgSettings({
+          ...(body.enforcementMode !== undefined ? { enforcementMode: body.enforcementMode } : {}),
+          ...(body.allowChiefCrossDispatch !== undefined ? { allowChiefCrossDispatch: body.allowChiefCrossDispatch } : {}),
+          ...(body.generalDepartmentName !== undefined ? { generalDepartmentName: body.generalDepartmentName } : {}),
+        }));
         return;
       }
 
@@ -916,4 +990,6 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
       json(res, 400, { error: err instanceof Error ? err.message : "操作失败" });
     }
   };
+
+  return Object.assign(handler, { triggerWorkflow });
 }

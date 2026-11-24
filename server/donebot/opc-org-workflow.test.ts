@@ -8,6 +8,7 @@ import { createDoneBotAccountRoutes } from "./routes.ts";
 import { DoneBotOpcStore } from "./opc-store.ts";
 import { createDoneBotOpcRoutes } from "./opc-routes.ts";
 import { createDoneBotOrgWorkflowRoutes, DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
+import { handleDoneBotOpcWorkflowInternal } from "./opc-workflow-tools.ts";
 
 const tempDirs: string[] = [];
 function makeTempFile(): string {
@@ -294,5 +295,90 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     const run = payload.run as { status: string; stepResults: Array<{ stepId: string }> };
     expect(run.status).toBe("completed");
     expect(run.stepResults.map(s => s.stepId)).toEqual(["sA", "sB", "sC"]);
+  });
+
+  it("supports department chiefs, optional allowChiefCrossDispatch toggle, general department rename, and chief-created cross-dept workflows overriding org chart", async () => {
+    const orgStore = new DoneBotOrgWorkflowStore(makeTempFile());
+    const contentChief = { ...makeBot("b-c1", "内容主编"), section: "内容部", chiefOfStaff: true } as BotRecord;
+    const contentWriter = { ...makeBot("b-w1", "文案写手"), section: "内容部" } as BotRecord;
+    const designChief = { ...makeBot("b-d1", "设计主管"), section: "设计部", chiefOfStaff: true } as BotRecord;
+    const generalBot = { ...makeBot("b-g1", "多宝"), section: "", chiefOfStaff: true } as BotRecord;
+    const bots = [generalBot, contentChief, contentWriter, designChief];
+    const store = { bots, bot: (id: string) => bots.find(b => b.id === id) } as unknown as Store;
+
+    orgStore.updateOrgSettings({ enforcementMode: "enforced", generalDepartmentName: "总控中心" });
+    expect(orgStore.getOrgChart(bots).generalDepartmentName).toBe("总控中心");
+    expect(orgStore.orgPromptForBot(generalBot.id, bots)).toContain("总控中心");
+    expect(orgStore.orgPromptForBot(generalBot.id, bots)).toContain("opc_save_workflow");
+
+    // 1. Department Chief can dispatch own department members without explicit manual reportsTo
+    expect(orgStore.evaluateCoordination(contentChief.id, [contentWriter.id], false, bots)).toBeNull();
+    // 2. Default strict mode blocks peer department Chiefs from dispatching directly without a wire
+    const strictDenied = orgStore.evaluateCoordination(contentChief.id, [designChief.id], false, bots);
+    expect(strictDenied).toContain("部门负责人直通");
+    // 3. Enabling allowChiefCrossDispatch opens direct cross-department Chief dispatch
+    orgStore.updateOrgSettings({ allowChiefCrossDispatch: true });
+    expect(orgStore.evaluateCoordination(contentChief.id, [designChief.id], false, bots)).toBeNull();
+    // Re-lock strict mode to verify fixed workflow STILL overrides org chart!
+    orgStore.updateOrgSettings({ allowChiefCrossDispatch: false });
+
+    const executed: string[] = [];
+    const routes = createDoneBotOrgWorkflowRoutes({
+      orgStore,
+      store,
+      generateBotText: async (botId, prompt) => {
+        executed.push(`${botId}:${prompt.includes("固定工作流优先于日常组织架构约束") ? "priority" : "plain"}`);
+        return `完成-${botId}`;
+      },
+      enableScheduler: false,
+    });
+
+    const callInternal = async (botId: string, path: string, body: unknown) => {
+      let status = 0;
+      let payload: Record<string, unknown> = {};
+      const handled = await handleDoneBotOpcWorkflowInternal({
+        orgStore,
+        store,
+        triggerWorkflow: routes.triggerWorkflow,
+        method: "POST",
+        path,
+        res: {} as never,
+        json: (_res, code, value) => { status = code; payload = value as Record<string, unknown>; },
+        readBody: async () => body,
+        botId,
+      });
+      expect(handled).toBe(true);
+      return { status, payload };
+    };
+
+    // 4. Non-chief specialist cannot create fixed workflows
+    const deniedCreate = await callInternal(contentWriter.id, "/api/internal/donebot/opc/workflows/save", {
+      name: "越权流程",
+      steps: [{ name: "步1", bot_id: contentWriter.id, instruction: "写稿" }],
+    });
+    expect(deniedCreate.status).toBe(403);
+
+    // 5. Chief bot creates a cross-department fixed workflow (auto-generates canvas coords)
+    const saved = await callInternal(generalBot.id, "/api/internal/donebot/opc/workflows/save", {
+      name: "跨部门爆款生产流",
+      schedule_kind: "daily",
+      daily_time: "09:00",
+      steps: [
+        { name: "内容写稿", bot_id: contentWriter.id, instruction: "写出初稿" },
+        { name: "设计出图", bot_id: designChief.id, instruction: "根据初稿做封面" },
+      ],
+    });
+    expect(saved.status).toBe(201);
+    const createdWf = saved.payload.workflow as { id: string; triggerPosition?: { x: number; y: number }; steps: Array<{ x?: number; y?: number }> };
+    expect(createdWf.triggerPosition).toBeDefined();
+    expect(typeof createdWf.steps[0]?.x).toBe("number");
+
+    // 6. Running this cross-department fixed workflow succeeds EVEN under strict org enforcement with zero handoff edges
+    const ran = await callInternal(generalBot.id, "/api/internal/donebot/opc/workflows/run", {
+      workflow_id: createdWf.id,
+    });
+    expect(ran.status).toBe(200);
+    expect((ran.payload.run as { status: string }).status).toBe("completed");
+    expect(executed).toEqual([`${contentWriter.id}:priority`, `${designChief.id}:priority`]);
   });
 });

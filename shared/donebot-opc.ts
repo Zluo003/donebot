@@ -160,6 +160,10 @@ export interface OpcOrgNodeConfig {
 
 export interface OpcOrgChartState {
   enforcementMode: OpcOrgEnforcementMode;
+  /** When true under `enforced` mode, department Chiefs (`chiefOfStaff`) may dispatch directly across departments without an explicit handoff wire. Defaults to false (strict). */
+  allowChiefCrossDispatch?: boolean;
+  /** Custom display label for the built-in default ("通用") department. Empty/omitted falls back to "通用". */
+  generalDepartmentName?: string;
   nodes: Record<string, OpcOrgNodeConfig>;
   updatedAt: number;
 }
@@ -176,6 +180,7 @@ export interface OpcOrgBlueprintEntry {
 
 export interface OpcOrgBlueprint {
   enforcementMode: OpcOrgEnforcementMode;
+  allowChiefCrossDispatch?: boolean;
   entries: OpcOrgBlueprintEntry[];
 }
 

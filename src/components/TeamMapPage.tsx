@@ -1,11 +1,13 @@
 import { UPSTREAM_SERVICES } from "@/donebot/services";
 import { OpcOrgChartView } from "@/donebot/OpcOrgChartView";
 import { OpcWorkflowsView } from "@/donebot/OpcWorkflowsView";
+import { OpcNativeDialog } from "@/donebot/paperclip-ui";
 import { opcApi } from "@/donebot/opc-api";
 import type { OpcOrgChartState, OpcOrgEnforcementMode } from "../../shared/donebot-opc";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, BookOpen, Box, Loader2, Monitor, Plus, Save, Users, UsersRound, X } from "lucide-react";
+import { ArrowRight, BookOpen, Box, GitBranch, Loader2, Monitor, Plus, Save, Users, UsersRound, X } from "lucide-react";
+import { Switch } from "./SettingsPrimitives";
 
 import { api, formatTime, openBot, openThread, useStore, type Bot } from "@/state/store";
 import {
@@ -293,9 +295,11 @@ export function TeamMapPage() {
   const [computerDrop, setComputerDrop] = useState<{ id: string; section: string } | null>(null);
   const clearComputerDrop = useCallback(() => setComputerDrop(null), []);
   const [pendingMove, setPendingMove] = useState<{ bot: Bot; destination: string; resolve: (moved: boolean) => void } | null>(null);
-  const [opcTab, setOpcTab] = useState<"org" | "workflows" | "departments">("org");
-  const [orgState, setOrgState] = useState<OpcOrgChartState>({ enforcementMode: "free", nodes: {}, updatedAt: 0 });
+  const [opcTab, setOpcTab] = useState<"org" | "workflows">("org");
+  const [orgState, setOrgState] = useState<OpcOrgChartState>({ enforcementMode: "free", allowChiefCrossDispatch: false, nodes: {}, updatedAt: 0 });
   const [orgModeBusy, setOrgModeBusy] = useState(false);
+  const [generalRenameOpen, setGeneralRenameOpen] = useState(false);
+  const [generalNameDraft, setGeneralNameDraft] = useState("");
   const opcOrgEnabled = !teamPeople && !remoteClient;
   const loadOrg = useCallback(async () => {
     if (!opcOrgEnabled) return;
@@ -306,14 +310,26 @@ export function TeamMapPage() {
     }
   }, [opcOrgEnabled]);
   useEffect(() => { void loadOrg(); }, [loadOrg]);
-  const switchOrgMode = async (next: OpcOrgEnforcementMode) => {
-    if (orgModeBusy || orgState.enforcementMode === next) return;
+  const patchOrgSettings = async (patch: {
+    enforcementMode?: OpcOrgEnforcementMode;
+    allowChiefCrossDispatch?: boolean;
+    generalDepartmentName?: string | null;
+  }) => {
+    if (orgModeBusy) return;
     const prev = orgState;
-    setOrgState({ ...prev, enforcementMode: next });
+    const optimistic: OpcOrgChartState = {
+      ...prev,
+      ...(patch.enforcementMode !== undefined ? { enforcementMode: patch.enforcementMode } : {}),
+      ...(patch.allowChiefCrossDispatch !== undefined ? { allowChiefCrossDispatch: patch.allowChiefCrossDispatch } : {}),
+      ...(patch.generalDepartmentName !== undefined
+        ? { generalDepartmentName: patch.generalDepartmentName?.trim() || undefined }
+        : {}),
+    };
+    setOrgState(optimistic);
     setOrgModeBusy(true);
     setError(null);
     try {
-      setOrgState(await opcApi.setOrgMode(next));
+      setOrgState(await opcApi.updateOrgSettings(patch));
     } catch (cause) {
       setOrgState(prev);
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -325,15 +341,17 @@ export function TeamMapPage() {
   pendingMoveRef.current = pendingMove;
   useEffect(() => () => pendingMoveRef.current?.resolve(false), []);
   const bots = useMemo(() => state.bots.filter((bot) => !bot.hidden), [state.bots]);
+  const generalDeptLabel = orgState.generalDepartmentName?.trim() || t("teamSettings.general");
   const sections = useMemo(() => {
     const names = [...new Set([...(state.sections ?? []), ...state.groups.flatMap((group) => group.section ? [group.section] : [])])];
     const order = (key: string) => key === "" ? -1 : names.includes(key) ? names.indexOf(key) : names.length;
     return buildTeamMapSections(bots, names).sort((a, b) => order(a.key) - order(b.key));
   }, [bots, state.sections, state.groups]);
+  const hasNamedDepartments = useMemo(() => sections.some(s => Boolean(s.key)), [sections]);
   const edges = useMemo(() => buildTeamMapEdges(bots, snapshot), [bots, snapshot]);
   const anyComputer = bots.some((bot) => bot.computer === "cloud" && bot.cloudBackend !== "vps") || computers.some((computer) => computer.section !== null);
   const { show: showComputers, loaded: computersChoiceLoaded, choose: setShowComputers } = useShowComputers(anyComputer);
-  const mapComputers = useMapComputers(!remoteClient && computersChoiceLoaded && showComputers);
+  const mapComputers = useMapComputers(!opcOrgEnabled && !remoteClient && computersChoiceLoaded && showComputers);
   const [taggedBotIds, setTaggedBotIds] = useState<string[]>([]);
   const [sent, setSent] = useState<{ botIds: string[]; key: number } | null>(null);
   const sentTimer = useRef<number | undefined>(undefined);
@@ -343,7 +361,14 @@ export function TeamMapPage() {
     sentTimer.current = window.setTimeout(() => setSent(null), SENT_HIGHLIGHT_MS);
   }, []);
   useEffect(() => () => window.clearTimeout(sentTimer.current), []);
-  const composerTeams = useMemo(() => sections.map((section) => ({ key: section.key, name: section.name, count: section.chiefs.length + section.members.length })), [sections]);
+  const composerTeams = useMemo(
+    () => sections.map((section) => ({
+      key: section.key,
+      name: section.key ? section.name : generalDeptLabel,
+      count: section.chiefs.length + section.members.length,
+    })),
+    [sections, generalDeptLabel],
+  );
 
   // `background`: the 3-second poll, which never wakes a Cloud home that went to sleep.
   const refresh = useCallback(async (background = false) => {
@@ -377,6 +402,57 @@ export function TeamMapPage() {
     }
   };
 
+  const toggleBotChief = async (bot: Bot, chiefOfStaff: boolean) => {
+    setError(null);
+    try {
+      const patched: Bot = await api(`/api/bots/${encodeURIComponent(bot.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ chiefOfStaff }),
+      });
+      dispatch({ type: "botPatched", bot: patched });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      throw cause;
+    }
+  };
+
+  const alignOrgByDepartments = async () => {
+    if (orgModeBusy) return;
+    setOrgModeBusy(true);
+    setError(null);
+    try {
+      const chiefBySection = new Map<string, Bot>();
+      for (const bot of bots) {
+        if (bot.chiefOfStaff) chiefBySection.set(bot.section?.trim() || "", bot);
+      }
+      const generalChief = chiefBySection.get("");
+      let latest = orgState;
+      // Clear chiefs' parents first so reparenting never trips transient cycles.
+      for (const bot of bots) {
+        const sec = bot.section?.trim() || "";
+        if (!bot.chiefOfStaff) continue;
+        const targetManager = sec && generalChief && generalChief.id !== bot.id ? generalChief.id : null;
+        if ((latest.nodes[bot.id]?.reportsToBotId ?? null) !== targetManager) {
+          latest = (await opcApi.saveOrgNode(bot.id, { reportsToBotId: targetManager })).org;
+        }
+      }
+      for (const bot of bots) {
+        if (bot.chiefOfStaff) continue;
+        const sec = bot.section?.trim() || "";
+        const deptChief = chiefBySection.get(sec);
+        const targetManager = deptChief && deptChief.id !== bot.id ? deptChief.id : (generalChief && generalChief.id !== bot.id ? generalChief.id : null);
+        if ((latest.nodes[bot.id]?.reportsToBotId ?? null) !== targetManager) {
+          latest = (await opcApi.saveOrgNode(bot.id, { reportsToBotId: targetManager })).org;
+        }
+      }
+      setOrgState(latest);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setOrgModeBusy(false);
+    }
+  };
+
   const requestMove = (bot: Bot, destination: string) => new Promise<boolean>((resolve) => {
     pendingMoveRef.current?.resolve(false);
     setPendingMove({ bot, destination, resolve });
@@ -392,16 +468,14 @@ export function TeamMapPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <UsersRound size={17} className="text-ink-secondary" />
-            <h1 className="text-[16px] font-semibold">{opcOrgEnabled ? "组织架构" : t("canvas.title")}</h1>
+            <h1 className="text-[16px] font-semibold">{opcOrgEnabled ? "组织与流程" : t("canvas.title")}</h1>
             <span className="ml-0.5 text-[11.5px] tabular-nums text-ink-tertiary">{teamMapBotCount(bots.length)}</span>
           </div>
           <p className="mt-0.5 text-[12px] text-ink-tertiary">
             {opcOrgEnabled
               ? opcTab === "org"
-                ? "拖拽调整汇报层级 · 点击员工配置流水线交接与审批门禁"
-                : opcTab === "workflows"
-                  ? "按固定顺序编排多员工流水线，支持定时触发与老板拍板暂停"
-                  : t("canvas.description")
+                ? "扁平与部门组织统一视图 · 拖卡片调汇报或部门，右侧圆点拉跨部门交接线"
+                : "固定工作流优先于组织架构约束直接跨部门执行，可画布编排或让主协调 Bot 创建"
               : t("canvas.description")}
           </p>
         </div>
@@ -409,11 +483,10 @@ export function TeamMapPage() {
         {teamPeople ? (
           <MapModeToggle />
         ) : opcOrgEnabled ? (
-          <div role="tablist" aria-label="组织架构视图" className="inline-flex items-center rounded-full bg-ink/[0.05] p-0.5">
+          <div role="tablist" aria-label="组织与流程视图" className="inline-flex items-center rounded-full bg-ink/[0.05] p-0.5">
             {([
               { id: "org", label: "组织架构" },
               { id: "workflows", label: "固定工作流" },
-              { id: "departments", label: "部门画布" },
             ] as const).map(item => (
               <button
                 key={item.id}
@@ -433,36 +506,62 @@ export function TeamMapPage() {
         ) : null}
 
         {!remoteClient && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             {opcOrgEnabled && opcTab === "org" && (
-              <div
-                role="group"
-                aria-label="协作约束模式"
-                title="开启「按架构约束」后，系统会拦截越级指挥与循环互派，仅允许按汇报线、交接链派单或跨岗咨询"
-                className="inline-flex items-center rounded-full bg-ink/[0.05] p-0.5"
-              >
-                {([
-                  { mode: "free", label: "自由协作" },
-                  { mode: "enforced", label: "按架构约束" },
-                ] as const).map(opt => (
+              <>
+                <label
+                  title="关闭：自由协作（架构仅作提示参考）。开启：服务端硬拦截越级派单与未授权跨部门派单。"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-hairline/70 bg-panel/80 px-3 py-1 text-[12px] text-ink-secondary hover:border-ink/30"
+                >
+                  <span className="font-medium text-ink">按架构约束</span>
+                  <Switch
+                    checked={orgState.enforcementMode === "enforced"}
+                    disabled={orgModeBusy}
+                    aria-label="开启按架构约束"
+                    onClick={() => void patchOrgSettings({ enforcementMode: orgState.enforcementMode === "enforced" ? "free" : "enforced" })}
+                  />
+                </label>
+
+                {orgState.enforcementMode === "enforced" && (
+                  <label
+                    title="默认严格模式关闭。开启后，各部门主 Bot 之间无需拉交接线即可跨部门直通派单。"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-hairline/70 bg-panel/80 px-3 py-1 text-[12px] text-ink-secondary hover:border-ink/30"
+                  >
+                    <span>部门负责人直通</span>
+                    <Switch
+                      checked={Boolean(orgState.allowChiefCrossDispatch)}
+                      disabled={orgModeBusy}
+                      aria-label="开启部门负责人跨部门直通"
+                      onClick={() => void patchOrgSettings({ allowChiefCrossDispatch: !orgState.allowChiefCrossDispatch })}
+                    />
+                  </label>
+                )}
+
+                {hasNamedDepartments && (
                   <button
-                    key={opt.mode}
                     type="button"
                     disabled={orgModeBusy}
-                    aria-pressed={orgState.enforcementMode === opt.mode}
-                    onClick={() => void switchOrgMode(opt.mode)}
-                    className={cn(
-                      "rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors",
-                      orgState.enforcementMode === opt.mode ? "bg-ink text-app shadow-xs" : "text-ink-secondary hover:text-ink",
-                    )}
+                    onClick={() => void alignOrgByDepartments()}
+                    title="将各部门成员汇报线一键归入本部门主 Bot 名下，之后仍可自由拖拽做跨部门调整"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-3 text-[12px] font-medium text-ink-secondary hover:bg-ink/[0.1] hover:text-ink disabled:opacity-45"
                   >
-                    {opt.label}
+                    <GitBranch size={12.5} /> 按部门对齐
                   </button>
-                ))}
-              </div>
+                )}
+
+                {admin !== false && (
+                  <button
+                    type="button"
+                    onClick={() => setTeamEditor({})}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink px-3.5 text-[12px] font-medium text-app hover:opacity-85"
+                  >
+                    <Plus size={13} /> 新建部门
+                  </button>
+                )}
+              </>
             )}
 
-            {(!opcOrgEnabled || opcTab === "departments") && (
+            {!opcOrgEnabled && (
               <>
                 <button onClick={() => setShowComputers(!showComputers)} aria-pressed={showComputers} title={t("canvas.showComputersHint")}
                   className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium transition-colors", showComputers ? "border-accent/40 bg-accent/10 text-ink" : "border-hairline/60 bg-panel text-ink-secondary hover:bg-control hover:text-ink")}>
@@ -495,7 +594,28 @@ export function TeamMapPage() {
       </div>}
       <div className="relative flex min-h-0 flex-1">
       {opcOrgEnabled && opcTab === "org" ? (
-        <OpcOrgChartView bots={bots} org={orgState} onOrgChange={setOrgState} />
+        <div className="relative flex min-h-0 min-w-0 flex-1">
+          <OpcOrgChartView
+            bots={bots}
+            sections={sections}
+            org={orgState}
+            taggedBotIds={taggedBotIds}
+            sent={sent}
+            bottomInset={bots.length ? 92 : 0}
+            onOrgChange={setOrgState}
+            onMoveToDepartment={moveBot}
+            onToggleChief={toggleBotChief}
+            onRenameGeneralDepartment={(currentLabel) => {
+              setGeneralNameDraft(currentLabel);
+              setGeneralRenameOpen(true);
+            }}
+            onEditTeam={(section, rename) => setTeamEditor({ section, rename })}
+            onInstructions={(section, label) => setContextEditor({ section, label })}
+            onMemory={(section, label) => setMemoryEditor({ section, label })}
+            onDeleteTeam={setDeletingTeam}
+          />
+          {bots.length > 0 && <MapComposer bots={bots} teams={composerTeams} onTagged={setTaggedBotIds} onSent={acknowledgeSent} />}
+        </div>
       ) : opcOrgEnabled && opcTab === "workflows" ? (
         <OpcWorkflowsView bots={bots} />
       ) : (
@@ -521,7 +641,7 @@ export function TeamMapPage() {
         </>
       )}
       </div>
-      {(!opcOrgEnabled || opcTab === "departments") && edges.length > 0 && <details className="shrink-0 border-t border-hairline/40 bg-panel px-6 py-3">
+      {(!opcOrgEnabled || opcTab === "org") && edges.length > 0 && <details className="shrink-0 border-t border-hairline/40 bg-panel px-6 py-3">
         <summary className="cursor-pointer text-[12px] text-ink-secondary">{t("canvas.whoHandsOn")} · {edges.length}</summary>
         <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{edges.slice(0, 12).map((edge) => <EdgeRow key={`${edge.sourceBotId}:${edge.targetBotId}`} edge={edge} bots={bots} />)}</div>
       </details>}
@@ -534,7 +654,53 @@ export function TeamMapPage() {
       )}
       {teamEditor && <TeamDialog {...teamEditor} onClose={() => setTeamEditor(null)} />}
       {memoryEditor && <TeamMemoryDialog key={memoryEditor.section} {...memoryEditor} onClose={() => setMemoryEditor(null)} />}
-      <ConfirmDialog open={pendingMove !== null} tone="neutral" title={t("canvas.moveConfirmTitle", { name: pendingMove?.bot.name ?? t("canvas.bot"), team: pendingMove?.destination || t("settings.section.general") })}
+      <OpcNativeDialog
+        open={generalRenameOpen}
+        onClose={() => setGeneralRenameOpen(false)}
+        ariaLabel="重命名默认部门"
+        className="w-[min(92vw,420px)]"
+      >
+        <div className="flex items-center justify-between border-b border-hairline/60 px-5 py-3.5">
+          <h3 className="text-[14.5px] font-semibold text-ink">重命名默认部门</h3>
+          <button type="button" onClick={() => setGeneralRenameOpen(false)} aria-label="关闭" className="rounded-full p-1 text-ink-tertiary hover:bg-ink/[0.06]">
+            <X size={15} />
+          </button>
+        </div>
+        <div className="space-y-2.5 px-5 py-4 text-[12.5px]">
+          <label className="block space-y-1.5">
+            <span className="text-[12px] text-ink-secondary">部门名称（留空则恢复为「通用」）</span>
+            <input
+              value={generalNameDraft}
+              maxLength={60}
+              onChange={e => setGeneralNameDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  void patchOrgSettings({ generalDepartmentName: generalNameDraft.trim() || null }).then(() => setGeneralRenameOpen(false));
+                }
+              }}
+              placeholder="如：总控中心 / 核心团队"
+              className="h-9 w-full rounded-xl border border-hairline/70 bg-inset px-3 text-[13px] text-ink outline-none focus:border-ink/40"
+            />
+          </label>
+          <p className="text-[11.5px] text-ink-tertiary">
+            修改名称不会影响原有对话、公共指令和共享记忆，也会同步生效到 @ 指挥栏和 AI 组织提示词。
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-hairline/60 px-5 py-3.5">
+          <button type="button" onClick={() => setGeneralRenameOpen(false)} className="h-8 rounded-full px-3 text-[12.5px] text-ink-secondary hover:bg-ink/[0.06]">
+            取消
+          </button>
+          <button
+            type="button"
+            disabled={orgModeBusy}
+            onClick={() => void patchOrgSettings({ generalDepartmentName: generalNameDraft.trim() || null }).then(() => setGeneralRenameOpen(false))}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink px-4 text-[12.5px] font-medium text-app hover:opacity-85 disabled:opacity-45"
+          >
+            保存名称
+          </button>
+        </div>
+      </OpcNativeDialog>
+      <ConfirmDialog open={pendingMove !== null} tone="neutral" title={t("canvas.moveConfirmTitle", { name: pendingMove?.bot.name ?? t("canvas.bot"), team: pendingMove?.destination || generalDeptLabel })}
         body={t("canvas.moveConfirmBody")}
         confirmLabel={t("canvas.moveConfirm") } onCancel={cancelMove} onConfirm={() => {
           const move = pendingMoveRef.current;

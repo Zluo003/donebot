@@ -1,5 +1,10 @@
 import type { ToolCallContext, ToolCallResult } from "../drivers/agents-call.ts";
 import type { Json } from "../drivers/agents-client.ts";
+import {
+  callDoneBotOpcWorkflowTool,
+  DONEBOT_OPC_WORKFLOW_TOOL_DEFINITIONS,
+  DONEBOT_OPC_WORKFLOW_TOOL_NAMES,
+} from "./opc-workflow-tools.ts";
 
 export const DONEBOT_COLLAB_TOOL_DEFINITIONS = [
   {
@@ -162,6 +167,7 @@ export const DONEBOT_COLLAB_TOOL_DEFINITIONS = [
       required: ["team_id", "task_id", "mode"],
     },
   },
+  ...DONEBOT_OPC_WORKFLOW_TOOL_DEFINITIONS,
 ];
 
 export const DONEBOT_COLLAB_TOOL_NAMES: ReadonlySet<string> = new Set(DONEBOT_COLLAB_TOOL_DEFINITIONS.map(tool => tool.name));
@@ -176,6 +182,9 @@ const TASK_TOOL_PATHS: Record<string, string> = {
 };
 
 export async function callDoneBotCollabTool(name: string, args: Json, context: ToolCallContext): Promise<ToolCallResult> {
+  if (DONEBOT_OPC_WORKFLOW_TOOL_NAMES.has(name)) {
+    return callDoneBotOpcWorkflowTool(name, args, context);
+  }
   if (name === "list_collab_folders") {
     const { ok, body } = await context.client.apiResponse("/api/internal/donebot/collab/folders", { method: "POST", body: "{}" });
     return ok ? { text: JSON.stringify(body) } : { text: String(body.error ?? "无法获取远程共享文件夹列表。"), isError: true };

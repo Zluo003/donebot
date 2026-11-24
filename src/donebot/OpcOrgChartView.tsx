@@ -1,37 +1,39 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import {
-  Crown,
-  FlaskConical,
-  GitBranch,
-  GripVertical,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
+import {
   Maximize2,
-  MessageSquare,
   Minus,
   Plus,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import type { OpcOrgChartState, OpcOrgNodeConfig } from "../../shared/donebot-opc";
 import { BotAvatar } from "@/components/Avatar";
-import { Switch } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
-import { useStore, type Bot } from "@/state/store";
-import { formatCny } from "./market-api";
+import type { TeamMapSection } from "@/lib/team-map";
+import type { Bot } from "@/state/store";
 import { opcApi } from "./opc-api";
+import { OpcDeptMenu, OpcOrgNodeCard } from "./OpcOrgCard";
+import { OpcOrgInspector } from "./OpcOrgInspector";
 import { OpcSkillStudioModal } from "./OpcSkillStudioModal";
 import {
-  DEFAULT_ORG_GEOMETRY,
-  flattenLayout,
-  layoutOrganization,
-  routeReportingEdges,
-  type LayoutNode,
-  type PaperclipOrgNode,
+  computeDepartmentClusters,
+  layoutTopDownOrgChart,
+  type DepartmentClusterBox,
+  type TopDownLayoutNode,
+  type TopDownOrgInputNode,
 } from "./paperclip-org-layout";
 
 const BOSS_ROOT_ID = "__boss__";
 const DRAG_THRESHOLD_PX = 6;
 
-function buildOrgTree(bots: readonly Bot[], org: OpcOrgChartState): PaperclipOrgNode[] {
+function buildTopDownOrgTree(bots: readonly Bot[], org: OpcOrgChartState): TopDownOrgInputNode {
   const byId = new Map(bots.map(b => [b.id, b]));
   const childrenByParent = new Map<string, Bot[]>();
 
@@ -44,14 +46,15 @@ function buildOrgTree(bots: readonly Bot[], org: OpcOrgChartState): PaperclipOrg
   }
 
   const visited = new Set<string>();
-  const toNode = (bot: Bot): PaperclipOrgNode => {
+  const toNode = (bot: Bot): TopDownOrgInputNode => {
     visited.add(bot.id);
     const children = (childrenByParent.get(bot.id) ?? []).filter(c => !visited.has(c.id));
     return {
       id: bot.id,
       name: bot.name,
-      role: org.nodes[bot.id]?.roleTitle || bot.title || (bot.chiefOfStaff ? "总控主管" : "AI 员工"),
+      role: org.nodes[bot.id]?.roleTitle || bot.title || (bot.chiefOfStaff ? "部门主 Bot" : "AI 员工"),
       status: bot.busy ? "working" : "idle",
+      section: bot.section?.trim() || "",
       reports: children.map(toNode),
     };
   };
@@ -61,55 +64,45 @@ function buildOrgTree(bots: readonly Bot[], org: OpcOrgChartState): PaperclipOrg
     if (!visited.has(bot.id)) bossChildren.push(toNode(bot));
   }
 
-  return [{
+  const bossSubtitle = org.enforcementMode === "enforced"
+    ? (org.allowChiefCrossDispatch ? "最终拍板 · 强约束（负责人直通）" : "最终拍板 · 按架构强约束")
+    : "最终拍板 · 自由协作";
+
+  return {
     id: BOSS_ROOT_ID,
     name: "你（老板）",
-    role: org.enforcementMode === "enforced" ? "最终拍板 · 按架构强约束" : "最终拍板 · 自由协作",
+    role: bossSubtitle,
     status: "owner",
+    section: "",
     reports: bossChildren,
-  }];
+  };
 }
 
-function roundedOrthogonalPath(points: ReadonlyArray<{ x: number; y: number }>, radius = 8): string {
-  if (points.length < 2) return "";
-  const parts: string[] = [`M ${points[0]!.x} ${points[0]!.y}`];
-  for (let i = 1; i < points.length - 1; i++) {
-    const prev = points[i - 1]!;
-    const curr = points[i]!;
-    const next = points[i + 1]!;
-    const dx1 = curr.x - prev.x;
-    const dy1 = curr.y - prev.y;
-    const dx2 = next.x - curr.x;
-    const dy2 = next.y - curr.y;
-    const len1 = Math.hypot(dx1, dy1);
-    const len2 = Math.hypot(dx2, dy2);
-    if (len1 < 1 || len2 < 1) {
-      parts.push(`L ${curr.x} ${curr.y}`);
-      continue;
-    }
-    const r = Math.min(radius, len1 / 2, len2 / 2);
-    const ax = curr.x - (dx1 / len1) * r;
-    const ay = curr.y - (dy1 / len1) * r;
-    const bx = curr.x + (dx2 / len2) * r;
-    const by = curr.y + (dy2 / len2) * r;
-    parts.push(`L ${ax} ${ay} Q ${curr.x} ${curr.y} ${bx} ${by}`);
-  }
-  const last = points[points.length - 1]!;
-  parts.push(`L ${last.x} ${last.y}`);
-  return parts.join(" ");
-}
-
-function handoffCurve(from: LayoutNode, to: LayoutNode): string {
-  const x1 = from.x + from.width;
+function handoffCurve(from: TopDownLayoutNode, to: TopDownLayoutNode): { d: string; midX: number; midY: number } {
+  const rightToLeft = to.x >= from.x;
+  const x1 = rightToLeft ? from.x + from.width : from.x;
   const y1 = from.y + from.height / 2;
-  const x2 = to.x;
+  const x2 = rightToLeft ? to.x : to.x + to.width;
   const y2 = to.y + to.height / 2;
-  if (x2 >= x1 - 12) {
-    const mid = (x1 + x2) / 2;
-    return `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
+  const span = Math.abs(x2 - x1);
+  if (span >= 24) {
+    const bend = Math.max(48, Math.min(160, span * 0.45));
+    const cx1 = rightToLeft ? x1 + bend : x1 - bend;
+    const cx2 = rightToLeft ? x2 - bend : x2 + bend;
+    const d = `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`;
+    return {
+      d,
+      midX: Math.round(0.125 * x1 + 0.375 * cx1 + 0.375 * cx2 + 0.125 * x2),
+      midY: Math.round(0.125 * y1 + 0.375 * y1 + 0.375 * y2 + 0.125 * y2),
+    };
   }
-  const topY = Math.min(from.y, to.y) - 26;
-  return `M ${from.x + from.width / 2} ${from.y} C ${from.x + from.width / 2} ${topY}, ${to.x + to.width / 2} ${topY}, ${to.x + to.width / 2} ${to.y}`;
+  const archX = Math.max(from.x + from.width, to.x + to.width) + 46;
+  const d = `M ${from.x + from.width} ${y1} C ${archX} ${y1}, ${archX} ${y2}, ${to.x + to.width} ${y2}`;
+  return {
+    d,
+    midX: Math.round(0.25 * (from.x + from.width) + 0.75 * archX),
+    midY: Math.round((y1 + y2) / 2),
+  };
 }
 
 function isDescendantInOrg(org: OpcOrgChartState, ancestorId: string, candidateId: string): boolean {
@@ -133,20 +126,49 @@ interface ActiveDragState {
   offsetX: number;
   offsetY: number;
   width: number;
-  height: number;
   moved: boolean;
+}
+
+interface ActiveWireState {
+  fromId: string;
+  startX: number;
+  startY: number;
+  curX: number;
+  curY: number;
+  hoverTargetId: string | null;
 }
 
 export function OpcOrgChartView({
   bots,
+  sections,
   org,
+  taggedBotIds = [],
+  sent,
+  bottomInset = 0,
   onOrgChange,
+  onMoveToDepartment,
+  onToggleChief,
+  onRenameGeneralDepartment,
+  onEditTeam,
+  onInstructions,
+  onMemory,
+  onDeleteTeam,
 }: {
   bots: Bot[];
+  sections: TeamMapSection<Bot>[];
   org: OpcOrgChartState;
+  taggedBotIds?: string[];
+  sent?: { botIds: string[]; key: number } | null;
+  bottomInset?: number;
   onOrgChange: (next: OpcOrgChartState) => void;
+  onMoveToDepartment: (bot: Bot, destinationSection: string) => Promise<void>;
+  onToggleChief: (bot: Bot, chiefOfStaff: boolean) => Promise<void>;
+  onRenameGeneralDepartment: (currentLabel: string) => void;
+  onEditTeam: (sectionKey: string, rename?: boolean) => void;
+  onInstructions: (sectionKey: string, label: string) => void;
+  onMemory: (sectionKey: string, label: string) => void;
+  onDeleteTeam: (sectionKey: string) => void;
 }) {
-  const { dispatch } = useStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ width: 960, height: 560 });
   const [zoom, setZoom] = useState(1);
@@ -154,7 +176,10 @@ export function OpcOrgChartView({
   const [panning, setPanning] = useState(false);
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null);
-  const [hoverTargetId, setHoverTargetId] = useState<string | null>(null);
+  const [hoverNodeId, setHoverNodeId] = useState<string | null>(null);
+  const [hoverDeptKey, setHoverDeptKey] = useState<string | null>(null);
+  const [wiring, setWiring] = useState<ActiveWireState | null>(null);
+  const [hoveredHandoffKey, setHoveredHandoffKey] = useState<string | null>(null);
   const [spendByBot, setSpendByBot] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -168,10 +193,32 @@ export function OpcOrgChartView({
   zoomRef.current = zoom;
   const justDraggedRef = useRef(false);
 
+  const generalDeptLabel = org.generalDepartmentName?.trim() || "通用";
+  const deptLabelOfKey = useCallback(
+    (key: string) => (key.trim() ? key.trim() : generalDeptLabel),
+    [generalDeptLabel],
+  );
+
+  const hasNamedDepartments = useMemo(
+    () => sections.some(s => Boolean(s.key)),
+    [sections],
+  );
+
+  const sectionOptions = useMemo(() => {
+    const list: Array<{ key: string; label: string }> = [{ key: "", label: generalDeptLabel }];
+    const seen = new Set<string>([""]);
+    for (const s of sections) {
+      if (!s.key || seen.has(s.key)) continue;
+      seen.add(s.key);
+      list.push({ key: s.key, label: s.key });
+    }
+    return list;
+  }, [sections, generalDeptLabel]);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => setViewport({ width: Math.max(360, el.clientWidth), height: Math.max(360, el.clientHeight) });
+    const measure = () => setViewport({ width: Math.max(360, el.clientWidth), height: Math.max(320, el.clientHeight) });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -190,38 +237,72 @@ export function OpcOrgChartView({
   const botById = useMemo(() => new Map(bots.map(b => [b.id, b])), [bots]);
 
   const layout = useMemo(() => {
-    const roots = buildOrgTree(bots, org);
-    const block = layoutOrganization(roots, viewport, DEFAULT_ORG_GEOMETRY);
-    const nodes = flattenLayout(block.roots);
-    const routes = routeReportingEdges(block.roots, DEFAULT_ORG_GEOMETRY.gap).map(route => ({
-      ...route,
-      roundedPath: roundedOrthogonalPath(route.points, 8),
-    }));
-    const nodeById = new Map(nodes.map(n => [n.id, n]));
-    const handoffEdges: Array<{ id: string; path: string; fromId: string; toId: string }> = [];
+    const rootInput = buildTopDownOrgTree(bots, org);
+    const tree = layoutTopDownOrgChart(rootInput);
+    const nodeById = new Map(tree.nodes.map(n => [n.id, n]));
+    const deptBoxes: DepartmentClusterBox[] = hasNamedDepartments
+      ? computeDepartmentClusters(tree.nodes, sections.map(s => s.key), tree.width)
+      : [];
+    const maxBoxRight = deptBoxes.length
+      ? Math.max(...deptBoxes.map(b => b.x + b.width + 64))
+      : 0;
+    const totalWidth = Math.max(tree.width, maxBoxRight);
+
+    const handoffEdges: Array<{
+      id: string;
+      fromId: string;
+      toId: string;
+      d: string;
+      midX: number;
+      midY: number;
+      crossDepartment: boolean;
+    }> = [];
     for (const bot of bots) {
       const from = nodeById.get(bot.id);
       if (!from) continue;
       for (const targetId of org.nodes[bot.id]?.handoffToBotIds ?? []) {
         const to = nodeById.get(targetId);
         if (!to || targetId === bot.id) continue;
+        const curve = handoffCurve(from, to);
         handoffEdges.push({
           id: `${bot.id}->${targetId}`,
-          path: handoffCurve(from, to),
           fromId: bot.id,
           toId: targetId,
+          ...curve,
+          crossDepartment: from.section !== to.section,
         });
       }
     }
-    return { block, nodes, nodeById, routes, handoffEdges };
-  }, [bots, org, viewport]);
+    return { ...tree, width: totalWidth, nodeById, deptBoxes, handoffEdges };
+  }, [bots, org, hasNamedDepartments, sections]);
 
   const layoutNodesRef = useRef(layout.nodes);
   layoutNodesRef.current = layout.nodes;
+  const deptBoxesRef = useRef(layout.deptBoxes);
+  deptBoxesRef.current = layout.deptBoxes;
+
+  const canvasOriginOffset = useMemo(() => {
+    const usableH = Math.max(240, viewport.height - bottomInset);
+    const x = Math.max(0, Math.round((viewport.width - layout.width * zoom) / 2));
+    const y = Math.max(12, Math.round((usableH - layout.height * zoom) / 4));
+    return { x, y };
+  }, [viewport.width, viewport.height, bottomInset, layout.width, layout.height, zoom]);
+
+  const originOffsetRef = useRef(canvasOriginOffset);
+  originOffsetRef.current = canvasOriginOffset;
+
+  const clientToWorld = useCallback((clientX: number, clientY: number) => {
+    const el = containerRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - originOffsetRef.current.x - panRef.current.x) / zoomRef.current,
+      y: (clientY - rect.top - originOffsetRef.current.y - panRef.current.y) / zoomRef.current,
+    };
+  }, []);
 
   const updateNode = useCallback(async (botId: string, patch: Partial<Omit<OpcOrgNodeConfig, "botId">>) => {
     const previous = orgRef.current;
-    // Optimistically update local org state so reparenting feels instantaneous.
     const existing = previous.nodes[botId] ?? {
       botId,
       reportsToBotId: null,
@@ -255,88 +336,96 @@ export function OpcOrgChartView({
     }
   }, [onOrgChange]);
 
-  const canvasOriginOffset = useMemo(() => {
-    const x = Math.max(0, Math.round((viewport.width - layout.block.width * zoom) / 2));
-    const y = Math.max(12, Math.round((viewport.height - layout.block.height * zoom) / 4));
-    return { x, y };
-  }, [viewport.width, viewport.height, layout.block.width, layout.block.height, zoom]);
+  const handleMoveDept = useCallback(async (bot: Bot, destinationSection: string) => {
+    setSaving(true);
+    setError("");
+    try {
+      await onMoveToDepartment(bot, destinationSection);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "切换部门失败。");
+    } finally {
+      setSaving(false);
+    }
+  }, [onMoveToDepartment]);
 
-  const originOffsetRef = useRef(canvasOriginOffset);
-  originOffsetRef.current = canvasOriginOffset;
+  const handleToggleChief = useCallback(async (bot: Bot, nextChief: boolean) => {
+    setSaving(true);
+    setError("");
+    try {
+      await onToggleChief(bot, nextChief);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "更新部门主 Bot 失败。");
+    } finally {
+      setSaving(false);
+    }
+  }, [onToggleChief]);
 
-  const hitTestNodeAtClient = useCallback((clientX: number, clientY: number, excludeId: string): string | null => {
-    const el = containerRef.current;
-    if (!el) return null;
-    const rect = el.getBoundingClientRect();
-    const curZoom = zoomRef.current;
-    const worldX = (clientX - rect.left - originOffsetRef.current.x - panRef.current.x) / curZoom;
-    const worldY = (clientY - rect.top - originOffsetRef.current.y - panRef.current.y) / curZoom;
+  const hitTestDrop = useCallback((clientX: number, clientY: number, draggedBotId: string, draggedSection: string) => {
+    const pt = clientToWorld(clientX, clientY);
     for (const node of layoutNodesRef.current) {
-      if (node.id === excludeId) continue;
+      if (node.id === draggedBotId) continue;
       if (
-        worldX >= node.x - 10
-        && worldX <= node.x + node.width + 10
-        && worldY >= node.y - 10
-        && worldY <= node.y + node.height + 10
+        pt.x >= node.x - 8
+        && pt.x <= node.x + node.width + 8
+        && pt.y >= node.y - 8
+        && pt.y <= node.y + node.height + 8
       ) {
-        return node.id;
+        return { nodeId: node.id, deptKey: null as string | null };
       }
     }
-    return null;
-  }, []);
+    for (const box of deptBoxesRef.current) {
+      if (box.sectionKey === draggedSection) continue;
+      if (pt.x >= box.x && pt.x <= box.x + box.width && pt.y >= box.y && pt.y <= box.y + box.height) {
+        return { nodeId: null as string | null, deptKey: box.sectionKey };
+      }
+    }
+    return { nodeId: null as string | null, deptKey: null as string | null };
+  }, [clientToWorld]);
 
-  const handleNodePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>, node: LayoutNode) => {
+  const handleNodePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>, node: TopDownLayoutNode) => {
     if (e.button !== 0 || node.id === BOSS_ROOT_ID) return;
+    if ((e.target as HTMLElement).closest("button, a, input, select, details")) return;
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const startState: ActiveDragState = {
-      botId: node.id,
-      startClientX: e.clientX,
-      startClientY: e.clientY,
-      clientX: e.clientX,
-      clientY: e.clientY,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
-      width: rect.width,
-      height: rect.height,
-      moved: false,
+    const dragRef: { current: ActiveDragState } = {
+      current: {
+        botId: node.id,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+        width: rect.width,
+        moved: false,
+      },
     };
-
-    const dragRef = { current: startState };
-    let currentTarget: string | null = null;
+    let curHit: { nodeId: string | null; deptKey: string | null } = { nodeId: null, deptKey: null };
 
     const onMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - dragRef.current.startClientX;
-      const dy = ev.clientY - dragRef.current.startClientY;
-      const moved = dragRef.current.moved || Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
-      dragRef.current = {
-        ...dragRef.current,
-        clientX: ev.clientX,
-        clientY: ev.clientY,
-        moved,
-      };
+      const moved = dragRef.current.moved
+        || Math.hypot(ev.clientX - dragRef.current.startClientX, ev.clientY - dragRef.current.startClientY) >= DRAG_THRESHOLD_PX;
+      dragRef.current = { ...dragRef.current, clientX: ev.clientX, clientY: ev.clientY, moved };
       if (moved) {
         setActiveDrag(dragRef.current);
-        currentTarget = hitTestNodeAtClient(ev.clientX, ev.clientY, node.id);
-        setHoverTargetId(currentTarget);
+        curHit = hitTestDrop(ev.clientX, ev.clientY, node.id, node.section);
+        setHoverNodeId(curHit.nodeId);
+        setHoverDeptKey(curHit.deptKey);
       }
     };
 
     const cleanup = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("pointercancel", cleanup);
       setActiveDrag(null);
-      setHoverTargetId(null);
-    };
-
-    const onCancel = () => {
-      cleanup();
+      setHoverNodeId(null);
+      setHoverDeptKey(null);
     };
 
     const onUp = () => {
       const finished = dragRef.current;
-      const targetId = currentTarget;
+      const hit = curHit;
       cleanup();
       if (!finished.moved) {
         setSelectedBotId(node.id);
@@ -344,24 +433,90 @@ export function OpcOrgChartView({
       }
       justDraggedRef.current = true;
       window.setTimeout(() => { justDraggedRef.current = false; }, 0);
-      if (!targetId || targetId === finished.botId) return;
-      if (isDescendantInOrg(orgRef.current, finished.botId, targetId)) {
-        setError("不能把员工拖到自己的下属名下（会形成循环汇报）。");
+
+      if (hit.nodeId && hit.nodeId !== finished.botId) {
+        if (isDescendantInOrg(orgRef.current, finished.botId, hit.nodeId)) {
+          setError("不能把员工拖到自己的下属名下（会形成循环汇报）。");
+          return;
+        }
+        const nextReportsTo = hit.nodeId === BOSS_ROOT_ID ? null : hit.nodeId;
+        if ((orgRef.current.nodes[finished.botId]?.reportsToBotId ?? null) !== nextReportsTo) {
+          void updateNode(finished.botId, { reportsToBotId: nextReportsTo });
+        }
         return;
       }
-      const nextReportsTo = targetId === BOSS_ROOT_ID ? null : targetId;
-      const currentReportsTo = orgRef.current.nodes[finished.botId]?.reportsToBotId ?? null;
-      if (currentReportsTo === nextReportsTo) return;
-      void updateNode(finished.botId, { reportsToBotId: nextReportsTo });
+      if (hit.deptKey !== null) {
+        const bot = botById.get(finished.botId);
+        if (bot && (bot.section?.trim() || "") !== hit.deptKey) {
+          void handleMoveDept(bot, hit.deptKey);
+        }
+      }
     };
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onCancel);
-  }, [hitTestNodeAtClient, updateNode]);
+    window.addEventListener("pointercancel", cleanup);
+  }, [botById, handleMoveDept, hitTestDrop, updateNode]);
+
+  const handleHandoffPortDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>, node: TopDownLayoutNode) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const startX = node.x + node.width;
+    const startY = node.y + node.height / 2;
+    let targetId: string | null = null;
+    const pt0 = clientToWorld(e.clientX, e.clientY);
+    setWiring({ fromId: node.id, startX, startY, curX: pt0.x, curY: pt0.y, hoverTargetId: null });
+
+    const onMove = (ev: PointerEvent) => {
+      const pt = clientToWorld(ev.clientX, ev.clientY);
+      const hit = layoutNodesRef.current.find(n =>
+        n.depth > 0
+        && n.id !== node.id
+        && pt.x >= n.x - 16
+        && pt.x <= n.x + n.width + 16
+        && pt.y >= n.y - 12
+        && pt.y <= n.y + n.height + 12,
+      );
+      targetId = hit?.id ?? null;
+      setWiring({
+        fromId: node.id,
+        startX,
+        startY,
+        curX: hit ? hit.x : pt.x,
+        curY: hit ? hit.y + hit.height / 2 : pt.y,
+        hoverTargetId: targetId,
+      });
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", cleanup);
+      setWiring(null);
+    };
+
+    const onUp = () => {
+      const chosen = targetId;
+      cleanup();
+      if (!chosen || chosen === node.id) return;
+      const existing = orgRef.current.nodes[node.id]?.handoffToBotIds ?? [];
+      if (!existing.includes(chosen)) {
+        void updateNode(node.id, { handoffToBotIds: [...existing, chosen] });
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", cleanup);
+  }, [clientToWorld, updateNode]);
+
+  const removeHandoffEdge = useCallback((fromId: string, toId: string) => {
+    const existing = orgRef.current.nodes[fromId]?.handoffToBotIds ?? [];
+    void updateNode(fromId, { handoffToBotIds: existing.filter(id => id !== toId) });
+  }, [updateNode]);
 
   const handleCanvasPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button, details, input, select")) return;
     const startX = e.clientX;
     const startY = e.clientY;
     const initPan = panRef.current;
@@ -374,9 +529,7 @@ export function OpcOrgChartView({
         dragged = true;
         setPanning(true);
       }
-      if (dragged) {
-        setPan({ x: initPan.x + dx, y: initPan.y + dy });
-      }
+      if (dragged) setPan({ x: initPan.x + dx, y: initPan.y + dy });
     };
 
     const onUp = () => {
@@ -420,18 +573,22 @@ export function OpcOrgChartView({
     : null;
 
   const draggedBot = activeDrag ? botById.get(activeDrag.botId) ?? null : null;
-  const hoverInvalid = activeDrag && hoverTargetId
-    ? isDescendantInOrg(org, activeDrag.botId, hoverTargetId)
-    : false;
-  const hoverTargetName = hoverTargetId === BOSS_ROOT_ID
-    ? "你（老板）"
-    : hoverTargetId
-      ? (botById.get(hoverTargetId)?.name ?? "上级")
-      : null;
+  const hoverInvalid = activeDrag && hoverNodeId ? isDescendantInOrg(org, activeDrag.botId, hoverNodeId) : false;
+  const dragHint = (() => {
+    if (!activeDrag || !draggedBot) return "";
+    if (hoverNodeId) {
+      if (hoverInvalid) return "不能汇报给自己的下属";
+      if (hoverNodeId === BOSS_ROOT_ID) return "松手直接汇报给「你（老板）」";
+      const target = botById.get(hoverNodeId);
+      const cross = target && (target.section?.trim() || "") !== (draggedBot.section?.trim() || "");
+      return `松手${cross ? "跨部门" : ""}汇报给「${target?.name ?? "上级"}」`;
+    }
+    if (hoverDeptKey !== null) return `松手移入「${deptLabelOfKey(hoverDeptKey)}」部门`;
+    return "拖到其他卡片改汇报线，或拖到部门框换部门";
+  })();
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
-      {/* Main interactive org chart surface */}
       <div
         ref={containerRef}
         data-opc-org-chart=""
@@ -447,6 +604,26 @@ export function OpcOrgChartView({
           backgroundPosition: `${pan.x + canvasOriginOffset.x}px ${pan.y + canvasOriginOffset.y}px`,
         }}
       >
+        {/* Flat-mode subtle general department pill so users can still rename/configure the default department */}
+        {!hasNamedDepartments && (
+          <div
+            onPointerDown={e => e.stopPropagation()}
+            className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full bg-panel/90 py-1 pl-3 pr-1 text-[12px] text-ink-secondary ring-[0.5px] ring-hairline/75 backdrop-blur-md"
+          >
+            <span className="font-medium text-ink">{generalDeptLabel}</span>
+            <span className="text-[11px] text-ink-tertiary">· 扁平组织</span>
+            <OpcDeptMenu
+              sectionKey=""
+              label={generalDeptLabel}
+              onEditTeam={onEditTeam}
+              onInstructions={onInstructions}
+              onMemory={onMemory}
+              onRenameGeneralDepartment={onRenameGeneralDepartment}
+              onDeleteTeam={onDeleteTeam}
+            />
+          </div>
+        )}
+
         {error && (
           <div role="alert" className="absolute left-5 right-5 top-4 z-20 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-xl bg-danger/12 px-4 py-2.5 text-[12.5px] text-danger backdrop-blur-sm">
             <span>{error}</span>
@@ -459,174 +636,211 @@ export function OpcOrgChartView({
         <div
           className="absolute left-0 top-0 origin-top-left"
           style={{
-            width: layout.block.width,
-            height: layout.block.height,
+            width: layout.width,
+            height: layout.height,
             transform: `translate3d(${canvasOriginOffset.x + pan.x}px, ${canvasOriginOffset.y + pan.y}px, 0) scale(${zoom})`,
           }}
         >
-          {/* SVG reporting tracks (solid rounded) & workflow handoff arcs (dashed) */}
+          {/* Department group containers (shown when custom departments exist) */}
+          {layout.deptBoxes.map(box => {
+            const label = deptLabelOfKey(box.sectionKey);
+            const dropping = hoverDeptKey === box.sectionKey && Boolean(activeDrag?.moved);
+            return (
+              <section
+                key={box.id}
+                data-org-dept={box.sectionKey}
+                style={{ left: box.x, top: box.y, width: box.width, height: box.height }}
+                className={cn(
+                  "absolute rounded-2xl border border-dashed bg-panel/35 transition-colors has-[details[open]]:z-20",
+                  dropping ? "border-accent bg-accent/[0.04] ring-2 ring-accent/25" : "border-hairline/75",
+                )}
+              >
+                <header className="flex h-9 items-center justify-between gap-2 px-3.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-[12px] font-semibold text-ink-secondary">{label}</span>
+                    <span className="text-[11px] tabular-nums text-ink-tertiary">{box.nodeIds.length}</span>
+                  </div>
+                  <OpcDeptMenu
+                    sectionKey={box.sectionKey}
+                    label={label}
+                    onEditTeam={onEditTeam}
+                    onInstructions={onInstructions}
+                    onMemory={onMemory}
+                    onRenameGeneralDepartment={onRenameGeneralDepartment}
+                    onDeleteTeam={onDeleteTeam}
+                  />
+                </header>
+                {box.empty && (
+                  <div className="flex h-[calc(100%-36px)] items-center justify-center px-5 pb-3 text-center text-[12px] text-ink-tertiary">
+                    拖员工卡片到这里加入「{label}」
+                  </div>
+                )}
+              </section>
+            );
+          })}
+
+          {/* Straight top-down reporting lines & dashed cross/same-department handoff arcs */}
           <svg
             aria-hidden="true"
-            width={Math.max(layout.block.width, 800)}
-            height={Math.max(layout.block.height, 600)}
+            width={Math.max(layout.width, 800)}
+            height={Math.max(layout.height, 600)}
             className="pointer-events-none absolute inset-0 overflow-visible"
           >
             <defs>
-              <marker id="opc-handoff-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--color-accent)" fillOpacity="0.7" />
+              <marker id="opc-handoff-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--color-accent)" fillOpacity="0.8" />
               </marker>
             </defs>
-            {layout.routes.map(route => (
+
+            {layout.edges.map(edge => (
               <path
-                key={`${route.parent.id}->${route.child.id}`}
-                d={route.roundedPath}
-                fill="none"
-                stroke="var(--color-hairline)"
-                strokeWidth="1.35"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ))}
-            {layout.handoffEdges.map(edge => (
-              <path
-                key={edge.id}
+                key={`${edge.parent.id}->${edge.child.id}`}
                 d={edge.path}
                 fill="none"
-                stroke="var(--color-accent)"
-                strokeOpacity="0.65"
-                strokeWidth="1.4"
-                strokeDasharray="5 4"
-                markerEnd="url(#opc-handoff-arrow)"
+                stroke={edge.crossDepartment ? "var(--color-ink-tertiary)" : "var(--color-hairline)"}
+                strokeWidth={edge.crossDepartment ? "1.5" : "1.35"}
+                strokeLinecap="square"
+                strokeLinejoin="miter"
               />
             ))}
+
+            {layout.handoffEdges.map(edge => {
+              const hovered = hoveredHandoffKey === edge.id;
+              return (
+                <g key={edge.id}>
+                  <path
+                    d={edge.d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth="16"
+                    className="pointer-events-auto cursor-pointer"
+                    onMouseEnter={() => setHoveredHandoffKey(edge.id)}
+                    onMouseLeave={() => setHoveredHandoffKey(prev => (prev === edge.id ? null : prev))}
+                    onClick={e => {
+                      e.stopPropagation();
+                      removeHandoffEdge(edge.fromId, edge.toId);
+                    }}
+                  />
+                  <path
+                    d={edge.d}
+                    fill="none"
+                    stroke="var(--color-accent)"
+                    strokeOpacity={hovered ? 0.95 : 0.7}
+                    strokeWidth={hovered ? "2.1" : "1.5"}
+                    strokeDasharray="5 4"
+                    markerEnd="url(#opc-handoff-arrow)"
+                  />
+                </g>
+              );
+            })}
+
+            {wiring && (
+              <path
+                d={`M ${wiring.startX} ${wiring.startY} C ${wiring.startX + 60} ${wiring.startY}, ${wiring.curX - 60} ${wiring.curY}, ${wiring.curX} ${wiring.curY}`}
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth="2"
+                strokeDasharray="6 4"
+              />
+            )}
           </svg>
 
-          {/* Org node cards */}
+          {/* Subtle cross-department reporting pills */}
+          {layout.edges.filter(e => e.crossDepartment).map(edge => (
+            <span
+              key={`xdept:${edge.parent.id}->${edge.child.id}`}
+              style={{ left: edge.midX, top: edge.midY }}
+              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-hairline/70 bg-app px-2 py-0.5 text-[10px] text-ink-tertiary"
+            >
+              跨部门
+            </span>
+          ))}
+
+          {/* Handoff midpoint badges (cross-department label + hover disconnect button) */}
+          {layout.handoffEdges.map(edge => {
+            const hovered = hoveredHandoffKey === edge.id;
+            return (
+              <button
+                key={`cut:${edge.id}`}
+                type="button"
+                aria-label="断开交接连线"
+                title="点击断开交接连线"
+                onMouseEnter={() => setHoveredHandoffKey(edge.id)}
+                onMouseLeave={() => setHoveredHandoffKey(prev => (prev === edge.id ? null : prev))}
+                onPointerDown={e => e.stopPropagation()}
+                onClick={e => {
+                  e.stopPropagation();
+                  removeHandoffEdge(edge.fromId, edge.toId);
+                }}
+                style={{ left: edge.midX, top: edge.midY }}
+                className={cn(
+                  "absolute -translate-x-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded-full border border-hairline/80 bg-panel px-2 py-0.5 text-[10px] text-accent shadow-xs transition-opacity hover:border-danger hover:text-danger",
+                  hovered || edge.crossDepartment ? "opacity-100" : "opacity-0 hover:opacity-100",
+                )}
+              >
+                {edge.crossDepartment && <span>跨部门交接</span>}
+                <X size={10} />
+              </button>
+            );
+          })}
+
+          {/* Boss & Employee cards */}
           {layout.nodes.map(node => {
             const isBoss = node.id === BOSS_ROOT_ID;
             const bot = isBoss ? null : botById.get(node.id) ?? null;
-            const cfg = bot ? org.nodes[bot.id] : undefined;
-            const selected = selectedBotId === node.id;
-            const isDraggingSource = activeDrag?.botId === node.id && activeDrag.moved;
-            const isDropTarget = hoverTargetId === node.id && Boolean(activeDrag?.moved);
-            const spend = bot ? (spendByBot[bot.id] ?? 0) : 0;
-
             return (
-              <div
+              <OpcOrgNodeCard
                 key={node.id}
-                data-org-node={node.id}
-                tabIndex={isBoss ? undefined : 0}
-                onPointerDown={(e) => handleNodePointerDown(e, node)}
-                onClick={(e) => {
-                  if (isBoss || justDraggedRef.current) return;
-                  e.stopPropagation();
-                  setSelectedBotId(node.id);
-                }}
-                onKeyDown={(e) => {
-                  if (!isBoss && (e.key === "Enter" || e.key === " ")) {
-                    e.preventDefault();
-                    setSelectedBotId(node.id);
-                  }
-                }}
-                style={{
-                  left: node.x,
-                  top: node.y,
-                  width: node.width,
-                  height: node.height,
-                }}
-                className={cn(
-                  "group absolute flex flex-col justify-between rounded-2xl px-3.5 py-3 transition-[box-shadow,transform,opacity] duration-150 select-none",
-                  isBoss
-                    ? "cursor-default bg-ink text-app shadow-sm"
-                    : "cursor-grab bg-panel/95 text-ink ring-[0.75px] ring-hairline/75 hover:ring-ink/40 active:cursor-grabbing",
-                  selected && !isBoss && "ring-2 ring-ink shadow-md",
-                  isDraggingSource && "opacity-35 ring-dashed ring-1 ring-ink/30",
-                  isDropTarget && !hoverInvalid && "scale-[1.03] ring-2 ring-accent shadow-lg",
-                  isDropTarget && hoverInvalid && "ring-2 ring-danger",
-                )}
-              >
-                <div className="flex items-center gap-2.5">
-                  {isBoss ? (
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-app/15">
-                      <Crown size={15} />
-                    </span>
-                  ) : bot ? (
-                    <BotAvatar bot={bot} size={32} motion="none" motionKey={0} animated={false} />
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[13.5px] font-semibold">{node.name}</span>
-                      {!isBoss && bot?.busy && (
-                        <span aria-label="工作中" className="size-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse" />
-                      )}
-                    </div>
-                    <div className={cn("truncate text-[11.5px]", isBoss ? "text-app/75" : "text-ink-tertiary")}>
-                      {node.role}
-                    </div>
-                  </div>
-                  {!isBoss && (
-                    <GripVertical size={13} className="shrink-0 text-ink-tertiary/40 transition-opacity group-hover:text-ink-tertiary" aria-hidden="true" />
-                  )}
-                </div>
-
-                {!isBoss && bot && (
-                  <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-ink-tertiary">
-                    <div className="flex items-center gap-1.5 truncate">
-                      {cfg?.requireBossApproval && (
-                        <span className="inline-flex items-center gap-0.5 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[10.5px] text-ink-secondary">
-                          <ShieldCheck size={10.5} /> 需拍板
-                        </span>
-                      )}
-                      {(cfg?.handoffToBotIds?.length ?? 0) > 0 && (
-                        <span className="inline-flex items-center gap-0.5 text-[10.5px] text-ink-tertiary">
-                          <GitBranch size={10.5} /> 交接 {cfg!.handoffToBotIds.length}
-                        </span>
-                      )}
-                    </div>
-                    <span className="shrink-0 tabular-nums">{formatCny(spend)}</span>
-                  </div>
-                )}
-              </div>
+                node={node}
+                isBoss={isBoss}
+                bot={bot}
+                cfg={bot ? org.nodes[bot.id] : undefined}
+                spend={bot ? (spendByBot[bot.id] ?? 0) : 0}
+                selected={selectedBotId === node.id}
+                tagged={!isBoss && taggedBotIds.includes(node.id)}
+                sentKey={!isBoss && sent?.botIds.includes(node.id) ? sent.key : undefined}
+                isDraggingSource={activeDrag?.botId === node.id && activeDrag.moved}
+                isDropTarget={hoverNodeId === node.id && Boolean(activeDrag?.moved)}
+                hoverInvalid={hoverInvalid}
+                isWireTarget={wiring?.hoverTargetId === node.id}
+                wiringActive={Boolean(wiring)}
+                hasNamedDepartments={hasNamedDepartments}
+                deptLabel={deptLabelOfKey(node.section)}
+                onPointerDown={e => handleNodePointerDown(e, node)}
+                onSelect={() => { if (!justDraggedRef.current) setSelectedBotId(node.id); }}
+                onHandoffPortDown={e => handleHandoffPortDown(e, node)}
+              />
             );
           })}
         </div>
 
-        {/* Floating drag ghost card (Pointer Events — rock-solid on macOS Electron) */}
+        {/* Floating drag ghost */}
         {activeDrag?.moved && draggedBot && (
           <div
             className="pointer-events-none fixed z-50"
-            style={{
-              left: activeDrag.clientX - activeDrag.offsetX,
-              top: activeDrag.clientY - activeDrag.offsetY,
-              width: activeDrag.width,
-            }}
+            style={{ left: activeDrag.clientX - activeDrag.offsetX, top: activeDrag.clientY - activeDrag.offsetY, width: activeDrag.width }}
           >
             <div className="flex items-center gap-2.5 rounded-2xl bg-panel px-3.5 py-3 text-ink shadow-2xl ring-2 ring-ink/70">
               <BotAvatar bot={draggedBot} size={30} motion="none" motionKey={0} animated={false} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13.5px] font-semibold">{draggedBot.name}</div>
-                <div className="truncate text-[11.5px] text-ink-tertiary">
-                  {hoverTargetName
-                    ? hoverInvalid
-                      ? "不能汇报给自己的下属"
-                      : `松手汇报给「${hoverTargetName}」`
-                    : "拖到老板或其他员工卡片上松手"}
-                </div>
+                <div className="truncate text-[11px] text-ink-tertiary">{dragHint}</div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Bottom-left minimal legend & zoom bar (anchored inside canvas, never overlaps sidebar) */}
+        {/* Bottom-left minimal legend & zoom bar (clears bottom MapComposer cleanly) */}
         <div
           onPointerDown={e => e.stopPropagation()}
-          className="absolute bottom-4 left-4 z-10 flex items-center gap-3 rounded-full bg-panel/90 px-3.5 py-1.5 text-[11.5px] text-ink-tertiary ring-[0.5px] ring-hairline/70 backdrop-blur-md"
+          style={{ bottom: bottomInset > 0 ? bottomInset + 10 : 16 }}
+          className="absolute left-4 z-10 flex items-center gap-3 rounded-full bg-panel/90 px-3.5 py-1.5 text-[11.5px] text-ink-tertiary ring-[0.5px] ring-hairline/70 backdrop-blur-md"
         >
           <span className="hidden items-center gap-1.5 sm:inline-flex">
-            <span className="h-px w-4 bg-hairline" /> 拖动员工卡片调整汇报线
+            <span className="h-px w-4 bg-hairline" /> 拖卡片改汇报/部门
           </span>
           <span className="hidden items-center gap-1.5 md:inline-flex">
-            <span className="h-px w-4 border-t border-dashed border-accent" /> 交接流水线
+            <span className="h-px w-4 border-t border-dashed border-accent" /> 右圆点拉交接线
           </span>
           <span className="hidden h-3 w-px bg-hairline/60 sm:inline-block" />
           <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.1).toFixed(2)))} aria-label="缩小" className="p-0.5 hover:text-ink"><Minus size={12.5} /></button>
@@ -636,156 +850,23 @@ export function OpcOrgChartView({
         </div>
       </div>
 
-      {/* Right minimal inspector drawer for selected employee */}
       {selectedBot && selectedCfg && (
-        <aside
-          aria-label={`${selectedBot.name} 岗位与汇报规则`}
-          className="flex w-[310px] shrink-0 flex-col border-l border-hairline/60 bg-panel"
-        >
-          <div className="flex items-center justify-between border-b border-hairline/50 px-5 py-4">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <BotAvatar bot={selectedBot} size={28} />
-              <div className="min-w-0">
-                <div className="truncate text-[14px] font-semibold text-ink">{selectedBot.name}</div>
-                <div className="text-[11.5px] text-ink-tertiary">岗位与工作流约束</div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedBotId(null)}
-              aria-label="关闭属性面板"
-              className="rounded-full p-1 text-ink-tertiary hover:bg-ink/[0.06] hover:text-ink"
-            >
-              <X size={15} />
-            </button>
-          </div>
-
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 text-[12.5px]">
-            <label className="block space-y-1.5">
-              <span className="text-[11.5px] font-medium text-ink-tertiary">岗位头衔</span>
-              <input
-                key={`title:${selectedBot.id}`}
-                defaultValue={selectedCfg.roleTitle ?? selectedBot.title ?? ""}
-                onBlur={e => {
-                  const val = e.target.value.trim();
-                  if (val !== (selectedCfg.roleTitle ?? "")) {
-                    void updateNode(selectedBot.id, { roleTitle: val });
-                  }
-                }}
-                placeholder="如：主编 / 选题侦察 / 视觉设计师"
-                className="h-8 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[12.5px] text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/40"
-              />
-            </label>
-
-            <label className="block space-y-1.5">
-              <span className="text-[11.5px] font-medium text-ink-tertiary">直属上级（汇报对象）</span>
-              <select
-                value={selectedCfg.reportsToBotId ?? BOSS_ROOT_ID}
-                disabled={saving}
-                onChange={e => {
-                  const val = e.target.value === BOSS_ROOT_ID ? null : e.target.value;
-                  void updateNode(selectedBot.id, { reportsToBotId: val });
-                }}
-                className="h-8 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[12.5px] text-ink outline-none focus:border-ink/40"
-              >
-                <option value={BOSS_ROOT_ID}>你（老板 · 直接汇报）</option>
-                {bots.filter(b => b.id !== selectedBot.id).map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-              <p className="text-[11.5px] leading-relaxed text-ink-tertiary">
-                开启「按架构约束」后，下属仅向上级汇报，上级可向下属派单与打回返工。
-              </p>
-            </label>
-
-            <div className="space-y-2 border-t border-hairline/40 pt-4">
-              <div className="text-[11.5px] font-medium text-ink-tertiary">流水线交接下一棒（可选）</div>
-              <p className="text-[11.5px] text-ink-tertiary">
-                勾选后在架构图绘制虚线箭头，允许本岗位完成后直接向其交接任务。
-              </p>
-              <div className="space-y-1 pt-1">
-                {bots.filter(b => b.id !== selectedBot.id).length === 0 ? (
-                  <p className="text-[12px] text-ink-tertiary">暂无其他员工可配置交接。</p>
-                ) : (
-                  bots.filter(b => b.id !== selectedBot.id).map(candidate => {
-                    const checked = selectedCfg.handoffToBotIds.includes(candidate.id);
-                    return (
-                      <label
-                        key={candidate.id}
-                        className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-ink/[0.04]"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <BotAvatar bot={candidate} size={20} motion="none" motionKey={0} animated={false} />
-                          <span className="truncate text-[12.5px] text-ink">{candidate.name}</span>
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={saving}
-                          onChange={e => {
-                            const next = e.target.checked
-                              ? [...selectedCfg.handoffToBotIds, candidate.id]
-                              : selectedCfg.handoffToBotIds.filter(id => id !== candidate.id);
-                            void updateNode(selectedBot.id, { handoffToBotIds: next });
-                          }}
-                          className="size-3.5 rounded accent-ink"
-                        />
-                      </label>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-3 border-t border-hairline/40 pt-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[12.5px] font-medium text-ink">产物须老板拍板</div>
-                  <div className="text-[11.5px] text-ink-tertiary">关键产出提醒先送老板台审核</div>
-                </div>
-                <Switch
-                  checked={Boolean(selectedCfg.requireBossApproval)}
-                  disabled={saving}
-                  onClick={() => void updateNode(selectedBot.id, { requireBossApproval: !selectedCfg.requireBossApproval })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[12.5px] font-medium text-ink">允许跨岗咨询</div>
-                  <div className="text-[11.5px] text-ink-tertiary">强约束下仍允许 consult 轻量询问</div>
-                </div>
-                <Switch
-                  checked={selectedCfg.allowCrossConsult !== false}
-                  disabled={saving}
-                  onClick={() => void updateNode(selectedBot.id, { allowCrossConsult: selectedCfg.allowCrossConsult === false })}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 border-t border-hairline/50 px-5 py-3.5">
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "select", id: selectedBot.id })}
-              className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full bg-ink/[0.06] text-[12px] font-medium text-ink hover:bg-ink/[0.11]"
-            >
-              <MessageSquare size={13} /> 对话
-            </button>
-            <button
-              type="button"
-              onClick={() => setLabBot(selectedBot)}
-              className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full bg-ink text-[12px] font-medium text-app hover:opacity-85"
-            >
-              <FlaskConical size={13} /> 能力实验室
-            </button>
-          </div>
-        </aside>
+        <OpcOrgInspector
+          bot={selectedBot}
+          cfg={selectedCfg}
+          bots={bots}
+          sectionOptions={sectionOptions}
+          generalDeptLabel={generalDeptLabel}
+          saving={saving}
+          onClose={() => setSelectedBotId(null)}
+          onUpdateNode={updateNode}
+          onMoveDepartment={handleMoveDept}
+          onToggleChief={handleToggleChief}
+          onOpenLab={setLabBot}
+        />
       )}
 
-      {labBot && (
-        <OpcSkillStudioModal bot={labBot} open onClose={() => setLabBot(null)} />
-      )}
+      {labBot && <OpcSkillStudioModal bot={labBot} open onClose={() => setLabBot(null)} />}
     </div>
   );
 }

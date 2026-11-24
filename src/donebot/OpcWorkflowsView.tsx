@@ -221,7 +221,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
           <div>
             <h2 className="text-[22px] font-semibold tracking-tight text-ink">固定与定时工作流</h2>
             <p className="mt-1 text-[13px] text-ink-secondary">
-              在无限画布上通过节点连线编排多员工固定流水线：定时触发或一键启动，关键环节自动暂停等老板拍板。
+              跨部门固定工作流优先于组织架构约束直接执行；可在画布连线编排，或直接让主协调 Bot 对话创建。
             </p>
           </div>
           <button

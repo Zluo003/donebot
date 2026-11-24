@@ -244,3 +244,307 @@ export const DEFAULT_ORG_GEOMETRY: ChartGeometry = {
   fitZoomMax: 1.05,
   sparseFitZoomMax: 1.05,
 };
+
+// --- Classic Top-Down Center-to-Center Straight Orthogonal Org Layout ---
+
+export interface TopDownOrgInputNode {
+  id: string;
+  name: string;
+  role: string;
+  status: string;
+  /** Department key (`""` for default/general department, non-empty for named department). */
+  section: string;
+  reports: TopDownOrgInputNode[];
+}
+
+export interface TopDownLayoutNode {
+  id: string;
+  name: string;
+  role: string;
+  status: string;
+  section: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depth: number;
+  children: TopDownLayoutNode[];
+}
+
+export interface TopDownReportingEdge {
+  parent: TopDownLayoutNode;
+  child: TopDownLayoutNode;
+  path: string;
+  midX: number;
+  midY: number;
+  crossDepartment: boolean;
+}
+
+export interface DepartmentClusterBox {
+  id: string;
+  sectionKey: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  nodeIds: string[];
+  empty: boolean;
+}
+
+const TD_BOSS_W = 240;
+const TD_BOSS_H = 84;
+const TD_BOT_W = 236;
+const TD_BOT_H = 116;
+const TD_SIBLING_GAP = 28;
+const TD_DEPT_GAP = 64;
+const TD_LEVEL_GAP = 86;
+const TD_PAD_X = 64;
+const TD_PAD_Y = 48;
+
+interface MeasuredSubtree {
+  node: TopDownLayoutNode;
+  width: number;
+  height: number;
+}
+
+function shiftTopDown(node: TopDownLayoutNode, dx: number, dy: number): void {
+  node.x += dx;
+  node.y += dy;
+  for (const child of node.children) shiftTopDown(child, dx, dy);
+}
+
+/**
+ * Lays out a top-down organization chart where every parent sits centered above its children
+ * and siblings in the same department stay adjacent with extra spacing across departments.
+ */
+export function layoutTopDownOrgChart(root: TopDownOrgInputNode): {
+  root: TopDownLayoutNode;
+  nodes: TopDownLayoutNode[];
+  edges: TopDownReportingEdge[];
+  width: number;
+  height: number;
+} {
+  const build = (input: TopDownOrgInputNode, depth: number): MeasuredSubtree => {
+    const width = depth === 0 ? TD_BOSS_W : TD_BOT_W;
+    const height = depth === 0 ? TD_BOSS_H : TD_BOT_H;
+
+    // Group siblings by section while preserving first-seen department order.
+    const sectionOrder: string[] = [];
+    for (const child of input.reports) {
+      if (!sectionOrder.includes(child.section)) sectionOrder.push(child.section);
+    }
+    const orderedReports = [...input.reports].sort(
+      (a, b) => sectionOrder.indexOf(a.section) - sectionOrder.indexOf(b.section),
+    );
+
+    const measuredChildren = orderedReports.map(child => build(child, depth + 1));
+
+    if (measuredChildren.length === 0) {
+      return {
+        node: {
+          id: input.id,
+          name: input.name,
+          role: input.role,
+          status: input.status,
+          section: input.section,
+          x: 0,
+          y: 0,
+          width,
+          height,
+          depth,
+          children: [],
+        },
+        width,
+        height,
+      };
+    }
+
+    let cursorX = 0;
+    let maxChildHeight = 0;
+    measuredChildren.forEach((child, idx) => {
+      if (idx > 0) {
+        const prevSec = measuredChildren[idx - 1]!.node.section;
+        cursorX += prevSec === child.node.section ? TD_SIBLING_GAP : TD_DEPT_GAP;
+      }
+      shiftTopDown(child.node, cursorX, height + TD_LEVEL_GAP);
+      cursorX += child.width;
+      maxChildHeight = Math.max(maxChildHeight, child.height);
+    });
+
+    const childrenWidth = cursorX;
+    const firstCenter = measuredChildren[0]!.node.x + measuredChildren[0]!.node.width / 2;
+    const lastChild = measuredChildren[measuredChildren.length - 1]!.node;
+    const lastCenter = lastChild.x + lastChild.width / 2;
+    const targetParentX = (firstCenter + lastCenter) / 2 - width / 2;
+
+    let parentX = targetParentX;
+    let blockWidth = Math.max(childrenWidth, parentX + width);
+    if (parentX < 0) {
+      const shiftRight = -parentX;
+      measuredChildren.forEach(c => shiftTopDown(c.node, shiftRight, 0));
+      parentX = 0;
+      blockWidth = Math.max(width, childrenWidth + shiftRight);
+    }
+
+    return {
+      node: {
+        id: input.id,
+        name: input.name,
+        role: input.role,
+        status: input.status,
+        section: input.section,
+        x: Math.round(parentX),
+        y: 0,
+        width,
+        height,
+        depth,
+        children: measuredChildren.map(c => c.node),
+      },
+      width: Math.round(blockWidth),
+      height: Math.round(height + TD_LEVEL_GAP + maxChildHeight),
+    };
+  };
+
+  const tree = build(root, 0);
+  shiftTopDown(tree.node, TD_PAD_X, TD_PAD_Y);
+
+  const nodes: TopDownLayoutNode[] = [];
+  const edges: TopDownReportingEdge[] = [];
+  const walk = (node: TopDownLayoutNode) => {
+    nodes.push(node);
+    const parentCx = Math.round(node.x + node.width / 2);
+    const parentBottom = Math.round(node.y + node.height);
+    for (const child of node.children) {
+      const childCx = Math.round(child.x + child.width / 2);
+      const childTop = Math.round(child.y);
+      const busY = Math.round(parentBottom + (childTop - parentBottom) / 2);
+      const straight = Math.abs(parentCx - childCx) <= 1;
+      const path = straight
+        ? `M ${childCx} ${parentBottom} L ${childCx} ${childTop}`
+        : `M ${parentCx} ${parentBottom} L ${parentCx} ${busY} L ${childCx} ${busY} L ${childCx} ${childTop}`;
+      edges.push({
+        parent: node,
+        child,
+        path,
+        midX: straight ? childCx : Math.round((parentCx + childCx) / 2),
+        midY: busY,
+        crossDepartment: node.depth > 0 && node.section !== child.section,
+      });
+      walk(child);
+    }
+  };
+  walk(tree.node);
+
+  return {
+    root: tree.node,
+    nodes,
+    edges,
+    width: tree.width + TD_PAD_X * 2,
+    height: tree.height + TD_PAD_Y * 2,
+  };
+}
+
+/**
+ * Computes clean non-overlapping visual boxes around contiguous department clusters
+ * plus drop-zone cards for any currently empty named departments.
+ */
+export function computeDepartmentClusters(
+  nodes: readonly TopDownLayoutNode[],
+  allSectionKeys: readonly string[],
+  layoutWidth: number,
+): DepartmentClusterBox[] {
+  const employeeNodes = nodes.filter(n => n.depth > 0);
+  const padX = 18;
+  const padTop = 38;
+  const padBottom = 18;
+
+  const overlapsForeign = (
+    box: { x: number; y: number; width: number; height: number },
+    sectionKey: string,
+  ) => nodes.some(n => {
+    if (n.depth > 0 && n.section === sectionKey) return false;
+    return n.x < box.x + box.width + 6
+      && n.x + n.width > box.x - 6
+      && n.y < box.y + box.height + 6
+      && n.y + n.height > box.y - 6;
+  });
+
+  const makeBox = (members: TopDownLayoutNode[]) => {
+    const minX = Math.min(...members.map(n => n.x)) - padX;
+    const minY = Math.min(...members.map(n => n.y)) - padTop;
+    const maxX = Math.max(...members.map(n => n.x + n.width)) + padX;
+    const maxY = Math.max(...members.map(n => n.y + n.height)) + padBottom;
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  };
+
+  const boxes: DepartmentClusterBox[] = [];
+  const grouped = new Map<string, TopDownLayoutNode[]>();
+  for (const node of employeeNodes) {
+    const list = grouped.get(node.section) ?? [];
+    list.push(node);
+    grouped.set(node.section, list);
+  }
+
+  for (const [sectionKey, members] of grouped.entries()) {
+    // Try single unified box first; if cross-department reparenting places a foreign node inside,
+    // split greedily into largest non-overlapping clusters so boxes never clash.
+    const fullBox = makeBox(members);
+    if (!overlapsForeign(fullBox, sectionKey)) {
+      boxes.push({
+        id: `dept:${sectionKey || "__general__"}:0`,
+        sectionKey,
+        ...fullBox,
+        nodeIds: members.map(m => m.id),
+        empty: false,
+      });
+      continue;
+    }
+
+    const clusters: TopDownLayoutNode[][] = [];
+    const sorted = [...members].sort((a, b) => a.x - b.x || a.y - b.y);
+    for (const member of sorted) {
+      let placed = false;
+      for (const cluster of clusters) {
+        const candidate = [...cluster, member];
+        if (!overlapsForeign(makeBox(candidate), sectionKey)) {
+          cluster.push(member);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) clusters.push([member]);
+    }
+    clusters.forEach((cluster, idx) => {
+      const box = makeBox(cluster);
+      boxes.push({
+        id: `dept:${sectionKey || "__general__"}:${idx}`,
+        sectionKey,
+        ...box,
+        nodeIds: cluster.map(m => m.id),
+        empty: false,
+      });
+    });
+  }
+
+  // Place empty named departments neatly to the right of the tree so users can drop bots into them.
+  let emptyX = Math.max(layoutWidth - TD_PAD_X + 24, TD_PAD_X + TD_BOSS_W + 64);
+  const emptyY = TD_PAD_Y + TD_BOSS_H + TD_LEVEL_GAP - padTop;
+  for (const sectionKey of allSectionKeys) {
+    if (!sectionKey || grouped.has(sectionKey)) continue;
+    const width = TD_BOT_W + padX * 2;
+    const height = TD_BOT_H + padTop + padBottom;
+    boxes.push({
+      id: `dept:${sectionKey}:empty`,
+      sectionKey,
+      x: emptyX,
+      y: emptyY,
+      width,
+      height,
+      nodeIds: [],
+      empty: true,
+    });
+    emptyX += width + 32;
+  }
+
+  return boxes;
+}

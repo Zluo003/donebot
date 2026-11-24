@@ -14,11 +14,13 @@ vi.mock("@/state/api", () => ({ api: mockApi }));
 vi.mock("@/state/inbox", () => ({ closeInbox: vi.fn() }));
 vi.mock("@/components/DesktopCapabilities", () => ({ useCaptionChrome: () => ({ dragProps: {} }) }));
 vi.mock("@/state/store", () => ({
+  openBot: vi.fn(),
   useStore: () => ({
     state: {
       activeView: "boss",
-      bots: [{ id: "b1", name: "封面视觉", color: "blue", hidden: false }],
+      bots: [{ id: "b1", name: "封面视觉", color: "blue", hidden: false, modelSelection: { instanceId: "i1", model: "m1" } }],
       groups: [],
+      instances: [],
       config: { donebot: { enabled: true, authenticated: true } },
     },
     dispatch: mockDispatch,
@@ -31,7 +33,13 @@ const { OpcBossSidebarRow } = await import("./OpcBossSidebarRow");
 const { OpcOrgChartView } = await import("./OpcOrgChartView");
 const { OpcWorkflowsView } = await import("./OpcWorkflowsView");
 const { OpcNativeDialog } = await import("./paperclip-ui");
-const { layoutOrganization, routeReportingEdges, DEFAULT_ORG_GEOMETRY } = await import("./paperclip-org-layout");
+const {
+  layoutOrganization,
+  routeReportingEdges,
+  layoutTopDownOrgChart,
+  computeDepartmentClusters,
+  DEFAULT_ORG_GEOMETRY,
+} = await import("./paperclip-org-layout");
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -209,6 +217,34 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     const edges = routeReportingEdges(block.roots, DEFAULT_ORG_GEOMETRY.gap);
     expect(edges.length).toBe(2);
 
+    // Top-down straight center-to-center orthogonal layout & department clusters
+    const topDown = layoutTopDownOrgChart({
+      id: "__boss__",
+      name: "你（老板）",
+      role: "最终拍板",
+      status: "owner",
+      section: "",
+      reports: [
+        {
+          id: "b1",
+          name: "多宝",
+          role: "主编",
+          status: "idle",
+          section: "",
+          reports: [
+            { id: "b2", name: "视觉", role: "设计师", status: "idle", section: "设计部", reports: [] },
+          ],
+        },
+      ],
+    });
+    expect(topDown.edges.length).toBe(2);
+    // Single child directly beneath parent yields a pure straight vertical center line (M x y1 L x y2)
+    expect(topDown.edges[0]!.path).toMatch(/^M \d+ \d+ L \d+ \d+$/);
+    expect(topDown.edges[1]!.crossDepartment).toBe(true);
+    const clusters = computeDepartmentClusters(topDown.nodes, ["", "设计部", "空部门"], topDown.width);
+    expect(clusters.some(c => c.sectionKey === "设计部")).toBe(true);
+    expect(clusters.some(c => c.sectionKey === "空部门" && c.empty)).toBe(true);
+
     mockApi.mockImplementation(async (path) => {
       if (path.startsWith("/api/donebot/opc/spend")) return { available: true, days: 30, totalCost: 0, llmCost: 0, imageCost: 0, videoCost: 0, musicCost: 0, bots: [] };
       if (path === "/api/donebot/opc/workflows") return { workflows: [], runs: [] };
@@ -220,11 +256,17 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     root = createRoot(container);
 
     const bots = [
-      { id: "b1", name: "多宝", color: "amber", hidden: false },
-      { id: "b2", name: "视觉", color: "blue", hidden: false },
+      { id: "b1", name: "多宝", color: "amber", hidden: false, chiefOfStaff: true, section: "", modelSelection: { instanceId: "i1", model: "deepseek-flash" } },
+      { id: "b2", name: "视觉", color: "blue", hidden: false, section: "设计部", modelSelection: { instanceId: "i1", model: "gemini" } },
+    ] as never;
+    const sections = [
+      { key: "", name: "通用", chiefs: [bots[0]], members: [] },
+      { key: "设计部", name: "设计部", chiefs: [], members: [bots[1]] },
     ] as never;
     const org = {
       enforcementMode: "enforced" as const,
+      allowChiefCrossDispatch: false,
+      generalDepartmentName: "总控中心",
       nodes: {
         b1: { botId: "b1", reportsToBotId: null, handoffToBotIds: ["b2"], roleTitle: "总控主编" },
         b2: { botId: "b2", reportsToBotId: "b1", handoffToBotIds: [], requireBossApproval: true },
@@ -233,16 +275,31 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     };
 
     await act(async () => {
-      root!.render(createElement(OpcOrgChartView, { bots, org, onOrgChange: vi.fn() }));
+      root!.render(createElement(OpcOrgChartView, {
+        bots,
+        sections,
+        org,
+        onOrgChange: vi.fn(),
+        onMoveToDepartment: vi.fn(async () => {}),
+        onToggleChief: vi.fn(async () => {}),
+        onRenameGeneralDepartment: vi.fn(),
+        onEditTeam: vi.fn(),
+        onInstructions: vi.fn(),
+        onMemory: vi.fn(),
+        onDeleteTeam: vi.fn(),
+      }));
     });
     expect(container.textContent).toContain("你（老板）");
     expect(container.textContent).toContain("总控主编");
-    expect(container.textContent).toContain("需拍板");
+    expect(container.textContent).toContain("总控中心");
+    expect(container.textContent).toContain("设计部");
+    expect(container.textContent).toContain("跨部门交接");
 
     // Click an employee node to open the right inspector drawer
     const empCard = container.querySelector<HTMLElement>('[data-org-node="b1"]')!;
     await act(async () => { empCard.click(); });
-    expect(container.textContent).toContain("岗位与工作流约束");
+    expect(container.textContent).toContain("岗位、部门与协作规则");
+    expect(container.textContent).toContain("设为本部门主 Bot");
 
     // Workflows list -> open full-workspace infinite-canvas node-graph editor
     mockApi.mockImplementation(async (path, init) => {

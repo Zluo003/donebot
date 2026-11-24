@@ -201,6 +201,17 @@ export const opcApi = {
     });
   },
 
+  updateOrgSettings(patch: {
+    enforcementMode?: OpcOrgEnforcementMode;
+    allowChiefCrossDispatch?: boolean;
+    generalDepartmentName?: string | null;
+  }): Promise<OpcOrgChartState> {
+    return api<OpcOrgChartState>("/api/donebot/opc/org/mode", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+  },
+
   saveOrgNode(
     botId: string,
     patch: Partial<Omit<OpcOrgNodeConfig, "botId">>,

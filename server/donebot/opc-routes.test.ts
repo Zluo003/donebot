@@ -7,6 +7,8 @@ import type { BotRecord, Store } from "../store.ts";
 import type { DoneBotGateway } from "./gateway.ts";
 import { DoneBotMarketInstallStore, attachMarketHeaders, MARKET_BOT_ID_HEADER, MARKET_INSTALL_HEADER } from "./market-installs.ts";
 import { createDoneBotOpcRoutes } from "./opc-routes.ts";
+import { createDoneBotOrgWorkflowRoutes, DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
+import { BOSS_FORMAL_REPORT_RULE } from "./opc-org-policy.ts";
 import { DoneBotOpcStore } from "./opc-store.ts";
 import { evaluateRewakeThrottle } from "./paperclip-rewake-throttle.ts";
 
@@ -298,5 +300,162 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     expect(ovData.spend.bots[0]?.botName).toBe("主编小墨");
 
     handler.stopScheduler();
+  });
+
+  it("unifies workflow gates and multi-file reports into single-click Boss formal reports and injects global formal reporting rules", async () => {
+    const dir = makeTempDir();
+    const opcStore = new DoneBotOpcStore(join(dir, "opc.json"));
+    const orgStore = new DoneBotOrgWorkflowStore(join(dir, "org.json"));
+
+    const bot: BotRecord = {
+      id: "bot-1",
+      name: "船长",
+      title: "独立站负责人",
+      section: "独立站",
+      color: "purple",
+      threadId: "thread-wf",
+      tasks: [{ threadId: "thread-wf", title: "独立站周报", createdAt: 1000 } as NonNullable<BotRecord["tasks"]>[number]],
+      modelSelection: { instanceId: "donebot", model: "deepseek-chat" },
+    } as BotRecord;
+
+    const now = Date.now();
+    const messages = [
+      { id: "m-req", role: "user", kind: "text", text: "请汇总本周独立站复盘并提交老板审批", at: now - 5_000 },
+      {
+        id: "m-wf",
+        role: "bot",
+        kind: "text",
+        text: "# 独立站第 47 周经营复盘\n\n## 核心结论\n\n本周 GMV 增长 28%，建议通过下周投放加码。",
+        at: now - 1_000,
+        requestMessageId: "m-req",
+        attachments: [
+          { kind: "file", path: "/tmp/weekly-report.md", name: "weekly-report.md", mime: "text/markdown" },
+          { kind: "image", path: "/tmp/gmv-chart.png", name: "gmv-chart.png", mime: "image/png" },
+        ],
+      },
+    ];
+
+    const store = {
+      bots: [bot],
+      bot: (id: string) => (id === bot.id ? bot : undefined),
+      messagesFor: () => messages,
+    } as unknown as Store;
+
+    // 1. Global Boss formal reporting rule is always injected even before configuring org nodes.
+    const defaultPrompt = orgStore.orgPromptForBot(bot.id, [bot]);
+    expect(defaultPrompt).toContain(BOSS_FORMAL_REPORT_RULE);
+
+    // 2. Create a gated workflow run whose step produced the two attachments above.
+    const wf = orgStore.createWorkflow({
+      name: "独立站周报流程",
+      steps: [{ name: "汇总复盘", botId: bot.id, instruction: "整理本周数据", approvalGate: true }],
+    });
+    const run = orgStore.saveWorkflowRun({
+      id: "run-1",
+      workflowId: wf.id,
+      workflowName: wf.name,
+      trigger: "manual",
+      variables: {},
+      status: "waiting_approval",
+      currentStepIndex: 0,
+      stepResults: [{
+        stepId: wf.steps[0]!.id,
+        stepName: "汇总复盘",
+        botId: bot.id,
+        botName: bot.name,
+        threadId: "thread-wf",
+        status: "waiting_approval",
+        output: "# 独立站第 47 周经营复盘\n\n## 核心结论\n\n本周 GMV 增长 28%，建议通过下周投放加码。",
+        startedAt: now - 4_000,
+        finishedAt: now - 500,
+      }],
+      startedAt: now - 4_000,
+    });
+
+    const gateway = {
+      collabCtx: () => ({
+        origin: "https://donebot.cn",
+        epoch: () => 1,
+        checkEpoch: () => {},
+        controllers: new Set(),
+        validSession: async () => ({ mode: "user" as const, accessToken: "jwt-123" }),
+        fetcher: async () => new Response(JSON.stringify({ code: 0, data: { days: 30, total_cost: 0, llm_cost: 0, image_cost: 0, video_cost: 0, music_cost: 0, bots: [] } }), { status: 200 }),
+        readGatewayJson: async (r: Response) => r.json(),
+      }),
+    } as unknown as DoneBotGateway;
+
+    const opcHandler = createDoneBotOpcRoutes({
+      opcStore,
+      orgStore,
+      gateway,
+      store,
+      listBotSkills: () => [],
+      readBotSkill: () => null,
+      installBotSkill: () => ({ name: "x", enabled: true }) as never,
+      setBotSkillEnabled: () => ({ name: "x", enabled: true }) as never,
+      removeBotSkill: () => {},
+      generateBotText: async () => "",
+      startTurn: vi.fn(),
+      broadcast: vi.fn(),
+      publicBot: (b) => b,
+      startScheduler: false,
+    });
+    const wfHandler = createDoneBotOrgWorkflowRoutes({ orgStore, opcStore, store, enableScheduler: false });
+
+    // Overview bundles the workflow gate + both attachments into ONE report (no duplicate artifact items).
+    const before = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
+    expect(before.status).toBe(200);
+    const beforeData = before.payload as { pendingReportCount: number; pendingArtifactCount: number; pendingReports: Array<{ id: string; source: string; title: string; attachments: Array<{ name: string }>; artifactIds: string[] }> };
+    expect(beforeData.pendingReportCount).toBe(1);
+    expect(beforeData.pendingArtifactCount).toBe(0);
+    expect(beforeData.pendingReports[0]?.source).toBe("workflow");
+    expect(beforeData.pendingReports[0]?.title).toBe("独立站第 47 周经营复盘");
+    expect(beforeData.pendingReports[0]?.attachments.map(a => a.name).sort()).toEqual(["gmv-chart.png", "weekly-report.md"]);
+
+    // Single approve on the workflow decision approves both the workflow gate and all attached artifacts atomically.
+    const decide = await callRoute(wfHandler as unknown as ReturnType<typeof createDoneBotOpcRoutes>, "POST", `/api/donebot/opc/workflow-runs/${run.id}/decision`, { action: "approve" });
+    expect(decide.status).toBe(200);
+
+    const after = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
+    const afterData = after.payload as { pendingReportCount: number; pendingArtifactCount: number };
+    expect(afterData.pendingReportCount).toBe(0);
+    expect(afterData.pendingArtifactCount).toBe(0);
+
+    // Standalone multi-file bot report (outside workflow) also bundles into 1 item and resolves in 1 click via /reports/review.
+    const msg2At = now + 60_000;
+    messages.push({
+      id: "m-standalone",
+      role: "bot",
+      kind: "text",
+      text: "# 品牌视觉升级方案\n\n## 核心结论\n\n已完成主视觉与规范手册两份交付物。",
+      at: msg2At,
+      requestMessageId: "m-req",
+      attachments: [
+        { kind: "file", path: "/tmp/brand-guide.md", name: "brand-guide.md", mime: "text/markdown" },
+        { kind: "image", path: "/tmp/kv.png", name: "kv.png", mime: "image/png" },
+      ],
+    });
+
+    const standaloneOv = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
+    const standaloneData = standaloneOv.payload as { pendingReportCount: number; pendingReports: Array<{ id: string; source: string; title: string; artifactIds: string[]; attachments: Array<{ name: string }> }> };
+    expect(standaloneData.pendingReportCount).toBe(1);
+    expect(standaloneData.pendingReports[0]?.source).toBe("bot_report");
+    expect(standaloneData.pendingReports[0]?.title).toBe("品牌视觉升级方案");
+    expect(standaloneData.pendingReports[0]?.artifactIds).toHaveLength(2);
+
+    const batchApprove = await callRoute(opcHandler, "POST", "/api/donebot/opc/reports/review", {
+      botId: bot.id,
+      status: "approved",
+      artifactIds: standaloneData.pendingReports[0]!.artifactIds,
+      threadId: "thread-wf",
+      reportTitle: "品牌视觉升级方案",
+    });
+    expect(batchApprove.status).toBe(200);
+    expect((batchApprove.payload as { reviewedCount: number }).reviewedCount).toBe(2);
+
+    const finalOv = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
+    expect((finalOv.payload as { pendingReportCount: number }).pendingReportCount).toBe(0);
+
+    opcHandler.stopScheduler();
   });
 });

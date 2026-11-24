@@ -14,16 +14,13 @@ import {
   Image as ImageIcon,
   Loader2,
   Music,
-  Pencil,
-  Plus,
   RotateCcw,
-  Target,
   X,
 } from "lucide-react";
-import type { OpcArtifactItem, OpcArtifactReviewStatus, OpcProjectGoal } from "../../shared/donebot-opc";
+import type { OpcArtifactItem, OpcArtifactReviewStatus } from "../../shared/donebot-opc";
 import { cn } from "@/lib/cn";
 import { useStore, type Bot } from "@/state/store";
-import { opcApi } from "./opc-api";
+import { notifyOpcOverviewChanged, opcApi } from "./opc-api";
 import { OpcSkillStudioModal } from "./OpcSkillStudioModal";
 import { OpcNativeDialog } from "./paperclip-ui";
 import {
@@ -100,6 +97,7 @@ function ArtifactLightbox({
         dispatchRevision: status === "changes_requested",
       });
       clearReviseDraft(draftKey);
+      notifyOpcOverviewChanged();
       onReviewed(current.id, status, status === "changes_requested" ? draft.reason.trim() : undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交审批失败。");
@@ -266,14 +264,6 @@ function ArtifactLightbox({
 
 export function OpcArtifactsPane({ bot }: { bot: Bot }) {
   const { dispatch } = useStore();
-  const [goal, setGoal] = useState<OpcProjectGoal | null>(null);
-  const [editingGoal, setEditingGoal] = useState(false);
-  const [goalTitle, setGoalTitle] = useState("");
-  const [goalObjective, setGoalObjective] = useState("");
-  const [goalRedlines, setGoalRedlines] = useState("");
-  const [goalDeliverables, setGoalDeliverables] = useState("");
-  const [savingGoal, setSavingGoal] = useState(false);
-
   const [artifacts, setArtifacts] = useState<OpcArtifactItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | OpcArtifactReviewStatus>("all");
@@ -283,13 +273,7 @@ export function OpcArtifactsPane({ bot }: { bot: Bot }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [goals, items] = await Promise.all([
-        opcApi.listGoals(bot.id),
-        opcApi.listArtifacts({ botId: bot.id }),
-      ]);
-      const active = goals.find(g => g.status === "active") ?? goals[0] ?? null;
-      setGoal(active);
-      setArtifacts(items);
+      setArtifacts(await opcApi.listArtifacts({ botId: bot.id }));
     } catch {
       // Quiet degrade when offline.
     } finally {
@@ -301,175 +285,13 @@ export function OpcArtifactsPane({ bot }: { bot: Bot }) {
     void load();
   }, [load, bot.messages]);
 
-  const openGoalEditor = () => {
-    setGoalTitle(goal?.title ?? "");
-    setGoalObjective(goal?.objective ?? "");
-    setGoalRedlines((goal?.redlines ?? []).join("\n"));
-    setGoalDeliverables((goal?.deliverables ?? []).map(d => d.title).join("\n"));
-    setEditingGoal(true);
-  };
-
-  const saveGoal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!goalTitle.trim()) return;
-    setSavingGoal(true);
-    try {
-      const prevMap = new Map((goal?.deliverables ?? []).map(d => [d.title, d]));
-      const deliverables = goalDeliverables
-        .split(/\r?\n/)
-        .map(s => s.trim())
-        .filter(Boolean)
-        .map(title => {
-          const prev = prevMap.get(title);
-          return prev ? { id: prev.id, title, done: prev.done, artifactId: prev.artifactId } : { title, done: false };
-        });
-      const saved = await opcApi.saveGoal({
-        ...(goal ? { id: goal.id } : {}),
-        botId: bot.id,
-        title: goalTitle.trim(),
-        objective: goalObjective.trim(),
-        redlines: goalRedlines.split(/\r?\n/).map(s => s.trim()).filter(Boolean),
-        deliverables,
-        status: "active",
-      });
-      setGoal(saved);
-      setEditingGoal(false);
-    } finally {
-      setSavingGoal(false);
-    }
-  };
-
   const filtered = useMemo(
     () => (filter === "all" ? artifacts : artifacts.filter(a => a.reviewStatus === filter)),
     [artifacts, filter],
   );
 
-  const doneCount = goal ? goal.deliverables.filter(d => d.done).length : 0;
-  const totalCount = goal ? goal.deliverables.length : 0;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 pb-5 pt-2">
-      {/* Collapsible Project Goal Card (Goal Ancestry) + Skill Studio Entry */}
-      <section aria-label="项目目标卡" className="rounded-xl bg-card/85 ring-[0.5px] ring-hairline/60">
-        {editingGoal ? (
-          <form onSubmit={saveGoal} className="space-y-2.5 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[12.5px] font-medium text-ink">设定项目目标卡</span>
-              <button
-                type="button"
-                onClick={() => setEditingGoal(false)}
-                className="text-[11.5px] text-ink-tertiary hover:text-ink"
-              >
-                取消
-              </button>
-            </div>
-            <input
-              type="text"
-              required
-              value={goalTitle}
-              onChange={(e) => setGoalTitle(e.target.value)}
-              placeholder="项目标题（如：12月小红书增长冲刺）"
-              className="w-full rounded-lg border border-hairline/70 bg-panel px-2.5 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
-            />
-            <textarea
-              rows={2}
-              value={goalObjective}
-              onChange={(e) => setGoalObjective(e.target.value)}
-              placeholder="最终目标（自动注入每次对话，防止偏航）"
-              className="w-full resize-none rounded-lg border border-hairline/70 bg-panel px-2.5 py-1.5 text-[12px] text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
-            />
-            <textarea
-              rows={2}
-              value={goalRedlines}
-              onChange={(e) => setGoalRedlines(e.target.value)}
-              placeholder="硬性红线（每行一条，如：严禁水印 / 严禁夸大宣传）"
-              className="w-full resize-none rounded-lg border border-hairline/70 bg-panel px-2.5 py-1.5 text-[12px] text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
-            />
-            <textarea
-              rows={2}
-              value={goalDeliverables}
-              onChange={(e) => setGoalDeliverables(e.target.value)}
-              placeholder="交付清单（每行一项，如：3 套爆款标题 + 封面图）"
-              className="w-full resize-none rounded-lg border border-hairline/70 bg-panel px-2.5 py-1.5 text-[12px] text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
-            />
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={savingGoal}
-                className="inline-flex h-7 items-center gap-1 rounded-lg bg-accent px-3 text-[12px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
-              >
-                {savingGoal && <Loader2 size={12} className="animate-spin" />}
-                保存目标
-              </button>
-            </div>
-          </form>
-        ) : goal ? (
-          <details className="group">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-              <div className="flex min-w-0 items-center gap-2">
-                <Target size={14} className="shrink-0 text-accent" aria-hidden="true" />
-                <span className="truncate text-[12.5px] font-medium text-ink">{goal.title}</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {totalCount > 0 && (
-                  <span className="text-[11px] tabular-nums text-ink-tertiary">
-                    {doneCount}/{totalCount}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); openGoalEditor(); }}
-                  aria-label="编辑项目目标卡"
-                  className="rounded p-1 text-ink-tertiary hover:bg-raised hover:text-ink"
-                >
-                  <Pencil size={12} />
-                </button>
-              </div>
-            </summary>
-            <div className="space-y-2 border-t border-hairline/40 px-3 pb-3 pt-2 text-[12px]">
-              {goal.objective && <p className="leading-relaxed text-ink-secondary">{goal.objective}</p>}
-              {goal.redlines.length > 0 && (
-                <div className="space-y-1">
-                  <div className="text-[11px] font-medium text-ink-tertiary">红线约束</div>
-                  <ul className="space-y-0.5 text-ink-secondary">
-                    {goal.redlines.map((r, i) => <li key={i}>· {r}</li>)}
-                  </ul>
-                </div>
-              )}
-              {goal.deliverables.length > 0 && (
-                <div className="space-y-1">
-                  <div className="text-[11px] font-medium text-ink-tertiary">交付清单</div>
-                  {goal.deliverables.map(d => (
-                    <label key={d.id} className="flex cursor-pointer items-center gap-2 text-ink">
-                      <input
-                        type="checkbox"
-                        checked={d.done}
-                        onChange={() => {
-                          void opcApi.toggleDeliverable(goal.id, d.id, !d.done).then(setGoal);
-                        }}
-                        className="rounded border-hairline accent-accent"
-                      />
-                      <span className={cn(d.done && "line-through text-ink-tertiary")}>{d.title}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          </details>
-        ) : (
-          <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-            <button
-              type="button"
-              onClick={openGoalEditor}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left text-[12.5px] text-ink-secondary hover:text-ink"
-            >
-              <Plus size={14} className="shrink-0 text-accent" />
-              <span className="truncate">添加项目目标卡（自动防偏航）</span>
-            </button>
-          </div>
-        )}
-      </section>
-
       {/* Toolbar: Filter pills + Skill Studio quick trigger */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1 rounded-lg bg-card/80 p-0.5 ring-[0.5px] ring-hairline/50">

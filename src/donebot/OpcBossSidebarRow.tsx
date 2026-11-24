@@ -3,7 +3,7 @@ import { LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { closeInbox } from "@/state/inbox";
 import { useStore } from "@/state/store";
-import { opcApi } from "./opc-api";
+import { OPC_OVERVIEW_CHANGED_EVENT, opcApi } from "./opc-api";
 
 /**
  * Primary top-of-sidebar entry for the OPC Boss Console ("老板台").
@@ -28,8 +28,8 @@ export function OpcBossSidebarRow({
       void opcApi.getOverview(30).then(res => {
         if (alive) {
           setBadge({
-            pending: (res.pendingArtifactCount ?? 0) + (res.waitingWorkflowCount ?? 0),
-            tripped: res.trippedCircuitBreakerCount ?? 0,
+            pending: res.pendingReportCount ?? ((res.pendingArtifactCount ?? 0) + (res.waitingWorkflowCount ?? 0)),
+            tripped: 0,
           });
         }
       }).catch(() => {
@@ -38,9 +38,11 @@ export function OpcBossSidebarRow({
     };
     poll();
     const timer = window.setInterval(poll, 45_000);
+    window.addEventListener(OPC_OVERVIEW_CHANGED_EVENT, poll);
     return () => {
       alive = false;
       window.clearInterval(timer);
+      window.removeEventListener(OPC_OVERVIEW_CHANGED_EVENT, poll);
     };
   }, [active]);
 

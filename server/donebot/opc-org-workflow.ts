@@ -30,6 +30,8 @@ import {
   type WorkflowTurnOutput,
 } from "./opc-workflow-runner.ts";
 import { buildOrgPromptForBot, evaluateOrgCoordination } from "./opc-org-policy.ts";
+import { approveWorkflowStepArtifacts } from "./opc-boss-reports.ts";
+import type { DoneBotOpcStore } from "./opc-store.ts";
 export { resolveWorkflowExecutionPlan } from "../../shared/donebot-opc-graph.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
@@ -481,6 +483,7 @@ export class DoneBotOrgWorkflowStore {
 
 export interface DoneBotOrgWorkflowRouteDeps {
   orgStore: DoneBotOrgWorkflowStore;
+  opcStore?: DoneBotOpcStore;
   store: Store;
   runBotTurn?: (input: WorkflowTurnInput) => Promise<WorkflowTurnOutput>;
   generateBotText?: (botId: string, prompt: string, signal?: AbortSignal) => Promise<string | undefined>;
@@ -829,6 +832,9 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
         if (body.action === "approve") {
           if (run.stepResults[idx]) {
             run.stepResults[idx] = { ...run.stepResults[idx]!, status: "completed", finishedAt: Date.now() };
+          }
+          if (deps.opcStore) {
+            approveWorkflowStepArtifacts(deps.store, deps.opcStore, run, idx);
           }
           if (idx + 1 >= run.stepResults.length) {
             const done: OpcWorkflowRun = { ...run, status: "completed", finishedAt: Date.now() };

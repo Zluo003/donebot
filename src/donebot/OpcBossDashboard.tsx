@@ -1,23 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
-  AlertTriangle,
   ArrowUpRight,
   Check,
   CheckCircle2,
   Coins,
-  FileText,
-  Film,
-  Image as ImageIcon,
   Loader2,
-  Music,
+  Paperclip,
   RotateCcw,
+  Zap,
 } from "lucide-react";
-import type { OpcArtifactItem, OpcBossOverview, OpcWorkflowRun } from "../../shared/donebot-opc";
+import type { OpcBossOverview, OpcBossReportItem } from "../../shared/donebot-opc";
 import { closeInbox } from "@/state/inbox";
 import { useStore } from "@/state/store";
 import { formatCny } from "./market-api";
-import { opcApi } from "./opc-api";
+import { notifyOpcOverviewChanged, OPC_OVERVIEW_CHANGED_EVENT, opcApi } from "./opc-api";
+import { resolvePendingBossReports } from "./OpcBossReportCard";
 import {
   claimReviseDraftWork,
   clearReviseDraft,
@@ -26,41 +23,48 @@ import {
 } from "./paperclip-revise-draft-store";
 import { OpcDecisionCardFooter, OpcInsetPanel, OpcMetricCard } from "./paperclip-ui";
 
-function ArtifactKindIcon({ kind }: { kind: OpcArtifactItem["kind"] }) {
-  switch (kind) {
-    case "image": return <ImageIcon size={14} className="shrink-0 text-ink-tertiary" />;
-    case "video": return <Film size={14} className="shrink-0 text-ink-tertiary" />;
-    case "audio": return <Music size={14} className="shrink-0 text-ink-tertiary" />;
-    default: return <FileText size={14} className="shrink-0 text-ink-tertiary" />;
-  }
-}
-
-function BossApprovalCard({
-  item,
+function CompactReportCard({
+  report,
   onResolved,
+  onOpenBoss,
   onJump,
 }: {
-  item: OpcArtifactItem;
-  onResolved: (artifactId: string) => void;
-  onJump: (item: OpcArtifactItem) => void;
+  report: OpcBossReportItem;
+  onResolved: (reportId: string) => void;
+  onOpenBoss: () => void;
+  onJump: (report: OpcBossReportItem) => void;
 }) {
-  const draftKey = `artifact:${item.id}`;
+  const draftKey = `report:${report.id}`;
   const [draft, updateDraft] = useReviseDraft(draftKey);
   const [error, setError] = useState("");
   const busy = draft.working !== null;
+  const approveLabel = report.workflow && !report.workflow.isLastStep ? "通过并继续" : "通过";
 
   const approve = async () => {
     if (!claimReviseDraftWork(draftKey, "approve")) return;
     setError("");
     try {
-      await opcApi.reviewArtifact(item.id, {
-        botId: item.botId,
-        status: "approved",
-        threadId: item.threadId,
-        artifactTitle: item.title,
-      });
+      if (report.source === "workflow" && report.workflow) {
+        await opcApi.decideWorkflowRun(report.workflow.runId, { action: "approve" });
+      } else if (report.artifactIds.length > 1) {
+        await opcApi.reviewReport({
+          botId: report.botId,
+          status: "approved",
+          artifactIds: report.artifactIds,
+          threadId: report.threadId,
+          reportTitle: report.title,
+        });
+      } else if (report.artifactIds.length === 1) {
+        await opcApi.reviewArtifact(report.artifactIds[0]!, {
+          botId: report.botId,
+          status: "approved",
+          threadId: report.threadId,
+          artifactTitle: report.title,
+        });
+      }
       clearReviseDraft(draftKey);
-      onResolved(item.id);
+      notifyOpcOverviewChanged("boss-dashboard");
+      onResolved(report.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败，请稍后重试。");
       releaseReviseDraftWork(draftKey);
@@ -75,16 +79,32 @@ function BossApprovalCard({
     if (!claimReviseDraftWork(draftKey, "revise")) return;
     setError("");
     try {
-      await opcApi.reviewArtifact(item.id, {
-        botId: item.botId,
-        status: "changes_requested",
-        note: draft.reason.trim(),
-        threadId: item.threadId,
-        artifactTitle: item.title,
-        dispatchRevision: true,
-      });
+      const note = draft.reason.trim();
+      if (report.source === "workflow" && report.workflow) {
+        await opcApi.decideWorkflowRun(report.workflow.runId, { action: "revise", note });
+      } else if (report.artifactIds.length > 1) {
+        await opcApi.reviewReport({
+          botId: report.botId,
+          status: "changes_requested",
+          artifactIds: report.artifactIds,
+          note,
+          threadId: report.threadId,
+          reportTitle: report.title,
+          dispatchRevision: true,
+        });
+      } else if (report.artifactIds.length === 1) {
+        await opcApi.reviewArtifact(report.artifactIds[0]!, {
+          botId: report.botId,
+          status: "changes_requested",
+          note,
+          threadId: report.threadId,
+          artifactTitle: report.title,
+          dispatchRevision: true,
+        });
+      }
       clearReviseDraft(draftKey);
-      onResolved(item.id);
+      notifyOpcOverviewChanged("boss-dashboard");
+      onResolved(report.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "派发修改意见失败。");
       releaseReviseDraftWork(draftKey);
@@ -94,38 +114,42 @@ function BossApprovalCard({
   return (
     <article className="flex flex-col gap-2.5 rounded-xl bg-card p-3 ring-[0.5px] ring-hairline/60">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-medium text-ink">审批交付物</span>
-        <span className="truncate text-[11px] text-ink-tertiary tabular-nums">
-          {item.botName} · v{item.version}
+        <span className="truncate text-[12px] font-medium text-ink">
+          {report.workflow ? `${report.workflow.workflowName} · ${report.workflow.stepName}` : "正式汇报"}
+        </span>
+        <span className="shrink-0 truncate text-[11px] text-ink-tertiary">
+          {report.botName}
         </span>
       </div>
 
       <OpcInsetPanel>
-        <div className="flex items-center gap-2.5">
-          {item.kind === "image" ? (
-            <img
-              src={item.previewUrl}
-              alt={item.title}
-              loading="lazy"
-              className="size-11 shrink-0 rounded-md object-cover bg-raised"
-            />
-          ) : (
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-raised">
-              <ArtifactKindIcon kind={item.kind} />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-medium text-ink">{item.title || item.name}</div>
-            <div className="truncate text-[11.5px] text-ink-tertiary">{item.threadTitle || item.name}</div>
-          </div>
+        <div className="flex items-start justify-between gap-2">
           <button
             type="button"
-            onClick={() => onJump(item)}
-            aria-label={`定位到「${item.title || item.name}」`}
-            title="查看原对话"
-            className="rounded-md p-1 text-ink-tertiary transition-colors hover:bg-raised hover:text-ink"
+            onClick={onOpenBoss}
+            className="min-w-0 flex-1 text-left"
           >
-            <ArrowUpRight size={14} />
+            <div className="truncate text-[13px] font-medium text-ink hover:underline">{report.title}</div>
+            {report.summary && (
+              <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-relaxed text-ink-secondary">
+                {report.summary}
+              </p>
+            )}
+            {report.attachments.length > 0 && (
+              <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-ink-tertiary">
+                <Paperclip size={11} aria-hidden="true" />
+                <span>{report.attachments.length} 份附件（去老板台展开阅读与下载）</span>
+              </div>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => onJump(report)}
+            aria-label={`定位到「${report.title}」`}
+            title="查看原对话"
+            className="shrink-0 rounded-md p-1 text-ink-tertiary transition-colors hover:bg-raised hover:text-ink"
+          >
+            <ArrowUpRight size={14} aria-hidden="true" />
           </button>
         </div>
 
@@ -133,7 +157,7 @@ function BossApprovalCard({
           <div className="space-y-1.5 pt-1">
             <textarea
               value={draft.reason}
-              onChange={(e) => updateDraft({ reason: e.target.value })}
+              onChange={e => updateDraft({ reason: e.target.value })}
               rows={2}
               placeholder="写一句修改意见（将自动发给该 Bot 返工）…"
               className="w-full resize-none rounded-lg border border-hairline/70 bg-panel px-2.5 py-1.5 text-[12px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
@@ -155,7 +179,15 @@ function BossApprovalCard({
             >
               取消批注
             </button>
-          ) : null
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenBoss}
+              className="text-[11.5px] text-accent hover:underline"
+            >
+              展开完整报告
+            </button>
+          )
         }
       >
         <button
@@ -164,7 +196,7 @@ function BossApprovalCard({
           onClick={() => void requestChanges()}
           className="inline-flex h-7 items-center gap-1 rounded-lg bg-raised px-2.5 text-[12px] font-medium text-ink-secondary transition-colors hover:bg-control hover:text-ink disabled:opacity-50"
         >
-          {draft.working === "revise" ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+          {draft.working === "revise" ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <RotateCcw size={12} aria-hidden="true" />}
           {draft.revising ? "发送修改" : "打回修改"}
         </button>
         <button
@@ -173,8 +205,8 @@ function BossApprovalCard({
           onClick={() => void approve()}
           className="inline-flex h-7 items-center gap-1 rounded-lg bg-accent px-2.5 text-[12px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {draft.working === "approve" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-          通过
+          {draft.working === "approve" ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+          {approveLabel}
         </button>
       </OpcDecisionCardFooter>
     </article>
@@ -182,11 +214,10 @@ function BossApprovalCard({
 }
 
 export function OpcBossDashboard() {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
   const [overview, setOverview] = useState<OpcBossOverview | null>(null);
   const [spendOpen, setSpendOpen] = useState(false);
   const [approvalsExpanded, setApprovalsExpanded] = useState(true);
-  const [wfBusyId, setWfBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -199,40 +230,60 @@ export function OpcBossDashboard() {
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => void load(), 45_000);
-    return () => window.clearInterval(timer);
+    const onChanged = (event: Event) => {
+      const source = (event as CustomEvent<{ source?: string }>).detail?.source;
+      if (source === "boss-dashboard") return;
+      void load();
+    };
+    window.addEventListener(OPC_OVERVIEW_CHANGED_EVENT, onChanged);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(OPC_OVERVIEW_CHANGED_EVENT, onChanged);
+    };
   }, [load]);
+
+  const pendingReports = useMemo(() => resolvePendingBossReports(overview), [overview]);
 
   if (!overview) return null;
 
-  const handleResolved = (artifactId: string) => {
+  const handleResolved = (reportId: string) => {
     setOverview(prev => {
       if (!prev) return prev;
-      const nextPending = prev.pendingArtifacts.filter(a => a.id !== artifactId);
+      const resolved = resolvePendingBossReports(prev).find(r => r.id === reportId);
+      const removedArtifactIds = new Set(resolved?.artifactIds ?? []);
+      const removedRunId = resolved?.workflow?.runId;
+      const nextReports = resolvePendingBossReports(prev).filter(r => r.id !== reportId);
+      const nextArtifacts = prev.pendingArtifacts.filter(a => !removedArtifactIds.has(a.id));
+      const nextRuns = removedRunId
+        ? (prev.waitingWorkflowRuns ?? []).filter(r => r.id !== removedRunId)
+        : (prev.waitingWorkflowRuns ?? []);
       return {
         ...prev,
-        pendingArtifactCount: Math.max(0, prev.pendingArtifactCount - 1),
-        pendingArtifacts: nextPending,
+        pendingReportCount: nextReports.length,
+        pendingReports: nextReports,
+        pendingArtifactCount: nextArtifacts.length,
+        pendingArtifacts: nextArtifacts,
+        waitingWorkflowCount: nextRuns.length,
+        waitingWorkflowRuns: nextRuns,
       };
     });
   };
 
-  const handleJump = (item: OpcArtifactItem) => {
-    dispatch({ type: "select", id: item.botId });
-    dispatch({ type: "focusMessage", threadId: item.threadId, messageId: item.reportMessageId });
+  const openBoss = () => {
+    closeInbox();
+    dispatch({ type: "showBoss" });
   };
 
-  const waitingWorkflowRuns: OpcWorkflowRun[] = overview.waitingWorkflowRuns ?? [];
-  const totalPendingCount = overview.pendingArtifactCount + waitingWorkflowRuns.length;
-
-  const approveWorkflowRun = async (runId: string) => {
-    setWfBusyId(runId);
-    try {
-      await opcApi.decideWorkflowRun(runId, { action: "approve" });
-      await load();
-    } finally {
-      setWfBusyId(null);
+  const handleJump = (report: OpcBossReportItem) => {
+    closeInbox();
+    dispatch({ type: "select", id: report.botId });
+    if (report.threadId && report.reportMessageId) {
+      dispatch({ type: "focusMessage", threadId: report.threadId, messageId: report.reportMessageId });
     }
   };
+
+  const totalPendingCount = pendingReports.length;
+  const activeAutomationCount = (state.routines ?? []).filter(r => r.enabled).length + (overview.activeWorkflowCount ?? 0);
 
   return (
     <section aria-label="老板批示台" className="mx-[13px] mb-2 mt-1 space-y-2.5">
@@ -240,13 +291,10 @@ export function OpcBossDashboard() {
         <span className="text-[11.5px] font-medium text-ink-secondary">老板批示台</span>
         <button
           type="button"
-          onClick={() => {
-            closeInbox();
-            dispatch({ type: "showBoss" });
-          }}
+          onClick={openBoss}
           className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-accent hover:underline"
         >
-          打开完整老板台 <ArrowUpRight size={12} />
+          打开完整老板台 <ArrowUpRight size={12} aria-hidden="true" />
         </button>
       </div>
       <div className="flex gap-2">
@@ -259,10 +307,10 @@ export function OpcBossDashboard() {
           onClick={totalPendingCount > 0 ? () => setApprovalsExpanded(v => !v) : undefined}
         />
         <OpcMetricCard
-          icon={overview.trippedCircuitBreakerCount > 0 ? AlertTriangle : Activity}
-          label="24h 巡检"
-          value={overview.trippedCircuitBreakerCount > 0 ? `${overview.trippedCircuitBreakerCount} 熔断` : overview.activeHeartbeatCount}
-          tone={overview.trippedCircuitBreakerCount > 0 ? "danger" : "neutral"}
+          icon={Zap}
+          label="自动化"
+          value={activeAutomationCount}
+          tone="neutral"
           onClick={() => dispatch({ type: "showRoutines", view: "list" })}
         />
         <OpcMetricCard
@@ -322,63 +370,15 @@ export function OpcBossDashboard() {
       {approvalsExpanded && totalPendingCount > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between px-0.5 text-[11.5px] text-ink-tertiary">
-            <span>待拍板项目</span>
-            <span className="tabular-nums">{totalPendingCount} 项</span>
+            <span>待拍板汇报</span>
+            <span className="tabular-nums">{totalPendingCount} 份</span>
           </div>
-          {waitingWorkflowRuns.slice(0, 3).map(run => {
-            const step = run.stepResults[run.currentStepIndex];
-            const isLast = run.currentStepIndex + 1 >= run.stepResults.length;
-            return (
-              <article key={run.id} className="flex flex-col gap-2 rounded-xl bg-card p-3 ring-[0.5px] ring-hairline/60">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[12px] font-medium text-ink">
-                    {run.workflowName} · {step?.stepName}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-ink-tertiary">{step?.botName}</span>
-                </div>
-                {step?.output && (
-                  <div className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg bg-raised/60 px-2.5 py-2 text-[11.5px] leading-relaxed text-ink-secondary">
-                    {step.output}
-                  </div>
-                )}
-                <OpcDecisionCardFooter
-                  leading={
-                    step?.botId ? (
-                      <button
-                        type="button"
-                        onClick={() => { closeInbox(); dispatch({ type: "select", id: step.botId }); }}
-                        className="text-[11.5px] text-accent hover:underline"
-                      >
-                        查看对话
-                      </button>
-                    ) : null
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => { closeInbox(); dispatch({ type: "showBoss" }); }}
-                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-raised px-2.5 text-[12px] font-medium text-ink-secondary hover:bg-control hover:text-ink"
-                  >
-                    批注返工
-                  </button>
-                  <button
-                    type="button"
-                    disabled={wfBusyId === run.id}
-                    onClick={() => void approveWorkflowRun(run.id)}
-                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-accent px-2.5 text-[12px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
-                  >
-                    {wfBusyId === run.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                    {isLast ? "批准定稿" : "通过"}
-                  </button>
-                </OpcDecisionCardFooter>
-              </article>
-            );
-          })}
-          {overview.pendingArtifacts.slice(0, 4).map(item => (
-            <BossApprovalCard
-              key={item.id}
-              item={item}
+          {pendingReports.slice(0, 4).map(report => (
+            <CompactReportCard
+              key={report.id}
+              report={report}
               onResolved={handleResolved}
+              onOpenBoss={openBoss}
               onJump={handleJump}
             />
           ))}

@@ -279,8 +279,47 @@ export function extractWorkflowVariables(steps: ReadonlyArray<Pick<OpcWorkflowSt
   return found;
 }
 
+export interface OpcBossReportAttachment {
+  id: string;
+  name: string;
+  path: string;
+  kind: "image" | "video" | "audio" | "document";
+  mime?: string;
+  threadId: string;
+  messageId: string;
+  previewUrl: string;
+}
+
+export interface OpcBossReportItem {
+  id: string;
+  source: "workflow" | "bot_report";
+  title: string;
+  summary: string;
+  body: string;
+  botId: string;
+  botName: string;
+  botColor: string;
+  department?: string;
+  roleTitle?: string;
+  at: number;
+  threadId: string;
+  reportMessageId?: string;
+  attachments: OpcBossReportAttachment[];
+  artifactIds: string[];
+  workflow?: {
+    runId: string;
+    workflowId: string;
+    workflowName: string;
+    stepIndex: number;
+    totalSteps: number;
+    stepName: string;
+    isLastStep: boolean;
+  };
+}
+
 export interface OpcBossOverview {
   pendingArtifactCount: number;
+  pendingReportCount?: number;
   activeHeartbeatCount: number;
   trippedCircuitBreakerCount: number;
   activeGoalCount: number;
@@ -289,6 +328,7 @@ export interface OpcBossOverview {
   orgEnforcementMode?: OpcOrgEnforcementMode;
   spend: OpcSpendResponse;
   pendingArtifacts: OpcArtifactItem[];
+  pendingReports?: OpcBossReportItem[];
   waitingWorkflowRuns?: OpcWorkflowRun[];
   heartbeats: OpcHeartbeatConfig[];
 }

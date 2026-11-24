@@ -1,13 +1,11 @@
 import { z } from "zod";
 import type {
-  OpcArtifactItem,
   OpcBossOverview,
   OpcEvalRunResult,
   OpcHeartbeatConfig,
   OpcSpendResponse,
 } from "../../shared/donebot-opc.ts";
 import { admitSkillFiles } from "../../shared/skill-files.ts";
-import { collectBotArtifacts, type ArtifactThread } from "../bot-artifacts.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import type { StoredSkillFiles } from "../skill-side-files.ts";
@@ -15,6 +13,7 @@ import type { SkillListing } from "../skills.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import { createDoneBotMarketClient } from "./market-gateway.ts";
+import { buildPendingBossReports, collectEnrichedArtifacts } from "./opc-boss-reports.ts";
 import { DoneBotOpcStore } from "./opc-store.ts";
 import type { DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
 import { runPaperclipEvalMatrix } from "./paperclip-eval-kernel.ts";
@@ -47,6 +46,16 @@ const artifactReviewSchema = z.object({
   deliverableId: z.string().trim().max(80).optional(),
   threadId: z.string().trim().max(128).optional(),
   artifactTitle: z.string().trim().max(200).optional(),
+  dispatchRevision: z.boolean().default(true),
+}).strict();
+
+const reportReviewSchema = z.object({
+  botId: z.string().trim().min(1).max(128),
+  status: z.enum(["approved", "changes_requested"]),
+  artifactIds: z.array(z.string().trim().min(1).max(128)).min(1).max(60),
+  note: z.string().trim().max(2000).optional(),
+  threadId: z.string().trim().max(128).optional(),
+  reportTitle: z.string().trim().max(200).optional(),
   dispatchRevision: z.boolean().default(true),
 }).strict();
 
@@ -108,74 +117,6 @@ export interface DoneBotOpcRouteDeps {
   broadcast(frame: unknown): void;
   publicBot(bot: BotRecord): unknown;
   startScheduler?: boolean;
-}
-
-function visibleBots(store: Store): BotRecord[] {
-  return store.bots.filter(b => !b.hidden);
-}
-
-function threadsForBot(store: Store, bot: BotRecord): ArtifactThread[] {
-  const out: ArtifactThread[] = [];
-  const seen = new Set<string>();
-  const add = (threadId: string | undefined, title: string, internal = false) => {
-    if (!threadId || seen.has(threadId)) return;
-    seen.add(threadId);
-    out.push({
-      threadId,
-      title,
-      ownerBotId: bot.id,
-      internal,
-      messages: store.messagesFor(threadId),
-    });
-  };
-  for (const task of bot.tasks ?? []) {
-    if (task.archivedAt !== undefined) continue;
-    add(task.threadId, task.title || bot.name, Boolean(task.openedBy));
-  }
-  add(bot.threadId, bot.name, false);
-  return out;
-}
-
-function enrichArtifacts(store: Store, opcStore: DoneBotOpcStore, targetBotId?: string): OpcArtifactItem[] {
-  const bots = targetBotId
-    ? visibleBots(store).filter(b => b.id === targetBotId)
-    : visibleBots(store);
-  const all: OpcArtifactItem[] = [];
-
-  for (const bot of bots) {
-    const raw = collectBotArtifacts(bot.id, threadsForBot(store, bot));
-    // Compute chronological version numbers (v1, v2...) per base title & kind.
-    const groups = new Map<string, typeof raw>();
-    for (const item of raw) {
-      const baseTitle = item.title.replace(/\s*·\s*\d+$/, "");
-      const key = `${baseTitle}:${item.kind}`;
-      const list = groups.get(key) ?? [];
-      list.push(item);
-      groups.set(key, list);
-    }
-    const versionById = new Map<string, number>();
-    for (const list of groups.values()) {
-      const oldestFirst = [...list].sort((a, b) => a.at - b.at);
-      oldestFirst.forEach((item, idx) => versionById.set(item.id, idx + 1));
-    }
-
-    for (const item of raw) {
-      const review = opcStore.getArtifactReview(item.id);
-      all.push({
-        ...item,
-        botId: bot.id,
-        botName: bot.name,
-        botColor: bot.color,
-        version: versionById.get(item.id) ?? 1,
-        reviewStatus: review?.status ?? "pending",
-        ...(review?.note ? { reviewNote: review.note } : {}),
-        ...(review?.reviewedAt ? { reviewedAt: review.reviewedAt } : {}),
-        ...(review?.deliverableId ? { deliverableId: review.deliverableId } : {}),
-      });
-    }
-  }
-
-  return all.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
 }
 
 function captureBotSnapshot(deps: DoneBotOpcRouteDeps, bot: BotRecord) {
@@ -389,24 +330,34 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
       if (method === "GET" && reqPath === "/api/donebot/opc/overview") {
         const daysRaw = Number(url.searchParams.get("days") ?? "30");
         const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(365, Math.round(daysRaw)) : 30;
-        const allArtifacts = enrichArtifacts(deps.store, deps.opcStore);
-        const pendingArtifacts = allArtifacts.filter(a => a.reviewStatus === "pending");
+        const allArtifacts = collectEnrichedArtifacts(deps.store, deps.opcStore);
         const heartbeats = deps.opcStore.listHeartbeats().map(decorateHeartbeat);
         const goals = deps.opcStore.listGoals().filter(g => g.status === "active");
         const workflows = deps.orgStore?.listWorkflows() ?? [];
+        const workflowRuns = deps.orgStore?.listWorkflowRuns() ?? [];
         const waitingWorkflowRuns = deps.orgStore?.listWaitingWorkflowRuns() ?? [];
+        const orgChart = deps.orgStore?.getOrgChart(deps.store.bots);
+        const { reports: pendingReports, workflowOwnedArtifactIds } = buildPendingBossReports({
+          store: deps.store,
+          allArtifacts,
+          workflowRuns,
+          orgChart,
+        });
+        const pendingArtifacts = allArtifacts.filter(a => a.reviewStatus === "pending" && !workflowOwnedArtifactIds.has(a.id));
         const trippedWorkflowCount = workflows.filter(w => w.pausedByCircuitBreaker).length;
         const spend = await loadSpend(days);
         const overview: OpcBossOverview = {
           pendingArtifactCount: pendingArtifacts.length,
+          pendingReportCount: pendingReports.length,
           activeHeartbeatCount: heartbeats.filter(h => h.enabled && !h.pausedByCircuitBreaker).length,
           trippedCircuitBreakerCount: heartbeats.filter(h => h.pausedByCircuitBreaker).length + trippedWorkflowCount,
           activeGoalCount: goals.length,
           activeWorkflowCount: workflows.filter(w => w.enabled && !w.pausedByCircuitBreaker).length,
           waitingWorkflowCount: waitingWorkflowRuns.length,
-          orgEnforcementMode: deps.orgStore?.getOrgChart().enforcementMode ?? "free",
+          orgEnforcementMode: orgChart?.enforcementMode ?? "free",
           spend,
           pendingArtifacts: pendingArtifacts.slice(0, 24),
+          pendingReports: pendingReports.slice(0, 24),
           waitingWorkflowRuns: waitingWorkflowRuns.slice(0, 12),
           heartbeats,
         };
@@ -429,7 +380,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
       if (method === "GET" && reqPath === "/api/donebot/opc/artifacts") {
         const botId = url.searchParams.get("botId")?.trim() || undefined;
         const statusFilter = url.searchParams.get("status")?.trim() || undefined;
-        let items = enrichArtifacts(deps.store, deps.opcStore, botId);
+        let items = collectEnrichedArtifacts(deps.store, deps.opcStore, botId);
         if (statusFilter && ["pending", "approved", "changes_requested"].includes(statusFilter)) {
           items = items.filter(i => i.reviewStatus === statusFilter);
         }
@@ -483,10 +434,42 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
       if (method !== "POST" && method !== "PUT" && method !== "PATCH") return PASS;
       const ownedMutation = reqPath.startsWith("/api/donebot/opc/goals")
         || reqPath.startsWith("/api/donebot/opc/artifacts")
+        || reqPath.startsWith("/api/donebot/opc/reports")
         || reqPath.startsWith("/api/donebot/opc/bots/")
         || reqPath.startsWith("/api/donebot/opc/heartbeats");
       if (!ownedMutation) return PASS;
       const body = await readBody(req, 1024 * 1024);
+
+      if (method === "POST" && reqPath === "/api/donebot/opc/reports/review") {
+        const parsed = reportReviewSchema.safeParse(body);
+        if (!parsed.success) return json(res, 400, { error: "汇报审批参数无效。" });
+        const bot = deps.store.bot(parsed.data.botId);
+        if (!bot || bot.hidden) return json(res, 404, { error: "未找到对应 Bot。" });
+        const uniqueIds = [...new Set(parsed.data.artifactIds)];
+        const records = uniqueIds.map(artifactId => deps.opcStore.setArtifactReview({
+          artifactId,
+          botId: bot.id,
+          status: parsed.data.status,
+          note: parsed.data.note,
+        }));
+        let dispatched = false;
+        if (parsed.data.status === "changes_requested" && parsed.data.dispatchRevision) {
+          const titleLabel = parsed.data.reportTitle?.trim() || "最新汇报";
+          const noteLine = parsed.data.note?.trim()
+            ? `老板批注修改意见：\n${parsed.data.note.trim()}`
+            : "请重新检查质量并输出优化后的新版正式汇报与交付物。";
+          const revisionPrompt = `【汇报打回修改 · ${titleLabel}】\n${noteLine}\n\n请据此修改并按正式汇报格式重新呈报。`;
+          try {
+            await Promise.resolve(deps.startTurn(bot.id, revisionPrompt, {
+              threadId: parsed.data.threadId || bot.threadId,
+            }));
+            dispatched = true;
+          } catch {
+            // Review records are already saved even if thread is busy.
+          }
+        }
+        return json(res, 200, { ok: true, reviewedCount: records.length, dispatched });
+      }
 
       if (method === "PUT" && reqPath === "/api/donebot/opc/goals") {
         const parsed = goalUpsertSchema.safeParse(body);

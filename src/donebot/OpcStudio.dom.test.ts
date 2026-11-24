@@ -187,14 +187,85 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("老板批示台");
     expect(container.textContent).toContain("打开完整老板台");
 
-    // 3. Full Boss Console renders KPI strip, employee table, goal card and 24h heartbeat panel
+    // 3. Full Boss Console renders KPI strip, employee table, and formal expandable reports without removed Goal Card or 24h Heartbeat
     await act(async () => {
       root!.render(createElement(OpcBossConsolePage));
     });
     expect(container.textContent).toContain("在岗员工");
     expect(container.textContent).toContain("封面视觉");
-    expect(container.textContent).toContain("项目目标卡");
-    expect(container.textContent).toContain("24h 静默巡检");
+    expect(container.textContent).not.toContain("项目目标卡");
+    expect(container.textContent).not.toContain("24h 静默巡检");
+  });
+
+  it("expands formal Boss report with Markdown body & attachment preview/download and approves in a single click", async () => {
+    mockApi.mockImplementation(async (path, init) => {
+      if (path.startsWith("/api/donebot/opc/overview")) {
+        return {
+          pendingArtifactCount: 2,
+          pendingReportCount: 1,
+          activeHeartbeatCount: 0,
+          trippedCircuitBreakerCount: 0,
+          activeGoalCount: 0,
+          activeWorkflowCount: 1,
+          waitingWorkflowCount: 0,
+          spend: { available: true, days: 30, totalCost: 3.2, llmCost: 3.2, imageCost: 0, videoCost: 0, musicCost: 0, bots: [] },
+          pendingArtifacts: [],
+          pendingReports: [{
+            id: "msg:t1:m1",
+            source: "bot_report",
+            title: "独立站首月投放复盘报告",
+            summary: "ROI 达到 3.4，建议加大美区短视频预算。",
+            body: "# 独立站首月投放复盘报告\n\n## 核心结论\n\n- ROI 达到 **3.4**，超出目标预期。\n",
+            botId: "b1",
+            botName: "封面视觉",
+            botColor: "blue",
+            department: "独立站",
+            roleTitle: "增长负责人",
+            at: 2000,
+            threadId: "t1",
+            reportMessageId: "m1",
+            attachments: [
+              { id: "a1", name: "report.md", path: "/tmp/report.md", kind: "document", threadId: "t1", messageId: "m1", previewUrl: "/api/threads/t1/messages/m1/file?preview=1&path=%2Ftmp%2Freport.md" },
+              { id: "a2", name: "chart.png", path: "/tmp/chart.png", kind: "image", threadId: "t1", messageId: "m1", previewUrl: "/api/threads/t1/messages/m1/file?preview=1&path=%2Ftmp%2Fchart.png" },
+            ],
+            artifactIds: ["a1", "a2"],
+          }],
+          heartbeats: [],
+        };
+      }
+      if (path === "/api/donebot/opc/reports/review" && init?.method === "POST") {
+        return { ok: true, reviewedCount: 2, dispatched: false };
+      }
+      return {};
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root!.render(createElement(OpcBossConsolePage)); });
+
+    expect(container.textContent).toContain("独立站首月投放复盘报告");
+    expect(container.textContent).toContain("2 份附件");
+    expect(container.textContent).not.toContain("汇报附件（2）");
+
+    // Click report header to expand full Markdown report & attachments
+    const expandBtn = [...container.querySelectorAll("button")].find(b => b.getAttribute("aria-expanded") === "false")!;
+    await act(async () => { expandBtn.click(); });
+    expect(expandBtn.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("汇报附件（2）");
+    expect(container.textContent).toContain("report.md");
+    expect(container.textContent).toContain("chart.png");
+    expect(container.textContent).toContain("预览");
+    expect(container.textContent).toContain("下载");
+
+    // Single click on 通过 approves all bundled attachments in one request
+    const approveBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.trim() === "通过")!;
+    await act(async () => { approveBtn.click(); });
+    expect(mockApi).toHaveBeenCalledWith(
+      "/api/donebot/opc/reports/review",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(container.textContent).not.toContain("独立站首月投放复盘报告");
   });
 
   it("lays out org chart via Paperclip layout engine and renders OrgChart + Workflows views", async () => {

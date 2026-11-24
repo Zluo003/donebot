@@ -118,6 +118,9 @@ export function evaluateOrgCoordination(
   return null;
 }
 
+export const BOSS_FORMAL_REPORT_RULE =
+  "向老板汇报规范：凡是向老板正式汇报阶段成果、呈送工作流门禁产出或请求老板拍板确认时，必须使用清晰的正式汇报格式（Markdown 排版）：① 一级或二级标题写明汇报主题；② 「核心结论」先行（1–3 句概括结论与关键产出）；③ 「执行摘要」列出关键数据、完成项或风险；④ 「待老板拍板」（如有需决断事项，给出明确选项与建议方案）；⑤ 「交付附件」（如有产出文件，逐项说明文件用途并确保文件真实已生成）。严禁将零散过程日志、思维草稿或未整理的原始输出直接当作正式汇报呈交老板。";
+
 /** Renders concise fenced Org & Workflow Discipline instructions for LLM system prompt injection. */
 export function buildOrgPromptForBot(
   orgChart: OpcOrgChartState,
@@ -131,7 +134,10 @@ export function buildOrgPromptForBot(
     || orgChart.enforcementMode === "enforced"
     || hasDepartments
     || Boolean(orgChart.generalDepartmentName);
-  if (!hasConfigured) return undefined;
+  if (!hasConfigured) {
+    const fence = safeFence(BOSS_FORMAL_REPORT_RULE);
+    return `[Studio Boss Reporting Rules]\n${fence}\n${BOSS_FORMAL_REPORT_RULE}\n${fence}`;
+  }
 
   const node = orgChart.nodes[botId] ?? defaultNode(botId);
   const sectionOf = (b?: BotRecord) => b?.section?.trim() || "";
@@ -178,6 +184,7 @@ export function buildOrgPromptForBot(
     intraDeptRule,
     crossDeptRule,
     node.requireBossApproval ? "审批纪律：你的关键交付物需提交老板拍板确认后再对外流转或收尾。" : "",
+    BOSS_FORMAL_REPORT_RULE,
     "固定工作流优先级：固定/定时工作流优先于日常组织架构约束，跨部门工作流节点直接按编排执行。",
     bot?.chiefOfStaff ? (!mySection ? "系统总协调编排权限：当老板要求建立固定或定时工作流（含跨部门流程）时，可直接调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 创建、修改或启动。" : "部门负责人编排权限：仅可调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门工作流请汇报给系统总协调或由老板编排。") : "",
   ].filter(Boolean);

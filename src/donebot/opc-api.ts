@@ -18,6 +18,14 @@ import type {
 import type { MarketEvalSample } from "../../shared/donebot-market";
 import { api } from "@/state/api";
 
+export const OPC_OVERVIEW_CHANGED_EVENT = "donebot:opc-overview-changed";
+
+export function notifyOpcOverviewChanged(source?: string): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(OPC_OVERVIEW_CHANGED_EVENT, { detail: { source } }));
+  }
+}
+
 export const opcApi = {
   getOverview(days = 30): Promise<OpcBossOverview> {
     return api<OpcBossOverview>(`/api/donebot/opc/overview?days=${days}`);
@@ -84,6 +92,21 @@ export const opcApi = {
   ): Promise<{ ok: boolean; dispatched: boolean }> {
     return api<{ ok: boolean; dispatched: boolean }>(
       `/api/donebot/opc/artifacts/${encodeURIComponent(artifactId)}/review`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  reviewReport(payload: {
+    botId: string;
+    status: "approved" | "changes_requested";
+    artifactIds: string[];
+    note?: string;
+    threadId?: string;
+    reportTitle?: string;
+    dispatchRevision?: boolean;
+  }): Promise<{ ok: boolean; reviewedCount: number; dispatched: boolean }> {
+    return api<{ ok: boolean; reviewedCount: number; dispatched: boolean }>(
+      "/api/donebot/opc/reports/review",
       { method: "POST", body: JSON.stringify(payload) },
     );
   },

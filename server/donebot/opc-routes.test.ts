@@ -417,9 +417,18 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     expect(decide.status).toBe(200);
 
     const after = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
-    const afterData = after.payload as { pendingReportCount: number; pendingArtifactCount: number };
+    const afterData = after.payload as {
+      pendingReportCount: number;
+      pendingArtifactCount: number;
+      approvedReportCount: number;
+      approvedReports: Array<{ title: string; approvedAt?: number; attachments: Array<{ name: string }> }>;
+    };
     expect(afterData.pendingReportCount).toBe(0);
     expect(afterData.pendingArtifactCount).toBe(0);
+    expect(afterData.approvedReportCount).toBe(1);
+    expect(afterData.approvedReports[0]?.title).toBe("独立站第 47 周经营复盘");
+    expect(afterData.approvedReports[0]?.approvedAt).toBeTypeOf("number");
+    expect(afterData.approvedReports[0]?.attachments.map(a => a.name).sort()).toEqual(["gmv-chart.png", "weekly-report.md"]);
 
     // Standalone multi-file bot report (outside workflow) also bundles into 1 item and resolves in 1 click via /reports/review.
     const msg2At = now + 60_000;
@@ -443,6 +452,8 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     expect(standaloneData.pendingReports[0]?.title).toBe("品牌视觉升级方案");
     expect(standaloneData.pendingReports[0]?.artifactIds).toHaveLength(2);
 
+    // Ensure distinct approval timestamp so reverse chronological ordering is deterministic.
+    await new Promise(resolve => setTimeout(resolve, 10));
     const batchApprove = await callRoute(opcHandler, "POST", "/api/donebot/opc/reports/review", {
       botId: bot.id,
       status: "approved",
@@ -454,7 +465,17 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     expect((batchApprove.payload as { reviewedCount: number }).reviewedCount).toBe(2);
 
     const finalOv = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
-    expect((finalOv.payload as { pendingReportCount: number }).pendingReportCount).toBe(0);
+    const finalData = finalOv.payload as {
+      pendingReportCount: number;
+      approvedReportCount: number;
+      approvedReports: Array<{ title: string }>;
+    };
+    expect(finalData.pendingReportCount).toBe(0);
+    expect(finalData.approvedReportCount).toBe(2);
+    expect(finalData.approvedReports.map(r => r.title)).toEqual([
+      "品牌视觉升级方案",
+      "独立站第 47 周经营复盘",
+    ]);
 
     opcHandler.stopScheduler();
   });

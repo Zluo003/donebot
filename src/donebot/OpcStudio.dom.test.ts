@@ -187,22 +187,29 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("老板批示台");
     expect(container.textContent).toContain("打开完整老板台");
 
-    // 3. Full Boss Console renders KPI strip, employee table, and formal expandable reports without removed Goal Card or 24h Heartbeat
+    // 3. Full Boss Console renders KPI strip, employee table, single Hire button, no Org button, and no removed Goal Card or 24h Heartbeat
     await act(async () => {
       root!.render(createElement(OpcBossConsolePage));
     });
     expect(container.textContent).toContain("在岗员工");
     expect(container.textContent).toContain("封面视觉");
+    expect(container.textContent).not.toContain("组织与流程");
+    expect(container.textContent).not.toContain("去广场逛 AI 工作室");
+    expect(container.textContent).not.toContain("从广场一键雇佣");
     expect(container.textContent).not.toContain("项目目标卡");
     expect(container.textContent).not.toContain("24h 静默巡检");
+    const hireButtons = [...container.querySelectorAll("button")].filter(b => b.textContent?.includes("雇佣"));
+    expect(hireButtons).toHaveLength(1);
   });
 
-  it("expands formal Boss report with Markdown body & attachment preview/download and approves in a single click", async () => {
+  it("expands formal Boss report, approves in one click into the reverse-chronological approved right drawer, and reads archived reports", async () => {
+    const earlierApprovedAt = new Date(2026, 10, 20, 10, 30).getTime();
     mockApi.mockImplementation(async (path, init) => {
       if (path.startsWith("/api/donebot/opc/overview")) {
         return {
           pendingArtifactCount: 2,
           pendingReportCount: 1,
+          approvedReportCount: 1,
           activeHeartbeatCount: 0,
           trippedCircuitBreakerCount: 0,
           activeGoalCount: 0,
@@ -230,6 +237,25 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
             ],
             artifactIds: ["a1", "a2"],
           }],
+          approvedReports: [{
+            id: "msg:t1:m0",
+            source: "bot_report",
+            title: "上周竞品调研简报",
+            summary: "竞品上新 2 款高客单 SKU。",
+            body: "# 上周竞品调研简报\n\n详细分析如下。",
+            botId: "b1",
+            botName: "封面视觉",
+            botColor: "blue",
+            department: "独立站",
+            at: earlierApprovedAt - 1000,
+            approvedAt: earlierApprovedAt,
+            threadId: "t1",
+            reportMessageId: "m0",
+            attachments: [
+              { id: "a0", name: "competitor.pdf", path: "/tmp/competitor.pdf", kind: "document", threadId: "t1", messageId: "m0", previewUrl: "/api/threads/t1/messages/m0/file?preview=1&path=%2Ftmp%2Fcompetitor.pdf" },
+            ],
+            artifactIds: ["a0"],
+          }],
           heartbeats: [],
         };
       }
@@ -249,23 +275,39 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).not.toContain("汇报附件（2）");
 
     // Click report header to expand full Markdown report & attachments
-    const expandBtn = [...container.querySelectorAll("button")].find(b => b.getAttribute("aria-expanded") === "false")!;
+    const expandBtn = [...container.querySelectorAll("button")].find(b => b.getAttribute("aria-expanded") === "false" && b.textContent?.includes("独立站首月投放复盘报告"))!;
     await act(async () => { expandBtn.click(); });
     expect(expandBtn.getAttribute("aria-expanded")).toBe("true");
     expect(container.textContent).toContain("汇报附件（2）");
     expect(container.textContent).toContain("report.md");
     expect(container.textContent).toContain("chart.png");
-    expect(container.textContent).toContain("预览");
-    expect(container.textContent).toContain("下载");
 
-    // Single click on 通过 approves all bundled attachments in one request
+    // Single click on 通过 approves all bundled attachments in one request and archives immediately
     const approveBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.trim() === "通过")!;
     await act(async () => { approveBtn.click(); });
     expect(mockApi).toHaveBeenCalledWith(
       "/api/donebot/opc/reports/review",
       expect.objectContaining({ method: "POST" }),
     );
-    expect(container.textContent).not.toContain("独立站首月投放复盘报告");
+    expect(container.textContent).toContain("所有汇报与工作流均已拍板");
+
+    // Open the right-hand approved reports sidebar drawer
+    const archiveTrigger = [...container.querySelectorAll("button")].find(b => b.textContent?.includes("已通过汇报") && b.hasAttribute("aria-expanded"))!;
+    await act(async () => { archiveTrigger.click(); });
+    const aside = container.querySelector('aside[aria-label="已通过汇报"]');
+    expect(aside).not.toBeNull();
+    const text = aside!.textContent ?? "";
+    expect(text).toContain("独立站首月投放复盘报告");
+    expect(text).toContain("上周竞品调研简报");
+    // Reverse chronological order: newly approved report appears before the earlier report
+    expect(text.indexOf("独立站首月投放复盘报告")).toBeLessThan(text.indexOf("上周竞品调研简报"));
+
+    // Click an archived report to read its full Markdown body and view its attachments
+    const archivedItemBtn = [...aside!.querySelectorAll("button")].find(b => b.textContent?.includes("上周竞品调研简报"))!;
+    await act(async () => { archivedItemBtn.click(); });
+    expect(aside!.textContent).toContain("返回已通过汇报");
+    expect(aside!.textContent).toContain("详细分析如下");
+    expect(aside!.textContent).toContain("competitor.pdf");
   });
 
   it("lays out org chart via Paperclip layout engine and renders OrgChart + Workflows views", async () => {

@@ -59,7 +59,7 @@ function formatReportTime(at: number): string {
   });
 }
 
-function ReportAttachmentTile({
+export function ReportAttachmentTile({
   attachment,
   onPreview,
 }: {
@@ -223,7 +223,7 @@ export function OpcBossReportCard({
   report: OpcBossReportItem;
   bot?: Bot;
   defaultExpanded?: boolean;
-  onResolved: (reportId: string) => void;
+  onResolved: (reportId: string, decision: "approved" | "changes_requested") => void;
   onPreviewAttachment: (att: OpcBossReportAttachment, report: OpcBossReportItem) => void;
   onJumpChat: (report: OpcBossReportItem) => void;
 }) {
@@ -260,7 +260,7 @@ export function OpcBossReportCard({
       }
       clearReviseDraft(draftKey);
       notifyOpcOverviewChanged("boss-console");
-      onResolved(report.id);
+      onResolved(report.id, "approved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "审批操作失败，请稍后重试。");
       releaseReviseDraftWork(draftKey);
@@ -301,7 +301,7 @@ export function OpcBossReportCard({
       }
       clearReviseDraft(draftKey);
       notifyOpcOverviewChanged("boss-console");
-      onResolved(report.id);
+      onResolved(report.id, "changes_requested");
     } catch (err) {
       setError(err instanceof Error ? err.message : "派发修改意见失败。");
       releaseReviseDraftWork(draftKey);

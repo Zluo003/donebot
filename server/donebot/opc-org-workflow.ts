@@ -830,14 +830,20 @@ export function createDoneBotOrgWorkflowRoutes(deps: DoneBotOrgWorkflowRouteDeps
         }
 
         if (body.action === "approve") {
+          const approvedNow = Date.now();
           if (run.stepResults[idx]) {
-            run.stepResults[idx] = { ...run.stepResults[idx]!, status: "completed", finishedAt: Date.now() };
+            run.stepResults[idx] = {
+              ...run.stepResults[idx]!,
+              status: "completed",
+              finishedAt: run.stepResults[idx]!.finishedAt ?? approvedNow,
+              approvedAt: approvedNow,
+            };
           }
           if (deps.opcStore) {
             approveWorkflowStepArtifacts(deps.store, deps.opcStore, run, idx);
           }
           if (idx + 1 >= run.stepResults.length) {
-            const done: OpcWorkflowRun = { ...run, status: "completed", finishedAt: Date.now() };
+            const done: OpcWorkflowRun = { ...run, status: "completed", finishedAt: approvedNow };
             deps.orgStore.saveWorkflowRun(done);
             json(res, 200, { run: done });
             return;

@@ -13,7 +13,7 @@ import type { SkillListing } from "../skills.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
 import { createDoneBotMarketClient } from "./market-gateway.ts";
-import { buildPendingBossReports, collectEnrichedArtifacts } from "./opc-boss-reports.ts";
+import { buildBossReports, collectEnrichedArtifacts } from "./opc-boss-reports.ts";
 import { DoneBotOpcStore } from "./opc-store.ts";
 import type { DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
 import { runPaperclipEvalMatrix } from "./paperclip-eval-kernel.ts";
@@ -337,10 +337,11 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
         const workflowRuns = deps.orgStore?.listWorkflowRuns() ?? [];
         const waitingWorkflowRuns = deps.orgStore?.listWaitingWorkflowRuns() ?? [];
         const orgChart = deps.orgStore?.getOrgChart(deps.store.bots);
-        const { reports: pendingReports, workflowOwnedArtifactIds } = buildPendingBossReports({
+        const { pendingReports, approvedReports, workflowOwnedArtifactIds } = buildBossReports({
           store: deps.store,
           allArtifacts,
           workflowRuns,
+          workflows,
           orgChart,
         });
         const pendingArtifacts = allArtifacts.filter(a => a.reviewStatus === "pending" && !workflowOwnedArtifactIds.has(a.id));
@@ -349,6 +350,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
         const overview: OpcBossOverview = {
           pendingArtifactCount: pendingArtifacts.length,
           pendingReportCount: pendingReports.length,
+          approvedReportCount: approvedReports.length,
           activeHeartbeatCount: heartbeats.filter(h => h.enabled && !h.pausedByCircuitBreaker).length,
           trippedCircuitBreakerCount: heartbeats.filter(h => h.pausedByCircuitBreaker).length + trippedWorkflowCount,
           activeGoalCount: goals.length,
@@ -358,6 +360,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
           spend,
           pendingArtifacts: pendingArtifacts.slice(0, 24),
           pendingReports: pendingReports.slice(0, 24),
+          approvedReports: approvedReports.slice(0, 60),
           waitingWorkflowRuns: waitingWorkflowRuns.slice(0, 12),
           heartbeats,
         };

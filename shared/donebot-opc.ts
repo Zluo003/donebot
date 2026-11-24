@@ -248,6 +248,8 @@ export interface OpcWorkflowStepRun {
   revisionNote?: string;
   startedAt?: number;
   finishedAt?: number;
+  /** Timestamp when the Boss approved this gated step. */
+  approvedAt?: number;
 }
 
 export interface OpcWorkflowRun {
@@ -302,6 +304,8 @@ export interface OpcBossReportItem {
   department?: string;
   roleTitle?: string;
   at: number;
+  /** Timestamp when approved by the Boss (present on approved archive items). */
+  approvedAt?: number;
   threadId: string;
   reportMessageId?: string;
   attachments: OpcBossReportAttachment[];
@@ -320,6 +324,7 @@ export interface OpcBossReportItem {
 export interface OpcBossOverview {
   pendingArtifactCount: number;
   pendingReportCount?: number;
+  approvedReportCount?: number;
   activeHeartbeatCount: number;
   trippedCircuitBreakerCount: number;
   activeGoalCount: number;
@@ -329,6 +334,7 @@ export interface OpcBossOverview {
   spend: OpcSpendResponse;
   pendingArtifacts: OpcArtifactItem[];
   pendingReports?: OpcBossReportItem[];
+  approvedReports?: OpcBossReportItem[];
   waitingWorkflowRuns?: OpcWorkflowRun[];
   heartbeats: OpcHeartbeatConfig[];
 }

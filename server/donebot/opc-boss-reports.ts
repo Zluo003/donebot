@@ -3,6 +3,7 @@ import type {
   OpcBossReportAttachment,
   OpcBossReportItem,
   OpcOrgChartState,
+  OpcWorkflowDefinition,
   OpcWorkflowRun,
   OpcWorkflowStepRun,
 } from "../../shared/donebot-opc.ts";
@@ -193,20 +194,114 @@ export function collectWorkflowRunArtifactIds(
   return [...ids];
 }
 
-export function buildPendingBossReports(params: {
+function buildWorkflowReportItem(params: {
+  run: OpcWorkflowRun;
+  stepIndex: number;
+  step: OpcWorkflowStepRun;
+  bot?: BotRecord;
+  roleTitle?: string;
+  stepArts: readonly OpcArtifactItem[];
+  runArtifactIds: string[];
+  approvedAt?: number;
+}): OpcBossReportItem {
+  const { run, stepIndex, step, bot, roleTitle, stepArts, runArtifactIds, approvedAt } = params;
+  const body = step.output?.trim() || "（该步骤已完成，暂无补充说明正文）";
+  const fallbackTitle = `${run.workflowName} · ${step.stepName}`;
+  const title = extractReportTitle(body, fallbackTitle);
+  const summary = extractReportSummary(body, title);
+  const reportMessageId = stepArts[0]?.reportMessageId;
+
+  return {
+    id: `wf:${run.id}:${stepIndex}`,
+    source: "workflow",
+    title,
+    summary,
+    body,
+    botId: step.botId,
+    botName: bot?.name ?? step.botName,
+    botColor: bot?.color ?? "blue",
+    ...(bot?.section?.trim() ? { department: bot.section.trim() } : {}),
+    ...(roleTitle ? { roleTitle } : {}),
+    at: step.finishedAt ?? step.startedAt ?? run.startedAt,
+    ...(approvedAt !== undefined ? { approvedAt } : {}),
+    threadId: step.threadId || bot?.threadId || "",
+    ...(reportMessageId ? { reportMessageId } : {}),
+    attachments: stepArts.map(toAttachment),
+    artifactIds: runArtifactIds,
+    workflow: {
+      runId: run.id,
+      workflowId: run.workflowId,
+      workflowName: run.workflowName,
+      stepIndex,
+      totalSteps: run.stepResults.length,
+      stepName: step.stepName,
+      isLastStep: stepIndex + 1 >= run.stepResults.length,
+    },
+  };
+}
+
+function buildBotReportItem(params: {
+  items: readonly OpcArtifactItem[];
+  store: Pick<Store, "messagesFor">;
+  bot?: BotRecord;
+  roleTitle?: string;
+  approvedAt?: number;
+}): OpcBossReportItem {
+  const { items, store, bot, roleTitle, approvedAt } = params;
+  const primary = items[0]!;
+  const messages = store.messagesFor(primary.threadId);
+  const reportMsg = messages.find(m => m.id === primary.reportMessageId)
+    ?? messages.find(m => m.id === primary.messageId);
+  const rawBody = reportMsg?.text?.trim() ?? "";
+  const fallbackTitle = primary.title || primary.threadTitle || primary.name;
+  const title = rawBody ? extractReportTitle(rawBody, fallbackTitle) : fallbackTitle;
+  const body = rawBody || `**交付文件**：${items.map(i => `\`${i.name}\``).join("、")}`;
+  const summary = extractReportSummary(body, title)
+    || (approvedAt !== undefined ? `共 ${items.length} 份已通过附件` : `共 ${items.length} 份交付附件等待审阅`);
+  const latestAt = Math.max(...items.map(i => i.at));
+
+  return {
+    id: `msg:${primary.threadId}:${primary.reportMessageId}`,
+    source: "bot_report",
+    title,
+    summary,
+    body,
+    botId: primary.botId,
+    botName: primary.botName,
+    botColor: primary.botColor,
+    ...(bot?.section?.trim() ? { department: bot.section.trim() } : {}),
+    ...(roleTitle ? { roleTitle } : {}),
+    at: latestAt,
+    ...(approvedAt !== undefined ? { approvedAt } : {}),
+    threadId: primary.threadId,
+    reportMessageId: primary.reportMessageId,
+    attachments: items.map(toAttachment),
+    artifactIds: items.map(i => i.id),
+  };
+}
+
+export function buildBossReports(params: {
   store: Pick<Store, "bots" | "bot" | "messagesFor">;
   allArtifacts: readonly OpcArtifactItem[];
   workflowRuns: readonly OpcWorkflowRun[];
+  workflows?: readonly OpcWorkflowDefinition[];
   orgChart?: OpcOrgChartState | null;
   now?: number;
 }): {
-  reports: OpcBossReportItem[];
+  pendingReports: OpcBossReportItem[];
+  approvedReports: OpcBossReportItem[];
   workflowOwnedArtifactIds: Set<string>;
 } {
   const now = params.now ?? Date.now();
   const botById = new Map<string, BotRecord>(params.store.bots.map(b => [b.id, b]));
   const orgNodes = params.orgChart?.nodes ?? {};
   const hasExplicitApprovalNodes = Object.values(orgNodes).some(n => Boolean(n?.requireBossApproval));
+  const workflowById = new Map<string, OpcWorkflowDefinition>((params.workflows ?? []).map(w => [w.id, w]));
+
+  const roleOf = (botId: string): string | undefined => {
+    const bot = botById.get(botId);
+    return orgNodes[botId]?.roleTitle?.trim() || bot?.title?.trim() || undefined;
+  };
 
   // Track every artifact produced inside any workflow run so intermediate/gated workflow
   // files never duplicate into the standalone artifact approval queue.
@@ -219,97 +314,104 @@ export function buildPendingBossReports(params: {
     }
   }
 
-  const reports: OpcBossReportItem[] = [];
+  const pendingReports: OpcBossReportItem[] = [];
+  const approvedReports: OpcBossReportItem[] = [];
 
-  // 1. Waiting workflow approval gates — one formal report item per waiting gate.
+  // 1. Workflow approval gates — waiting gates go to pending, approved gates go to archive.
   for (const run of params.workflowRuns) {
-    if (run.status !== "waiting_approval") continue;
-    const stepIndex = run.currentStepIndex;
-    const step = run.stepResults[stepIndex];
-    if (!step) continue;
-    const bot = botById.get(step.botId);
-    const node = orgNodes[step.botId];
-    const stepArts = matchStepArtifacts(step, params.allArtifacts, now);
-    const runArtifactIds = collectWorkflowRunArtifactIds(run, stepIndex, params.allArtifacts, now);
-    const body = step.output?.trim() || "（该步骤已完成，暂无补充说明正文）";
-    const fallbackTitle = `${run.workflowName} · ${step.stepName}`;
-    const title = extractReportTitle(body, fallbackTitle);
-    const summary = extractReportSummary(body, title);
-    const reportMessageId = stepArts[0]?.reportMessageId;
+    const wfDef = workflowById.get(run.workflowId);
+    if (run.status === "waiting_approval") {
+      const stepIndex = run.currentStepIndex;
+      const step = run.stepResults[stepIndex];
+      if (step) {
+        pendingReports.push(buildWorkflowReportItem({
+          run,
+          stepIndex,
+          step,
+          bot: botById.get(step.botId),
+          roleTitle: roleOf(step.botId),
+          stepArts: matchStepArtifacts(step, params.allArtifacts, now),
+          runArtifactIds: collectWorkflowRunArtifactIds(run, stepIndex, params.allArtifacts, now),
+        }));
+      }
+    }
 
-    reports.push({
-      id: `wf:${run.id}:${stepIndex}`,
-      source: "workflow",
-      title,
-      summary,
-      body,
-      botId: step.botId,
-      botName: bot?.name ?? step.botName,
-      botColor: bot?.color ?? "blue",
-      ...(bot?.section?.trim() ? { department: bot.section.trim() } : {}),
-      ...(node?.roleTitle?.trim() || bot?.title?.trim() ? { roleTitle: node?.roleTitle?.trim() || bot?.title?.trim() } : {}),
-      at: step.finishedAt ?? step.startedAt ?? run.startedAt,
-      threadId: step.threadId || bot?.threadId || "",
-      ...(reportMessageId ? { reportMessageId } : {}),
-      attachments: stepArts.map(toAttachment),
-      artifactIds: runArtifactIds,
-      workflow: {
-        runId: run.id,
-        workflowId: run.workflowId,
-        workflowName: run.workflowName,
+    run.stepResults.forEach((step, stepIndex) => {
+      if (step.status !== "completed") return;
+      const defStep = wfDef?.steps.find(s => s.id === step.stepId);
+      const wasGated = step.approvedAt !== undefined || Boolean(defStep?.approvalGate);
+      if (!wasGated) return;
+      const approvedAt = step.approvedAt ?? step.finishedAt ?? step.startedAt ?? run.startedAt;
+      approvedReports.push(buildWorkflowReportItem({
+        run,
         stepIndex,
-        totalSteps: run.stepResults.length,
-        stepName: step.stepName,
-        isLastStep: stepIndex + 1 >= run.stepResults.length,
-      },
+        step,
+        bot: botById.get(step.botId),
+        roleTitle: roleOf(step.botId),
+        stepArts: matchStepArtifacts(step, params.allArtifacts, now),
+        runArtifactIds: collectWorkflowRunArtifactIds(run, stepIndex, params.allArtifacts, now),
+        approvedAt,
+      }));
     });
   }
 
-  // 2. Non-workflow pending deliverables — grouped per report message (1 report = 1 approval click).
-  const grouped = new Map<string, OpcArtifactItem[]>();
+  // 2. Non-workflow deliverables — grouped per report message (1 report = 1 approval click).
+  const pendingGrouped = new Map<string, OpcArtifactItem[]>();
+  const approvedGrouped = new Map<string, OpcArtifactItem[]>();
   for (const item of params.allArtifacts) {
-    if (item.reviewStatus !== "pending") continue;
     if (workflowOwnedArtifactIds.has(item.id)) continue;
-    if (hasExplicitApprovalNodes && !orgNodes[item.botId]?.requireBossApproval) continue;
     const groupKey = `${item.botId}:${item.threadId}:${item.reportMessageId}`;
-    const list = grouped.get(groupKey) ?? [];
-    list.push(item);
-    grouped.set(groupKey, list);
+    if (item.reviewStatus === "pending") {
+      if (hasExplicitApprovalNodes && !orgNodes[item.botId]?.requireBossApproval) continue;
+      const list = pendingGrouped.get(groupKey) ?? [];
+      list.push(item);
+      pendingGrouped.set(groupKey, list);
+    } else if (item.reviewStatus === "approved") {
+      const list = approvedGrouped.get(groupKey) ?? [];
+      list.push(item);
+      approvedGrouped.set(groupKey, list);
+    }
   }
 
-  for (const items of grouped.values()) {
+  for (const items of pendingGrouped.values()) {
     const primary = items[0]!;
-    const bot = botById.get(primary.botId);
-    const node = orgNodes[primary.botId];
-    const messages = params.store.messagesFor(primary.threadId);
-    const reportMsg = messages.find(m => m.id === primary.reportMessageId)
-      ?? messages.find(m => m.id === primary.messageId);
-    const rawBody = reportMsg?.text?.trim() ?? "";
-    const fallbackTitle = primary.title || primary.threadTitle || primary.name;
-    const title = rawBody ? extractReportTitle(rawBody, fallbackTitle) : fallbackTitle;
-    const body = rawBody || `**交付文件**：${items.map(i => `\`${i.name}\``).join("、")}`;
-    const summary = extractReportSummary(body, title) || `共 ${items.length} 份交付附件等待审阅`;
-    const latestAt = Math.max(...items.map(i => i.at));
-
-    reports.push({
-      id: `msg:${primary.threadId}:${primary.reportMessageId}`,
-      source: "bot_report",
-      title,
-      summary,
-      body,
-      botId: primary.botId,
-      botName: primary.botName,
-      botColor: primary.botColor,
-      ...(bot?.section?.trim() ? { department: bot.section.trim() } : {}),
-      ...(node?.roleTitle?.trim() || bot?.title?.trim() ? { roleTitle: node?.roleTitle?.trim() || bot?.title?.trim() } : {}),
-      at: latestAt,
-      threadId: primary.threadId,
-      reportMessageId: primary.reportMessageId,
-      attachments: items.map(toAttachment),
-      artifactIds: items.map(i => i.id),
-    });
+    pendingReports.push(buildBotReportItem({
+      items,
+      store: params.store,
+      bot: botById.get(primary.botId),
+      roleTitle: roleOf(primary.botId),
+    }));
   }
 
-  reports.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
-  return { reports, workflowOwnedArtifactIds };
+  for (const [groupKey, items] of approvedGrouped.entries()) {
+    // Only consider a message's report archived once no sibling artifact in the same message is still pending.
+    if (pendingGrouped.has(groupKey)) continue;
+    const primary = items[0]!;
+    const approvedAt = Math.max(...items.map(i => i.reviewedAt ?? i.at));
+    approvedReports.push(buildBotReportItem({
+      items,
+      store: params.store,
+      bot: botById.get(primary.botId),
+      roleTitle: roleOf(primary.botId),
+      approvedAt,
+    }));
+  }
+
+  pendingReports.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+  approvedReports.sort((a, b) => (b.approvedAt ?? b.at) - (a.approvedAt ?? a.at) || a.id.localeCompare(b.id));
+  return { pendingReports, approvedReports, workflowOwnedArtifactIds };
+}
+
+export function buildPendingBossReports(params: {
+  store: Pick<Store, "bots" | "bot" | "messagesFor">;
+  allArtifacts: readonly OpcArtifactItem[];
+  workflowRuns: readonly OpcWorkflowRun[];
+  orgChart?: OpcOrgChartState | null;
+  now?: number;
+}): {
+  reports: OpcBossReportItem[];
+  workflowOwnedArtifactIds: Set<string>;
+} {
+  const { pendingReports, workflowOwnedArtifactIds } = buildBossReports(params);
+  return { reports: pendingReports, workflowOwnedArtifactIds };
 }

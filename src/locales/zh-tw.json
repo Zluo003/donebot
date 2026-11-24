@@ -1942,7 +1942,7 @@
   "team.deleteKeepBotsDescription": "機器人與聊天室會移至「一般」，對話完整保留。部門及其共用指示會被刪除，且無法復原。",
   "team.deleteKeepBotsSimple": "其中的機器人與聊天室會連同對話一起保留，只是不再屬於任何部門。部門及其共用指示會被刪除，且無法復原。",
   "team.delete": "刪除部門",
-  "team.share": "分享部門…",
+  "team.share": "分享到 Bot 廣場",
   "team.actions": "{name} 部門的動作",
   "teamSettings.menu": "為這個部門的所有機器人設定…",
   "teamSettings.title": "為 {name} 中的所有機器人設定",

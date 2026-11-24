@@ -211,6 +211,22 @@ describe("DoneBot collab routes and bot tools", () => {
     expect(gateway.collabUpdateProfile).toHaveBeenCalledWith({ username: "阿泽", avatar_url: "" });
     expect(syncLocalProfile).toHaveBeenCalledWith({ name: "阿泽", avatarUrl: "", email: "alice@example.invalid" });
 
+    for (const forbidden of ["root", "Admin", "DoneBot官方", "在线客服", "管 理 员"]) {
+      const badProfileOut = fakeRes();
+      await handler({
+        req: {} as IncomingMessage,
+        res: badProfileOut.res,
+        url: new URL("http://127.0.0.1/api/donebot/collab/profile"),
+        path: "/api/donebot/collab/profile",
+        method: "PUT",
+        auth: { kind: "loopback", scopes: ["admin"] },
+        json: badProfileOut.json,
+        readBody: async () => ({ nickname: forbidden }),
+      });
+      expect(badProfileOut.status, forbidden).toBe(400);
+      expect(badProfileOut.body, forbidden).toEqual(expect.objectContaining({ code: "invalid_nickname" }));
+    }
+
     const remarkOut = fakeRes();
     await handler({
       req: {} as IncomingMessage,

@@ -254,7 +254,7 @@ export function installDoneBotCloud({ ipcMain, guardLocal, guardWorkspace, reque
   }, expires, renew: connection.renew }) : null;
   lifecycle?.whenReady().then(() => renewal?.start());
   lifecycle?.once("before-quit", () => { renewal?.stop(); cancel(); });
-  return { ...connection, open, cancel, syncMenu: () => syncPersonal(), refreshTheme: () => display?.refreshTheme(), hidesRail: () => Boolean(display?.visible()) || doneBotCloudEntry(activeEnvironment(saved())), start: () => renewal?.start(), stop: () => { renewal?.stop(); cancel(); }, select(entry, still) {
+  return { ...connection, open, cancel, syncMenu: () => syncPersonal(), refreshTheme: () => display?.refreshTheme(), hidesRail: () => true, start: () => renewal?.start(), stop: () => { renewal?.stop(); cancel(); }, select(entry, still) {
     connection.cancel();
     if (doneBotCloudEntry(entry)) return open({ entry, still });
     display?.hide();

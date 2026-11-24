@@ -221,7 +221,7 @@ export function ShareDepartmentToMarketPanel({
           <div className="flex items-center justify-between text-[12.5px]">
             <span className="inline-flex items-center gap-1.5 font-medium text-ink">
               <Users size={14} className="text-accent" />
-              待发布成员（{teamBots.length} 位 · {teamBots.length >= 2 ? "AI 工作室 / 部门整包" : "专家 Bot"}）
+              待发布成员（{teamBots.length} 位 · {teamBots.length >= 2 ? "部门整包" : "专家 Bot"}）
             </span>
             {routineCount > 0 && (
               <span className="text-[11.5px] text-ink-secondary">{routineCount} 条例行任务（安装后默认暂停）</span>

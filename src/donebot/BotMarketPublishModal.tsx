@@ -135,7 +135,7 @@ export function BotMarketPublishModal({
     const isStudio = listingType === "studio";
     if (isStudio) {
       if (selectedStudioBots.length < 2) {
-        setError("AI 工作室整包至少需要勾选 2 位本地 Bot 员工。");
+        setError("部门整包至少需要勾选 2 位本地 Bot 员工。");
         return;
       }
       const weak = selectedStudioBots.find(b => b.soul_length < 20);
@@ -299,7 +299,7 @@ export function BotMarketPublishModal({
                   <div className="inline-flex rounded-xl bg-card p-0.5 ring-[0.5px] ring-hairline/70">
                     {([
                       { key: "bot", label: "单个专家 Bot" },
-                      { key: "studio", label: "AI 工作室整包（2–8 位员工）" },
+                      { key: "studio", label: "部门整包（2–8 位员工）" },
                     ] as const).map(opt => (
                       <button
                         key={opt.key}
@@ -326,7 +326,7 @@ export function BotMarketPublishModal({
               <div>
                 <label className="mb-1.5 block text-[12.5px] font-medium text-ink">
                   {listingType === "studio"
-                    ? `勾选工作室成员（已选 ${selectedStudioBotIds.length}/8，至少 2 位）`
+                    ? `勾选部门成员（已选 ${selectedStudioBotIds.length}/8，至少 2 位）`
                     : "选择要分享的本地 Bot"}
                 </label>
                 {loadingBots ? (
@@ -380,7 +380,7 @@ export function BotMarketPublishModal({
                 <div className="rounded-xl border border-hairline bg-card p-3 text-[12px] text-ink-secondary space-y-1">
                   <div className="flex items-center gap-1.5 font-medium text-ink">
                     <Users size={13} className="text-accent" />
-                    工作室编制预览（{selectedStudioBots.length} 位 AI 员工 · 按实际消耗自动归因分润）
+                    部门编制预览（{selectedStudioBots.length} 位 AI 员工 · 按实际消耗自动归因分润）
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {selectedStudioBots.map(b => (

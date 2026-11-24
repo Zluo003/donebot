@@ -22,7 +22,7 @@ export function RailStripIcon({ size }: { size: number }) {
  * Advanced's, or Advanced's column when the sidebar shows only avatars. */
 export function ChromeRailToggle({ advanced = false, icons = false, bar, style }: { advanced?: boolean; icons?: boolean; bar?: string; style?: CSSProperties }) {
   const rail = useChromeRail();
-  if (!rail?.available) return null;
+  if (!UPSTREAM_SETTINGS.computerRail || !rail?.available) return null;
   const label = t(rail.hidden ? "rail.show" : "rail.hide");
   return <button type="button" data-rail-toggle aria-label={label} title={label} aria-expanded={!rail.hidden} style={style}
     onClick={() => setChromeRailHidden(!rail.hidden)}

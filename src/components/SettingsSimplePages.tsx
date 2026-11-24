@@ -198,7 +198,7 @@ export function SimpleAiPage({ has, disclose, connections, engines }: { has: Has
           </AdminOnly>
         </div>
       )}
-      {UPSTREAM_SETTINGS.apiKeys && has("connections") && (
+      {(UPSTREAM_SETTINGS.apiKeys || UPSTREAM_SETTINGS.appKeys) && has("connections") && (
         <AdminOnly>
           <SettingsDisclosureRow title={t("settings.section.connections")} block="connections" {...disclose("ai-keys")}>
             {connections}

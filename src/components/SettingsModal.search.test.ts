@@ -76,6 +76,17 @@ describe("Settings search in Simple mode", () => {
     }
   });
 
+  it("exposes Composio connected-app keys but never third-party LLM keys when only appKeys is enabled", () => {
+    for (const key of Object.keys(UPSTREAM_SETTINGS) as Array<keyof typeof UPSTREAM_SETTINGS>) UPSTREAM_SETTINGS[key] = false;
+    UPSTREAM_SETTINGS.appKeys = true;
+    type("composio");
+    expect(document.querySelector('[data-settings-key-result="composio"]')).not.toBeNull();
+    for (const blocked of ["openai", "anthropic", "deepseek", "ollama", "1password", "vps"]) {
+      type(blocked);
+      expect(document.querySelector("[data-settings-key-result]"), blocked).toBeNull();
+    }
+  });
+
   it("opens on the dialog itself, and a typed letter moves into search", () => {
     expect(document.activeElement).toBe(dialog());
     flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true, cancelable: true })));

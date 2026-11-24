@@ -126,9 +126,11 @@ test("native IPC saves a reusable Cloud entry and refuses renewal from another p
   assert.deepEqual(navigated, [origin, origin]);
   await handlers.get("donebot-cloud:local")({ senderFrame: { url: origin } });
   assert.equal(state.activeId, "local");
+  assert.equal(connection.hidesRail(), true);
   assert.equal(state.environments.length, 1);
   await connection.select(state.environments[0]);
   assert.equal(state.activeId, state.environments[0].id);
+  assert.equal(connection.hidesRail(), true);
   assert.equal(state.environments.length, 1);
 });
 

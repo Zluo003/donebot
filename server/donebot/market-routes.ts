@@ -251,7 +251,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           ? Array.from(new Set(input.bot_ids ?? []))
           : input.bot_id ? [input.bot_id] : [];
         if (isStudio && targetIds.length < 2) {
-          return json(res, 400, { error: "AI 工作室整包至少需要选择 2 位本地 Bot 员工。" });
+          return json(res, 400, { error: "部门整包至少需要选择 2 位本地 Bot 员工。" });
         }
         if (!isStudio && targetIds.length !== 1) {
           return json(res, 400, { error: "请选择要分享的本地 Bot。" });

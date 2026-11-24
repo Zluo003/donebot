@@ -332,4 +332,15 @@ describe("Boat's credit offer on the Boat card", () => {
     page();
     expect(row("box")).not.toBeNull(); expect(offer()).toBeNull();
   });
+
+  it("in DoneBot mode opens the Apps section by default with Composio visible and hides all LLM, voice, helper and computer keys", () => {
+    setConfig({ ...fx.config, donebot: { enabled: true } });
+    page();
+    expect([...host.querySelectorAll<HTMLElement>("[data-keys-section]")].map((element) => element.dataset.keysSection)).toEqual(["apps"]);
+    expect(expanded("apps")).toBe("true");
+    expect(rowsShown()).toContain("composio");
+    for (const hidden of ["openai", "anthropic", "deepseek", "ollama", "elevenlabs", "box", "vps", "onePassword", "jev"]) {
+      expect(row(hidden), hidden).toBeNull();
+    }
+  });
 });

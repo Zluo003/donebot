@@ -15,6 +15,7 @@ import {
   type MascotFaceColor,
 } from "../../shared/bot-avatar";
 import type { DoneBotChatMessage, DoneBotCollabChatBot } from "../../shared/donebot-collab";
+import { validateUserNickname } from "../../shared/nickname-policy";
 import { newBotBody } from "./avatars";
 import {
   cleanError,
@@ -492,10 +493,16 @@ export function CollabProfileDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
+    const trimmedNickname = nickname.trim();
+    const nicknameCheck = validateUserNickname(trimmedNickname);
+    if (!nicknameCheck.ok) {
+      setError(nicknameCheck.message ?? "昵称包含受限制词汇，请更换其他昵称。");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      const payload: { nickname: string; avatar_url?: string } = { nickname: nickname.trim() };
+      const payload: { nickname: string; avatar_url?: string } = { nickname: trimmedNickname };
       if (avatarTouched) payload.avatar_url = avatarUrl;
       const updated = await api<{ nickname?: string; avatar_url?: string; local_avatar_url?: string }>("/api/donebot/collab/profile", {
         method: "PUT",
@@ -624,7 +631,7 @@ export function CollabProfileDialog({
                 className={COLLAB_INPUT}
               />
               <span className="text-[11px] text-ink-tertiary">
-                账号邮箱：{email || "未登录"}（最多 64 个字符，留空则显示邮箱）
+                账号邮箱：{email || "未登录"}（最多 64 字，禁止使用官方、管理员、客服等保留词）
               </span>
             </div>
 

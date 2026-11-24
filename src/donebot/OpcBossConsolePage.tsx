@@ -7,7 +7,6 @@ import {
   Layers,
   MessageSquare,
   RefreshCw,
-  Store,
 } from "lucide-react";
 import type {
   OpcBossOverview,
@@ -176,7 +175,6 @@ export function OpcBossConsolePage() {
   const mediaTotalSpend = overview?.spend.available
     ? overview.spend.imageCost + overview.spend.videoCost + overview.spend.musicCost
     : 0;
-  const canOpenMarket = state.config?.donebot?.enabled === true && !state.config?.team && window.ogb?.remoteClient?.active !== true;
 
   const statusLine = pendingCount > 0
     ? `${pendingCount} 份正式汇报等待拍板 · ${visibleBots.length} 位员工在岗`
@@ -225,15 +223,6 @@ export function OpcBossConsolePage() {
                     </span>
                   )}
                 </button>
-                {canOpenMarket && (
-                  <button
-                    type="button"
-                    onClick={() => dispatch({ type: "showMarket" })}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-[13px] font-medium text-app transition-opacity hover:opacity-85"
-                  >
-                    <Store size={14} aria-hidden="true" /> 雇佣工作室
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => void loadAll()}
@@ -364,7 +353,7 @@ export function OpcBossConsolePage() {
               >
                 {employeeRows.length === 0 ? (
                   <div className="py-8 text-center text-[13px] text-ink-tertiary">
-                    还没有 AI 员工，点击右上角「雇佣工作室」即可一键组建团队。
+                    还没有 AI 员工，可在左侧「Bot 广场」雇佣或新建机器人组建团队。
                   </div>
                 ) : (
                   <table className="w-full border-collapse text-left text-[13px]">

@@ -163,7 +163,7 @@ export function BotMarketPage() {
           <Store size={18} className="text-accent" />
           <h1 className="text-[15.5px] font-semibold">Bot 广场</h1>
           <span className="hidden text-[12px] text-ink-secondary sm:inline">
-            一键雇佣整套 AI 工作室或专家员工 · 分享作品持续赚取算力分润
+            一键雇佣整套部门或专家员工 · 分享作品持续赚取算力分润
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -238,7 +238,7 @@ export function BotMarketPage() {
                   <div role="group" aria-label="类型筛选" className="inline-flex items-center rounded-xl bg-card p-0.5 ring-[0.5px] ring-hairline/70">
                     {([
                       { key: "all", label: "全部" },
-                      { key: "studio", label: "AI 工作室" },
+                      { key: "studio", label: "部门" },
                       { key: "bot", label: "专家 Bot" },
                     ] as const).map(opt => (
                       <button
@@ -381,7 +381,7 @@ export function BotMarketPage() {
                               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-tertiary">
                                 {isStudio && (
                                   <span className="inline-flex items-center gap-1 font-medium text-accent">
-                                    <Users size={11} /> AI 工作室 · {item.bot_count} 位员工
+                                    <Users size={11} /> 部门 · {item.bot_count} 位员工
                                   </span>
                                 )}
                                 {!isStudio && <span>{item.category_name}</span>}
@@ -441,7 +441,7 @@ export function BotMarketPage() {
                               className="inline-flex items-center gap-1 rounded-xl bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90 disabled:opacity-50"
                             >
                               {busyId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                              {isStudio ? "雇佣工作室" : "安装"}
+                              {isStudio ? "雇佣部门" : "安装"}
                             </button>
                           )}
                         </div>

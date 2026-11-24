@@ -14,6 +14,7 @@ export const UPSTREAM_SETTINGS = {
   advanced: false,
   computers: false,
   apiKeys: false,
+  appKeys: true,
   welcomeTour: false,
   diagnostics: false,
   profilePhone: false,
@@ -22,7 +23,7 @@ export const UPSTREAM_SETTINGS = {
 
 export function doneBotSettingsSectionVisible(id: string): boolean {
   if (!UPSTREAM_SETTINGS.computers && ["computer", "companion", "remote", "desktopWorkspaces", "logins"].includes(id)) return false;
-  return id !== "connections" || UPSTREAM_SETTINGS.apiKeys;
+  return id !== "connections" || UPSTREAM_SETTINGS.apiKeys || UPSTREAM_SETTINGS.appKeys;
 }
 
 export function rememberDoneBotCloud(response: Response): void {
@@ -55,6 +56,14 @@ export const UPSTREAM_SERVICES = {
 
 export function doneBotKeyVisible(id: string): boolean {
   return (id !== "box" || UPSTREAM_SERVICES.boat) && (id !== "modelgo" || UPSTREAM_SERVICES.promotions);
+}
+
+export function doneBotKeyAllowed(entry: { id: string; section: string }, donebotEnabled = false): boolean {
+  if (!doneBotKeyVisible(entry.id)) return false;
+  if (donebotEnabled || !UPSTREAM_SETTINGS.apiKeys) {
+    return UPSTREAM_SETTINGS.appKeys && entry.section === "apps";
+  }
+  return true;
 }
 
 export function doneBotPlaceChoices(choices: RailAddChoices): RailAddChoices {

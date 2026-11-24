@@ -622,7 +622,7 @@ export function PluginsPanel() {
                 className="underline underline-offset-2 hover:text-ink"
                 onClick={() => {
                   close();
-                  dispatch({ type: "toggleAppSettings", open: true });
+                  dispatch(openKeySettings("composio"));
                 }}
               >
                 {t("connectors.updateKey")}

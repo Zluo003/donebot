@@ -1,5 +1,5 @@
 import { DoneBotMobileAccess } from "../donebot/MobileAccess";
-import { UPSTREAM_SERVICES, UPSTREAM_SETTINGS, doneBotKeyVisible, doneBotSettingsSectionVisible } from "@/donebot/services";
+import { UPSTREAM_SERVICES, UPSTREAM_SETTINGS, doneBotKeyAllowed, doneBotSettingsSectionVisible } from "@/donebot/services";
 import { useEffect, useRef, useState } from "react";
 import { Archive, Cloud, Gauge, CloudDownload, Coins, Download, FlaskConical, KeyRound, LockKeyhole, Monitor, Palette, ScrollText, Search, Settings, Sparkles, TabletSmartphone, Terminal, User, Users, X, Building2, Zap, BookOpen, ImagePlus } from "lucide-react";
 import { useStore, type AppSettingsSection } from "@/state/store";
@@ -175,24 +175,32 @@ export function revealSettingsBlock(
   if (block) scrollWithin(scroller, block);
 }
 
-function simplePageMatches(page: SimpleSettingsPage, query: string): boolean {
+function simplePageMatches(page: SimpleSettingsPage, query: string, donebotEnabled = false): boolean {
   if (!query) return true;
   if ([t(page.labelKey), ...page.keywords ?? []].some((part) => part.toLowerCase().includes(query))) return true;
   return page.sections.some((id) => {
     const entry = SECTIONS.find((candidate) => candidate.id === id);
-    return entry ? sectionMatches(entry, query) : false;
+    return entry ? sectionMatches(entry, query, donebotEnabled) : false;
   });
 }
 
-export function sectionMatches(section: (typeof SECTIONS)[number], query: string): boolean {
+export function sectionMatches(section: (typeof SECTIONS)[number], query: string, donebotEnabled = false): boolean {
   if (!doneBotSettingsSectionVisible(section.id)) return false;
   if (!query) return true;
-  if (section.id === "connections" && KEY_CATALOG.some((entry) => doneBotKeyVisible(entry.id) && keyMatches(entry, query))) return true;
+  if (section.id === "connections") {
+    if (KEY_CATALOG.some((entry) => doneBotKeyAllowed(entry, donebotEnabled) && keyMatches(entry, query))) return true;
+    if (donebotEnabled || !UPSTREAM_SETTINGS.apiKeys) {
+      return [t(section.labelKey), "api", "key", "keys", "api key", "api keys", "connections", "composio", "应用", "密钥"]
+        .some((part) => part.toLowerCase().includes(query));
+    }
+  }
   return [t(section.labelKey), ...section.keywords].some((part) => part.toLowerCase().includes(query));
 }
 
-export function keySearchResults(query: string): KeyEntry[] {
-  return UPSTREAM_SETTINGS.apiKeys && query ? KEY_CATALOG.filter((entry) => doneBotKeyVisible(entry.id) && keyMatches(entry, query)).slice(0, 8) : [];
+export function keySearchResults(query: string, donebotEnabled = false): KeyEntry[] {
+  return (UPSTREAM_SETTINGS.apiKeys || UPSTREAM_SETTINGS.appKeys) && query
+    ? KEY_CATALOG.filter((entry) => doneBotKeyAllowed(entry, donebotEnabled) && keyMatches(entry, query)).slice(0, 8)
+    : [];
 }
 
 export const openKeyResult = (entry: KeyEntry) => entry.uses ? openKeySettings(entry.uses, entry.id) : openKeySettings(entry.id);
@@ -240,12 +248,13 @@ function SettingsDialog() {
     .filter((entry) => entry.id !== "people" || (!window.ogb && state.config?.cloudHome !== true))
     .filter((entry) => entry.id !== "activity" || (!window.ogb && ownerOrAdmin === true))
     .filter((entry) => entry.id !== "botAccess" || (Boolean(state.config?.team) && ownerOrAdmin === true));
+  const donebotEnabled = state.config?.donebot?.enabled === true;
   const availableSections = baseSections.filter((entry) => entry.id !== "skills" || skillsLibraryEnabled(state.config));
-  const visibleSections = availableSections.filter((entry) => sectionMatches(entry, q));
+  const visibleSections = availableSections.filter((entry) => sectionMatches(entry, q, donebotEnabled));
 
   const simpleAvailable = new Set<AppSettingsSection>([...availableSections.map((entry) => entry.id), ...(remoteActive ? [] : ["updates" as const])]);
   const simplePages = advanced ? [] : simpleSettingsPages(simpleAvailable, section);
-  const visiblePages = simplePages.filter((page) => simplePageMatches(page, q));
+  const visiblePages = simplePages.filter((page) => simplePageMatches(page, q, donebotEnabled));
   const currentPage = simplePages.find((page) => page.sections.includes(section));
 
   const sectionLabelKey = advanced
@@ -275,7 +284,7 @@ function SettingsDialog() {
   const [reveal, setReveal] = useState<string | null>(null);
   const advancedMatches = !UPSTREAM_SETTINGS.advanced || advanced || SIMPLE_ONLY || !q ? [] : SIMPLE_ADVANCED_ONLY.filter((key) => t(key).toLowerCase().includes(q));
   const moreSections = availableSections.filter((entry) => SIMPLE_HIDDEN_SECTIONS.includes(entry.id));
-  const keyResults = remoteActive || !availableSections.some((entry) => entry.id === "connections") ? [] : keySearchResults(q);
+  const keyResults = remoteActive || !availableSections.some((entry) => entry.id === "connections") ? [] : keySearchResults(q, donebotEnabled);
   const keyResultButtons = (className: string) => keyResults.map((entry) => (
     <button key={entry.id} type="button" data-settings-key-result={entry.id} className={className}
       onClick={() => { setQuery(""); setSubPage(null); dispatch(openKeyResult(entry)); }}>

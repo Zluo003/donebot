@@ -6,6 +6,7 @@ import { z } from "zod";
 import { botAvatarProfile, clampAvatarFocus, clampAvatarZoom } from "../../shared/bot-avatar.ts";
 import { EXTERNAL_CODING_AGENT_SHARE_REFUSAL, isExternalCodingAgentBot } from "../../shared/coding-agents.ts";
 import { DONEBOT_COLLAB_MAX_FILE_BYTES, type DoneBotCollabChatBot } from "../../shared/donebot-collab.ts";
+import { validateUserNickname } from "../../shared/nickname-policy.ts";
 import { ATTACHMENTS_DIR } from "../attachments.ts";
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
@@ -765,7 +766,11 @@ export function createDoneBotCollabRoutes(deps: DoneBotCollabRouteDeps): RouteHa
           throw new DoneBotGatewayError(400, "invalid_avatar", "头像仅支持 PNG、JPEG 或 WebP 图片。");
         }
         const payload: { username?: string; avatar_url?: string } = {};
-        if (parsed.data.nickname !== undefined) payload.username = parsed.data.nickname;
+        if (parsed.data.nickname !== undefined) {
+          const check = validateUserNickname(parsed.data.nickname);
+          if (!check.ok) throw new DoneBotGatewayError(400, "invalid_nickname", check.message ?? "昵称包含受限制词汇，请更换其他昵称。");
+          payload.username = parsed.data.nickname;
+        }
         if (parsed.data.avatar_url !== undefined) payload.avatar_url = parsed.data.avatar_url.trim();
         const updated = await gateway.collabUpdateProfile(payload);
         const identity = await gateway.collabIdentity();

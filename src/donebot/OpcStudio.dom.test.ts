@@ -187,19 +187,18 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("老板批示台");
     expect(container.textContent).toContain("打开完整老板台");
 
-    // 3. Full Boss Console renders KPI strip, employee table, single Hire button, no Org button, and no removed Goal Card or 24h Heartbeat
+    // 3. Full Boss Console renders KPI strip, employee table, and no duplicate nav/hire buttons or removed Goal Card / 24h Heartbeat
     await act(async () => {
       root!.render(createElement(OpcBossConsolePage));
     });
     expect(container.textContent).toContain("在岗员工");
     expect(container.textContent).toContain("封面视觉");
     expect(container.textContent).not.toContain("组织与流程");
+    expect(container.textContent).not.toContain("雇佣工作室");
     expect(container.textContent).not.toContain("去广场逛 AI 工作室");
     expect(container.textContent).not.toContain("从广场一键雇佣");
     expect(container.textContent).not.toContain("项目目标卡");
     expect(container.textContent).not.toContain("24h 静默巡检");
-    const hireButtons = [...container.querySelectorAll("button")].filter(b => b.textContent?.includes("雇佣"));
-    expect(hireButtons).toHaveLength(1);
   });
 
   it("expands formal Boss report, approves in one click into the reverse-chronological approved right drawer, and reads archived reports", async () => {

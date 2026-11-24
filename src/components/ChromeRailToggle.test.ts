@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { withUpstreamServices } from "@/testing/upstream-services";
+withUpstreamServices();
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -21,9 +23,11 @@ function bridge(answer: ChromeRailState | Error, { refuse = false } = {}) {
 }
 
 /** A fresh page with the sidebar's button and Settings' switch, as this window's bridge answers them. */
-async function page(rail: ChromeRailBridge | undefined) {
+async function page(rail: ChromeRailBridge | undefined, { computerRail = true } = {}) {
   vi.resetModules();
   Object.assign(window, { ogb: rail ? { rail } : undefined });
+  const { UPSTREAM_SETTINGS } = await import("@/donebot/services");
+  UPSTREAM_SETTINGS.computerRail = computerRail;
   const { setLocale } = await import("@/lib/i18n");
   setLocale("en");
   const { ChromeRailRow, ChromeRailToggle } = await import("./ChromeRailToggle");
@@ -80,4 +84,10 @@ it("nothing in a browser, on an older app, on a page that isn't beside the rail,
     await act(async () => root?.unmount());
     root = null;
   }
+});
+
+it("hides both the window rail toggle button and settings switch when computerRail is disabled", async () => {
+  const { rail } = bridge({ available: true, hidden: false });
+  await page(rail, { computerRail: false });
+  expect([button(), toggle()]).toEqual([null, null]);
 });

@@ -1,4 +1,4 @@
-import { doneBotKeyVisible } from "@/donebot/services";
+import { UPSTREAM_SETTINGS, doneBotKeyAllowed } from "@/donebot/services";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronRight, Search } from "lucide-react";
 import { useStore, type ConfigStatus } from "@/state/store";
@@ -127,8 +127,10 @@ function landOn(page: HTMLElement | null, request: KeyFocusRequest, section: Key
 export function KeysPage() {
   const { state } = useStore();
   const [query, setQuery] = useState("");
+  const donebotEnabled = state.config?.donebot?.enabled === true;
+  const appKeysOnly = donebotEnabled || !UPSTREAM_SETTINGS.apiKeys;
   const [open, setOpen] = useState<ReadonlySet<KeySectionId>>(() => new Set(
-    KEY_SECTIONS.filter((section) => section.id === "ai" || KEY_CATALOG.some((entry) => entry.section === section.id && connected(entry, state.config)))
+    KEY_SECTIONS.filter((section) => (appKeysOnly ? section.id === "apps" : section.id === "ai") || KEY_CATALOG.some((entry) => entry.section === section.id && connected(entry, state.config)))
       .map((section) => section.id),
   ));
   const pageRef = useRef<HTMLDivElement>(null);
@@ -152,7 +154,7 @@ export function KeysPage() {
 
   // With Azure chosen, Live calls do not use the OpenAI key that row points at.
   const azureLive = state.config?.live?.provider === "azure";
-  const rows = KEY_CATALOG.filter((entry) => doneBotKeyVisible(entry.id) && !(state.config?.donebot?.enabled && ["ai", "servers", "helpers", "voice"].includes(entry.section)) && keyMatches(entry, q) && !(azureLive && entry.id === "liveCalls"));
+  const rows = KEY_CATALOG.filter((entry) => doneBotKeyAllowed(entry, donebotEnabled) && keyMatches(entry, q) && !(azureLive && entry.id === "liveCalls"));
   const sections = KEY_SECTIONS.flatMap((section) => {
     const own = rows.filter((entry) => entry.section === section.id);
     return own.length > 0 ? [{ id: section.id, rows: own }] : [];
@@ -160,7 +162,9 @@ export function KeysPage() {
 
   return (
     <div ref={pageRef} data-keys-page className="flex flex-col gap-4">
-      <p className="text-[13px] leading-[18px] text-ink-secondary">{t("settings.connections.subtitle")}</p>
+      <p className="text-[13px] leading-[18px] text-ink-secondary">
+        {appKeysOnly ? "用于连接外部应用和扩展工具的项目密钥（如 Composio）。粘贴密钥后会自动保存并检查。" : t("settings.connections.subtitle")}
+      </p>
       <div className="flex h-8 items-center gap-2 rounded-lg bg-ink/[0.05] px-[9px] focus-within:ring-2 focus-within:ring-focus/60">
         <Search size={15} aria-hidden="true" className="shrink-0 text-ink-secondary" />
         <input

@@ -202,7 +202,7 @@ export function BotMarketDetailModal({
                   <div className="flex items-center justify-between text-[12.5px]">
                     <span className="flex items-center gap-1.5 font-medium text-ink">
                       <Users size={14} className="text-accent" />
-                      AI 工作室成员编制（{detail.bot_count ?? detail.bots_summary?.length} 位员工）
+                      部门成员编制（{detail.bot_count ?? detail.bots_summary?.length} 位员工）
                     </span>
                     <span className="text-[11.5px] text-ink-tertiary">一键入职，按实际算力消耗计费</span>
                   </div>
@@ -436,7 +436,7 @@ export function BotMarketDetailModal({
                   {installed
                     ? "再安装一个副本"
                     : detail.listing_type === "studio"
-                      ? `一键雇佣整套工作室（${detail.bot_count ?? 2} 位员工）`
+                      ? `一键雇佣整套部门（${detail.bot_count ?? 2} 位员工）`
                       : "一键安装"}
                 </button>
               )}

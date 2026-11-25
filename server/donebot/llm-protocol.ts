@@ -446,7 +446,15 @@ export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: 
     }
     else throw new ChatProtocolError("The selected model has no registered native LLM protocol");
     const init: RequestInit = { method: "POST", headers: { "content-type": "application/json", ...(protocol === "messages" ? { "anthropic-version": "2023-06-01" } : {}) }, body: JSON.stringify(body), signal: input.signal, redirect: "error" };
-    const response = await (input.teamExecution ? request(path, init, input.teamExecution) : request(path, init));
+    let response: Response;
+    try {
+      response = await (input.teamExecution ? request(path, init, input.teamExecution) : request(path, init));
+    } catch (error) {
+      input.signal.throwIfAborted();
+      if (error instanceof ChatProtocolError || (error instanceof Error && error.name === "AbortError")) throw error;
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`DoneBot gateway connection failed: ${detail}`, error instanceof Error ? { cause: error } : undefined);
+    }
     if (!response.ok) { await response.body?.cancel().catch(() => {}); throw new Error(`DoneBot gateway model request failed (HTTP ${response.status})`); }
     let result: Completion;
     if (protocol === "messages") result = await readMessages(response, input);

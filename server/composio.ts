@@ -34,7 +34,7 @@ import {
 } from "./connector-advertisement.ts";
 import { connectedAppGrantSlugs, serviceSlugFor, serviceSlugForCandidates } from "./connector-verdict.ts";
 import { parseMcpResponse, withToolsListFallback } from "./connector-tools-list.ts";
-import { brokerAccess, managedComposioBrokerOff, type BrokerAccess } from "./composio-broker-access.ts";
+import { brokerAccess, managedComposioBrokerOff, managedComposioBrokerUrl, type BrokerAccess } from "./composio-broker-access.ts";
 export { applyManagedBrokerMessage, brokerAccess, setManagedBrokerAccess, type BrokerAccess } from "./composio-broker-access.ts";
 export { prepareProjectSession, trustedSessionMcpUrl } from "./composio-session.ts";
 
@@ -166,7 +166,7 @@ export function connectorSetup(
   managedHost: boolean = process.env.DONEBOT_DESKTOP_PARENT === "1",
 ): ConnectorSetup {
   if (configured(cfg)) return "ready";
-  return managedHost && !managedComposioBrokerOff() ? "service-unavailable" : "needs-setup";
+  return managedHost && Boolean(managedComposioBrokerUrl(process.env.DONEBOT_COMPOSIO_BROKER_URL, managedHost)) && !managedComposioBrokerOff() ? "service-unavailable" : "needs-setup";
 }
 
 async function brokerRequest(path: string, init?: RequestInit, broker = brokerAccess()): Promise<Response> {

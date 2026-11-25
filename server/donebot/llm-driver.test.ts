@@ -307,6 +307,25 @@ describe("DoneBot driver using the existing platform tool loop", () => {
     expect(JSON.stringify(fx.events)).not.toContain("private fixture detail");
   });
 
+  it.each(["messages", "gemini", "responses", "chat"] as const)("retries a pre-stream transport fetch failure on the follow-up round after a completed %s tool call without replaying the tool", async (protocol) => {
+    const fx = await fixture(protocol);
+    let attempt = 0;
+    fx.request.mockImplementation(async (_path, init) => {
+      fx.bodies.push(JSON.parse(init.body as string));
+      attempt += 1;
+      if (attempt === 1) return reply(protocol, true);
+      if (attempt === 2) throw new TypeError("fetch failed");
+      return reply(protocol, false);
+    });
+    await fx.instance.adapter.sendTurn({ threadId: "fixture", text: "Write the fixture", cwd: fx.cwd, approvalMode: "full", toolScope: { allow: ["native:workspace_write"] } });
+    await fx.completed();
+    expect(fx.request).toHaveBeenCalledTimes(3);
+    expect(fx.events).toContainEqual(expect.objectContaining({ type: "turn.retrying", attempt: 1, reason: "connection_reset" }));
+    expect(fx.events.filter((one) => one.type === "item.completed" && one.itemType === "tool")).toHaveLength(1);
+    expect(fx.events.at(-1)).toMatchObject({ type: "turn.completed", ok: true });
+    expect(await readFile(join(fx.cwd, "receipt.txt"), "utf8")).toBe("fixture written");
+  });
+
   it.each(["messages", "gemini", "responses", "chat"] as const)("does not replay a completed %s tool call when the following model request fails", async (protocol) => {
     const fx = await fixture(protocol);
     let attempt = 0;

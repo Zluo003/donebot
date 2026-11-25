@@ -141,6 +141,7 @@ describe("a Cloud home's connected-apps installation", () => {
   });
 
   it("boots with the service down, never throws, and retries with backoff until it registers", async () => {
+    vi.stubEnv("DONEBOT_COMPOSIO_BROKER_URL", BROKER);
     const broker = fakeBroker({
       "POST /v1/installations": [
         new TypeError("fetch failed"),

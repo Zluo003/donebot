@@ -1,7 +1,8 @@
 const TOKEN = /^[0-9a-f]{64}$/;
 
-/** DoneBot's connected-apps service (cloudflare/composio-broker): the packaged desktop app and a Cloud home use it. */
-export const DEFAULT_MANAGED_COMPOSIO_BROKER_URL = "https://openmausbot-composio.milindsoni201.workers.dev";
+/** Disabled by default in DoneBot so packaged builds never contact upstream OpenMausBot's third-party worker.
+ * Set DONEBOT_COMPOSIO_BROKER_URL explicitly to opt into a self-hosted broker, or configure a personal COMPOSIO_API_KEY. */
+export const DEFAULT_MANAGED_COMPOSIO_BROKER_URL = "";
 
 /** DONEBOT_COMPOSIO_BROKER=off: nothing reaches the managed service, whatever else is set. */
 export function managedComposioBrokerOff(environment = process.env) {

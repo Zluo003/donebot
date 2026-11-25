@@ -2,12 +2,14 @@ import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { requestTooLargeModel } from "../../shared/request-too-large";
 
-const UNREACHABLE = /^(?:TypeError:\s*)?(?:Failed to fetch|NetworkError when attempting to fetch resource\.?|Load failed|fetch failed)$/i;
+const UNREACHABLE = /^(?:TypeError:\s*)?(?:Failed to fetch|NetworkError when attempting to fetch resource\.?|Load failed)$/i;
 const TIMED_OUT = /^(?:TimeoutError:\s*)?(?:The operation was aborted due to timeout|signal timed out|The operation timed out\.?)$/i;
+const CONNECTION_DROP = /ECONNRESET|ECONNREFUSED|ECONNABORTED|EPIPE|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|socket hang up|connection (?:reset|refused)|gateway (?:stream )?connection (?:failed|reset)|^(?:TypeError:\s*)?fetch failed$/i;
 
 const TECHNICAL: RegExp[] = [
   UNREACHABLE,
   TIMED_OUT,
+  CONNECTION_DROP,
   /^\d{3}(?: [A-Za-z][\w '-]*)?$/,
   /[{[]\s*"[\w$-]+"\s*:/,
   /\n\s+at \S/,
@@ -23,7 +25,7 @@ const KINDS: Array<[RegExp, LocaleKey]> = [
   [UNREACHABLE, "error.plain.unreachable"],
   [/\b429\b|rate.?limit|too many requests/i, "error.plain.rateLimited"],
   [/overloaded|\b529\b|\b503\b|capacity|service unavailable/i, "error.plain.busy"],
-  [/ECONNRESET|ECONNREFUSED|ECONNABORTED|EPIPE|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|socket hang up|connection (?:reset|refused)/i, "error.plain.connection"],
+  [CONNECTION_DROP, "error.plain.connection"],
   [/timeout|timed out|ETIMEDOUT/i, "error.plain.timeout"],
   [/\b(?:EACCES|EPERM)\b/, "error.plain.permission"],
   [/\b40[13]\b|unauthori[sz]ed|forbidden/i, "error.plain.access"],

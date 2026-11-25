@@ -701,7 +701,9 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                 continue;
               }
               // Once a call has been handled, never replay it through a turn retry.
-              if (options.retryScale === undefined || abort.signal.aborted || streamed || seenCalls.size ||
+              // A pre-stream transport drop in a follow-up round only resends this round's HTTP request (tool results stay in messages).
+              const retryableTransportAfterTools = verdict.reason === "connection_reset" || verdict.reason === "timeout";
+              if (options.retryScale === undefined || abort.signal.aborted || streamed || (seenCalls.size > 0 && !retryableTransportAfterTools) ||
                   error instanceof ChatProtocolError || !verdict.transient || attempt >= RETRY_MAX_ATTEMPTS - 1) throw error;
               const delayMs = computeBackoff(attempt++);
               emit({ ...base(turn.threadId, turnId), type: "turn.retrying", attempt, delayMs, reason: verdict.reason });

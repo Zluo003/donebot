@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { connectorAvailability, connectorSetup } from "./composio.ts";
 import type { AppConfig } from "./config.ts";
+
+afterEach(() => vi.unstubAllEnvs());
 
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({ ...over }) as AppConfig;
 
@@ -37,7 +39,9 @@ describe("connectorSetup", () => {
     expect(connectorSetup(cfg({ composio: { apiKey: "" } }), false)).toBe("needs-setup");
   });
 
-  it("reports the managed service as unavailable only on a host it comes with (the installed desktop app, a Cloud home)", () => {
+  it("needs setup on a managed host when no managed broker URL is configured, and reports unavailable only when one is", () => {
+    expect(connectorSetup(cfg(), true)).toBe("needs-setup");
+    vi.stubEnv("DONEBOT_COMPOSIO_BROKER_URL", "https://broker.example");
     expect(connectorSetup(cfg(), true)).toBe("service-unavailable");
   });
 });

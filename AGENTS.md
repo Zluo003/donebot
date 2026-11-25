@@ -47,7 +47,8 @@ isolated fixture; never verify mutations against the user's live app or data.
 
 ## 打包默认
 
-除非用户明确指定其他方式，macOS 打包只生成 Apple 芯片（arm64）的未签名 DMG，不执行 Developer ID 签名或公证，也不生成 Intel 或 ZIP 安装包。`pnpm package:mac` 遵循此默认。
+- 日常未签名打包：除非用户明确指定其他方式，macOS 打包只生成 Apple 芯片（arm64）的未签名 DMG，不执行 Developer ID 签名或公证，也不生成 Intel 或 ZIP 安装包。`pnpm package:mac` 遵循此默认。
+- 正式签名版打包：当用户要求打包 macOS 正式签名版 DMG 时，必须同步生成配套的 macOS 自动更新升级 ZIP（`DoneBot-<version>-arm64.zip`，使用 `ditto -c -k --sequesterRsrc --keepParent` 封装同一已签名 `DoneBot.app`），同步刷新 `.blockmap`、`latest-mac.yml`（包含 zip 与 dmg）及 `SHA256SUMS.txt`，并完成 DMG 挂载与 ZIP 隔离解压后的深度签名校验。
 
 ## Comments
 

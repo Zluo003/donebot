@@ -8,6 +8,7 @@ import type { MausState } from "@/lib/mascot";
 import type { Bot } from "@/state/store";
 import { BOT_PROFILE_LIMITS } from "../../../shared/bot-profile";
 import { BotAvatar } from "../Avatar";
+import { coordinatorRoleLabel } from "../BotRole";
 import type { BotPatch } from "../bot-settings/useBotSettingsDerived";
 
 const inlineInputCls =
@@ -91,9 +92,9 @@ export function PanelHero({ bot, activeState, patch, editorOpen, onToggleEditor 
           <Pencil size={20} />
         </span>
         {bot.chiefOfStaff && (
-          <span data-panel-chief title={t("chat.chiefOfStaff")} className="absolute -bottom-0.5 -right-0.5 flex size-[22px] items-center justify-center rounded-full bg-accent text-accent-ink ring-[3px] ring-app">
+          <span data-panel-chief title={coordinatorRoleLabel(bot)} className="absolute -bottom-0.5 -right-0.5 flex size-[22px] items-center justify-center rounded-full bg-accent text-accent-ink ring-[3px] ring-app">
             <Crown size={12} aria-hidden="true" />
-            <span className="sr-only">{t("chat.chiefOfStaff")}</span>
+            <span className="sr-only">{coordinatorRoleLabel(bot)}</span>
           </span>
         )}
         <span

@@ -409,18 +409,18 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).not.toContain("跨部门交接");
     expect(container.textContent).not.toContain("右圆点拉交接线");
 
-    // Click system chief (General section) -> shows "设为系统总协调" and collaboration summary (no pipeline handoff checkboxes)
+    // Click system chief (General section) -> shows "设为总协调机器人" and collaboration summary (no pipeline handoff checkboxes)
     const empCard = container.querySelector<HTMLElement>('[data-org-node="b1"]')!;
     await act(async () => { empCard.click(); });
     expect(container.textContent).toContain("岗位、部门与协作规则");
-    expect(container.textContent).toContain("设为系统总协调");
+    expect(container.textContent).toContain("设为总协调机器人");
     expect(container.textContent).toContain("协作与交接规则");
     expect(container.textContent).not.toContain("流水线交接下一棒");
 
-    // Click named department bot -> shows "设为部门负责人"
+    // Click named department bot -> shows "设为部门协调机器人"
     const deptBotCard = container.querySelector<HTMLElement>('[data-org-node="b2"]')!;
     await act(async () => { deptBotCard.click(); });
-    expect(container.textContent).toContain("设为部门负责人");
+    expect(container.textContent).toContain("设为部门协调机器人");
 
     // Workflows list -> open full-workspace infinite-canvas node-graph editor
     mockApi.mockImplementation(async (path, init) => {
@@ -518,7 +518,7 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     const flatReportsSelect = flatSelects[1]!;
     const peerOpt = [...flatReportsSelect.querySelectorAll("option")].find(o => o.value === "d1")!;
     expect(peerOpt.disabled).toBe(true);
-    expect(container.textContent).toContain("暂无负责人，成员保持平级");
+    expect(container.textContent).toContain("暂无部门协调机器人，成员保持平级");
 
     // 2. Designating d1 as department chief lets d3 pick either d1 (chief) or d2 (sub-lead) while disabling Boss root.
     const headedBots = [duobao, { ...devA, chiefOfStaff: true }, devB, devC];

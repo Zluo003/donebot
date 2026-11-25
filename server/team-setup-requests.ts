@@ -11,8 +11,50 @@ import { UNDO_STALE, type DirectApply } from "./direct-apply.ts";
 import { harnessCapabilityLines, type DriverCapabilities } from "./harness-capabilities.ts";
 import { MAX_MCP_SERVERS, mcpServerNameError } from "./mcp-registry.ts";
 import { redactSecretsInText } from "./redact.ts"; import { chiefLevel } from "./chief-level.ts"; import { defaultBotRefusal } from "./default-bot.ts";
-import type { BotRecord, OptionCardData } from "./store.ts"; import { outsideDepartmentReason } from "./peer-roster.ts";
-import type { TeamSetupFields, TeamSetupOperation, TeamSetupRequest, TeamSetupResult, TeamSetupUndo } from "../shared/team-setup.ts";
+import { SECTION_CONTEXT_MAX_BYTES } from "./section-context.ts";
+import type { BotRecord, OptionCardData } from "./store.ts"; import { isSystemCoordinator, outsideDepartmentReason } from "./peer-roster.ts";
+import type { TeamSetupCreatedRoom, TeamSetupFields, TeamSetupOperation, TeamSetupRequest, TeamSetupResult, TeamSetupUndo } from "../shared/team-setup.ts";
+
+const DEPARTMENT_COORDINATOR_HINT = /(?:部门协调|部门负责人|负责人|主管|总监|导演|制片人|经理|组长|主编|总编|统筹|总控|带队|主理人|chief|coordinator|lead|director|manager|head)/i;
+
+function pickDefaultDepartmentCoordinator(operations: readonly TeamSetupOperation[]): TeamSetupOperation | undefined {
+  const eligible = operations.filter((op) => op.fields.chiefOfStaff !== false);
+  if (!eligible.length) return undefined;
+  return eligible.find((op) => DEPARTMENT_COORDINATOR_HINT.test([op.fields.title, op.fields.name, op.fields.description].filter(Boolean).join(" "))) ?? eligible[0];
+}
+
+function buildDefaultDepartmentInstructions(department: string, reason: string, operations: readonly TeamSetupOperation[], store: SetupStore): string {
+  const members = operations.map((op) => {
+    const existing = op.action === "update" ? store.bot(op.botId) : undefined;
+    return {
+      name: op.fields.name?.trim() || existing?.name || "未命名成员",
+      title: op.fields.title?.trim() || existing?.title || "",
+      chiefOfStaff: op.fields.chiefOfStaff ?? existing?.chiefOfStaff ?? false,
+    };
+  });
+  const coordinator = members.find((member) => member.chiefOfStaff);
+  const lines = [
+    `# ${department} 部门共享指示`,
+    "",
+    "## 部门目标",
+    `- ${reason.trim() || `承接「${department}」相关业务交付与协作。`}`,
+    "",
+    "## 部门分工与协调",
+    ...(coordinator
+      ? [`- 部门协调机器人：@${coordinator.name}${coordinator.title ? `（${coordinator.title}）` : ""} — 统筹本部门任务拆解、交接协调与汇总汇报，并向总协调机器人汇报。`]
+      : []),
+    ...members
+      .filter((member) => !coordinator || member.name !== coordinator.name)
+      .map((member) => `- @${member.name}${member.title ? `：${member.title}` : ""}`),
+    "",
+    "## 协作规范",
+    `- 本部门内部任务流转由${coordinator ? `部门协调机器人 @${coordinator.name}` : "部门负责人"}统筹，关键节点与交付物同步在「${department}群聊」留痕。`,
+    "- 涉及对外发布、付费消耗、外部授权或不可逆操作前须先确认。",
+    "- 不编造数据、来源或未完成的交付结果；遇到阻塞第一时间回报。",
+  ];
+  const text = lines.join("\n").trim();
+  return Buffer.byteLength(text, "utf8") <= SECTION_CONTEXT_MAX_BYTES ? text : text.slice(0, 6000);
+}
 
 const section = (value?: string) => value?.trim() || "";
 const teamName = z.string().trim().min(1).max(60).refine(fitsOnOneLine).refine((value) => redactSecretsInText(value) === value, "Team names cannot contain credentials");
@@ -34,8 +76,9 @@ const touchesMcp = (request: TeamSetupRequest) => request.operations.some((opera
 const planSchema = z.object({
   reason: z.string().trim().min(1).max(500),
   newTeams: z.array(teamName).max(8).default([]),
+  departmentInstructions: z.record(teamName, z.string().trim().min(1).max(SECTION_CONTEXT_MAX_BYTES)).optional(),
   operations: z.array(z.discriminatedUnion("action", [
-    z.object({ action: z.literal("create"), key: z.string().trim().min(1).max(80), fields: fieldsSchema }).strict(),
+    z.object({ action: z.literal("create"), key: z.string().trim().min(1).max(80).optional(), fields: fieldsSchema }).strict(),
     z.object({ action: z.literal("update"), botId: z.string().min(1).max(128), fields: fieldsSchema }).strict(),
   ])).min(1).max(MAX_SETUP_BOTS, `Review at most ${MAX_SETUP_BOTS} bots in one setup`),
 }).strict();
@@ -49,8 +92,9 @@ function takenKeys(path: readonly PropertyKey[]): string {
 
 function planProblem(error: z.ZodError): string {
   const issue = error.issues[0];
-  if (issue?.code !== "unrecognized_keys") return issue?.message ?? "Invalid team setup";
-  return `${issue.path.length ? `${issue.path.map(String).join(".")}: ` : ""}${issue.message}. It takes ${takenKeys(issue.path)}.`;
+  const where = issue?.path.length ? `${issue.path.map(String).join(".")}: ` : "";
+  if (issue?.code !== "unrecognized_keys") return `${where}${issue?.message ?? "Invalid team setup"}`;
+  return `${where}${issue.message}. It takes ${takenKeys(issue.path)}.`;
 }
 
 export class TeamSetupError extends Error {
@@ -112,6 +156,21 @@ interface Options {
   deleteBot(botId: string, revalidate: () => void, request?: TeamSetupRequest): Promise<void>;
   /** Why deleting this bot would be refused now, as a person's hold reaches it; null when it would not. */
   deletionRefusal(botId: string): string | null;
+  /** Runs after a non-deletion setup commits (e.g., writing department shared instructions, auto-creating department group chats & syncing org chart). */
+  onApplied?(request: TeamSetupRequest, result: TeamSetupResult):
+    | TeamSetupCreatedRoom[]
+    | {
+        createdRooms?: TeamSetupCreatedRoom[];
+        updatedDepartmentInstructions?: string[];
+        previousSectionContexts?: TeamSetupUndo["previousSectionContexts"];
+      }
+    | void;
+  /** Removes an untouched auto-created room when Undo reverses a newly created department. */
+  deleteUnusedRoom?(roomId: string): void;
+  /** Reads existing department shared instructions so untouched non-empty briefs are preserved. */
+  readSectionContext?(section: string): string | null;
+  /** Restores department shared instructions if still matching what this setup wrote. */
+  restoreSectionContext?(entry: { section: string; previousText: string | null; writtenText: string }): void;
 }
 
 type RequestFrom = { botId: string; name: string; color: string };
@@ -122,6 +181,7 @@ type SubmitAuthority = { canCommit?: () => boolean };
 
 export class TeamSetupRequestService {
   private readonly resolving = new Set<string>();
+  private readonly appliedSectionUndo = new WeakMap<TeamSetupResult, NonNullable<TeamSetupUndo["previousSectionContexts"]>>();
   private readonly options: Options;
   constructor(options: Options) { this.options = options; }
 
@@ -200,9 +260,19 @@ export class TeamSetupRequestService {
       if (fields.chiefOfStaff !== undefined && !chief.chiefOfStaff) throw new TeamSetupError(`Only the Chief of Staff changes who the Chief is; ${chief.name} doesn't.`, 403);
       if (confirming && target) this.options.validateChange?.(target, fields);
       const destination = fields.section ?? target?.section ?? chief.section;
-      if (!allowed(destination)) throw new TeamSetupError(outsideDepartmentReason(chief, { section: destination }), 403);
-      if (!request.newTeams.includes(section(destination)) && !existingTeams.has(section(destination))) throw new TeamSetupError("The destination team no longer exists", 409);
-      const next = { id: operation.botId, name: fields.name ?? target!.name, section: section(destination), chiefOfStaff: fields.chiefOfStaff ?? target?.chiefOfStaff, hidden: false,
+      const destKey = section(destination);
+      if (!request.newTeams.includes(destKey)) {
+        if (!existingTeams.has(destKey)) {
+          throw new TeamSetupError(
+            confirming
+              ? "The destination team no longer exists"
+              : `Department ${JSON.stringify(destKey)} does not exist yet. Include ${JSON.stringify(destKey)} in newTeams to create it.`,
+            409,
+          );
+        }
+        if (!allowed(destination)) throw new TeamSetupError(outsideDepartmentReason(chief, { section: destination }), 403);
+      }
+      const next = { id: operation.botId, name: fields.name ?? target!.name, section: destKey, chiefOfStaff: fields.chiefOfStaff ?? target?.chiefOfStaff, hidden: false,
         createdBy: target ? target.createdBy : botOwner(chief) ?? undefined, reportsTo: target?.reportsTo };
       const at = projected.findIndex((bot) => bot.id === operation.botId);
       if (at < 0) projected.push(next); else projected[at] = next;
@@ -210,10 +280,30 @@ export class TeamSetupRequestService {
     const creating = request.operations.filter((op) => op.action === "create").length;
     if (this.options.store.bots.length + creating > this.options.maxBots) throw new TeamSetupError("This setup exceeds the workspace bot limit", 409);
     for (const name of request.newTeams) if (!request.operations.some((op) => section(op.fields.section) === name)) throw new TeamSetupError(`New team ${JSON.stringify(name)} needs a specialist in this setup`);
+    const instructionEntries = Object.entries(request.departmentInstructions ?? {});
+    if (instructionEntries.length > 8) throw new TeamSetupError("Update shared instructions for at most 8 departments in one setup");
+    for (const [rawDept, text] of instructionEntries) {
+      const dept = section(rawDept);
+      if (!dept) throw new TeamSetupError("Department shared instructions require a named department");
+      if (!request.newTeams.includes(dept) && !existingTeams.has(dept)) {
+        throw new TeamSetupError(`Department ${JSON.stringify(dept)} does not exist yet.`, 409);
+      }
+      if (!allowed(dept)) throw new TeamSetupError(outsideDepartmentReason(chief, { section: dept }), 403);
+      if (Buffer.byteLength(text, "utf8") > SECTION_CONTEXT_MAX_BYTES) {
+        throw new TeamSetupError(`Shared instructions for ${JSON.stringify(dept)} exceed ${SECTION_CONTEXT_MAX_BYTES / 1000}KB`);
+      }
+    }
     for (const operation of request.operations) {
       const candidate = projected.find((bot) => bot.id === operation.botId)!;
       if (projected.some((bot) => bot.id !== candidate.id && !bot.hidden && bot.section === candidate.section && bot.name.trim().toLowerCase() === candidate.name.trim().toLowerCase())) throw new TeamSetupError(`@${candidate.name} already exists in that team`, 409);
-      if (candidate.chiefOfStaff && projected.some((bot) => bot.id !== candidate.id && bot.chiefOfStaff && chiefScope(bot) === chiefScope(candidate))) throw new TeamSetupError("Each team can have one Chief. Include the current Chief's demotion in this plan.", 409);
+      if (candidate.chiefOfStaff && projected.some((bot) => bot.id !== candidate.id && bot.chiefOfStaff && chiefScope(bot) === chiefScope(candidate))) {
+        throw new TeamSetupError(
+          candidate.section
+            ? `Each department can have only one Chief (Department Coordinator). Include the current coordinator's demotion in this plan.`
+            : "There can be only one Chief (System Coordinator) globally. Include the current System Coordinator's demotion in this plan.",
+          409,
+        );
+      }
     }
     if (request.deletion) {
       const target = this.options.store.bot(request.deletion.botId);
@@ -229,12 +319,20 @@ export class TeamSetupRequestService {
     if (!parsed.success) throw new TeamSetupError(planProblem(parsed.error));
     const chief = this.chief(args.botId);
     const combined = new Map<string, typeof parsed.data.operations[number]>();
-    for (const operation of parsed.data.operations) {
-      const key = operation.action === "create" ? `create:${operation.key}` : `update:${operation.botId}`;
+    for (let index = 0; index < parsed.data.operations.length; index += 1) {
+      const operation = parsed.data.operations[index]!;
+      const createKey = operation.action === "create"
+        ? (operation.key?.trim() || operation.fields.name?.trim() || `new-bot-${index + 1}`)
+        : "";
+      const key = operation.action === "create" ? `create:${createKey}` : `update:${operation.botId}`;
       const previous = combined.get(key);
       if (operation.fields.soul !== undefined && operation.fields.soulAppend !== undefined) throw new TeamSetupError("Use either soul or soulAppend for a bot, not both");
       const soulAppend = [previous?.fields.soulAppend, operation.fields.soulAppend].filter(Boolean).join("\n\n") || undefined;
-      combined.set(key, { ...operation, fields: { ...previous?.fields, ...operation.fields, soulAppend } });
+      combined.set(key, {
+        ...operation,
+        ...(operation.action === "create" ? { key: createKey } : {}),
+        fields: { ...previous?.fields, ...operation.fields, soulAppend },
+      });
     }
     const entries = [...combined.values()];
     if (entries.filter((operation) => operation.action === "create").length > MAX_NEW_BOTS) throw new TeamSetupError(`Review at most ${MAX_NEW_BOTS} new bots in one setup`);
@@ -259,11 +357,80 @@ export class TeamSetupRequestService {
         ...(target ? { expectedRevision: teamSetupRevision(target, fields) } : {}),
       };
     });
+    const existingTeams = new Set(this.options.teams().map(section));
+    const newTeams = new Set(parsed.data.newTeams);
+    // The unique System Coordinator can create departments directly even when it names a new section without repeating it in newTeams.
+    if (isSystemCoordinator(chief)) {
+      for (const operation of operations) {
+        const dest = section(operation.fields.section);
+        if (dest && !existingTeams.has(dest)) newTeams.add(dest);
+      }
+    }
+    // Every newly created department (and any existing coordinator-less department receiving new bots) gets a Department Coordinator unless explicitly opted out / demoted.
+    const touchedExistingDepartments = new Set<string>();
+    if (chief.chiefOfStaff) {
+      for (const operation of operations) {
+        const dest = section(operation.fields.section);
+        if (dest && !newTeams.has(dest) && operation.action === "create") touchedExistingDepartments.add(dest);
+      }
+      const ensureCoordinatorFor = (dept: string, isNewDepartment: boolean) => {
+        const deptOps = operations.filter((op) => section(op.fields.section) === dept);
+        if (!deptOps.length) return;
+        if (deptOps.some((op) => op.fields.chiefOfStaff === false)) return;
+        const touchedIds = new Set(operations.map((op) => op.botId));
+        const existingBotsInDept = isNewDepartment
+          ? []
+          : this.options.store.bots.filter((bot) => !bot.hidden && !touchedIds.has(bot.id) && section(bot.section) === dept);
+        const hasCoordinator = existingBotsInDept.some((bot) => Boolean(bot.chiefOfStaff)) || deptOps.some((op) => {
+          if (op.fields.chiefOfStaff !== undefined) return op.fields.chiefOfStaff;
+          return op.action === "update" && Boolean(this.options.store.bot(op.botId)?.chiefOfStaff);
+        });
+        const totalInDept = existingBotsInDept.length + deptOps.length;
+        if (!hasCoordinator && (totalInDept >= 2 || isSystemCoordinator(chief))) {
+          const chosen = pickDefaultDepartmentCoordinator(deptOps);
+          if (chosen) {
+            chosen.fields.chiefOfStaff = true;
+            if (chosen.action === "update") {
+              const existing = this.options.store.bot(chosen.botId);
+              if (existing) chosen.expectedRevision = teamSetupRevision(existing, chosen.fields);
+            }
+          }
+        }
+      };
+      for (const dept of newTeams) ensureCoordinatorFor(dept, true);
+      for (const dept of touchedExistingDepartments) ensureCoordinatorFor(dept, false);
+    }
+    const safeReason = redactSecretsInText(parsed.data.reason);
+    const departmentInstructions: Record<string, string> = {};
+    for (const [rawDept, rawText] of Object.entries(parsed.data.departmentInstructions ?? {})) {
+      const dept = section(rawDept);
+      const clean = redactSecretsInText(rawText).trim();
+      if (dept && clean) departmentInstructions[dept] = clean;
+    }
+    if (chief.chiefOfStaff) {
+      for (const dept of newTeams) {
+        if (departmentInstructions[dept]) continue;
+        const deptOps = operations.filter((op) => section(op.fields.section) === dept);
+        if (!deptOps.length) continue;
+        departmentInstructions[dept] = buildDefaultDepartmentInstructions(dept, safeReason, deptOps, this.options.store);
+      }
+      if (this.options.readSectionContext) {
+        for (const dept of touchedExistingDepartments) {
+          if (departmentInstructions[dept]) continue;
+          if (this.options.readSectionContext(dept)?.trim()) continue;
+          const deptOps = operations.filter((op) => section(op.fields.section) === dept);
+          if (!deptOps.length) continue;
+          departmentInstructions[dept] = buildDefaultDepartmentInstructions(dept, safeReason, deptOps, this.options.store);
+        }
+      }
+    }
     const requesterScope: TeamSetupFields = {};
     for (const operation of operations) if (operation.botId === chief.id) Object.assign(requesterScope, operation.fields);
     const request: TeamSetupRequest = { version: 1, requestId: newId(), botId: args.botId, threadId: args.threadId,
-      reason: redactSecretsInText(parsed.data.reason), createdAt: Date.now(), requesterRevision: teamSetupRevision(chief, requesterScope),
-      newTeams: [...new Set(parsed.data.newTeams)], operations };
+      reason: safeReason, createdAt: Date.now(), requesterRevision: teamSetupRevision(chief, requesterScope),
+      newTeams: [...newTeams],
+      ...(Object.keys(departmentInstructions).length ? { departmentInstructions } : {}),
+      operations };
     this.validate(request, false);
     return request;
   }
@@ -313,12 +480,16 @@ export class TeamSetupRequestService {
         lines.push(`Authorize @${chief.name} to coordinate and propose setup changes in these new departments.`);
       }
     }
+    if (request.departmentInstructions && Object.keys(request.departmentInstructions).length) {
+      lines.push(`Set department shared instructions: ${Object.keys(request.departmentInstructions).map((name) => JSON.stringify(name)).join(", ")}.`);
+    }
     for (const operation of request.operations) {
       const current = this.options.store.bot(operation.botId);
       lines.push(`\n${operation.action === "create" ? "Create" : "Update"} @${operation.fields.name ?? current?.name} (${operation.action === "create" ? "new bot" : operation.botId})`);
       for (const [key, value] of Object.entries(operation.fields)) {
         if (key === "chiefOfStaff") {
-          lines.push(`Chief of Staff: ${current?.chiefOfStaff ? "Yes" : "No"} → ${value ? "Yes" : "No"}.${value ? " May coordinate and configure bots in this department." : " Access to additional departments is removed."}`);
+          const destSection = section(operation.fields.section ?? current?.section ?? chief.section);
+          lines.push(`Chief of Staff: ${current?.chiefOfStaff ? "Yes" : "No"} → ${value ? "Yes" : "No"}.${value ? (destSection ? ` Appointed as Department Coordinator for "${destSection}" (not the global System Coordinator).` : " Appointed as the workspace's unique System Coordinator.") : " Access to additional departments is removed."}`);
           continue;
         }
         if (key === "soul") {
@@ -375,6 +546,16 @@ export class TeamSetupRequestService {
     for (const { id, profile } of before) {
       const bot = this.options.store.bot(id);
       if (bot) recordProfileChange(id, actor, via, profile, profileSnapshot(bot));
+    }
+    if (via === "team-setup") {
+      const hook = this.options.onApplied?.(request, result);
+      if (Array.isArray(hook)) {
+        if (hook.length) result.createdRooms = hook;
+      } else if (hook) {
+        if (hook.createdRooms?.length) result.createdRooms = hook.createdRooms;
+        if (hook.updatedDepartmentInstructions?.length) result.updatedDepartmentInstructions = hook.updatedDepartmentInstructions;
+        if (hook.previousSectionContexts?.length) this.appliedSectionUndo.set(result, hook.previousSectionContexts);
+      }
     }
     return result;
   }
@@ -441,12 +622,20 @@ export class TeamSetupRequestService {
 
   private undoRecord(result: TeamSetupResult, before: TeamSetupUndo["before"]): TeamSetupUndo {
     const created = result.bots.filter((bot) => bot.action === "created").map((bot) => bot.id);
+    const createdRoomIds = result.createdRooms?.map((room) => room.id);
+    const previousSectionContexts = this.appliedSectionUndo.get(result);
     const revisions: Record<string, string> = {};
     for (const id of new Set([...created, ...before.map((entry) => entry.botId)])) {
       const bot = this.options.store.bot(id);
       if (bot) revisions[id] = teamSetupRevision(bot);
     }
-    return { created, before, revisions };
+    return {
+      created,
+      ...(createdRoomIds?.length ? { createdRoomIds } : {}),
+      ...(previousSectionContexts?.length ? { previousSectionContexts } : {}),
+      before,
+      revisions,
+    };
   }
 
   /** Reverses a setup that applied on its own; changes nothing once a bot it touched changed since or a new bot was used. */
@@ -472,6 +661,8 @@ export class TeamSetupRequestService {
     if (refusal) return cannot(refusal);
     try {
       for (const id of created) await this.options.deleteBot(id, () => { if (changed([id])) throw new TeamSetupError(UNDO_STALE, 409); });
+      for (const roomId of request.undo.createdRoomIds ?? []) this.options.deleteUnusedRoom?.(roomId);
+      for (const entry of request.undo.previousSectionContexts ?? []) this.options.restoreSectionContext?.(entry);
       const restore = before.filter((entry) => Object.keys(entry.fields).length);
       if (restore.length) {
         this.applySetup({ version: 1, requestId: newId(), botId: request.botId, threadId: request.threadId, reason: request.reason,

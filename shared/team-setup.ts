@@ -22,10 +22,19 @@ export interface TeamSetupOperation {
   expectedRevision?: string;
 }
 
+export interface TeamSetupCreatedRoom {
+  id: string;
+  name: string;
+  section: string;
+  memberIds: string[];
+}
+
 export interface TeamSetupResult {
   state: "applied" | "denied" | "cancelled" | "failed";
   bots: Array<{ id: string; name: string; action: "created" | "updated" | "deleted"; section?: string; modelSelection?: ModelSelection; chiefOfStaff?: boolean }>;
   newTeams: string[];
+  createdRooms?: TeamSetupCreatedRoom[];
+  updatedDepartmentInstructions?: string[];
   error?: string;
 }
 
@@ -40,6 +49,8 @@ export interface TeamSetupRequest {
   requesterRevision: string;
   operations: TeamSetupOperation[];
   newTeams: string[];
+  /** Shared instructions (OpenMausBot section-context) to write per department when this setup applies. */
+  departmentInstructions?: Record<string, string>;
   deletion?: { botId: string; name: string; expectedRevision: string };
   result?: TeamSetupResult;
   resumed?: boolean;
@@ -51,6 +62,8 @@ export interface TeamSetupRequest {
  * the Chief its earlier teams; `revisions` pin every bot it touched as it applied, so a later change refuses Undo. */
 export interface TeamSetupUndo {
   created: string[];
+  createdRoomIds?: string[];
+  previousSectionContexts?: Array<{ section: string; previousText: string | null; writtenText: string }>;
   before: Array<{ botId: string; fields: TeamSetupFields; managedSections?: string[] | null }>;
   revisions: Record<string, string>;
 }

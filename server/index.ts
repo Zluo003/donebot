@@ -149,7 +149,7 @@ import { createSideJobs, helperSelection } from "./side-jobs.ts";
 import type { CaptureTurn, RoomLine } from "./memory-capture.ts";
 import { createAboutMe } from "./about-me.ts"; import { createPersonPreference } from "./host/person-preference.ts";
 import { botMemoryUpdate, ownersOwnAsk } from "./memory-forget.ts";
-import { canManage, canReach, hasTeamAuthority, livePeerRoster, livePeerRosterBlock, peerName, peerRosterSystemPrompt, peerStatus, peerStatusWords, reachablePeers, resolveTeammate, roomPeerRosterSystemPrompt, roomRosterLine } from "./peer-roster.ts"; import { roomPostRefusal, sharedNamesNote, unreachedMentionLines } from "./same-name-mentions.ts";
+import { canManage, canReach, hasCoordinatorBuiltinSkills, hasTeamAuthority, isSystemCoordinator, livePeerRoster, livePeerRosterBlock, peerName, peerRosterSystemPrompt, peerStatus, peerStatusWords, reachablePeers, resolveTeammate, roomPeerRosterSystemPrompt, roomRosterLine } from "./peer-roster.ts"; import { roomPostRefusal, sharedNamesNote, unreachedMentionLines } from "./same-name-mentions.ts";
 import {
   containerComputerAction,
   containerComputerFrame,
@@ -640,7 +640,7 @@ import { createHandoffStatus } from "./host/handoff-status.ts";
 import { createCheckBacks, type CheckBackRecord } from "./host/check-backs.ts";
 import { writeCheckBackLine } from "./host/check-back-host.ts";
 import { checkBackRefusal, createCheckBackRoutes, createCheckBackToolRoutes } from "./routes/check-backs.ts";
-import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
+import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalDepartmentInstructionsRoutes } from "./routes/internal-department-instructions.ts"; import { buildCoordinatorSkillFindPayload, collectInternalRoomsPayload, createTeamSetupDepartmentHooks, fillTeamSetupDefaultModels, resolveCreateBotDepartment, resolveCreateRoomTarget } from "./host/coordinator-departments.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
 import { createRoomHoldRoutes } from "./routes/room-holds.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
@@ -3078,7 +3078,7 @@ function previewSystemPrompt(bot: BotRecord) {
     { id: "credential", label: "Credentials", text: agentsMounted ? CREDENTIAL_PROMPT + savedSecretsPrompt(botLogins.secretNamesFor(bot.id), bitwarden?.status().connected) : "" },
     { id: "routine", label: "Triggers", text: agentsMounted ? TRIGGER_PROMPT : "" },
     { id: "profile", label: "Profile changes", text: agentsMounted ? PROFILE_PROMPT : "" },
-    { id: "section-context", label: "Section context", text: sectionContextSystemPrompt(bot.section) },
+    { id: "section-context", label: "Section context", text: sectionContextSystemPrompt(bot.section, Boolean(bot.chiefOfStaff)) },
     { id: "team-memory", label: "Team memory", text: teamMemory.systemPrompt(bot.section) + (agentsMounted ? TEAM_MEMORY_PROMPT : "") },
     teamAvailabilityPart(agentsMounted && coordination ? peers : []),
     { id: "memory", label: "Memory", text: memorySystemPrompt(bot.id, { managedWrites: agentsMounted, fileTools: Boolean(privateWorkspace), enabled: bot.memoryEnabled !== false }) },
@@ -7905,7 +7905,7 @@ async function beginTurn(
       const unseen = handed && handedStateUsable(handed, cursor, contextOrder) ? unseenMessages(replayable, contextOrder, handed) : undefined;
       const externalUpdate = Boolean(opts?.coordination?.resumed || unseen?.some((m) => m.keep));
       // What a resumed session keeps from its launch; Codex reasserts model and provider on resume, but an in-flight turn and an omitted effort keep the prior selection.
-      const persistentConfig = [bot.name, bot.title, bot.description, sectionContextSystemPrompt(bot.section), ...(cfg.everyBotRules?.trim() ? [cfg.everyBotRules.trim()] : []),
+      const persistentConfig = [bot.name, bot.title, bot.description, sectionContextSystemPrompt(bot.section, Boolean(bot.chiefOfStaff)), ...(cfg.everyBotRules?.trim() ? [cfg.everyBotRules.trim()] : []),
         ...(instance.driverKind === "codex" ? [model, effort ?? null] : [])];
       const sessionConfig = (soul: string | undefined) =>
         createHash("sha256").update(JSON.stringify([...persistentConfig, soul])).digest("hex").slice(0, 16);
@@ -7979,7 +7979,7 @@ async function beginTurn(
           ...(skillAuthoring ? ["skillAuthoring"] : []),
         ],
         skills,
-        { chief: chiefLevel(bot) },
+        { chief: hasCoordinatorBuiltinSkills(bot) },
       );
       if (phoneOffered) integrations.phone = phoneIntegration(bot.id, threadId, dispatchClaimId);
       if (bot.composio !== false && composio.configured(cfg) && instance.adapter.capabilities.composioMcp === true) {
@@ -8473,7 +8473,7 @@ async function beginTurn(
         { id: "routine-execution", label: "Routine execution", text: opts?.automationSource === "schedule" || opts?.automationSource === "manual" || opts?.automationSource === "startup" ? (confined ? READ_ONLY_ROUTINE_EXECUTION_PROMPT : ROUTINE_EXECUTION_PROMPT) : "" },
         { id: "profile", label: "Profile changes", text: profilePrompt },
         { id: "learn", label: "Skill authoring", text: learnPrompt },
-        { id: "section-context", label: "Section context", text: sectionContextSystemPrompt(bot.section) },
+        { id: "section-context", label: "Section context", text: sectionContextSystemPrompt(bot.section, Boolean(bot.chiefOfStaff)) },
         { id: "team-memory", label: "Team memory", text: teamMemory.systemPrompt(bot.section) + (integrations.agents ? TEAM_MEMORY_PROMPT : "") },
         // Volatile, so a teammate starting or finishing never changes the stable half.
         teamAvailabilityPart(coordinationPrompt ? sectionPeers : []),
@@ -9367,6 +9367,7 @@ const teamSetupRequests = new TeamSetupRequestService({
     const result = await deleteBotWithLifecycle(botId, revalidate, request);
     if (result.status >= 400) throw new TeamSetupError(result.body.error ?? "The bot could not be deleted", result.status);
   },
+  ...createTeamSetupDepartmentHooks({ store, syncOrgChart: (bots) => void donebotOrgWorkflowStore.getOrgChart(bots), roomDeciderReady, createChannel }),
 });
 
 async function resolveAndSendTeamSetup(res: ServerResponse, args: { botId: string; threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean> {
@@ -9932,7 +9933,7 @@ async function runClaimedGroupMemberTurn(
       latestUser?.text ?? "",
       skillAuthoring ? ["skillAuthoring"] : [],
       skills,
-      { chief: chiefLevel(bot) },
+      { chief: hasCoordinatorBuiltinSkills(bot) },
     ),
   );
   if (phoneOffered) integrations.phone = phoneIntegration(bot.id, threadId, internalGeneration);
@@ -10320,7 +10321,7 @@ async function runClaimedGroupMemberTurn(
     { id: "recall", label: "Recall", text: integrations.agents && bot.memoryEnabled !== false ? SESSION_SEARCH_SYSTEM_PROMPT : "" }, { id: "just-do-it", label: "Just do it", text: preparedApprovalMode === "full" && !isUnattended(bot.id, threadId) ? JUST_DO_IT_PROMPT : "" },
     teamAvailabilityPart(outsideRoom),
     { id: "recent", label: "Recent work", text: recentWorkPrompt(recentLines) },
-    { id: "section-context", label: "Section context", text: sectionContextSystemPrompt(bot.section) },
+    { id: "section-context", label: "Section context", text: sectionContextSystemPrompt(bot.section, Boolean(bot.chiefOfStaff)) },
     { id: "team-memory", label: "Team memory", text: teamMemory.systemPrompt(bot.section) + (integrations.agents ? TEAM_MEMORY_PROMPT : "") },
     { id: "memory", label: "Memory", text: roomMemory ? `\n${roomMemory.trim()}` : "" },
     { id: "skills", label: "Skills index", text: workspace ? skillsHost.skillsIndex(bot, threadId, instance) : "" },
@@ -13560,25 +13561,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (!connectorThread(from.id, fromThreadId)) {
           return json(res, 403, { error: "source conversation does not belong to sender" });
         }
-        const rooms: Array<{ id: string; name: string; members: string[] }> = [];
-        const unpostable: Array<{ name: string; reason: string }> = [];
-        for (const group of store.groups) {
-          if (group.dm || !group.memberIds.includes(from.id)) continue;
-          const eligibility = roomPostEligibility(from, group, fromThreadId);
-          if (!eligibility.ok) {
-            unpostable.push({ name: group.name, reason: eligibility.error });
-            continue;
-          }
-          rooms.push({
-            id: group.id,
-            name: group.name,
-            members: group.memberIds
-              .map((id) => store.bot(id))
-              .filter((member): member is BotRecord => Boolean(member))
-              .map((member) => member.name),
-          });
-        }
-        return json(res, 200, { rooms: rooms.slice(0, 50), unpostable: unpostable.slice(0, 50) });
+        return json(res, 200, collectInternalRoomsPayload({ store, from, fromThreadId, roomPostEligibility }));
       }
       const triggerContext = { from: internalSender, threadId: internalCapability.threadId, ownsThread: (botId: string, threadId: string) => Boolean(connectorThread(botId, threadId)), guestDriven: cloudGuestDriven(internalCapability.threadId), outsideDriven: () => outsideDrivenThread(internalCapability.threadId), canCommit: () => internalCapabilityIsActive(internalCapability), routineShown: (routine: Routine) => teamRoutines.inTurn(routine, internalCapability.threadId) };
       if (await dispatchRoutes([appTriggers.internalRoutes(triggerContext)], { req, res, url, path, method, auth, json, readBody })) return;
@@ -13743,14 +13726,15 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         return json(res, 201, proposed);
       }
       if (await dispatchRoutes([createCheckBackToolRoutes({ checkBacks, requireActive: requireActiveInternalCapability, readBody: readInternalBody, botId: () => internalSender.id, threadId: () => internalCapability.threadId, zone: () => proactive.brief.timeZone() ?? routineTimeZone(), origin: () => { const origin = turnOrigin(internalCapability); return origin.kind === "user" ? withPerson(origin, donebotHost.team?.requests.forRun(internalCapability.generation).actor.person ?? origin.person ?? threadPersonKey(internalCapability.threadId)) : origin; }, prepare: (record) => { donebotHost.team?.requests.scheduleCheckBack({ runId: internalCapability.generation, record, audience: teamHost.audienceOf(record.threadId), generation: donebotHost.team.coordinator().generation }); }, refusal: () => { const source = connectorThread(internalSender.id, internalCapability.threadId); return checkBackRefusal({ owned: source !== null, room: Boolean(source?.group), depth: internalCapability.depth, handedOff: Boolean(internalCapability.roomHandoffId), routineRun: Boolean(activeRoutineRunForThread(internalCapability.threadId)), outsideDriven: outsideDrivenThread(internalCapability.threadId) || outsideWorkStaysHere(internalCapability.threadId), personStarted: turnOrigin(internalCapability).kind === "user", guest: cloudGuestDriven(internalCapability.threadId) }); } }), createBurstProposalRoutes({ requireActive: requireActiveInternalCapability, readBody: readInternalBody, refusal: () => burstProposalRefusal({ owner: connectorThread(internalSender.id, internalCapability.threadId), outside: outsideWorkStaysHere(internalCapability.threadId), self: selfThreadRefusal({ handoff: Boolean(internalCapability.roomHandoffId), requestLine: store.activePath(internalCapability.threadId).findLast((line) => line.role === "user" && line.kind === "text") }) }), model: () => burst.model(internalSender, internalCapability.threadId), propose: (plan) => burst.propose({ ...plan, botId: internalSender.id, threadId: internalCapability.threadId }) }), createInternalChiefTeamRoutes({ bot: () => store.bot(internalCapability.botId), requireActive: requireActiveInternalCapability,
-        teams: teamSetupTeams, bots: () => store.bots, instances: () => registry.describe() }), createInternalModelRoutes({ requireActive: requireActiveInternalCapability, menu: (search) => ownThreads.menu(internalCapability.botId, internalCapability.threadId, search) })], { req, res, url, path, method, auth, json, readBody })) return;
+        teams: teamSetupTeams, bots: () => store.bots, instances: () => registry.describe() }), createInternalDepartmentInstructionsRoutes({ sender: () => internalSender, ownsThread: (botId) => Boolean(connectorThread(botId, internalCapability.threadId)), readInternalBody, sections: () => store.sections, bots: () => store.bots, groups: () => store.groups }), createInternalModelRoutes({ requireActive: requireActiveInternalCapability, menu: (search) => ownThreads.menu(internalCapability.botId, internalCapability.threadId, search) })], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/team-setup-requests") {
         const parsed = z.object({ fromBotId: z.string().optional(), fromThreadId: z.string().optional(), plan: z.unknown() }).strict().safeParse(await readInternalBody());
         if (!parsed.success) return json(res, 400, { error: "Invalid team setup request" });
         const chief = store.bot(internalCapability.botId)!;
         const owner = connectorThread(chief.id, internalCapability.threadId);
         if (!owner) return json(res, 403, { error: "Source conversation no longer belongs to the Chief" });
-        const proposed = await teamSetupRequests.submit({ botId: chief.id, threadId: internalCapability.threadId, plan: parsed.data.plan,
+        const planToSubmit = await fillTeamSetupDefaultModels(parsed.data.plan, defaultSelection);
+        const proposed = await teamSetupRequests.submit({ botId: chief.id, threadId: internalCapability.threadId, plan: planToSubmit,
           canCommit: () => internalCapabilityIsActive(internalCapability),
           ...(owner.group ? { from: { botId: chief.id, name: chief.name, color: chief.color } } : {}) });
         if (proposed.state === "applied" || proposed.state === "pending") appendDecision(DATA_DIR, { threadId: internalCapability.threadId, requestId: proposed.requestId, botId: chief.id,
@@ -13871,7 +13855,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           requireActiveInternalCapability();
           if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
           const current = skillTarget(internalSender, target.id);
-          return "error" in current ? json(res, 403, current) : json(res, 200, { botId: target.id, botName: target.name, ...result });
+          if ("error" in current) return json(res, 403, current);
+          return json(res, 200, { botId: target.id, botName: target.name, ...buildCoordinatorSkillFindPayload(internalSender, target, result) });
         }
         if (typeof body.source !== "string" || !body.source.trim() || body.source.length > 2000 || (body.preview !== undefined && typeof body.preview !== "boolean")) return json(res, 400, { error: "source must be a skill URL or local path, and preview must be a boolean" });
         const source = body.source.trim();
@@ -14030,6 +14015,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           botIds.push(resolved.id);
         }
         if (new Set(botIds).size !== botIds.length) return refuse(400, "bot_ids name the same teammate twice — send each teammate once");
+        const orgDeny = donebotOrgWorkflowStore.evaluateCoordination(internalSender.id, botIds, Boolean(call.consult), store.bots);
+        if (orgDeny) return refuse(403, orgDeny);
         const addressedRoom = destination && { id: destination.id, name: destination.name, here: destination.id === source?.id };
         const roomThreadId = destination && (addressedRoom?.here ? address.threadId : destination.threadId);
         const targets = botIds.map(botId => roomHandoffTarget({ groupId: destination?.id, threadId: roomThreadId ?? store.bot(botId)?.threadId ?? "", botId }, address));
@@ -14225,7 +14212,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           done_when: z.string().trim().max(1000).optional(), answers: z.string().trim().min(1).max(128).optional(), files: handoffFilesSchema,
         }).safeParse(await readInternalBody());
         if (!parsed.success) return json(res, 400, { error: coordinateTooLong(parsed.error.issues) ?? `Provide 1-4 distinct botIds and a message of 1-${coordinateMessageMax} characters; thread is standing, new or the id of a thread you opened on that teammate, title one line of at most 80 characters, reply is resume or none, consult is a boolean, done_when at most 1000 characters, files at most 5 paths.` });
-        const { groupId, botIds, message, reason, rework, thread, title, reply, consult, inMyFolder, done_when: doneWhen, answers, files: paths } = parsed.data; const orgDeny = donebotOrgWorkflowStore.evaluateCoordination(internalSender.id, botIds, consult, store.bots); if (orgDeny) return json(res, 403, { error: orgDeny });
+        const { groupId, botIds, message, reason, rework, thread, title, reply, consult, inMyFolder, done_when: doneWhen, answers, files: paths } = parsed.data;
         const result = await handoffFiles.coordinate({ paths, answers, senderId: internalSender.id, recipients: botIds.length,
           saveOne: async path => saveTurnFile(internalCapability, internalSender.id, await attachmentVmForTurn(internalCapability), path, undefined, true),
           send: files => { requireActiveInternalCapability(); return coordinateBots({ groupId, botIds, message, reason: reason || undefined, rework, thread, title: title || undefined, reply, consult, inMyFolder, doneWhen: doneWhen || undefined, ...(answers ? { answers } : {}), ...(files ? { files } : {}) }); },
@@ -14504,6 +14491,9 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           if (!checkedCwd.ok) return json(res, 400, { error: checkedCwd.error });
           cwd = checkedCwd.cwd ?? undefined;
         }
+        const dept = resolveCreateBotDepartment(body as Record<string, unknown>, chief, teamSetupTeams());
+        if (!dept.ok) return json(res, dept.status, { error: dept.error });
+        const { targetSection, departmentCoordinator, creatingNewTeam } = dept;
         // Discovery can yield; check current authority and capacity again before writing.
         if (store.bot(chief.id) !== chief || chief.hidden || !chiefLevel(chief) || !connectorThread(chief.id, fromThreadId)) {
           return json(res, 403, { error: "only an active Chief of Staff can create operator bots" });
@@ -14515,7 +14505,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const duplicate = store.bots.find(
           (candidate) =>
             !candidate.hidden &&
-            sectionKey(candidate.section) === sectionKey(chief.section) &&
+            sectionKey(candidate.section) === targetSection &&
             candidate.name.trim().toLowerCase() === name.toLowerCase(),
         );
         if (duplicate) {
@@ -14528,7 +14518,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           canCommit: () => internalCapabilityIsActive(internalCapability),
           ...(owner.group ? { from: { botId: chief.id, name: chief.name, color: chief.color } } : {}),
           plan: {
-            reason: `Add @${name} (${role}) to the team.`,
+            reason: `Add @${name} (${role}) to ${targetSection || "the team"}.`,
+            ...(creatingNewTeam ? { newTeams: [targetSection] } : {}),
             operations: [{
               action: "create",
               key: "create_bot",
@@ -14538,6 +14529,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
                 description: summary.length > 200 ? `${summary.slice(0, 199).trimEnd()}…` : summary,
                 soul: instructions,
                 modelSelection: selection,
+                ...(body.section !== undefined ? { section: targetSection } : {}),
+                ...(departmentCoordinator ? { chiefOfStaff: true } : {}),
                 ...(cwd !== undefined ? { cwd } : {}),
               },
             }],
@@ -14555,12 +14548,15 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const created = createdId ? store.bot(createdId) : undefined;
         if (!created) return json(res, 201, proposed);
         const paused = starterCaps.createdPaused(created.id);
+        const createdRooms = "result" in proposed ? proposed.result.createdRooms : undefined;
         return json(res, 201, {
           ...proposed,
           id: created.id,
           name: created.name,
           title: created.title,
           section: created.section || "General",
+          chiefOfStaff: Boolean(created.chiefOfStaff),
+          ...(createdRooms?.length ? { createdRooms } : {}),
           model: created.modelSelection.model,
           modelSelection: created.modelSelection, ...(botNameClash.warning(created.name) ? { warning: botNameClash.warning(created.name) } : {}),
           ...(paused ? { paused } : {}),
@@ -14575,12 +14571,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (!body || typeof body !== "object" || Array.isArray(body)) {
           return json(res, 400, { error: "room request must be a JSON object" });
         }
-        // A Chief gathers only bots it can reach; which department a room is filed in is the person's choice.
         const allowedIds = new Set([chief.id, ...reachablePeers(store.bots, chief).map((bot) => bot.id), ...(botLink.link.on() ? botLink.link.linked().map((one) => one.id) : [])]);
-        const allowedRoster = (ids: string[], keepFar = false) => ids.includes(chief.id) && ids.every((id) => allowedIds.has(id) || (keepFar && id.startsWith("link-")));
-        if (body.section !== undefined && (typeof body.section !== "string" || sectionKey(body.section) !== sectionKey(chief.section))) {
-          return json(res, 403, { error: "rooms stay in your own department; ask the person to move them" });
-        }
+        const membersReachable = (ids: string[], keepFar = false) => ids.length > 0 && ids.every((id) => allowedIds.has(id) || (keepFar && id.startsWith("link-")));
+        const allowedRoster = (ids: string[], keepFar = false, requireChief = true) =>
+          (!requireChief || ids.includes(chief.id)) && membersReachable(ids, keepFar);
         if (path === "/api/internal/create-room") {
           if ((internalCapability.createdRooms ?? 0) >= 4) {
             return json(res, 429, { error: "you can create at most 4 rooms in one turn" });
@@ -14588,22 +14582,24 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           const parsed = z.object({
             fromBotId: z.string().optional(), fromThreadId: z.string().optional(),
             name: z.string().trim().min(1).max(100), memberIds: z.array(z.string()).min(1).max(100),
-            section: z.string().optional(), bulletin: z.string().max(12_000).optional(),
+            section: z.string().trim().max(60).optional(), bulletin: z.string().max(12_000).optional(),
           }).strict().safeParse(body);
-          if (!parsed.success) return json(res, 400, { error: "provide a room name, memberIds, and optional bulletin (at most 12000 characters)" });
-          const memberIds = [...new Set([chief.id, ...parsed.data.memberIds])];
-          if (!allowedRoster(memberIds)) {
-            return json(res, 403, { error: "include yourself and only active bots you can reach (list_bots)" });
-          }
+          if (!parsed.success) return json(res, 400, { error: "provide a room name, memberIds, optional section, and optional bulletin (at most 12000 characters)" });
+          const roomTarget = resolveCreateRoomTarget({ section: parsed.data.section, memberIds: parsed.data.memberIds, chief, botById: (id) => store.bot(id), allowedRoster });
+          if (!roomTarget.ok) return json(res, roomTarget.status, { error: roomTarget.error });
+          const { targetSection, memberIds, fallbackBotId } = roomTarget;
           const group = createChannel({
-            name: redactSecretsInText(parsed.data.name), memberIds, section: chief.section,
+            name: redactSecretsInText(parsed.data.name), memberIds, section: targetSection || undefined,
             setup: {
               bulletin: redactSecretsInText(parsed.data.bulletin ?? ""),
-              defaultResponder: roomDeciderReady() ? { kind: "auto", fallbackBotId: chief.id } : { kind: "member", botId: chief.id },
+              defaultResponder: roomDeciderReady() ? { kind: "auto", fallbackBotId } : { kind: "member", botId: fallbackBotId },
             },
           });
           internalCapability.createdRooms = (internalCapability.createdRooms ?? 0) + 1;
           return json(res, 201, { id: group.id, name: group.name, section: group.section || "General", memberIds: group.memberIds, memberCount: group.memberIds.length });
+        }
+        if (body.section !== undefined && (typeof body.section !== "string" || sectionKey(body.section) !== sectionKey(chief.section))) {
+          return json(res, 403, { error: "moving existing rooms between departments is user-only" });
         }
         const parsed = z.object({
           fromBotId: z.string().optional(), fromThreadId: z.string().optional(),
@@ -14613,8 +14609,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         }).strict().safeParse(body);
         if (!parsed.success) return json(res, 400, { error: "provide roomId and a supported room action; section moves are user-only" });
         const room = store.group(parsed.data.roomId);
-        if (!room || room.dm || sectionKey(room.section) !== sectionKey(chief.section) || !allowedRoster(room.memberIds, true)) {
-          return json(res, 403, { error: "you can only manage rooms you belong to in your own department, whose members you can all reach; no bot needs adding to get work, since coordinate_bots reaches bots outside the room directly" });
+        const sysManagedDeptRoom = Boolean(room && isSystemCoordinator(chief) && sectionKey(room.section) !== "");
+        const requireChiefInRoom = !sysManagedDeptRoom;
+        if (!room || room.dm || !hasTeamAuthority(chief, room.section) || !allowedRoster(room.memberIds, true, requireChiefInRoom)) {
+          return json(res, 403, { error: "you can only manage rooms in departments you oversee, whose members you can all reach; no bot needs adding to get work, since coordinate_bots reaches bots outside the room directly" });
         }
         const { action, memberIds, name, bulletin } = parsed.data;
         if (cloudGuestDriven(internalCapability.threadId)) {
@@ -14639,7 +14637,9 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           }
           const next = action === "add_members" ? [...new Set([...room.memberIds, ...memberIds])]
             : action === "remove_members" ? room.memberIds.filter((id) => !memberIds.includes(id)) : memberIds;
-          if (!allowedRoster(next, true)) return json(res, 403, { error: "keep yourself in the room; only the user can remove its managing Chief" });
+          if (!allowedRoster(next, true, requireChiefInRoom)) {
+            return json(res, 403, { error: requireChiefInRoom ? "keep yourself in the room; only the user can remove its managing Chief" : "a room must keep at least one active member" });
+          }
           patch.memberIds = next;
         }
         const updated = updateChannel(room.id, patch);

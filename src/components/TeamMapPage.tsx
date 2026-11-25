@@ -758,7 +758,7 @@ export function TeamMapPage() {
             />
           </label>
           <p className="text-[11.5px] text-ink-tertiary">
-            修改名称不会影响原有对话、公共指令和共享记忆，也会同步生效到 @ 指挥栏和 AI 组织提示词。
+            修改名称不会影响原有对话、共享指示和部门记忆，也会同步生效到 @ 指挥栏和 AI 组织提示词。
           </p>
         </div>
         <div className="flex justify-end gap-2 border-t border-hairline/60 px-5 py-3.5">

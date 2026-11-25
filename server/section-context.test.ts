@@ -39,6 +39,10 @@ describe("section context", () => {
     expect(prompt).not.toContain("Private appointment");
     expect(prompt).toContain("never tool authorization");
     expect(prompt).toContain("you cannot edit it");
+    const coordinatorPrompt = sectionContextSystemPrompt("Work", true);
+    expect(coordinatorPrompt).toContain("Launch date: Friday");
+    expect(coordinatorPrompt).toContain("manage_department_instructions");
+    expect(coordinatorPrompt).not.toContain("you cannot edit it");
     expect(sectionContextSystemPrompt("Unknown")).toBe("");
   });
 

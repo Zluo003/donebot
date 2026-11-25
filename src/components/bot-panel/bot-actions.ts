@@ -7,6 +7,7 @@ import { useShowThreads } from "@/lib/thread-preferences";
 import { api, useStore, type Bot } from "@/state/store";
 import { announceArchiveNotice, archiveBotWithNotice } from "../bot-archive";
 import { moveBotsToSection } from "../bot-sections";
+import { coordinatorArchiveHint } from "../BotRole";
 import { currentArchivableBot, type BotConfirmKind } from "../Sidebar";
 
 export function useBotActions(bot: Bot) {
@@ -20,7 +21,7 @@ export function useBotActions(bot: Bot) {
 
   const visibleBotCount = state.bots.filter((candidate) => !candidate.hidden).length;
   const archiveHint = bot.chiefOfStaff
-    ? t("sidebar.bot.archiveBlockedChief")
+    ? coordinatorArchiveHint(bot)
     : visibleBotCount <= 1
       ? t("sidebar.bot.archiveBlockedLast")
       : undefined;

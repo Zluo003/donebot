@@ -1,4 +1,4 @@
-import { hasTeamAuthority, peerAllowed } from "../peer-roster.ts"; import { chiefLevel } from "../chief-level.ts";
+import { hasTeamAuthority, isSystemCoordinator, peerAllowed } from "../peer-roster.ts"; import { chiefLevel } from "../chief-level.ts";
 import type { BotRecord } from "../store.ts";
 import { libraryTeamRoles } from "../team-library.ts";
 import { PASS, type RouteHandler } from "./table.ts";
@@ -45,13 +45,21 @@ export function createInternalChiefTeamRoutes(deps: {
     deps.requireActive();
     const current = chief();
     if (!current) return json(res, 403, { error: NOT_CHIEF });
+    const sysCoordinator = isSystemCoordinator(current);
     return json(res, 200, {
+      coordinatorRole: sysCoordinator ? "system_coordinator" : "department_coordinator",
       teams: deps.teams().filter((name) => hasTeamAuthority(current, name)),
       bots: deps.bots().filter((bot) => !bot.hidden && hasTeamAuthority(current, bot.section) && (bot.id === current.id || peerAllowed(current, bot)))
-        .map((bot) => ({ id: bot.id, name: bot.name, title: bot.title, section: bot.section ?? "", modelSelection: bot.modelSelection, chiefOfStaff: Boolean(bot.chiefOfStaff) })),
+        .map((bot) => ({
+          id: bot.id, name: bot.name, title: bot.title, section: bot.section ?? "", modelSelection: bot.modelSelection,
+          chiefOfStaff: Boolean(bot.chiefOfStaff),
+          coordinatorRole: bot.chiefOfStaff ? (bot.section?.trim() ? "department_coordinator" : "system_coordinator") : "member",
+        })),
       instances: instances.map((instance) => ({ instanceId: instance.instanceId, driverKind: instance.driverKind, displayName: instance.displayName,
         state: instance.snapshot.state, models: instance.models, effortLevels: instance.capabilities?.effortLevels ?? [] })),
-      scope: "Bot model defaults apply to groups and new threads; existing threads retain their models. Requested team setup applies immediately, and the person can undo it. Existing unauthorized teams remain outside this Chief's scope.",
+      scope: sysCoordinator
+        ? "You are the unique System Coordinator overseeing all departments and uncategorized bots. You may directly create new departments (in newTeams or via a new section name), create department bots, appoint ONE Department Coordinator (chiefOfStaff: true) per named department (department members report to the Department Coordinator; the Department Coordinator reports to you), and pass departmentInstructions to initialize each department's shared instructions. Creating a new department automatically ensures a Department Coordinator, initializes department shared instructions, syncs the org chart, and creates its department group chat. After creating any bot(s), immediately equip each with skill(s) via user-provided -> skill_find + skill_import + enable -> skill_manage create."
+        : "Bot model defaults apply to groups and new threads; existing threads retain their models. Requested team setup applies immediately, and the person can undo it. Existing unauthorized teams remain outside this coordinator's scope.",
     });
   };
 }

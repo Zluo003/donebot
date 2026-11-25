@@ -10,7 +10,8 @@ function chiefCovers(bot: Bot, bots: ReadonlyArray<Bot>): boolean {
   return bots.some((candidate) =>
     candidate.id !== bot.id &&
     Boolean(candidate.chiefOfStaff) &&
-    (sectionKey(candidate.section) === target ||
+    (!sectionKey(candidate.section) ||
+      sectionKey(candidate.section) === target ||
       (Array.isArray(candidate.managedSections) &&
         candidate.managedSections.some((team) => typeof team === "string" && sectionKey(team) === target))));
 }

@@ -4,6 +4,7 @@ import {
   canManage,
   canReach,
   hasAuthority,
+  hasCoordinatorBuiltinSkills,
   hasTeamAuthority,
   PEER_ACCESS_HELP,
   LIVE_PEER_ROSTER_MAX,
@@ -76,14 +77,16 @@ describe("peerAllowed", () => {
 
 describe("Chief authority over additional departments", () => {
   const chief = { ...self, chiefOfStaff: true, managedSections: ["Personal"] };
-  it("labels actual Chiefs, whom any bot can reach in any department", () => {
+  it("labels System Coordinator and Department Coordinator distinctly, whom any bot can reach in any department", () => {
     const clive = { id: "chief", name: "Clive", section: "Personal", chiefOfStaff: true, managedSections: ["Work"] };
+    const sysCoord = { id: "sys", name: "Duobao", chiefOfStaff: true };
     expect(canReach(self, clive)).toBe(true);
     expect(resolveTeammate([...fleet, clive], self, "Clive")).toEqual({ id: "chief", byName: true });
-    const prompt = peerRosterSystemPrompt([clive]);
-    expect(prompt).toContain("[Chief of Staff]");
+    const prompt = peerRosterSystemPrompt([sysCoord, clive]);
+    expect(prompt).toContain("[System Coordinator]");
+    expect(prompt).toContain("[Department Coordinator]");
     expect(prompt).toContain("send a self-contained request to a Chief of Staff with coordinate_bots");
-    expect(peerRosterSystemPrompt([{ ...clive, chiefOfStaff: false }])).not.toContain("[Chief of Staff]");
+    expect(peerRosterSystemPrompt([{ ...clive, chiefOfStaff: false }])).not.toContain("[Department Coordinator]");
   });
   it("gives Clive authority over the selected departments without elevating their specialists", () => {
     expect(reachablePeers(fleet, chief).map(bot => bot.id)).toEqual(["writer", "coder", "elsewhere"]);
@@ -114,12 +117,19 @@ describe("reach across departments", () => {
     expect(canReach(self, { ...fleet[4]!, visibility: "admins" })).toBe(false);
   });
 
-  it("grants no authority over another department", () => {
+  it("grants no authority over another department to non-chiefs or unscoped department coordinators, while the unique System Coordinator oversees all departments", () => {
     expect(hasTeamAuthority(self, "Personal")).toBe(false);
     expect(hasAuthority(self, fleet[4]!)).toBe(false);
     expect(canManage(self, fleet[4]!)).toBe(false);
     expect(canManage(self, fleet[1]!)).toBe(true);
-    expect(hasTeamAuthority({ chiefOfStaff: true, managedSections: ["Work"] }, "Personal")).toBe(false);
+    expect(hasTeamAuthority({ section: "Sales", chiefOfStaff: true, managedSections: ["Work"] }, "Personal")).toBe(false);
+    expect(hasTeamAuthority({ chiefOfStaff: true, managedSections: [] }, "Personal")).toBe(true);
+    expect(hasTeamAuthority({ chiefOfStaff: true, managedSections: [] }, "")).toBe(true);
+    expect(hasCoordinatorBuiltinSkills({ chiefOfStaff: true })).toBe(true);
+    expect(hasCoordinatorBuiltinSkills({ defaultBot: {} })).toBe(true);
+    expect(hasCoordinatorBuiltinSkills({ defaultBot: { person: "member@acme.test" } })).toBe(false);
+    expect(hasCoordinatorBuiltinSkills({ chiefOfStaff: true, section: "短剧部" })).toBe(false);
+    expect(hasCoordinatorBuiltinSkills({ section: "短剧部" })).toBe(false);
   });
 
   it("names no setting in a refusal: only an archived bot or another audience stops reach", () => {
@@ -200,7 +210,7 @@ describe("resolveTeammate", () => {
     const twins = [...fleet, { id: "writer2", name: "quill", title: "Analyst", section: "Work" }, { id: "writer3", name: "QUILL", chiefOfStaff: true, section: "Work" }];
     expect(resolveTeammate(twins, self, "Quill")).toEqual({
       error: '3 teammates you can reach are named "Quill", so nothing was sent: '
-        + `${fleet.filter((bot) => bot.name === "Quill").map((bot) => `Quill${bot.title ? `, ${bot.title}` : ""} (id ${bot.id})`).join("; ")}; quill, Analyst (id writer2); QUILL, Chief of Staff (id writer3). `
+        + `${fleet.filter((bot) => bot.name === "Quill").map((bot) => `Quill${bot.title ? `, ${bot.title}` : ""} (id ${bot.id})`).join("; ")}; quill, Analyst (id writer2); QUILL, Department Coordinator (id writer3). `
         + "Send it again with the id of the one you mean.",
     });
     expect(resolveTeammate(twins, self, "writer2")).toEqual({ id: "writer2", byName: false });

@@ -8,6 +8,7 @@ import { EMAIL_CREDENTIAL } from "../../shared/email.ts";
 
 import { peerName } from "../peer-roster.ts";
 import { callCardTool, CARD_TOOL_NAMES } from "./agents-call-cards.ts";
+import { callCreateRoom, callManageDepartmentInstructions, callManageRoom, enhanceTeamSetupResult, formatCreateBotResult, formatManagedRoomsBlock } from "./agents-call-coordinator.ts";
 import { callTriggerTool, TRIGGER_TOOL_NAMES } from "./agents-call-triggers.ts";
 import { catalogProfileFromEnv, fullInputSchema, SHARED_COMPUTER_TOOL_NAMES } from "./agents-catalog.ts";
 import { harnessClientFromEnv } from "./agents-client.ts";
@@ -378,21 +379,24 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     const query = new URLSearchParams({ fromBotId: BOT_ID, fromThreadId: THREAD_ID });
     const r = await api(`/api/internal/rooms?${query.toString()}`);
     const rooms = Array.isArray(r.rooms) ? r.rooms.filter(jsonRecord) : [];
+    const managedRooms = Array.isArray(r.managedRooms) ? r.managedRooms.filter(jsonRecord) : [];
     const unpostable = Array.isArray(r.unpostable) ? r.unpostable.filter(jsonRecord) : [];
+    const managedBlock = formatManagedRoomsBlock(managedRooms);
     const blocked = unpostable.length
       ? `\n\nRooms you are in but cannot post into (no id — there is nothing to retry; give the user the reason instead):\n${
         unpostable.map((room) => `- ${String(room.name)}: ${String(room.reason)}`).join("\n")
       }`
       : "";
     if (!rooms.length) {
-      return { text: `You are not in any room you can post into. Tell the user what you wanted to share and let them decide where it goes.${blocked}` };
+      return { text: `You are not in any room you can post into. Tell the user what you wanted to share and let them decide where it goes.${managedBlock}${blocked}` };
     }
     const lines = rooms.map((room) => {
       const members = Array.isArray(room.members) ? room.members.map(String).join(", ") : "";
-      return `- ${String(room.name)} [id: ${String(room.id)}]${members ? ` — members: ${members}` : ""}`;
+      const sec = typeof room.section === "string" && room.section ? ` (${room.section})` : "";
+      return `- ${String(room.name)}${sec} [id: ${String(room.id)}]${members ? ` — members: ${members}` : ""}`;
     });
     return {
-      text: `Rooms you can post into:\n${lines.join("\n")}\n\nUse post_to_room with one of these ids. A post adds one message to the room; it does not start anyone's turn, so nobody replies to it automatically.${blocked}`,
+      text: `Rooms you can post into:\n${lines.join("\n")}\n\nUse post_to_room with one of these ids. A post adds one message to the room; it does not start anyone's turn, so nobody replies to it automatically.${managedBlock}${blocked}`,
     };
   }
   if (name === "post_to_room") {
@@ -515,7 +519,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       }),
     });
     const completed = completedProposalResult(result, deleting ? "the requested bot deletion" : "the requested team setup");
-    if (completed) return completed;
+    if (completed) return enhanceTeamSetupResult(completed, result, deleting);
     return { text: `One review card is visible: ${String(result.title)}. Nothing has been applied. End this turn; the decision and structured result resume you automatically once. Do not ask again, poll, or repeat this proposal.` };
   }
   if (name === "create_bot") {
@@ -533,6 +537,8 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
         name: botName,
         role,
         instructions,
+        ...(typeof args.section === "string" ? { section: args.section.trim() } : {}),
+        ...(args.department_coordinator === true ? { department_coordinator: true } : {}),
         ...(args.modelSelection !== undefined ? { modelSelection: args.modelSelection } : {}),
         ...(typeof args.cwd === "string" ? { cwd: args.cwd.trim() } : {}),
       }),
@@ -541,66 +547,11 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       return { text: `One review card is visible: ${String(r.title)}. @${botName} has not been created yet. End this turn; the decision and structured result resume you automatically once. Do not ask again, poll, or repeat this request.` };
     }
     if (!r.id) return completedProposalResult(r, `creating @${botName}`) ?? { text: `@${botName} was not created.`, isError: true };
-    return {
-      text: `Created @${r.name ?? botName} in ${r.section ?? "General"} [id: ${r.id}].${r.modelSelection ? ` Model: ${JSON.stringify(r.modelSelection)}.` : ""} Assign work with coordinate_bots.`,
-    };
+    return formatCreateBotResult(r, botName);
   }
-  if (member === "create_room") {
-    if (args.section !== undefined) return { text: "A room you create stays in your own department; ask the user to move it.", isError: true };
-    const roomName = String(args.name ?? "").trim();
-    const memberIds = Array.isArray(args.member_bot_ids)
-      ? args.member_bot_ids.map((id) => String(id).trim()).filter(Boolean)
-      : [];
-    const bulletin = typeof args.bulletin === "string" ? args.bulletin.trim() : undefined;
-    if (!roomName) {
-      return { text: "manage_room action=create needs a room name.", isError: true };
-    }
-    if (!memberIds.length) {
-      return { text: "manage_room action=create needs at least one bot ID in member_bot_ids.", isError: true };
-    }
-    const r = await api(`/api/internal/create-room`, {
-      method: "POST",
-      body: JSON.stringify({
-        fromBotId: BOT_ID,
-        fromThreadId: THREAD_ID,
-        name: roomName,
-        memberIds,
-        bulletin,
-      }),
-    });
-    if (r.error) return { text: `Couldn't create room: ${r.error}`, isError: true };
-    return {
-      text: `Created room “${r.name ?? roomName}” in section “${r.section ?? "General"}” [id: ${r.id}] with ${r.memberCount ?? memberIds.length} members.`,
-    };
-  }
-  if (member === "manage_room") {
-    if (args.section !== undefined || args.action === "set_section") return { text: "Moving rooms between sections is user-only.", isError: true };
-    const roomId = String(args.room_id ?? "").trim();
-    const action = String(args.action ?? "").trim();
-    if (!roomId || !action) {
-      return { text: "manage_room needs action and, for any action but create, the room_id from list_rooms.", isError: true };
-    }
-    const memberIds = Array.isArray(args.member_bot_ids)
-      ? args.member_bot_ids.map((id) => String(id).trim()).filter(Boolean)
-      : undefined;
-    const roomName = typeof args.name === "string" ? args.name.trim() : undefined;
-    const bulletin = typeof args.bulletin === "string" ? args.bulletin.trim() : undefined;
-    const r = await api(`/api/internal/manage-room`, {
-      method: "POST",
-      body: JSON.stringify({
-        fromBotId: BOT_ID,
-        fromThreadId: THREAD_ID,
-        roomId,
-        action,
-        memberIds,
-        name: roomName,
-        bulletin,
-      }),
-    });
-    if (r.error) return { text: `Couldn't manage room: ${r.error}`, isError: true };
-    const message = typeof r.message === "string" ? r.message : `Updated room ${roomId}.`;
-    return { text: message };
-  }
+  if (member === "create_room") return callCreateRoom(args, api, BOT_ID, THREAD_ID);
+  if (member === "manage_room") return callManageRoom(args, api, BOT_ID, THREAD_ID);
+  if (name === "manage_department_instructions") return callManageDepartmentInstructions(args, api);
   if (name === "request_credential") {
     const credentialId = args.credential_id;
     if (credentialId === undefined || credentialId === "") return requestCustomSecret(args, context);

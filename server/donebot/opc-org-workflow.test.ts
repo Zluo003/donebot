@@ -329,7 +329,7 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     //    while still preventing bypassing the other department's Chief to dispatch directly to its member.
     orgStore.updateOrgSettings({ allowChiefCrossDispatch: true });
     expect(orgStore.evaluateCoordination(contentChief.id, [designChief.id], false, bots)).toBeNull();
-    expect(orgStore.evaluateCoordination(contentChief.id, [designMember.id], false, bots)).toContain("对方部门负责人决定");
+    expect(orgStore.evaluateCoordination(contentChief.id, [designMember.id], false, bots)).toContain("对方部门协调机器人决定");
     expect(orgStore.evaluateCoordination(contentWriter.id, [designChief.id], false, bots)).toContain("组织架构约束已拦截");
     expect(orgStore.orgPromptForBot(contentChief.id, bots)).toContain("已开启「跨部门沟通」");
     // Re-lock strict mode to verify fixed workflow STILL overrides org chart!
@@ -456,8 +456,8 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     expect(orgStore.evaluateCoordination(botC.id, [botD.id], false, bots)).toContain("组织架构约束已拦截");
 
     // Non-chief member C cannot bypass chief A to report directly to Boss or 多宝; chief A can report to Boss.
-    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: null }, bots)).toThrow(/已设负责人/);
-    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: duobao.id }, bots)).toThrow(/已设负责人/);
+    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: null }, bots)).toThrow(/已设部门协调机器人/);
+    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: duobao.id }, bots)).toThrow(/已设部门协调机器人/);
     orgStore.upsertOrgNode(botA.id, { reportsToBotId: null }, bots);
     expect(orgStore.getOrgChart(bots).nodes[botA.id]?.reportsToBotId).toBeNull();
     orgStore.upsertOrgNode(botA.id, { reportsToBotId: duobao.id }, bots);
@@ -481,7 +481,7 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     // In a chief-less department, former chief B can no longer dispatch laterally to peer A under enforced mode.
     expect(orgStore.evaluateCoordination(botB.id, [botA.id], false, bots)).toContain("组织架构约束已拦截");
     // Manual same-department subordination is blocked until a department chief is designated.
-    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: botA.id }, bots)).toThrow(/暂无负责人/);
+    expect(() => orgStore.upsertOrgNode(botC.id, { reportsToBotId: botA.id }, bots)).toThrow(/暂无部门协调机器人/);
 
     // 5. Re-assigning A as department chief automatically subordinates B/C/D under A again.
     botA.chiefOfStaff = true;
@@ -490,6 +490,23 @@ describe("OPC Org Chart, Coordination Gate & Multi-step Workflows", () => {
     expect(chart.nodes[botB.id]?.reportsToBotId).toBe(botA.id);
     expect(chart.nodes[botC.id]?.reportsToBotId).toBe(botA.id);
     expect(chart.nodes[botD.id]?.reportsToBotId).toBe(botA.id);
+
+    // 6. Uncategorized bots automatically attach directly under the unique System Coordinator (多宝),
+    //    newly created department coordinators default under 多宝, and 多宝 cannot be subordinated under another bot.
+    const solo = { ...makeBot("b-solo", "独立助手"), section: "" } as BotRecord;
+    const newDeptLead = { ...makeBot("b-drama-lead", "掌镜"), section: "短剧部", chiefOfStaff: true } as BotRecord;
+    const newDeptMember = { ...makeBot("b-drama-writer", "笔客"), section: "短剧部" } as BotRecord;
+    const extended = [...bots, solo, newDeptLead, newDeptMember];
+    chart = orgStore.getOrgChart(extended);
+    expect(chart.nodes[duobao.id]?.reportsToBotId).toBeNull();
+    expect(chart.nodes[solo.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[newDeptLead.id]?.reportsToBotId).toBe(duobao.id);
+    expect(chart.nodes[newDeptMember.id]?.reportsToBotId).toBe(newDeptLead.id);
+    expect(() => orgStore.upsertOrgNode(duobao.id, { reportsToBotId: newDeptLead.id }, extended)).toThrow(/全局唯一的总协调机器人/);
+    // System Coordinator dispatches seamlessly to uncategorized bots, department coordinators, and subordinates.
+    expect(orgStore.evaluateCoordination(duobao.id, [solo.id, newDeptLead.id, newDeptMember.id], false, extended)).toBeNull();
+    // Unresolved/unknown target IDs are never misclassified as same-department peers.
+    expect(orgStore.evaluateCoordination(duobao.id, ["掌镜"], false, extended)).toBeNull();
   });
 
   it("drives real bot chat turns with peerAsk handoff between nodes, outputs final reply in last bot's chat, and exposes real content to Boss approval", async () => {

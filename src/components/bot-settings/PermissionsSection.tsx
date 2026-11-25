@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Crown } from "lucide-react";
 
 import { cn } from "@/lib/cn";
-import { t } from "@/lib/i18n";
+import { activeLocale, t } from "@/lib/i18n";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { useStore, type Bot } from "@/state/store";
 import type { ApprovalMode } from "../../../shared/approval-mode";
@@ -35,6 +35,35 @@ export function PermissionsSection({
   const ownerOrAdmin = useOwnerOrAdmin();
   const { draft } = useBotEditor();
   const displaySectionName = sectionName === "General" ? t("botAccess.teams.general") : sectionName;
+  const inNamedDept = Boolean(bot.section?.trim());
+  const isZh = activeLocale() === "zh" || activeLocale() === "zh-tw" || activeLocale() === "zh-hant" || activeLocale() === "zh-hk";
+  const chiefTitle = inNamedDept
+    ? (isZh ? "部门协调机器人" : "Department Coordinator")
+    : t("permissions.chief.title");
+  const chiefSubtitle = inNamedDept
+    ? (isZh ? `「${displaySectionName}」的部门协调机器人（非总协调）` : `Coordinator for ${displaySectionName} (not global System Coordinator)`)
+    : t("permissions.chief.oneFor", { section: displaySectionName });
+  const chiefDescription = bot.chiefOfStaff && !canCoordinate
+    ? t("permissions.chief.unsupportedCurrent")
+    : bot.chiefOfStaff
+      ? (inNamedDept
+        ? (isZh
+          ? `这是「${displaySectionName}」的部门协调机器人，负责统筹本部门内的专业机器人分工、验收并向总协调机器人汇报。`
+          : `Coordinates specialists inside ${displaySectionName} and reports to the System Coordinator.`)
+        : t("permissions.chief.active", { section: displaySectionName }))
+      : !canCoordinate
+        ? t("permissions.chief.unsupported")
+        : currentChief
+          ? (inNamedDept
+            ? (isZh
+              ? `将此机器人设为「${displaySectionName}」的部门协调机器人，并替换 ${currentChief.name}。`
+              : `Make this bot the ${displaySectionName} Department Coordinator and replace ${currentChief.name}.`)
+            : t("permissions.chief.replace", { section: displaySectionName, current: currentChief.name }))
+          : (inNamedDept
+            ? (isZh
+              ? `将此机器人设为「${displaySectionName}」的部门协调机器人，负责统筹本部门成员任务。`
+              : `Make this bot the Department Coordinator for ${displaySectionName}.`)
+            : t("permissions.chief.make", { section: displaySectionName }));
   const [localAutoWarning, setLocalAutoWarning] = useState<string | null>(null);
   const [commandAllowlistTarget, setCommandAllowlistTarget] = useState<{ botId: string; botName: string } | null>(null);
   const shows = (part: PermissionsPart) => !parts || parts.includes(part);
@@ -71,12 +100,12 @@ export function PermissionsSection({
             <Crown size={17} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-medium text-ink">{t("permissions.chief.title")}</div>
-            <div className="text-[12px] text-ink-secondary">{t("permissions.chief.oneFor", { section: displaySectionName })}</div>
+            <div className="text-[15px] font-medium text-ink">{chiefTitle}</div>
+            <div className="text-[12px] text-ink-secondary">{chiefSubtitle}</div>
           </div>
           <Switch
             checked={Boolean(bot.chiefOfStaff)}
-            aria-label={t("permissions.chief.title")}
+            aria-label={chiefTitle}
             disabled={!bot.chiefOfStaff && !canCoordinate}
             onClick={() => patch({ chiefOfStaff: !bot.chiefOfStaff })}
             title={!bot.chiefOfStaff && !canCoordinate ? t("permissions.cannotCoordinate") : undefined}
@@ -84,15 +113,7 @@ export function PermissionsSection({
           />
         </div>
         <div className="mt-3 text-[13px] leading-relaxed text-ink-secondary">
-          {bot.chiefOfStaff && !canCoordinate
-            ? t("permissions.chief.unsupportedCurrent")
-            : bot.chiefOfStaff
-              ? t("permissions.chief.active", { section: displaySectionName })
-              : !canCoordinate
-                ? t("permissions.chief.unsupported")
-                : currentChief
-                  ? t("permissions.chief.replace", { section: displaySectionName, current: currentChief.name })
-                  : t("permissions.chief.make", { section: displaySectionName })}
+          {chiefDescription}
         </div>
         <ProposalStatus bot={bot} kind="chief" />
         {bot.chiefOfStaff && <ManagedTeamsSettings

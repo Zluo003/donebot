@@ -58,10 +58,10 @@ export function OpcDeptMenu({
           <Users size={13} /> 管理部门成员
         </button>
         <button type="button" onClick={() => onInstructions(sectionKey, label)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-ink-secondary hover:bg-ink/[0.06] hover:text-ink">
-          <BookOpen size={13} /> 部门公共指令
+          <BookOpen size={13} /> 部门共享指示
         </button>
         <button type="button" onClick={() => onMemory(sectionKey, label)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-ink-secondary hover:bg-ink/[0.06] hover:text-ink">
-          <Brain size={13} /> 部门共享记忆
+          <Brain size={13} /> 部门记忆
         </button>
         <button
           type="button"
@@ -172,7 +172,7 @@ export function OpcOrgNodeCard({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-[13.5px] font-semibold">{node.name}</span>
-                {bot.chiefOfStaff && <Crown size={11.5} className="shrink-0 text-warning" aria-label={node.section ? "部门负责人" : "系统总协调"} />}
+                {bot.chiefOfStaff && <Crown size={11.5} className="shrink-0 text-warning" aria-label={node.section ? "部门协调机器人" : "总协调机器人"} />}
                 {status && status.tone !== "idle" && (
                   <span
                     title={status.label}

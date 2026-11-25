@@ -284,7 +284,7 @@ beforeEach(() => {
 });
 
 describe("the bot panel in Simple mode", () => {
-  it("has Share, a gear for Bot settings and a close button on top, the hero, and three tabs: Details, Library, Computer", () => {
+  it("has Share, a gear for Bot settings and a close button on top, the hero, and four tabs: Details, Library, Computer, Artifacts", () => {
     const bot = makeBot();
     const rendered = panel(bot);
     expect(ofType(rendered, ChatShareMenu)!.props.bot).toBe(bot);
@@ -296,7 +296,7 @@ describe("the bot panel in Simple mode", () => {
     expect(hero.props.bot).toBe(bot);
     expect(hero.props.patch).toBe(patch);
     const tabs = [...rendered.html.matchAll(/data-panel-tab="(\w+)"[^>]*>([^<]+)<\/button>/g)].map((match) => [match[1], match[2]]);
-    expect(tabs).toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
+    expect(tabs).toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"], ["artifacts", "Artifacts"]]);
     expect(shown(rendered)).toEqual({ tab: "details", page: undefined });
     expect(ofType(rendered, DetailsTab)!.props.bot).toBe(bot);
     expect(rendered.html).toContain('id="bot-settings-title"');
@@ -892,10 +892,24 @@ describe("the Bot settings page", () => {
 });
 
 describe("the Library tab", () => {
-  it("says what it will hold while the bot has made nothing, then what it remembers, its skills and its folder", () => {
-    const rendered = library(makeBot());
+  it("puts what it remembers, its skills and its folder first, omits raw file clutter, and shows the empty note below", () => {
+    const rendered = library(makeBot({
+      messages: [
+        {
+          id: "m-files",
+          role: "bot",
+          text: "Ran python",
+          at: 1,
+          activity: {
+            tools: [{ id: "t1", name: "Write", status: "done", input: JSON.stringify({ file_path: "/tmp/__pycache__/abc.cpython-39.pyc" }) }],
+          },
+        } as never,
+      ],
+    }));
+    expect(rendered.html).not.toContain('data-panel-card="files"');
+    expect(rendered.html).not.toContain("abc.cpython-39.pyc");
     expect(rendered.html).toContain('data-panel-empty="library"');
-    const order = ['data-panel-empty="library"', 'data-panel-page="memory"', 'data-panel-page="skills"', 'data-panel-page="folder"'].map((marker) => rendered.html.indexOf(marker));
+    const order = ['data-panel-page="memory"', 'data-panel-page="skills"', 'data-panel-page="folder"', 'data-panel-empty="library"'].map((marker) => rendered.html.indexOf(marker));
     expect(order.every((index) => index > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });

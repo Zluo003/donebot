@@ -79,10 +79,92 @@ describe("reviewed Chief team setup", () => {
     const before = structuredClone(h.store.bots);
     const request = h.propose([{ action: "update", botId: h.peer.id, fields: { chiefOfStaff: true } }]);
     expect(request.detail).toContain("Chief of Staff: No → Yes");
-    expect(request.detail).toContain("May coordinate and configure bots in this department");
+    expect(request.detail).toContain('Appointed as Department Coordinator for "Engineering"');
     expect(h.store.bots).toEqual(before);
     expect((await h.resolve(request.requestId, "deny"))?.result.state).toBe("denied");
     expect(h.store.bots).toEqual(before);
+  });
+
+  it("lets the unique System Coordinator auto-create new departments even without newTeams, omits optional create keys, and blocks a second System Coordinator", async () => {
+    const h = harness();
+    h.chief.section = undefined;
+    h.chief.managedSections = [];
+    const onApplied = vi.fn((req: TeamSetupRequest, result: TeamSetupResult) => ({
+      createdRooms: result.newTeams.map((team: string) => ({
+        id: `room-${team}`, name: `${team}群聊`, section: team, memberIds: result.bots.map((b: { id: string }) => b.id),
+      })),
+      updatedDepartmentInstructions: Object.keys(req.departmentInstructions ?? {}),
+      previousSectionContexts: Object.entries(req.departmentInstructions ?? {}).map(([sec, writtenText]) => ({
+        section: sec,
+        previousText: null,
+        writtenText,
+      })),
+    }));
+    const deleteUnusedRoom = vi.fn();
+    const restoreSectionContext = vi.fn();
+    const service = new TeamSetupRequestService({
+      store: h.store as never,
+      teams: () => h.teams,
+      maxBots: 100,
+      hasTeamAuthority,
+      canPersist: () => ({ ok: true }),
+      validateModel: () => null,
+      targetBusy: () => false,
+      mcpServerProblem: () => null,
+      ownsThread: () => true,
+      deleteBot: h.deleteBot,
+      deletionRefusal: () => null,
+      autoApply: () => "full-access",
+      onApplied,
+      deleteUnusedRoom,
+      restoreSectionContext,
+    });
+    // Omit newTeams, key, chiefOfStaff, and departmentInstructions -> System Coordinator auto-infers "短剧部",
+    // auto-appoints 掌镜 (导演) as Department Coordinator, initializes department shared instructions, and creates group chat.
+    const created = await service.submit({
+      botId: h.chief.id,
+      threadId: h.chief.threadId,
+      plan: {
+        reason: "建立短剧部并统筹分镜与编剧",
+        operations: [
+          { action: "create", fields: { name: "笔客", title: "编剧", soul: "撰写短剧剧本。", section: "短剧部", modelSelection: { instanceId: "claude", model: "sonnet" } } },
+          { action: "create", fields: { name: "掌镜", title: "导演", soul: "统筹短剧分镜。", section: "短剧部", modelSelection: { instanceId: "claude", model: "sonnet" } } },
+        ],
+      },
+    });
+    expect(created).toMatchObject({
+      applied: true,
+      state: "applied",
+      result: {
+        state: "applied",
+        newTeams: ["短剧部"],
+        createdRooms: [{ id: "room-短剧部", name: "短剧部群聊", section: "短剧部" }],
+        updatedDepartmentInstructions: ["短剧部"],
+      },
+    });
+    const dramaLead = h.store.bots.find((b) => b.name === "掌镜");
+    const dramaWriter = h.store.bots.find((b) => b.name === "笔客");
+    expect(dramaLead?.chiefOfStaff).toBe(true);
+    expect(dramaWriter?.chiefOfStaff).toBeUndefined();
+    expect(onApplied.mock.calls[0]?.[0]?.departmentInstructions?.["短剧部"]).toContain("短剧部");
+    expect(onApplied.mock.calls[0]?.[0]?.departmentInstructions?.["短剧部"]).toContain("@掌镜");
+    expect(onApplied).toHaveBeenCalledTimes(1);
+    // Blocking a second global System Coordinator in General (section: "")
+    await expect(service.submit({
+      botId: h.chief.id,
+      threadId: h.chief.threadId,
+      plan: {
+        reason: "试图创建第二个总协调",
+        operations: [
+          { action: "create", fields: { name: "二号总控", title: "总控", soul: "冲突。", section: "", chiefOfStaff: true, modelSelection: { instanceId: "claude", model: "sonnet" } } },
+        ],
+      },
+    })).rejects.toThrow(/only one Chief \(System Coordinator\) globally/);
+    // Undo cleans up both the auto-created department room and auto-written department shared instructions
+    const undone = await service.undo({ botId: h.chief.id, threadId: h.chief.threadId, requestId: created.requestId });
+    expect(undone).toMatchObject({ claimed: true, state: "undone" });
+    expect(deleteUnusedRoom).toHaveBeenCalledWith("room-短剧部");
+    expect(restoreSectionContext).toHaveBeenCalledWith(expect.objectContaining({ section: "短剧部", previousText: null }));
   });
   it("warns what an engine switch gains and loses beyond the label", () => {
     const h = harness({
@@ -217,7 +299,7 @@ describe("reviewed Chief team setup", () => {
     expect(() => h.propose([{ action: "update", botId: h.peer.id, fields: { model: "gpt" } }]))
       .toThrow(/^operations\.0\.fields: Unrecognized key: "model"\. It takes chiefOfStaff, name, title, description, soul, soulAppend, cwd, section, modelSelection, mcpServers\.$/);
     expect(() => h.service.propose({ botId: h.chief.id, threadId: h.chief.threadId, plan: { reason: "Requested", operations: [{ action: "update", botId: h.peer.id, fields: { title: "Lead" } }], teams: [] } }))
-      .toThrow(/^Unrecognized key: "teams"\. It takes reason, newTeams, operations\.$/);
+      .toThrow(/^Unrecognized key: "teams"\. It takes reason, newTeams, departmentInstructions, operations\.$/);
   });
   it("rejects unknown models, foreign teams, missing specialists and duplicate names", () => {
     const h = harness();

@@ -25,6 +25,7 @@ import { useMoveToTeam } from "./MoveToTeam";
 import type { MenuState } from "./Sidebar";
 import { departmentNames, moveBotsToSection, useMayMoveBots } from "./bot-sections";
 import { openBotSettings } from "./bot-panel/panel-link";
+import { coordinatorArchiveHint } from "./BotRole";
 import { isArchived } from "./SidebarThreadRow";
 
 type Flyout = "more" | "move";
@@ -166,17 +167,17 @@ export function BotContextMenu({
   const visibleBotCount = state.bots.filter((candidate) => !candidate.hidden).length;
   const archiveBlocked = Boolean(bot.chiefOfStaff) || visibleBotCount <= 1;
   const archiveHint = bot.chiefOfStaff
-    ? t("sidebar.bot.archiveBlockedChief")
+    ? coordinatorArchiveHint(bot)
     : visibleBotCount <= 1
       ? t("sidebar.bot.archiveBlockedLast")
       : undefined;
   const inNamedDept = Boolean(bot.section?.trim());
   const chiefActionLabel = inNamedDept
-    ? (activeLocale() === "zh-tw"
-      ? (bot.chiefOfStaff ? "取消部門負責人" : "設為部門負責人")
+    ? (activeLocale() === "zh-tw" || activeLocale() === "zh-hant" || activeLocale() === "zh-hk"
+      ? (bot.chiefOfStaff ? "取消部門協調機器人" : "設為部門協調機器人")
       : activeLocale() === "zh"
-        ? (bot.chiefOfStaff ? "取消部门负责人" : "设为部门负责人")
-        : (bot.chiefOfStaff ? "Remove department lead" : "Make department lead"))
+        ? (bot.chiefOfStaff ? "取消部门协调机器人" : "设为部门协调机器人")
+        : (bot.chiefOfStaff ? "Remove department coordinator" : "Make department coordinator"))
     : (bot.chiefOfStaff ? t("sidebar.bot.removeChief") : t("sidebar.bot.makeChief"));
   const chiefItem = () => item(
     <Crown size={16} className={bot.chiefOfStaff ? "text-accent" : "text-ink-secondary"} />,

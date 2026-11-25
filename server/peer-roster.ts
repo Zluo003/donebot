@@ -1,5 +1,6 @@
 import { botOwner } from "../shared/bot-owner.ts";
 import { sameAudience } from "./bot-visibility.ts"; import type { DefaultBotFields } from "../shared/default-bot.ts";
+import { chiefLevel } from "./chief-level.ts";
 import type { BotActivity } from "./store.ts";
 
 export interface RosterMember extends Pick<DefaultBotFields, "defaultBot"> {
@@ -20,6 +21,27 @@ export interface RosterMember extends Pick<DefaultBotFields, "defaultBot"> {
 
 const sectionKey = (section?: string): string => section?.trim() || "";
 
+/** The single workspace-wide System Coordinator (General scope, no section, personal workspace). */
+export function isSystemCoordinator(
+  bot: Pick<RosterMember, "section" | "chiefOfStaff" | "createdBy" | "reportsTo" | "defaultBot"> | null | undefined,
+): boolean {
+  return Boolean(bot?.chiefOfStaff && !sectionKey(bot.section) && !botOwner(bot));
+}
+
+/** A named department's coordinator (`section != ""`), distinct from the unique System Coordinator. */
+export function isDepartmentCoordinator(
+  bot: Pick<RosterMember, "section" | "chiefOfStaff" | "createdBy" | "reportsTo" | "defaultBot"> | null | undefined,
+): boolean {
+  return Boolean(bot?.chiefOfStaff && sectionKey(bot.section) && !botOwner(bot));
+}
+
+/** Built-in meta-skills (`find-skills`, `skill-creator`) belong only to the General System Coordinator, never Department Coordinators. */
+export function hasCoordinatorBuiltinSkills(
+  bot: Pick<RosterMember, "section" | "chiefOfStaff" | "defaultBot"> | null | undefined,
+): boolean {
+  return Boolean(bot && chiefLevel(bot) && !sectionKey(bot.section));
+}
+
 export const PEER_ACCESS_HELP = "Every bot can reach every other bot, in any department, and list_bots shows each one with its exact id. A bot it does not show is archived or shared with different people, so it cannot be reached. Never use computer control to get around this.";
 
 // Authority (supervising, incidents, setup changes, automations, a person's brief) follows departments,
@@ -27,10 +49,12 @@ export const PEER_ACCESS_HELP = "Every bot can reach every other bot, in any dep
 
 /** A title, peer id, imported persona or room membership is not a grant; invalid saved grants fail closed. */
 export function hasTeamAuthority(
-  from: Pick<RosterMember, "section" | "chiefOfStaff" | "managedSections">,
+  from: Pick<RosterMember, "section" | "chiefOfStaff" | "managedSections" | "createdBy" | "reportsTo" | "defaultBot">,
   section?: string,
 ): boolean {
   const target = sectionKey(section);
+  // In a personal workspace, the unique System Coordinator (General scope) oversees all departments and uncategorized bots.
+  if (isSystemCoordinator(from)) return true;
   return target === sectionKey(from.section) || Boolean(from.chiefOfStaff &&
     Array.isArray(from.managedSections) && from.managedSections.some(value =>
       typeof value === "string" && sectionKey(value) === target));
@@ -211,7 +235,9 @@ const CHOICES_MAX = 12;
 
 export function sharedNameChoices(matches: readonly RosterMember[]): string {
   const listed = matches.slice(0, CHOICES_MAX).map((bot) => {
-    const role = bot.chiefOfStaff ? "Chief of Staff" : peerName(bot.title ?? "");
+    const role = bot.chiefOfStaff
+      ? (sectionKey(bot.section) ? "Department Coordinator" : "System Coordinator")
+      : peerName(bot.title ?? "");
     return `${peerName(bot.name)}${role ? `, ${role}` : ""} (id ${bot.id})`;
   });
   return listed.join("; ") + (matches.length > CHOICES_MAX ? `; and ${matches.length - CHOICES_MAX} more` : "");
@@ -283,7 +309,10 @@ export function renderRoster(team: readonly RosterMember[], opts: RosterOptions)
     const role = clip(bot.title ?? "", ROSTER_ROLE_MAX) || "General assistant";
     const about = opts.about ? clip(bot.description ?? "", ROSTER_ABOUT_MAX) : "";
     const department = departments ? ` (${departmentLabel(bot)})` : "";
-    return `- ${name} — ${role}${department}${bot.chiefOfStaff ? " [Chief of Staff]" : ""}${about ? `: ${about}` : ""} [id: ${clip(bot.id, ROSTER_NAME_MAX)}]`;
+    const coordinatorTag = bot.chiefOfStaff
+      ? (sectionKey(bot.section) ? " [Department Coordinator]" : " [System Coordinator]")
+      : "";
+    return `- ${name} — ${role}${department}${coordinatorTag}${about ? `: ${about}` : ""} [id: ${clip(bot.id, ROSTER_NAME_MAX)}]`;
   });
   return (
     lines.join("\n") +

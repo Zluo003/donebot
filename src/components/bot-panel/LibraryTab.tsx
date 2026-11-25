@@ -1,4 +1,4 @@
-import { AppWindow, Brain, FileText, Folder, Globe, Zap } from "lucide-react";
+import { AppWindow, Brain, Folder, Globe, Zap } from "lucide-react";
 import { useMemo } from "react";
 
 import { t } from "@/lib/i18n";
@@ -6,23 +6,20 @@ import { usePageOpener } from "@/lib/page-open";
 import { shortPath } from "@/lib/short-path";
 import { SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useStore, visibleMessages, type Bot, type Message } from "@/state/store";
-import { AttachedFileChip } from "../AttachmentPreview";
-import { recentChangedFiles, sharedFileReferences } from "../ComputerFilesPane";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
 import { skillSwitchOn, useManagedSkills } from "../bot-settings/SkillsSection";
 import type { SimplePageId } from "./page-registry";
-import { Card, CardLabel, NavRow } from "./rows";
+import { Card, NavRow } from "./rows";
 import { panelMemoryNotes } from "./memory-notes";
 import { useMemoryDoc } from "./use-memory-doc";
 
 export interface LibraryItems {
   pages: Array<{ messageId: string; title: string; url: string }>;
   apps: Array<{ messageId: string; title: string }>;
-  shared: Array<NonNullable<ReturnType<ReturnType<typeof sharedFileReferences>["get"]>>>;
-  unshared: string[];
 }
 
-/** What the bot made in the open conversation, newest first: its live published pages, its apps, and its files. */
+/** What the bot made in the open conversation, newest first: its live published pages and interactive apps.
+ * Delivered documents and media live in the dedicated Artifacts tab instead of mixing with raw workspace churn here. */
 export function libraryItems(bot: Bot, messages: readonly Message[] = visibleMessages(bot)): LibraryItems {
   const pages: LibraryItems["pages"] = [];
   const apps: LibraryItems["apps"] = [];
@@ -35,19 +32,8 @@ export function libraryItems(bot: Bot, messages: readonly Message[] = visibleMes
     }
     if (message.kind === "app" && message.app?.doc) apps.push({ messageId: message.id, title: message.app.title });
   }
-  const references = sharedFileReferences(bot);
-  const shared: LibraryItems["shared"] = [];
-  const seenFiles = new Set<string>();
-  for (const reference of references.values()) {
-    if (seenFiles.has(reference.file.path)) continue;
-    seenFiles.add(reference.file.path);
-    shared.push(reference);
-  }
-  const unshared = recentChangedFiles(bot).filter((path) => !references.has(path));
-  return { pages, apps, shared, unshared };
+  return { pages, apps };
 }
-
-const fileName = (path: string) => path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
 
 export function LibraryTab({ bot, onOpen }: { bot: Bot; onOpen: (page: SimplePageId) => void }) {
   const { dispatch } = useStore();
@@ -56,7 +42,7 @@ export function LibraryTab({ bot, onOpen }: { bot: Bot; onOpen: (page: SimplePag
   const phone = !useMediaQuery(SIDEBAR_INLINE, true);
   const skills = useManagedSkills(bot);
   const memory = useMemoryDoc(bot);
-  const { pages, apps, shared, unshared } = useMemo(() => libraryItems(bot), [bot]);
+  const { pages, apps } = useMemo(() => libraryItems(bot), [bot]);
   const showInChat = (messageId: string) => {
     dispatch({ type: "focusMessage", threadId: bot.threadId, messageId });
     if (phone) dispatch({ type: "toggleSettings", open: false });
@@ -87,18 +73,19 @@ export function LibraryTab({ bot, onOpen }: { bot: Bot; onOpen: (page: SimplePag
     </Card>
   );
 
-  if (pages.length + apps.length + shared.length + unshared.length === 0) {
+  if (pages.length + apps.length === 0) {
     return (
       <div data-panel-tabpanel="library">
-        <p data-panel-empty="library" className="px-3 py-7 text-center text-[13px] leading-[18px] text-ink-tertiary">
+        {keeps}
+        <p data-panel-empty="library" className="px-3 py-6 text-center text-[13px] leading-[18px] text-ink-tertiary">
           {t("botPanel.library.empty")}
         </p>
-        {keeps}
       </div>
     );
   }
   return (
     <div data-panel-tabpanel="library">
+      {keeps}
       {pages.length > 0 && (
         <Card label={t("botPanel.library.pages")} anchor="pages">
           {pages.map((page) => (
@@ -113,27 +100,7 @@ export function LibraryTab({ bot, onOpen }: { bot: Bot; onOpen: (page: SimplePag
           ))}
         </Card>
       )}
-      {shared.length + unshared.length > 0 && (
-        <section data-panel-card="files">
-          <CardLabel>{t("botPanel.library.files")}</CardLabel>
-          <ul className="flex flex-col gap-1.5">
-            {shared.map((reference) => (
-              <li key={`${reference.message.messageId}:${reference.file.path}`} className="min-w-0">
-                <AttachedFileChip file={reference.file} message={reference.message} linked={reference.file.linked} className="w-full max-w-none" />
-              </li>
-            ))}
-            {unshared.map((path) => (
-              <li key={path} title={t("computer.files.notSharedHint")} className="flex min-w-0 items-center gap-2 rounded-lg border border-hairline/40 px-2.5 py-2">
-                <FileText size={14} className="shrink-0 text-ink-secondary" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{fileName(path)}</span>
-                <span className="shrink-0 text-[11px] text-ink-tertiary">{t("computer.files.notShared")}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       <p className="mt-3 text-center text-[12px] text-ink-tertiary">{t("botPanel.library.scope")}</p>
-      {keeps}
     </div>
   );
 }

@@ -18,7 +18,6 @@ import { matchesSearch, nextAfter } from "./inbox-answer";
 import { listedRows, rowsIn, waitingCount } from "./inbox-view";
 import { useInboxActions } from "./use-inbox-actions";
 import { roundButtonCls } from "../bot-panel/rows";
-import { OpcBossDashboard } from "@/donebot/OpcBossDashboard";
 
 
 export function InboxPanel() {
@@ -105,7 +104,6 @@ export function InboxPanel() {
         ) : (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {!query.trim() && <OpcBossDashboard />}
               {/* The conversations each bot and room pinned, at the top of the list. */}
               {!query.trim() && <PinnedThreads bots={state.bots} groups={state.groups} queued={state.pendingQueued} now={now} current={openThread} onOpen={(row) => dispatch(attentionJumpAction(row))} onUnpin={(row) => dispatch(attentionUnpinAction(row))} />}
               {listed.length > 0 && <label className="mx-[13px] my-2.5 flex h-8 items-center gap-2 rounded-lg bg-ink/[0.045] px-2.5 ring-[0.5px] ring-ink/[0.12] focus-within:ring-ink/30">

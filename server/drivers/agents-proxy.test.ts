@@ -667,6 +667,7 @@ describe("agents-proxy MCP surface", () => {
       "propose_team_setup",
       "propose_bot_deletion",
       "manage_room",
+      "manage_department_instructions",
       "request_credential",
       "request_sign_in",
       "fill_login",
@@ -685,6 +686,7 @@ describe("agents-proxy MCP surface", () => {
       "list_waits",
       "cancel_wait",
       "check_back",
+      "app_settings",
       "propose_profile",
       "propose_model",
       "propose_team_memory",
@@ -1145,13 +1147,8 @@ describe("agents-proxy MCP surface", () => {
   });
 
   it("does not expose bot moves or silently accept room section reassignment", async () => {
-    for (const [name, args] of [
-      ["create_room", { name: "Elsewhere", member_bot_ids: ["bot-1"], section: "Foreign" }],
-      ["manage_room", { room_id: "room-dev", action: "set_section", section: "Foreign" }],
-    ] as const) {
-      const result = await callTool(name, args);
-      expect(result.result.isError).toBe(true);
-    }
+    const result = await callTool("manage_room", { room_id: "room-dev", action: "set_section", section: "Foreign" });
+    expect(result.result.isError).toBe(true);
     expect((await callTool("move_bot", { bot_id: "bot-1", section: "Foreign" })).error.message).toContain("Unknown tool");
   });
 
@@ -2081,7 +2078,7 @@ describe("agents-proxy MCP surface", () => {
     const manage = list.result.tools.find((t: { name: string }) => t.name === "skill_manage");
     expect(JSON.stringify(manage.inputSchema)).not.toMatch(/"(oneOf|anyOf|allOf|const|format)":/);
     expect(manage.inputSchema.required).toEqual(["action"]);
-    expect(manage.inputSchema.properties.action.enum).toEqual(["create", "update", "enable", "disable", "delete"]);
+    expect(manage.inputSchema.properties.action.enum).toEqual(["create", "update", "import", "enable", "disable", "delete"]);
 
     const listed = await callTool("skills_list", {});
     expect(listed.result.content[0].text).toContain("file-expense");
@@ -2214,7 +2211,7 @@ describe("standing external runtime", () => {
   it("sees the same one tool surface as every turn: the switches it sets change nothing", async () => {
     const list = await externalRpc("tools/list");
     // the main child is a Chief's turn that may pick its computer; this one is neither, so only those differ
-    const chiefOnly = ["create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"];
+    const chiefOnly = ["create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "manage_department_instructions", "retry_thread"];
     const everyTurn = (await rpc("tools/list")).result.tools.filter((tool: any) => !chiefOnly.includes(tool.name) && tool.name !== "select_computer");
     const names = list.result.tools.map((tool: any) => tool.name);
     expect(names).toEqual(everyTurn.map((tool: any) => tool.name));
@@ -2332,7 +2329,7 @@ describe("with computer sharing off and no Chief of Staff (the defaults)", () =>
   it("shows a bot that is not a Chief none of the Chief-only tools or parameters", async () => {
     type ListedTool = { name: string; description: string; inputSchema: { properties: Record<string, unknown> } };
     const tools = new Map(((await gatedRpc("tools/list")).result.tools as ListedTool[]).map((tool) => [tool.name, tool]));
-    for (const name of ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"]) {
+    for (const name of ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "manage_department_instructions", "retry_thread"]) {
       expect(tools.has(name), name).toBe(false);
     }
     for (const name of ["propose_profile", "propose_model"]) {
@@ -2469,7 +2466,7 @@ describe("tool bridge", () => {
 
   /** The main child's switches: a Chief with skills and shared computers. */
   const CHIEF = { DONEBOT_SKILL_AUTHORING_ENABLED: "1", DONEBOT_SHARED_COMPUTERS_ENABLED: "1", DONEBOT_CHIEF_OF_STAFF: "1", DONEBOT_COMPUTER_SELECTION: "1" };
-  const CHIEF_ONLY = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"];
+  const CHIEF_ONLY = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "manage_department_instructions", "retry_thread"];
   const HOT = ["tool_result_read", "list_room_targets", "coordinate_bots", "list_bots", "list_rooms", "select_computer", "attach_file", "publish_page", "post_to_room", "request_credential", "request_sign_in", "fill_login", "message_person", "memory_update"];
   let chief: Rpc;
   let plain: Rpc;

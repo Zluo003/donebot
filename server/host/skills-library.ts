@@ -1,4 +1,4 @@
-import { chiefLevel } from "../chief-level.ts";
+import { hasCoordinatorBuiltinSkills } from "../peer-roster.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 
@@ -82,7 +82,7 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
   const { store, cfg } = deps;
   const mode = () => shareLearnedSkillsMode(cfg);
   const bundled = loadBundledSkills().filter((skill) => skill.manifest.chiefOnly && skill.manifest.alwaysAvailable);
-  const builtinsFor = (bot: BotRecord) => chiefLevel(bot) ? bundled : [];
+  const builtinsFor = (bot: BotRecord) => hasCoordinatorBuiltinSkills(bot) ? bundled : [];
 
   /** The bot's own skills, and its library skills while the library is on; an imported skill of the same name yields. */
   const ownSkills = (bot: BotRecord) =>

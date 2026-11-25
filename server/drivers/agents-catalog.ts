@@ -13,6 +13,7 @@ import { CHECK_BACK_TOOL_DEFINITIONS, CHECK_BACK_TOOL_NAMES } from "./agents-che
 import { APP_SETTINGS_TOOL_DEFINITION } from "./agents-app-settings-tool.ts";
 import { WAIT_TOOL_DEFINITIONS, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
 import { COMPUTER_ASK_TOOL_DEFINITIONS, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
+import { COORDINATOR_ROOM_AND_INSTRUCTIONS_TOOLS } from "./agents-catalog-coordinator.ts";
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { doneBotCredentialTool } from "../donebot/credential-policy.ts";
 import { DONEBOT_MEDIA_TOOL_DEFINITIONS, DONEBOT_MEDIA_TOOL_NAMES } from "../donebot/media-tools.ts"; import { DONEBOT_COLLAB_TOOL_DEFINITIONS, DONEBOT_COLLAB_TOOL_NAMES } from "../donebot/collab-tools.ts";
@@ -397,13 +398,15 @@ const TOOL_DEFINITIONS = [
   {
     name: "create_bot",
     description:
-      "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its SOUL.md: include purpose, responsibilities, boundaries, deliverables and result checks. After creation offer skills or adding them later. Unless the user supplies a specific skill or explicitly requests custom creation, first find and inspect high-quality existing skills, then recommend suitable choices for the user's decision. Offer custom creation only if no suitable candidate was found; respect an already stated choice. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
+      "Coordinator only: add a specialist bot now (in your own department, or for the System Coordinator in any existing/new department via section, with optional department_coordinator=true to appoint that department's coordinator — creating a new department also auto-creates its department group chat); the person can undo it. instructions become its SOUL.md: include purpose, responsibilities, boundaries, deliverables and result checks. Immediately after creation, automatically equip the new bot with matching professional skill(s) using bot_id in strict priority order WITHOUT asking first: (1) user-provided skill via skill_import(preview=false) + skill_manage(enable), (2) skill_find + skill_import(preview=false) + skill_manage(enable), (3) skill_manage(action='create') custom skill if no suitable skill exists. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
     inputSchema: {
       type: "object",
       properties: {
         name: { type: "string", description: "Short, unique display name for the specialist." },
         role: { type: "string", description: "The specialist's job title or role." },
         instructions: { type: "string", minLength: 1, description: "Concise SOUL.md: identity, responsibilities, scope, deliverables, quality checks and reporting. Put detailed reusable procedures in skills." },
+        section: { type: "string", maxLength: 60, description: "Optional department name. Omit for your own department (uncategorized bots belong directly under the System Coordinator). The System Coordinator may name an existing or brand-new department." },
+        department_coordinator: { type: "boolean", description: "True to appoint this bot as its named department's Department Coordinator (requires a non-empty section; never creates a second global System Coordinator)." },
         modelSelection: { type: "object", additionalProperties: false, properties: {
           instanceId: { type: "string" }, model: { type: "string" },
           effort: { type: "string" }, variant: { type: "string" },
@@ -419,35 +422,41 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "list_team_setup",
-    description: "Chief of Staff only: list authorized teams, teammate IDs, and exact engine/model choices for team setup. Call before proposing configuration; never invent model IDs. Existing thread models are independent of bot defaults.",
+    description: "Coordinator only: list authorized teams, teammate IDs, and exact engine/model choices for team setup. Call before proposing configuration; never invent model IDs. Existing thread models are independent of bot defaults.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
   },
   {
     name: "list_team_library",
-    description: "Chief of Staff only: ready-made teams, each with a summary and roles (lead = the team's Chief). Create roles with create_bot.",
+    description: "Coordinator only: ready-made teams, each with a summary and roles (lead = the team's coordinator). Create roles with create_bot or propose_team_setup.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
   },
   {
     name: "propose_team_setup",
-    description: "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes. MCP server lists apply directly only at Full access; otherwise wait for the person to review the card." + APPLIES_AT_ONCE,
+    description: "Coordinator only: create new departments, batch-create department specialists, appoint each named department's Department Coordinator (chiefOfStaff: true on ONE bot per new department — never a second global System Coordinator in General; if omitted on a new department, the server auto-appoints the best-matching lead role or first member), initialize each department's shared instructions (departmentInstructions — auto-populated if omitted for a new department), and update bots' profiles, models and teams all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new department goes in newTeams (or for the System Coordinator, any new section name on an operation creates the department automatically); creating a new department automatically creates its department group chat, syncs the Paperclip org chart (members report to the Department Coordinator, who reports to the System Coordinator), and writes its department shared instructions. Immediately after bots are created, automatically equip EVERY newly created bot with skill(s) using bot_id in strict priority order WITHOUT asking first: (1) user-provided skill -> (2) skill_find + skill_import(preview=false) + skill_manage(enable) -> (3) skill_manage(action='create') custom skill. Models change defaults for new threads (omitted modelSelection on create falls back to workspace default); mcpServers sets an existing bot's MCP servers; no other execution permission changes. MCP server lists apply directly only at Full access; otherwise wait for the person to review the card." + APPLIES_AT_ONCE,
     inputSchema: {
       type: "object", additionalProperties: false,
       properties: {
         reason: { type: "string", minLength: 1, maxLength: 500 },
         newTeams: { type: "array", maxItems: 8, items: { type: "string", minLength: 1, maxLength: 60 } },
+        departmentInstructions: {
+          type: "object",
+          maxProperties: 8,
+          additionalProperties: { type: "string", minLength: 1, maxLength: 24000 },
+          description: "Optional map of department name -> shared instructions (department goals, handoff workflow, shared deliverable paths, quality standards & hard rules) injected into every bot in that department. Auto-initialized for newly created departments when omitted.",
+        },
         operations: { type: "array", minItems: 1, maxItems: 40, items: {
           type: "object", additionalProperties: false,
           properties: {
             action: { type: "string", enum: ["create", "update"] },
-            key: { type: "string", description: "create: your short name for the new bot." },
+            key: { type: "string", description: "create: optional short unique key for the new bot (defaults to fields.name)." },
             botId: { type: "string", description: "update: the bot's id from list_team_setup." },
             fields: { type: "object", additionalProperties: false, properties: {
               name: { type: "string", maxLength: 100 }, title: { type: "string", maxLength: 200 },
-              chiefOfStaff: { type: "boolean", description: "Appoint or remove the team's Chief; one per team, so demote the current one in this plan. Grants no other access." },
-              description: { type: "string", maxLength: 4000 }, soul: { type: "string", description: "Standing instructions; a new bot needs name, title, soul and modelSelection." },
+              chiefOfStaff: { type: "boolean", description: "Appoint or remove a department's Department Coordinator (one per named department; globally there is only one System Coordinator in General). Grants no other access." },
+              description: { type: "string", maxLength: 4000 }, soul: { type: "string", description: "Standing instructions; a new bot needs name, title, soul (and optional modelSelection)." },
               soulAppend: { type: "string", description: "update, instead of soul: text to append." },
               cwd: { type: "string", maxLength: 1024, description: "create: an existing absolute folder; omit for a private workspace." },
-              section: { type: "string", maxLength: 60, description: "An authorized team or one in newTeams; \"\" = General." },
+              section: { type: "string", maxLength: 60, description: "Department name (authorized team, one in newTeams, or for the System Coordinator any new department name); \"\" = General (reports directly to the System Coordinator)." },
               modelSelection: { type: "object", additionalProperties: false, properties: {
                 instanceId: { type: "string" }, model: { type: "string" }, effort: { type: "string" }, variant: { type: "string" },
               }, required: ["instanceId", "model"] },
@@ -465,37 +474,7 @@ const TOOL_DEFINITIONS = [
       bot_id: { type: "string", minLength: 1 }, reason: { type: "string", minLength: 1, maxLength: 500 },
     }, required: ["bot_id", "reason"] },
   },
-  {
-    name: "manage_room",
-    description:
-      "Chiefs only, for rooms in your own department. create a room (was create_room) when the user asks for one (at most four per turn), with active bots from list_bots in any department; you are included automatically as the default responder, and it creates no turns or messages. For a room from list_rooms: rename it, change its bulletin, add, remove or set members, with any bots you can reach (keep yourself as a member), or open a new thread in it (new_thread, at most four per turn), which becomes the room's current thread. Busy rooms, pending approvals and team-goal leads are protected. Moving rooms or bots between departments stays with the user; coordinate_bots reaches bots outside a room directly. Follow the tool result under the effective access level; if the change is refused, report the blocker, or ask the user to make the room change, without trying another route.",
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        action: {
-          type: "string",
-          enum: ["create", "add_members", "remove_members", "set_members", "rename", "set_bulletin", "new_thread"],
-          description: "The change to make.",
-        },
-        room_id: { type: "string", description: "Every action but create: the room's id from list_rooms." },
-        name: { type: "string", minLength: 1, maxLength: 100, description: "create and rename: the room's display name (e.g. \"Nalamdesk Team\"). new_thread: the thread's title (optional)." },
-        member_bot_ids: {
-          type: "array",
-          minItems: 1,
-          maxItems: 100,
-          items: { type: "string" },
-          description: "create, add_members, remove_members and set_members: the bot IDs.",
-        },
-        bulletin: {
-          type: "string",
-          maxLength: 12_000,
-          description: "create: an optional bulletin, goal or instructions pinned for the room. set_bulletin: the new bulletin; an empty string clears it.",
-        },
-      },
-      required: ["action"],
-    },
-  },
+  ...COORDINATOR_ROOM_AND_INSTRUCTIONS_TOOLS,
   {
     name: "request_credential",
     description:
@@ -783,20 +762,20 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "skill_find",
-    description: "Find skills matching a concrete role or task. Use this first when adding skills unless the user chose a specific skill or explicitly requested custom creation. Searches local skills and skills.sh without an external CLI; network failure returns local matches. Inspect quality, task fit and dependencies before recommending choices; install counts alone do not establish quality. Let the user decide before installation.",
+    description: "Find skills matching a concrete role or task. Priority 2 when equipping newly created bots (after any user-provided skill and before custom skill creation). Searches local skills and skills.sh without an external CLI; network failure returns local matches. Inspect quality, task fit and dependencies; install and enable the best match immediately for newly created bots via skill_import(preview=false) + skill_manage(enable).",
     inputSchema: { type: "object", additionalProperties: false, properties: {
       query: { type: "string", minLength: 1, maxLength: 300 },
-      bot_id: { type: "string", description: "Omit for yourself; a Chief may target a managed bot." },
+      bot_id: { type: "string", description: "Omit for yourself; a Coordinator may target any bot it oversees." },
       online: { type: "boolean", description: "False searches local skills only. Defaults true." },
     }, required: ["query"] },
   },
   {
     name: "skill_import",
-    description: "Preview a skill's contents and files, or import the user-selected skill into the specified bot, disabled. Supports GitHub/skills.sh URLs, owner/repo and a local SKILL.md or folder in this conversation. Preview defaults true; set preview=false to install, then skill_manage enable with the same bot_id. Preserves bundled scripts/assets, reports skipped files and never executes them.",
+    description: "Preview a skill's contents and files, or import a user-provided or discovered skill into the specified bot, disabled. Supports GitHub/skills.sh URLs, owner/repo and a local SKILL.md or folder in this conversation. Preview defaults true; set preview=false to install, then immediately call skill_manage enable with the same bot_id. Preserves bundled scripts/assets, reports skipped files and never executes them.",
     inputSchema: { type: "object", additionalProperties: false, properties: {
       source: { type: "string", minLength: 1, maxLength: 2000 },
-      bot_id: { type: "string", description: "Omit for yourself; a Chief may target a managed bot." },
-      preview: { type: "boolean", description: "Defaults true (read only). False imports the selected skill, disabled." },
+      bot_id: { type: "string", description: "Omit for yourself; a Coordinator may target any bot it oversees." },
+      preview: { type: "boolean", description: "Defaults true (read only). False imports the skill, disabled." },
     }, required: ["source"] },
   },
   {
@@ -817,7 +796,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "skill_manage",
     description:
-      "Submit a reusable SKILL.md, import one from GitHub or skills.sh for review, or enable, disable or delete a skill. Omit bot_id for yourself; a Chief may target a bot it manages. For a new skill, first search and inspect existing skills with skill_find unless the user explicitly requested custom creation. User-requested new bot setup authorizes creating a chosen skill for that bot. Never change a skill unless the user explicitly asked for that named skill. If the result is pending, a create stays inactive and an update leaves the current version unchanged." + APPLIES_OUTCOME,
+      "Submit a reusable SKILL.md, import one from GitHub or skills.sh for review, or enable, disable or delete a skill. Omit bot_id for yourself; a Coordinator may target any bot it oversees. For newly created bots (single create_bot or batch propose_team_setup), automatically equip skills in strict priority without asking first: (1) user-provided skill -> (2) skill_find + skill_import(preview=false) + skill_manage(enable) -> (3) skill_manage(create) custom skill when no suitable existing skill was found. For existing bots outside new-bot setup, only modify a named skill when requested. If the result is pending, a create stays inactive and an update leaves the current version unchanged." + APPLIES_OUTCOME,
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -949,7 +928,7 @@ const SKILL_TOOL_NAMES = new Set(["skills_list", "skill_manage", "skill_find", "
 export const SHARED_COMPUTER_TOOL_NAMES = new Set(["list_shared_computers", "shared_computer"]);
 const VOICE_TOOL_NAMES = new Set(["send_voice_note"]);
 const CHIEF_ONLY_TOOL_NAMES = new Set([
-  "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread",
+  "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "manage_department_instructions", "retry_thread",
 ]);
 const CHIEF_TARGET_TOOL_NAMES = new Set(["propose_profile", "propose_model"]);
 const WATCHER_TOOL_NAMES = new Set(["create_options_card"]);

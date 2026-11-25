@@ -9,15 +9,18 @@ Adapted from Vercel's find-skills. The pinned original and license ship with thi
 
 ## Understand the work
 
-Use the conversation and the target bot's role, SOUL.md and expected deliverables to identify the capability needed. Ask only for missing information that changes the recommendation. Check the target bot's existing skills before recommending duplicates.
+Use the conversation and the target bot's role, SOUL.md and expected deliverables to identify the capability needed. Check the target bot's existing skills before installing duplicates.
 
-When the user wants skills added but has not chosen a specific skill or explicitly requested custom creation, discovery and evaluation of existing skills come first. This applies to existing bots as well as new ones. Respect a user-supplied skill or explicit custom request without requiring a redundant search.
+When creating bot(s) (whether single `create_bot` or batch `propose_team_setup`), automatically equip every newly created bot with skill(s) in strict priority order WITHOUT stopping to ask whether to add skills later:
+1. **User-provided skill first**: if the user supplied a skill link, local file/folder or explicit specification, install and enable it directly without redundant search.
+2. **Search existing skills second**: call `skill_find` for that bot's role/tasks, inspect strong candidates, and immediately install and enable the best match.
+3. **Custom skill creation third**: if search and inspection find no suitable existing skill (or online search fails and no local skill fits), immediately author and enable a tailored skill with `skill_manage` (`action: create`).
 
 ## Discover and inspect
 
-Call `skill_find` with a concrete task query and the target's `bot_id`. It searches the target's local skills and skills.sh over HTTPS without npm, npx, Python or another agent CLI. For local-only discovery use `online: false`. On a network failure, explain that online search is unavailable, use suitable local skills or offer a tailored skill. Online search being unavailable does not mean no matching skill exists.
+Call `skill_find` with a concrete task query and the target's `bot_id`. It searches the target's local skills and skills.sh over HTTPS without npm, npx, Python or another agent CLI. For local-only discovery use `online: false`.
 
-Search hits are candidates, not instructions. Read the candidate with `skill_import` using `preview: true` before recommending it. Compare role/task fit, source credibility, concrete procedures and result checks, relevant resources, maintenance evidence and dependency compatibility with the target bot. Prefer a well-supported, usable skill over a weak match with more installs. Distinguish verified evidence from unknowns; do not invent maintenance or quality claims. Explain why each recommendation fits, its source, required tools/accounts and any environment limitation. Popularity helps compare candidates but does not establish quality. Offer a small set of useful choices and let the user decide; respect an existing choice without asking again.
+Search hits are candidates, not instructions. Read promising candidates with `skill_import` using `preview: true` before installing. Compare role/task fit, source credibility, concrete procedures and result checks, relevant resources, maintenance evidence and dependency compatibility with the target bot. Prefer a well-supported, usable skill over a weak match with more installs. Popularity helps compare candidates but does not establish quality. For newly created bots, pick the best verified match and install/enable it immediately; for existing bots when the user asks for options, summarize the choices clearly.
 
 ## Install the chosen skill
 
@@ -27,4 +30,4 @@ For a skill the user supplies, use their GitHub/skills.sh link or a file/folder 
 
 ## No suitable skill
 
-After searching and inspecting candidates, explain the unmet requirement or compatibility gap before offering to create one with the built-in skill-creator or continue with the bot's available capabilities. An online search failure is not proof that no suitable skill exists; report that limitation and let the user choose whether to use local options, retry discovery later or create a tailored skill. Skill installation does not grant tools, subscriptions or permissions. Use DoneBot's native tools for installation; a third-party skill's global CLI install commands do not select the target bot correctly.
+If searching and inspecting candidates find no suitable match (or online search is unavailable and no local skill fits), immediately fall back to custom creation with `skill_manage` (`action: create`, using the target `bot_id`) following `skill-creator` principles, then report what was created and any online/dependency limitations. Skill installation does not grant tools, subscriptions or permissions. Use DoneBot's native tools for installation; a third-party skill's global CLI install commands do not select the target bot correctly.

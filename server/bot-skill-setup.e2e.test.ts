@@ -33,22 +33,31 @@ it("configures a managed bot's full skill folder and custom skill with native to
   };
   try {
     await api("PATCH", "/api/config", { features: { skillsLibrary: true } });
+    // Built-in find-skills and skill-creator belong strictly to the workspace's unique System Coordinator (General scope), never Department Coordinators.
+    const initialBots = (await api("GET", "/api/bots?messages=0")).bots as any[];
+    const sysChief = initialBots.find((b) => b.chiefOfStaff && !(b.section ?? "").trim()) ?? initialBots[0];
+    await api("PATCH", `/api/bots/${sysChief.id}`, { chiefOfStaff: true, section: "" });
+    const sysToken = await start(sysChief, "verify-system-coordinator-builtin-skills");
+    for (const name of ["find-skills", "skill-creator"]) {
+      expect(dump().systemPrompt).toContain(`<donebot-skill id="${name}"`);
+      expect((await api("GET", `/api/bots/${sysChief.id}/skills`)).skills.find((skill: any) => skill.name === name)).toMatchObject({ enabled: true, source: `builtin:${name}`, editable: false });
+      expect((await api("GET", `/api/bots/${sysChief.id}/skills/${name}`)).text).toContain("DoneBot");
+      await api("PATCH", `/api/bots/${sysChief.id}/skills/${name}`, { enabled: false }, 409);
+      await api("DELETE", `/api/bots/${sysChief.id}/skills/${name}`, undefined, 409);
+      await api("POST", "/api/internal/skills/stage", { action: "disable", skill_name: name }, 422, sysToken);
+    }
+    expect((await api("GET", "/api/internal/skills?skillName=skill-creator&reference=references/grader.md", undefined, 200, sysToken)).text).toContain("Grade");
+    await api("GET", "/api/internal/skills?skillName=skill-creator&reference=references/../../AGENTS.md", undefined, 404, sysToken);
+    await finish();
+
     const chief = (await api("POST", "/api/bots", { name: "Skill setup chief", section: "Studio" }, 201)).bot;
-    await api("POST", `/api/bots/${chief.id}/skill-template`, { name: "find-skills", description: "A preexisting private skill.", source: "fixture", enabled: false,
-      text: "---\nname: find-skills\ndescription: A preexisting private skill.\n---\nPrivate fixture skill.\n" }, 201);
     await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true });
     const other = (await api("POST", "/api/bots", { name: "Other department", section: "Other" }, 201)).bot;
     const token = await start(chief, "create-a-reporting-specialist-fixture");
     for (const name of ["find-skills", "skill-creator"]) {
-      expect(dump().systemPrompt).toContain(`<donebot-skill id="${name}"`);
-      expect((await api("GET", `/api/bots/${chief.id}/skills`)).skills.find((skill: any) => skill.name === name)).toMatchObject({ enabled: true, source: `builtin:${name}`, editable: false });
-      expect((await api("GET", `/api/bots/${chief.id}/skills/${name}`)).text).toContain("DoneBot");
-      await api("PATCH", `/api/bots/${chief.id}/skills/${name}`, { enabled: false }, 409);
-      await api("DELETE", `/api/bots/${chief.id}/skills/${name}`, undefined, 409);
-      await api("POST", "/api/internal/skills/stage", { action: "disable", skill_name: name }, 422, token);
+      expect(dump().systemPrompt).not.toContain(`<donebot-skill id="${name}"`);
+      expect((await api("GET", `/api/bots/${chief.id}/skills`)).skills.some((skill: any) => skill.name === name)).toBe(false);
     }
-    expect((await api("GET", "/api/internal/skills?skillName=skill-creator&reference=references/grader.md", undefined, 200, token)).text).toContain("Grade");
-    await api("GET", "/api/internal/skills?skillName=skill-creator&reference=references/../../AGENTS.md", undefined, 404, token);
     const soul = "You prepare weekly reports. Check source facts, return one report and state any unverified claims.";
     await api("POST", "/api/internal/create-bot", { name: "Reporting specialist", role: "Report writer", instructions: soul }, 201, token);
     const target = (await api("GET", "/api/bots")).bots.find((bot: any) => bot.name === "Reporting specialist");

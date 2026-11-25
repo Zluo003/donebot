@@ -11,7 +11,7 @@ export interface OrgSyncBot {
 
 function defaultOrgNode(botId: string, bot?: OrgSyncBot): OpcOrgNodeConfig {
   const roleTitle = bot?.title?.trim()
-    || (bot?.chiefOfStaff ? (bot.section?.trim() ? "部门负责人" : "系统总协调") : undefined);
+    || (bot?.chiefOfStaff ? (bot.section?.trim() ? "部门协调机器人" : "总协调机器人") : undefined);
   return {
     botId,
     reportsToBotId: null,
@@ -27,12 +27,17 @@ function sectionOf(bot?: OrgSyncBot): string {
 }
 
 /**
- * Reconciles org-chart reporting edges against each department's `chiefOfStaff` status:
- * - Departments without a chief automatically flatten all intra-department edges to peer level,
- *   inheriting the top external manager (or Boss root `null`).
- * - Departments with a chief place the chief at the top of the department and attach all members
- *   not already inside the chief's intra-department subtree directly under the chief, while
- *   preserving user-arranged multi-tier sub-hierarchies (e.g. Chief A -> Lead B -> C, D).
+ * Reconciles org-chart reporting edges against each department's coordinator status:
+ * - There is at most one workspace-wide System Coordinator (General scope, `section === ""`).
+ * - Uncategorized bots (`section === ""`, not assigned to any department) automatically belong
+ *   directly under the System Coordinator.
+ * - Newly created department coordinators and chief-less department members default to reporting
+ *   under the System Coordinator (while preserving explicit user overrides to Boss `null`).
+ * - Departments without a coordinator flatten intra-department edges to peer level, inheriting
+ *   their top external manager (or the System Coordinator / Boss root).
+ * - Departments with a coordinator place the department coordinator at the top of the department
+ *   and attach members not already inside its intra-department subtree directly under it, while
+ *   preserving user-arranged multi-tier sub-hierarchies (e.g. Lead A -> Sub-lead B -> C, D).
  */
 export function reconcileOrgChartWithBots(
   org: OpcOrgChartState,
@@ -40,6 +45,8 @@ export function reconcileOrgChartWithBots(
 ): { org: OpcOrgChartState; changed: boolean } {
   const visibleBots = bots.filter(b => !b.hidden);
   const botById = new Map(visibleBots.map(b => [b.id, b]));
+  const systemCoordinator = visibleBots.find(b => b.chiefOfStaff && !sectionOf(b)) ?? null;
+  const existingNodeIds = new Set(Object.keys(org.nodes));
   const nodes: Record<string, OpcOrgNodeConfig> = {};
   for (const [id, node] of Object.entries(org.nodes)) {
     nodes[id] = {
@@ -52,11 +59,24 @@ export function reconcileOrgChartWithBots(
   let changed = false;
   for (const bot of visibleBots) {
     if (!nodes[bot.id]) {
-      nodes[bot.id] = defaultOrgNode(bot.id, bot);
+      const fresh = defaultOrgNode(bot.id, bot);
+      if (systemCoordinator && bot.id !== systemCoordinator.id) {
+        fresh.reportsToBotId = systemCoordinator.id;
+        changed = true;
+      }
+      nodes[bot.id] = fresh;
     }
     const node = nodes[bot.id]!;
     if (node.reportsToBotId && (node.reportsToBotId === bot.id || !botById.has(node.reportsToBotId))) {
-      node.reportsToBotId = null;
+      node.reportsToBotId = systemCoordinator && bot.id !== systemCoordinator.id ? systemCoordinator.id : null;
+      changed = true;
+    }
+  }
+  // Ensure the unique System Coordinator never reports under a department member or subordinate.
+  if (systemCoordinator) {
+    const sysNode = nodes[systemCoordinator.id]!;
+    if (sysNode.reportsToBotId !== null) {
+      sysNode.reportsToBotId = null;
       changed = true;
     }
   }
@@ -118,20 +138,21 @@ export function reconcileOrgChartWithBots(
       continue;
     }
 
-    // 1. Ensure the department chief sits at the top of the department (never under a same-dept member).
+    // 1. Ensure the department coordinator sits at the top of the department (never under a same-dept member).
     const chiefNode = nodes[deptChief.id]!;
     if (chiefNode.reportsToBotId) {
       const chiefParent = botById.get(chiefNode.reportsToBotId);
       if (chiefParent && sectionOf(chiefParent) === secKey) {
         const externalParent = resolveExternalParent(deptChief.id, secKey);
-        if (chiefNode.reportsToBotId !== externalParent) {
-          chiefNode.reportsToBotId = externalParent;
+        const fallbackParent = externalParent ?? (secKey && systemCoordinator && !existingNodeIds.has(deptChief.id) ? systemCoordinator.id : null);
+        if (chiefNode.reportsToBotId !== fallbackParent) {
+          chiefNode.reportsToBotId = fallbackParent;
           changed = true;
         }
       }
     }
     if (hasCycleFrom(deptChief.id)) {
-      chiefNode.reportsToBotId = null;
+      chiefNode.reportsToBotId = secKey && systemCoordinator && deptChief.id !== systemCoordinator.id ? systemCoordinator.id : null;
       changed = true;
     }
 
@@ -205,6 +226,13 @@ export function validateOrgReportsTo(
     return "员工不能向自己汇报，请选择其他上级或直接向你汇报。";
   }
 
+  if (bots && targetId) {
+    const selfBot = bots.find(b => !b.hidden && b.id === botId);
+    if (selfBot && !sectionOf(selfBot) && selfBot.chiefOfStaff) {
+      return `「${selfBot.name}」是全局唯一的总协调机器人，直接向你汇报，不能挂到其他机器人名下。`;
+    }
+  }
+
   if (targetId) {
     const visited = new Set<string>([botId]);
     let cursor: string | null = targetId;
@@ -230,14 +258,19 @@ export function validateOrgReportsTo(
   const targetBot = targetId ? visibleBots.find(b => b.id === targetId) ?? null : null;
   const sameSection = Boolean(targetBot && sectionOf(targetBot) === mySec);
 
+  if (!mySec && bot.chiefOfStaff && targetId) {
+    return `「${bot.name}」是全局唯一的总协调机器人，直接向你汇报，不能挂到其他机器人名下。`;
+  }
   if (!deptChief && sameSection) {
-    return `「${deptName}」暂无负责人，成员保持平级；请先指定部门负责人后再建立多级汇报。`;
+    return `「${deptName}」暂无部门协调机器人，成员保持平级；请先指定部门协调机器人后再建立多级汇报。`;
   }
   if (deptChief && deptChief.id === bot.id && sameSection) {
-    return `「${bot.name}」是「${deptName}」负责人，不能向同部门成员汇报；可拖至你（负责人）或其他部门上级。`;
+    return `「${bot.name}」是「${deptName}」${mySec ? "部门协调机器人" : "总协调机器人"}，不能向同部门成员汇报；可拖至你（负责人）或上级协调节点。`;
   }
   if (deptChief && deptChief.id !== bot.id && !sameSection) {
-    return `「${deptName}」已设负责人「${deptChief.name}」，成员须归属其下级（可拖到本部门同事名下建多级，或拖入其他部门框转岗）。`;
+    return mySec
+      ? `「${deptName}」已设部门协调机器人「${deptChief.name}」，成员须归属其下级（可拖到本部门同事名下建多级，或拖入其他部门框转岗）。`
+      : `未归入部门的机器人直接归属总协调机器人「${deptChief.name}」（如需归入其他部门，请先移入对应部门）。`;
   }
   return null;
 }

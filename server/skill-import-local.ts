@@ -1,7 +1,7 @@
 import { lstatSync, readdirSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { readFileNoFollow } from "./imported-skills.ts";
-import { SKILL_FILE_MAX_BYTES } from "../shared/skill-md.ts";
+import { parseSkillMd, SKILL_FILE_MAX_BYTES } from "../shared/skill-md.ts";
 import type { FetchedSkill } from "./skill-fetch.ts";
 import { planSkillFolder, skillFilePathProblem, type FolderEntry } from "./skill-folder.ts";
 
@@ -51,7 +51,11 @@ export function fetchLocalSkill(source: string, roots: string[], attachedFiles: 
       if (!content || content.length !== entry.size) throw new Error("A skill file changed while it was being read; try again.");
       return { path: entry.path, content, executable: Boolean(entry.executable) };
     });
-    return { skills: [{ source: real, files, skipped: planned.skipped }] };
+    const skillMdFile = files.find((file) => file.path === "SKILL.md");
+    const parsedSkill = skillMdFile ? parseSkillMd(skillMdFile.content.toString("utf8")) : null;
+    const portableName = parsedSkill && !("error" in parsedSkill) ? parsedSkill.name : basename(folder).trim();
+    const portableSource = portableName ? `local:${portableName}` : "local";
+    return { skills: [{ source: portableSource, files, skipped: planned.skipped }] };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "The local skill could not be read." };
   }

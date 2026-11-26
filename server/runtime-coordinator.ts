@@ -150,6 +150,8 @@ export class RuntimeCoordinator implements Coordinator {
   private readonly log: (line: string) => void;
   /** The person's stops, remembered: which bots' work on which request they stopped, and when. */
   private readonly stops: Array<{ at: number; request: string; bots: Set<string> }> = [];
+  /** Most recent mid-turn steer from the person per root assignment, lifting earlier stops on that root. */
+  private readonly steeredAt = new Map<string, number>();
   private opened = false;
   private prunedAt: number | undefined;
 
@@ -443,20 +445,47 @@ export class RuntimeCoordinator implements Coordinator {
     for (const { root, work } of trees) if (root) this.rememberStop(root, work);
   }
 
+  personSteered(threadId: string): void {
+    this.ready();
+    const at = this.now();
+    this.pruneStopMemory(at);
+    for (const n of this.live()) {
+      if (n.assignee.destination.threadId === threadId) this.steeredAt.set(n.rootId, at);
+    }
+  }
+
+  private pruneStopMemory(at: number): void {
+    while (this.stops.length && at - this.stops[0]!.at > STOP_MEMORY_MS) this.stops.shift();
+    for (const [rootId, ts] of this.steeredAt) {
+      if (at - ts > STOP_MEMORY_MS) this.steeredAt.delete(rootId);
+    }
+  }
+
   /** The person's stop, remembered (scoped to that request): the bots whose work on it the stop ended don't take the same
    * request from another bot again, unless the person asked again after the stop. In memory only, for a day. */
   private rememberStop(root: Assignment, work: readonly Assignment[]): void {
     const request = requestKey(root);
     const bots = new Set(work.filter(a => this.store.get(a.id)?.status === "cancelled").map(a => a.assignee.botId));
     const at = this.now();
-    while (this.stops.length && at - this.stops[0]!.at > STOP_MEMORY_MS) this.stops.shift();
-    if (request && bots.size) this.stops.push({ at, request, bots });
+    this.pruneStopMemory(at);
+    if (request && bots.size) {
+      this.steeredAt.delete(root.id);
+      this.stops.push({ at, request, bots });
+    }
   }
 
   /** Work for `root`'s request was stopped for `botId`, and this request is not one the person made after that stop. */
   private stoppedFor(root: Assignment, botId: string): boolean {
     const request = requestKey(root);
-    return request !== "" && this.stops.some(stop => stop.request === request && stop.bots.has(botId) && root.createdAt <= stop.at && this.now() - stop.at <= STOP_MEMORY_MS);
+    if (request === "") return false;
+    const now = this.now();
+    const steered = this.steeredAt.get(root.id);
+    return this.stops.some(stop =>
+      stop.request === request &&
+      stop.bots.has(botId) &&
+      root.createdAt <= stop.at &&
+      !(steered !== undefined && steered >= stop.at) &&
+      now - stop.at <= STOP_MEMORY_MS);
   }
 
   activeDirect(threadId: string): boolean {

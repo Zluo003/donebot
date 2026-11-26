@@ -13,7 +13,7 @@ export interface MapComposerTeam {
   name: string;
 }
 
-export type MapTag = { kind: "bot" | "team" | "everyone"; name: string; botIds: string[] };
+export type MapTag = { kind: "bot" | "team" | "everyone"; name: string; key?: string; botIds: string[] };
 
 /**
  * Who a message typed on the Team map goes to: each tagged bot, every bot of a tagged team, or every bot for
@@ -31,7 +31,7 @@ export function mapMessageTargets(text: string, bots: readonly MapComposerBot[],
   const names = [
     ...visible.map((bot) => ({ name: bot.name, tag: { kind: "bot" as const, name: bot.name, botIds: [bot.id] } })),
     ...teams.filter((team) => team.name.trim()).map((team) => ({ name: team.name, tag: {
-      kind: "team" as const, name: team.name,
+      kind: "team" as const, name: team.name, key: team.key,
       botIds: visible.filter((bot) => (bot.section?.trim() ?? "") === team.key).map((bot) => bot.id),
     } })),
     { name: "everyone", tag: { kind: "everyone" as const, name: "everyone", botIds: visible.map((bot) => bot.id) } },
@@ -58,20 +58,58 @@ export function mapMessageTargets(text: string, bots: readonly MapComposerBot[],
   return { botIds: [...new Set(tags.flatMap((tag) => tag.botIds))], tags, unknown, words };
 }
 
-/** Who a message from the Team map is delivered to. `@everyone` goes to the team's Chief alone, which hands it to the bots it
- * concerns, so a bot it doesn't concern takes no turn. A stop goes to every bot, as its own words without the tags, so each
- * bot's own send path stops it at once. A bot or team named directly always gets it. With no Chief, everyone gets it. */
+/** Who a message from the Team map is delivered to. `@everyone` goes to the team's System Coordinator alone, and `@<department>`
+ * goes to that department's Department Coordinator alone, which hands it to the teammates it concerns. A stop goes to every bot
+ * in the tagged scope, as its own words without the tags, so each bot stops at once. An individually named bot always gets it
+ * directly. With no coordinator for a scope, every bot in that scope gets it. */
 export function mapDelivery(targets: ReturnType<typeof mapMessageTargets>, bots: readonly MapComposerBot[], stop: boolean): {
   botIds: string[];
   text?: string;
   chief?: MapComposerBot;
+  chiefs?: MapComposerBot[];
 } {
-  if (!targets.tags.some((tag) => tag.kind === "everyone")) return { botIds: targets.botIds };
+  const hasEveryone = targets.tags.some((tag) => tag.kind === "everyone");
+  const globalChief = hasEveryone ? everyoneChief(bots) : undefined;
+  const routedChiefs: MapComposerBot[] = [];
+  const addChief = (candidate: MapComposerBot | undefined) => {
+    if (candidate && !routedChiefs.some((existing) => existing.id === candidate.id)) routedChiefs.push(candidate);
+  };
+  if (globalChief) addChief(globalChief);
+
+  const botIds: string[] = [];
+  if (globalChief) botIds.push(globalChief.id);
+
+  for (const tag of targets.tags) {
+    if (tag.kind === "everyone") {
+      if (!globalChief) botIds.push(...tag.botIds);
+      continue;
+    }
+    if (tag.kind === "team") {
+      const deptChief = teamChief(bots, tag.key ?? tag.name);
+      if (deptChief) {
+        addChief(deptChief);
+        botIds.push(deptChief.id);
+      } else {
+        botIds.push(...tag.botIds);
+      }
+      continue;
+    }
+    botIds.push(...tag.botIds);
+  }
+
+  if (!routedChiefs.length) return { botIds: targets.botIds };
   if (stop) return { botIds: targets.botIds, text: targets.words };
-  const chief = everyoneChief(bots);
-  if (!chief) return { botIds: targets.botIds };
-  const named = targets.tags.filter((tag) => tag.kind !== "everyone").flatMap((tag) => tag.botIds);
-  return { botIds: [...new Set([chief.id, ...named])], chief };
+  return {
+    botIds: [...new Set(botIds)],
+    chief: routedChiefs[0],
+    ...(routedChiefs.length > 1 ? { chiefs: routedChiefs } : {}),
+  };
+}
+
+/** The Department Coordinator for a specific department key (`""` = General), never a hidden one. */
+export function teamChief<T extends MapComposerBot>(bots: readonly T[], sectionKey: string): T | undefined {
+  const key = sectionKey.trim();
+  return bots.find((bot) => bot.chiefOfStaff && !bot.hidden && (bot.section?.trim() ?? "") === key);
 }
 
 /** The Chief an `@everyone` line goes to: the one over the whole team before a department's own. */

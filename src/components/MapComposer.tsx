@@ -31,7 +31,7 @@ export function MapComposer({ bots, teams, onTagged, onSent }: {
   const [caret, setCaret] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [highlight, setHighlight] = useState(0);
-  const [sent, setSent] = useState<{ botIds: string[]; expanded: boolean; chiefId?: string } | null>(null);
+  const [sent, setSent] = useState<{ botIds: string[]; expanded: boolean; chiefIds?: string[] } | null>(null);
 
   const visible = useMemo(() => bots.filter((bot) => !bot.hidden), [bots]);
   const targets = useMemo(() => mapMessageTargets(text, visible, teams), [text, visible, teams]);
@@ -86,21 +86,24 @@ export function MapComposer({ bots, teams, onTagged, onSent }: {
     const delivery = stop === null ? { botIds: typed.botIds } : mapDelivery(typed, visible, stop);
     for (const botId of delivery.botIds) dispatch({ type: "send", botId, text: delivery.text || message, sendId: randomUuid() });
     onSent(delivery.botIds);
-    setSent({ botIds: delivery.botIds, expanded: false, ...(delivery.chief ? { chiefId: delivery.chief.id } : {}) });
+    const chiefIds = delivery.chiefs?.map((bot) => bot.id) ?? (delivery.chief ? [delivery.chief.id] : undefined);
+    setSent({ botIds: delivery.botIds, expanded: false, ...(chiefIds?.length ? { chiefIds } : {}) });
   };
 
-  const chief = sent?.chiefId ? visible.find((bot) => bot.id === sent.chiefId) : undefined;
-  const names = (sent?.botIds ?? []).filter((id) => id !== chief?.id).flatMap((id) => visible.find((bot) => bot.id === id) ?? []);
+  const sentChiefs = (sent?.chiefIds ?? []).flatMap((id) => visible.find((bot) => bot.id === id) ?? []);
+  const sentChiefSet = new Set(sentChiefs.map((bot) => bot.id));
+  const previewChiefs = preview.chiefs ?? (preview.chief ? [preview.chief] : []);
+  const names = (sent?.botIds ?? []).filter((id) => !sentChiefSet.has(id)).flatMap((id) => visible.find((bot) => bot.id === id) ?? []);
   const summary = sentToSummary(names.map((bot) => bot.name));
   const shownNames = sent?.expanded ? names : names.slice(0, summary.names.length);
   const hint = text.trim() && !targets.botIds.length ? t("mapComposer.tagHint")
-    : preview.chief ? t("mapComposer.willSendViaChief", { name: preview.chief.name }) : null;
+    : previewChiefs.length > 0 ? t("mapComposer.willSendViaChief", { name: previewChiefs.map((bot) => bot.name).join("、") }) : null;
 
   return <>
     <div className="pointer-events-none absolute inset-x-0 bottom-5 z-30 flex justify-center px-4">
       <div className="pointer-events-auto w-full max-w-[620px]">
-        {sent && (chief || names.length > 0) && <p role="status" className="mb-2 flex flex-wrap items-center gap-x-1 gap-y-0.5 rounded-xl bg-panel/95 px-3 py-1.5 text-[12px] text-ink-secondary shadow-sm ring-1 ring-hairline/50">
-          {chief && <span>{t("mapComposer.sentViaChief", { name: chief.name })}{names.length > 0 ? " ·" : ""}</span>}
+        {sent && (sentChiefs.length > 0 || names.length > 0) && <p role="status" className="mb-2 flex flex-wrap items-center gap-x-1 gap-y-0.5 rounded-xl bg-panel/95 px-3 py-1.5 text-[12px] text-ink-secondary shadow-sm ring-1 ring-hairline/50">
+          {sentChiefs.length > 0 && <span>{t("mapComposer.sentViaChief", { name: sentChiefs.map((bot) => bot.name).join("、") })}{names.length > 0 ? " ·" : ""}</span>}
           {names.length > 0 && <span>{t("mapComposer.sentTo")}</span>}
           {shownNames.map((bot, index) => <span key={bot.id}>
             <button className="font-medium text-ink underline-offset-2 hover:underline" onClick={() => openBot(dispatch, bot, showThreads)}>{bot.name}</button>

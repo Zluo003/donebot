@@ -99,4 +99,50 @@ describe("stored template skill files", () => {
     expect(host.checkedExportSkillNames(["find-skills"], [bot])).toMatchObject({ ok: false });
     expect(host.collectExportSkills([bot], ["report"]).get(bot.id)).toHaveLength(1);
   });
+
+  it("lets readBotSkillFile return verified side reference files for installed and assigned library skills while refusing traversal and binaries", async () => {
+    const { createSkillsLibraryHost } = await import("./host/skills-library.ts");
+    const privateBot = { id: "ref-own", name: "Director", assignedSkills: [] } as unknown as BotRecord;
+    const assignedBot = { id: "ref-lib", name: "Assigned", assignedSkills: ["lib-guide"] } as unknown as BotRecord;
+    const unassignedBot = { id: "ref-other", name: "Other", assignedSkills: [] } as unknown as BotRecord;
+
+    const installed = skills.installSkill(privateBot.id, "local:storyboarding", [
+      { path: "SKILL.md", content: "---\nname: storyboarding\ndescription: Storyboard.\n---\nRead references/director-foundations.md.\n" },
+      { path: "references/director-foundations.md", content: "# 导演基础\n180度轴线规则\n" },
+      { path: "references/nested/short-drama.md", content: "# 短剧手册\n" },
+      { path: "scripts/check.mjs", content: "console.log('ok');\n" },
+      { path: "assets/bin.dat", content: Buffer.from([0x00, 0x01, 0x02]) },
+    ]);
+    if ("error" in installed) throw new Error(installed.error);
+
+    const root = library.skillsLibraryRoot();
+    const libAdded = library.installLibrarySkill({
+      name: "lib-guide",
+      instructions: "---\nname: lib-guide\ndescription: Shared guide.\n---\nRead references/shared.md.\n",
+      source: "fixture",
+      files: [{ path: "references/shared.md", content: Buffer.from("# Shared Reference\n"), executable: false }],
+      root,
+    });
+    expect(libAdded).not.toHaveProperty("error");
+
+    const host = createSkillsLibraryHost({
+      store: { bots: [privateBot, assignedBot, unassignedBot], bot: (id: string) => [privateBot, assignedBot, unassignedBot].find((b) => b.id === id) } as never,
+      cfg: { features: { skillsLibrary: true } } as never,
+      appendSkillRequestCard: () => ({ requestId: "r", summary: "" }),
+    });
+
+    expect(host.readBotSkillFile(privateBot, "storyboarding", "references/director-foundations.md")).toBe("# 导演基础\n180度轴线规则\n");
+    expect(host.readBotSkillFile(privateBot, "storyboarding", "./references/nested/short-drama.md")).toBe("# 短剧手册\n");
+    expect(host.readBotSkillFile(privateBot, "storyboarding", "scripts/check.mjs")).toBe("console.log('ok');\n");
+    expect(host.readBotSkillFile(privateBot, "storyboarding", "assets/bin.dat")).toBeNull();
+    expect(host.readBotSkillFile(privateBot, "storyboarding", "../SKILL.md")).toBeNull();
+    expect(host.readBotSkillFile(privateBot, "storyboarding", "references/missing.md")).toBeNull();
+
+    expect(host.readBotSkillFile(assignedBot, "lib-guide", "references/shared.md")).toBe("# Shared Reference\n");
+    expect(host.readBotSkillFile(unassignedBot, "lib-guide", "references/shared.md")).toBeNull();
+
+    const dirOnDisk = skills.skillDirectory(privateBot.id, "storyboarding", skills.readManifest(privateBot.id).storyboarding!)!;
+    writeFileSync(join(dirOnDisk, "references/director-foundations.md"), "# tampered\n");
+    expect(host.readBotSkillFile(privateBot, "storyboarding", "references/director-foundations.md")).toBeNull();
+  });
 });

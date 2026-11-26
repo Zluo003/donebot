@@ -133,4 +133,68 @@ describe("DoneBot selected workspace tools", () => {
     await expect(execute("workspace_write", { path: "forbidden", text: "x" }, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
     await expect(readFile(join(cwd, "forbidden"))).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  it("allows read-only access to the bot's enabled skill folders via absolute paths and trusted native links while blocking writes and forged links", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "donebot-workspace-skill-cwd-")); directories.push(cwd);
+    const skillDir = await mkdtemp(join(tmpdir(), "donebot-workspace-skill-dir-")); directories.push(skillDir);
+    const outsideDir = await mkdtemp(join(tmpdir(), "donebot-workspace-skill-out-")); directories.push(outsideDir);
+
+    await mkdir(join(skillDir, "references", "nested"), { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: storyboarding\ndescription: Storyboard\n---\nRead references/director-foundations.md\n");
+    await writeFile(join(skillDir, "references", "director-foundations.md"), "# 导演基础\n轴线不可越界\n");
+    await writeFile(join(skillDir, "references", "nested", "short-drama.md"), "# 短剧手册\n前三秒强钩子\n");
+    await writeFile(join(outsideDir, "secret.txt"), "top-secret");
+    await symlink(join(outsideDir, "secret.txt"), join(skillDir, "references", "escape.md"));
+
+    await mkdir(join(cwd, ".agents", "skills"), { recursive: true });
+    await symlink(skillDir, join(cwd, ".agents", "skills", "storyboarding"), "dir");
+    await symlink(outsideDir, join(cwd, ".agents", "skills", "forged"), "dir");
+
+    const session = await createWorkspaceTools(
+      { threadId: "fixture", text: "fixture", cwd },
+      signal(),
+      { skillRoots: new Map([["storyboarding", skillDir]]) },
+    );
+    sessions.push(session);
+    const execute = (name: string, args: Record<string, unknown>) => session.execute(name, args, signal());
+
+    // 1. Absolute path read/list/search inside the enabled skill folder works.
+    const skillMd = JSON.parse((await execute("workspace_read", { path: join(skillDir, "SKILL.md") })).text);
+    expect(skillMd.text).toContain("references/director-foundations.md");
+
+    const refAbs = JSON.parse((await execute("workspace_read", { path: join(skillDir, "references", "director-foundations.md") })).text);
+    expect(refAbs.text).toContain("轴线不可越界");
+
+    const listedAbs = JSON.parse((await execute("workspace_list", { path: join(skillDir, "references") })).text);
+    expect(listedAbs.entries.map((e: { name: string }) => e.name).sort()).toEqual(["director-foundations.md", "escape.md", "nested"]);
+
+    // 2. Trusted native link under .agents/skills/<name> appears as directory and supports nested read/list/search.
+    const listedSkillsDir = JSON.parse((await execute("workspace_list", { path: ".agents/skills" })).text);
+    expect(listedSkillsDir.entries).toEqual(expect.arrayContaining([
+      { name: "storyboarding", kind: "directory" },
+      { name: "forged", kind: "symlink" },
+    ]));
+
+    const refRel = JSON.parse((await execute("workspace_read", { path: ".agents/skills/storyboarding/references/nested/short-drama.md" })).text);
+    expect(refRel.text).toContain("前三秒强钩子");
+
+    const searched = JSON.parse((await execute("workspace_search", { path: ".agents/skills/storyboarding", query: "前三秒" })).text);
+    expect(searched.matches).toEqual([{
+      path: join(".agents", "skills", "storyboarding", "references", "nested", "short-drama.md"),
+      line: 2,
+      text: "前三秒强钩子",
+    }]);
+
+    // 3. Writes/patches to skill folders (absolute or via native link) remain strictly blocked.
+    await expect(execute("workspace_write", { path: join(skillDir, "SKILL.md"), text: "hacked", expected_sha256: skillMd.sha256 })).rejects.toThrow();
+    await expect(execute("workspace_write", { path: ".agents/skills/storyboarding/references/new.md", text: "hacked" })).rejects.toThrow();
+    await expect(execute("workspace_patch", { path: ".agents/skills/storyboarding/references/director-foundations.md", old_text: "轴线", new_text: "篡改", expected_sha256: refAbs.sha256 })).rejects.toThrow();
+
+    // 4. Forged symlinks in .agents/skills and symlinks nested inside a skill folder remain strictly blocked.
+    await expect(execute("workspace_read", { path: ".agents/skills/forged/secret.txt" })).rejects.toThrow();
+    await expect(execute("workspace_list", { path: ".agents/skills/forged" })).rejects.toThrow();
+    await expect(execute("workspace_read", { path: ".agents/skills/storyboarding/references/escape.md" })).rejects.toThrow();
+    await expect(execute("workspace_read", { path: join(skillDir, "references", "escape.md") })).rejects.toThrow();
+    await expect(execute("workspace_read", { path: join(outsideDir, "secret.txt") })).rejects.toThrow();
+  });
 });

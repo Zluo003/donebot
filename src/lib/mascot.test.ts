@@ -39,6 +39,17 @@ describe("stateForBot", () => {
   it("keeps reading a pending card as curious behind a live call's record", () => {
     expect(stateForBot({ name: "Atlas", messages: [{ kind: "options" }, { kind: "call" }] })).toBe("curious");
   });
+
+  it("does not put the mascot into alerting state for a partial step notice after a completed reply", () => {
+    expect(stateForBot({
+      name: "Atlas",
+      messages: [
+        { kind: "text" },
+        { kind: "activity", tool: { ok: false, partial: true } },
+        { kind: "digest" },
+      ],
+    })).not.toBe("alerting");
+  });
 });
 
 describe("silver", () => {

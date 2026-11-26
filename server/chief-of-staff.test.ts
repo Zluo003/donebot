@@ -137,6 +137,7 @@ describe("chiefOfStaffSystemPrompt", () => {
     ], true);
     expect(deptPrompt).toContain("Department Coordinator for the 短剧部 department (not the global System Coordinator)");
     expect(deptPrompt).toContain("[System Coordinator]");
+    expect(deptPrompt).toContain("When the person writes to @短剧部 on the Team map, it comes to you alone as the Department Coordinator");
     expect(deptPrompt).not.toContain("The built-in find-skills and skill-creator");
   });
 

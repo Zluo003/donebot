@@ -138,7 +138,7 @@ export const PICKABLE_STATES: MausState[] = [
 
 type MascotMessage = {
   kind: string;
-  tool?: { ok?: boolean };
+  tool?: { ok?: boolean; partial?: boolean };
 };
 
 export type MascotBotProfile = {
@@ -158,7 +158,7 @@ export function stateForBot(bot: MascotBotProfile): MausState {
 
   const last = lastNonReceipt(bot.messages);
 
-  if (last?.kind === "activity" && last.tool?.ok === false) return "alerting";
+  if (last?.kind === "activity" && last.tool?.ok === false && !last.tool.partial) return "alerting";
   if (bot.busy) return "working";
   if (botShowsUnread(bot)) return "notifying";
   if (last?.kind === "options") return "curious";

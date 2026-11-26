@@ -257,4 +257,57 @@ describe("DoneBot native LLM transports", () => {
     await expect(result).rejects.toMatchObject({ name: "AbortError" });
     expect(cancelled).toHaveBeenCalled();
   });
+
+  it("normalizes unprefixed built-in tool calls to their uniquely advertised prefixed name across protocols without widening scope", async () => {
+    const tools = [
+      { type: "function" as const, function: { name: "agents_coordinate_bots", description: "Coordinate bots", parameters: { type: "object" } } },
+      { type: "function" as const, function: { name: "browser_restart_browser", description: "Restart browser", parameters: { type: "object" } } },
+      { type: "function" as const, function: { name: "agents_dup", description: "Dup A", parameters: { type: "object" } } },
+      { type: "function" as const, function: { name: "data_dup", description: "Dup B", parameters: { type: "object" } } },
+    ];
+
+    // Messages (Claude): bare coordinate_bots -> agents_coordinate_bots; unadvertised vm_exec stays untouched; replay uses normalized name
+    const msgRes = await createDoneBotCompletion(async () => json({
+      content: [
+        { type: "thinking", thinking: "plan", signature: "sig-1" },
+        { type: "tool_use", id: "call-1", name: "coordinate_bots", input: { bot_ids: ["b1"], message: "hi" } },
+        { type: "tool_use", id: "call-2", name: "vm_exec", input: { command: "id" } },
+        { type: "tool_use", id: "call-3", name: "dup", input: {} },
+      ],
+      stop_reason: "tool_use",
+    }), () => "messages")(input({ tools, stream: false }));
+    expect(msgRes.toolCalls.map((c) => c.function.name)).toEqual(["agents_coordinate_bots", "vm_exec", "dup"]);
+    const msgAssistant: OpenAIChatMessage = { role: "assistant", content: null, tool_calls: msgRes.toolCalls };
+    const msgReplay = messagesRequest(input({ tools, messages: [msgAssistant], replay: () => msgRes.nativeOutput }));
+    expect(msgReplay.messages[0]!.content[0]).toEqual({ type: "thinking", thinking: "plan", signature: "sig-1" });
+    expect(msgReplay.messages[0]!.content[1]).toMatchObject({ type: "tool_use", id: "call-1", name: "agents_coordinate_bots" });
+    expect(msgReplay.messages[0]!.content[2]).toMatchObject({ type: "tool_use", id: "call-2", name: "vm_exec" });
+
+    // Gemini: bare restart_browser -> browser_restart_browser while preserving thoughtSignature & matching functionResponse
+    const gemRes = await createDoneBotCompletion(async () => json({
+      candidates: [{ content: { parts: [{ functionCall: { id: "g-1", name: "restart_browser", args: {} }, thoughtSignature: "gem-sig" }] }, finishReason: "STOP" }],
+    }), () => "gemini")(input({ tools, stream: false }));
+    expect(gemRes.toolCalls[0]!.function.name).toBe("browser_restart_browser");
+    const gemAssistant: OpenAIChatMessage = { role: "assistant", content: null, tool_calls: gemRes.toolCalls };
+    const gemReplay = geminiRequest(input({
+      tools,
+      messages: [gemAssistant, { role: "tool", tool_call_id: "g-1", content: "ok" }],
+      replay: (m) => m === gemAssistant ? gemRes.nativeOutput : undefined,
+    }));
+    expect(gemReplay.contents[0]!.parts[0]).toEqual({ functionCall: { id: "g-1", name: "browser_restart_browser", args: {} }, thoughtSignature: "gem-sig" });
+    expect(gemReplay.contents[1]!.parts[0]).toEqual({ functionResponse: { id: "g-1", name: "browser_restart_browser", response: { result: "ok" } } });
+
+    // Responses & Chat
+    const respRes = await createDoneBotCompletion(async () => sse([{
+      type: "response.completed",
+      response: { output: [{ type: "function_call", call_id: "r-1", name: "coordinate_bots", arguments: '{"bot_ids":["b1"],"message":"hi"}' }] },
+    }]), () => "responses")(input({ tools, stream: false }));
+    expect(respRes.toolCalls[0]!.function.name).toBe("agents_coordinate_bots");
+    expect((respRes.nativeOutput as { content: Array<{ name?: string }> }).content[0]!.name).toBe("agents_coordinate_bots");
+
+    const chatRes = await createDoneBotCompletion(async () => json({
+      choices: [{ message: { tool_calls: [{ id: "c-1", type: "function", function: { name: "coordinate_bots", arguments: "{}" } }] }, finish_reason: "tool_calls" }],
+    }), () => "chat")(input({ tools, stream: false }));
+    expect(chatRes.toolCalls[0]!.function.name).toBe("agents_coordinate_bots");
+  });
 });

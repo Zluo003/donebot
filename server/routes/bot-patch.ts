@@ -65,7 +65,7 @@ export interface BotPatchRouteDeps {
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
   engineSwitchNeedsAsk(mode: ApprovalMode, from: ModelSelection, to: ModelSelection): boolean;
   currentBrowserSession(botId: string, profile: string | undefined): string;
-  interruptAllDirectThreads(botId: string): Promise<void>;
+  interruptAllDirectThreads(botId: string, cause?: string): Promise<void>;
   cancelGroupTurnOperations(groupId: string, threadId: string): void;
   revokeInternalCapabilitiesForThread(threadId: string): void;
   runningTurnInstance(bot: BotRecord | null | undefined, threadId: string): ReturnType<ProviderRegistry["get"]>;
@@ -619,7 +619,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         console.warn(`bot ${m[1]}: ${loosened.join(", ")} loosened by ${requestSource(req)} through the local API with no paired session`);
       }
       if (existingBot?.computer === "local" && computerSpecified && requestedComputer !== "local") {
-        await interruptAllDirectThreads(existingBot.id);
+        await interruptAllDirectThreads(existingBot.id, "Turn interrupted — computer setting changed");
         const routine = routines!.activeBotRunForBot(existingBot.id);
         if (routine) await routines!.cancelRun(routine.id);
         const groupTurn = activeGroupTurnForBot(existingBot.id);

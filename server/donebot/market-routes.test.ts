@@ -604,4 +604,163 @@ describe("createDoneBotMarketRoutes", () => {
       reward_amount: 0.85,
     }));
   });
+
+  it("rewrites local filesystem skill sources to portable local:<name> while preserving all side files across publish and install", async () => {
+    const listingId = "66666666-6666-4666-8666-666666666666";
+    const bot = makeBot({
+      id: "writer-1",
+      name: "砚舟",
+      section: "创作部",
+      soul: "你是独立的中文作家，擅长长篇小说、短篇小说、故事与散文随笔，写作自然凝练并兼顾人物动机与长篇伏笔连续性。",
+    });
+    const store = makeStore([bot]);
+    const marketInstalls = new DoneBotMarketInstallStore(tempFile("bot-market-local-skill.json"));
+    const capturedBodies: Array<Record<string, unknown>> = [];
+
+    const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/donebot/market/bots") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        capturedBodies.push(body);
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            id: listingId,
+            listing_type: body.listing_type,
+            name: body.name,
+            status: "pending_review",
+            latest_version: 1,
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith(`/api/v1/donebot/market/bots/${listingId}/install`) && init?.method === "POST") {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            install_id: "inst-local-1",
+            listing_id: listingId,
+            listing_type: "bot",
+            release_id: "rel-local-1",
+            version: 1,
+            name: "小说写作",
+            install_token: "",
+            self_install: true,
+            expires_at: new Date(Date.now() + 86400_000).toISOString(),
+            package: capturedBodies[0]!.package,
+            skills: capturedBodies[0]!.skills,
+            soul_text: String(capturedBodies[0]!.soul_text ?? ""),
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ code: 0, data: {} }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const skillsByBot = new Map([
+      [bot.id, [
+        {
+          name: "novel-writing",
+          description: "中文长短篇小说写作指南",
+          source: "/Users/dev/skills/novel-writing",
+          instructions: "---\nname: novel-writing\ndescription: 中文长短篇小说写作指南\n---\n\n# 写作规范\n",
+          files: [
+            { path: "references/style/pacing.md", content: "# 节奏控制\n" },
+            { path: "references/outline.md", content: "# 大纲模板\n" },
+          ],
+          enabled: true,
+        },
+        {
+          name: "win-local",
+          description: "Windows 本地技能",
+          source: "C:\\Users\\dev\\skills\\win-local",
+          instructions: "---\nname: win-local\ndescription: Windows 本地技能\n---\n\n# Win\n",
+          enabled: true,
+        },
+        {
+          name: "remote-ref",
+          description: "远端技能",
+          source: "https://github.com/example/skills/remote-ref",
+          instructions: "---\nname: remote-ref\ndescription: 远端技能\n---\n\n# Remote\n",
+          enabled: true,
+        },
+      ]],
+    ]);
+
+    const installedSkills: Array<{ source: string; files: Array<{ path: string; content: string }> }> = [];
+    const packageImportDeps = (): PackageImportDeps => ({
+      store,
+      routines: { create: vi.fn(), remove: vi.fn() },
+      skills: {
+        install: (_botId, source, files) => {
+          installedSkills.push({ source, files });
+          return { name: source.replace(/^local:/, ""), description: "", source, enabled: false } as never;
+        },
+        setEnabled: (_botId, name) => ({ name, description: "", source: "local", enabled: true }) as never,
+      },
+      memory: { writeIndex: vi.fn(), writeTopic: vi.fn() },
+      mcp: { servers: () => ({}), refusal: () => undefined, persist: vi.fn() },
+      sections: { writeBrief: vi.fn() },
+      images: { save: () => "/img.png" },
+      defaultSelection: () => ({ instanceId: "donebot", model: "gpt-5.4" }),
+    });
+
+    const handler = createDoneBotMarketRoutes({
+      gateway: mockGateway(fetcher),
+      store,
+      marketInstalls,
+      listBotSkills: () => [],
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot, skipped: [], available: ["novel-writing", "win-local", "remote-ref"] }),
+      defaultSelection: async () => ({ instanceId: "donebot", model: "gpt-5.4" }),
+      packageImportDeps,
+      broadcast: () => {},
+      publicBot: (b: BotRecord) => b,
+    });
+
+    const single = await callRoute(handler, "POST", "/api/donebot/market/publish", {
+      listing_type: "bot",
+      bot_id: bot.id,
+      category_id: 1,
+      name: "小说写作",
+      tagline: "中文小说与短文作家",
+      skill_names: ["novel-writing", "win-local", "remote-ref"],
+    });
+    expect(single.status, JSON.stringify(single.payload)).toBe(200);
+
+    const dept = await callRoute(handler, "POST", "/api/donebot/market/publish-department", {
+      team: "创作部",
+      category_id: 1,
+      name: "创作部",
+      tagline: "中文小说与短文创作部门",
+      skill_names: ["novel-writing", "win-local", "remote-ref"],
+    });
+    expect(dept.status, JSON.stringify(dept.payload)).toBe(200);
+    expect(capturedBodies).toHaveLength(2);
+
+    for (const published of capturedBodies) {
+      const pkg = published.package as { package: { skills?: { entries: Array<{ name: string; source?: string; files?: Array<{ path: string }> }> } } };
+      const entries = pkg.package.skills?.entries ?? [];
+      const localEntry = entries.find((e) => e.name === "novel-writing");
+      const winEntry = entries.find((e) => e.name === "win-local");
+      const remoteEntry = entries.find((e) => e.name === "remote-ref");
+      expect(localEntry?.source).toBe("local:novel-writing");
+      expect(localEntry?.files?.map((f) => f.path)).toEqual(["references/style/pacing.md", "references/outline.md"]);
+      expect(winEntry?.source).toBe("local:win-local");
+      expect(remoteEntry?.source).toBe("https://github.com/example/skills/remote-ref");
+
+      const marketSkills = published.skills as Array<{ name: string; files?: Array<{ path: string }> }>;
+      expect(marketSkills.find((s) => s.name === "novel-writing")?.files?.map((f) => f.path)).toEqual([
+        "references/style/pacing.md",
+        "references/outline.md",
+      ]);
+    }
+
+    const inst = await callRoute(handler, "POST", `/api/donebot/market/bots/${listingId}/install`, {});
+    expect(inst.status, JSON.stringify(inst.payload)).toBe(200);
+    const novelInstalled = installedSkills.find((s) => s.source === "local:novel-writing");
+    expect(novelInstalled).toBeDefined();
+    expect(novelInstalled!.files.map((f) => f.path)).toEqual([
+      "SKILL.md",
+      "references/style/pacing.md",
+      "references/outline.md",
+    ]);
+  });
 });

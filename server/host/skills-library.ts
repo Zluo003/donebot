@@ -105,9 +105,34 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
     const names = new Set(listed.map((skill) => skill.name));
     return [...listed, ...nativesFor(bot, threadId).filter((skill) => !names.has(skill.name)).map((skill) => nativeSkillListing(skill, isNativeSkillEnabled(bot.id, skill.name)))];
   };
+  const readBotSkillFiles = (bot: BotRecord, name: string): StoredSkillFiles => {
+    if (builtinsFor(bot).some(skill => skill.manifest.id === name)) return [];
+    if (readSkillFile(bot.id, name) !== null) return ownSkillFiles(bot.id, name);
+    if (listSkills(bot.id).some(skill => skill.name === name)) return null;
+    if (skillsLibraryEnabled(cfg) && listLibrarySkills().some(skill => skill.name === name &&
+      (bot.assignedSkills?.includes(name) || (skill.everyBot && !librarySkillOptOuts(bot.id).has(name))))) return librarySkillFiles(name);
+    return [];
+  };
+  const readBotSkillReference = (bot: BotRecord, name: string, reference: string): string | null => {
+    const normalized = reference.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+    if (!normalized) return null;
+    const files = readBotSkillFiles(bot, name);
+    if (!files?.length) return null;
+    const match = files.find((file) => file.path === normalized);
+    if (!match) return null;
+    if (typeof match.content === "string") return match.content;
+    if (match.content.includes(0)) return null;
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(match.content);
+    } catch {
+      return null;
+    }
+  };
   const readBotSkillFile = (bot: BotRecord, name: string, reference?: string): string | null => {
     const builtin = builtinsFor(bot).find((skill) => skill.manifest.id === name);
-    if (reference !== undefined) return builtin ? readBundledSkillReference(builtin, reference) : null;
+    if (reference !== undefined) {
+      return builtin ? readBundledSkillReference(builtin, reference) : readBotSkillReference(bot, name, reference);
+    }
     if (builtin) return builtin.instructions;
     const own = readSkillFile(bot.id, name);
     if (own !== null) return own;
@@ -118,15 +143,6 @@ export function createSkillsLibraryHost(deps: SkillsLibraryHostDeps) {
     if (readImportedSkills()[name]) return readImportedSkillFile(name);
     const native = nativesFor(bot).find((skill) => skill.name === name);
     return native ? readNativeSkillFile(native) : null;
-  };
-
-  const readBotSkillFiles = (bot: BotRecord, name: string): StoredSkillFiles => {
-    if (builtinsFor(bot).some(skill => skill.manifest.id === name)) return [];
-    if (readSkillFile(bot.id, name) !== null) return ownSkillFiles(bot.id, name);
-    if (listSkills(bot.id).some(skill => skill.name === name)) return null;
-    if (skillsLibraryEnabled(cfg) && listLibrarySkills().some(skill => skill.name === name &&
-      (bot.assignedSkills?.includes(name) || (skill.everyBot && !librarySkillOptOuts(bot.id).has(name))))) return librarySkillFiles(name);
-    return [];
   };
 
   const shareBotsNow = (): ShareBot[] =>

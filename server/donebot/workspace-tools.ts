@@ -5,13 +5,17 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import { allowsTool } from "../../shared/tool-scope.ts";
 import { augmentedPath } from "../env-path.ts";
+import { IMPORTED_SKILLS_DIR, readImportedSkills } from "../imported-skills.ts";
 import { killCliTree, spawnCli } from "../procs.ts";
+import { librarySkillDirectory, librarySkillFilePath, readSkillLibraryIndex, skillsLibraryRoot } from "../skill-library.ts";
+import { ownSkillLinks } from "../skills.ts";
 import type { SendTurnInput } from "../contracts.ts";
 import type { ChatToolDefinition, ChatToolResult } from "../drivers/chat-mcp-tools.ts";
 import type { LocalChatTools } from "../drivers/openai-chat.ts";
 
 const MAX_FILE = 1024 * 1024;
 const MAX_OUTPUT = 64 * 1024;
+const NATIVE_SKILL_PREFIXES = new Set([".agents", ".claude", ".grok"]);
 const hasControls = (value: string) => [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
 const pathValue = z.string().min(1).max(4096).refine((value) => !hasControls(value), "Path contains control characters");
 const hashValue = z.string().regex(/^[a-f0-9]{64}$/);
@@ -25,9 +29,9 @@ const schemas = {
 };
 type ToolName = keyof typeof schemas;
 const definitions: ChatToolDefinition[] = [
-  { type: "function", function: { name: "workspace_list", description: "List files in your selected working folder. Paths are relative to that folder; symlinks are not followed.", parameters: { type: "object", properties: { path: { type: "string" } }, additionalProperties: false } } },
-  { type: "function", function: { name: "workspace_read", description: "Read a UTF-8 text file in your selected working folder. Returns its whole-file SHA-256 for a later safe edit. Reads at most 24000 characters; use offset and limit to page through larger files.", parameters: { type: "object", properties: { path: { type: "string" }, offset: { type: "integer", minimum: 0 }, limit: { type: "integer", minimum: 1, maximum: 24000 } }, required: ["path"], additionalProperties: false } } },
-  { type: "function", function: { name: "workspace_search", description: "Search literal text in files under your selected working folder. Skips symlinks, binary files, dependencies and git internals. Results are bounded; narrow the query for more detail.", parameters: { type: "object", properties: { query: { type: "string" }, path: { type: "string" } }, required: ["query"], additionalProperties: false } } },
+  { type: "function", function: { name: "workspace_list", description: "List files in your selected working folder or read-only inside your enabled skill folders (including references/ and scripts/). Arbitrary symlinks are not followed.", parameters: { type: "object", properties: { path: { type: "string" } }, additionalProperties: false } } },
+  { type: "function", function: { name: "workspace_read", description: "Read a UTF-8 text file in your selected working folder or read-only inside your enabled skill folders (SKILL.md, references/, scripts/). Returns its whole-file SHA-256 for a later safe edit. Reads at most 24000 characters; use offset and limit to page through larger files.", parameters: { type: "object", properties: { path: { type: "string" }, offset: { type: "integer", minimum: 0 }, limit: { type: "integer", minimum: 1, maximum: 24000 } }, required: ["path"], additionalProperties: false } } },
+  { type: "function", function: { name: "workspace_search", description: "Search literal text in files under your selected working folder or inside a specified enabled skill folder. Skips arbitrary symlinks, binary files, dependencies and git internals. Results are bounded; narrow the query for more detail.", parameters: { type: "object", properties: { query: { type: "string" }, path: { type: "string" } }, required: ["query"], additionalProperties: false } } },
   { type: "function", function: { name: "workspace_write", description: "Create a UTF-8 file in your selected working folder. Overwriting an existing file requires the expected_sha256 from workspace_read. Does not create parent folders.", parameters: { type: "object", properties: { path: { type: "string" }, text: { type: "string" }, expected_sha256: { type: "string" } }, required: ["path", "text"], additionalProperties: false } } },
   { type: "function", function: { name: "workspace_patch", description: "Replace exactly one old_text passage in a UTF-8 file in your selected working folder. Requires expected_sha256 from workspace_read; stale or ambiguous edits fail.", parameters: { type: "object", properties: { path: { type: "string" }, old_text: { type: "string" }, new_text: { type: "string" }, expected_sha256: { type: "string" } }, required: ["path", "old_text", "new_text", "expected_sha256"], additionalProperties: false } } },
   { type: "function", function: { name: "workspace_run", description: "Run an approved executable with a separate args array in your selected working folder. Shell expansion is not applied. Uses the platform's existing bot box when configured. In an unboxed desktop this has the user's process privileges, so only request the precise action needed. No model credentials are inherited. Timeout or Stop kills the process tree; inspect side effects before retrying.", parameters: { type: "object", properties: { executable: { type: "string" }, args: { type: "array", items: { type: "string" } }, timeout_seconds: { type: "integer", minimum: 1, maximum: 300 } }, required: ["executable", "args"], additionalProperties: false } } },
@@ -36,15 +40,111 @@ const isTool = (name: string): name is ToolName => Object.hasOwn(schemas, name);
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 const within = (root: string, path: string) => { const part = relative(root, path); return part === "" || (!isAbsolute(part) && part !== ".." && !part.startsWith(`..${sep}`)); };
 
-export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSignal): Promise<LocalChatTools> {
+interface TrustedSkillRoot {
+  canonical: string;
+  raw: string;
+}
+
+export interface WorkspaceToolsOptions {
+  /** Overrides enabled read-only skill roots (name -> directory) for isolated tests. */
+  skillRoots?: ReadonlyMap<string, string>;
+}
+
+async function linkTargetsCanonical(workspaceRoot: string, name: string, canonicalDir: string): Promise<boolean> {
+  if (!workspaceRoot) return false;
+  for (const prefix of NATIVE_SKILL_PREFIXES) {
+    try {
+      const prefixInfo = await lstat(join(workspaceRoot, prefix));
+      if (prefixInfo.isSymbolicLink() || !prefixInfo.isDirectory()) continue;
+      const skillsInfo = await lstat(join(workspaceRoot, prefix, "skills"));
+      if (skillsInfo.isSymbolicLink() || !skillsInfo.isDirectory()) continue;
+      if (await realpath(join(workspaceRoot, prefix, "skills", name)) === canonicalDir) return true;
+    } catch {
+      // Missing link or unreadable folder; try next native skill dir.
+    }
+  }
+  return false;
+}
+
+async function resolveTrustedSkillRoots(
+  turn: SendTurnInput,
+  workspaceRoot: string,
+  injected?: ReadonlyMap<string, string>,
+): Promise<Map<string, TrustedSkillRoot>> {
+  const byName = new Map<string, TrustedSkillRoot>();
+  const register = async (name: string, dir: string) => {
+    if (byName.has(name)) return;
+    try {
+      const canonical = await realpath(dir);
+      const info = await lstat(canonical);
+      if (!info.isDirectory() || info.isSymbolicLink()) return;
+      byName.set(name, { canonical, raw: resolve(dir) });
+    } catch {
+      // Ignore missing or unreadable skill folder.
+    }
+  };
+  if (injected) {
+    for (const [name, dir] of injected) await register(name, dir);
+    return byName;
+  }
+  const botId = typeof turn.botId === "string" ? turn.botId.trim() : "";
+  if (!botId) return byName;
+  for (const [name, dir] of ownSkillLinks(botId)) await register(name, dir);
+  const promptText = [turn.system, turn.systemStable].filter((part): part is string => typeof part === "string" && part.length > 0).join("\n");
+  const libRoot = skillsLibraryRoot();
+  for (const [name, entry] of Object.entries(readSkillLibraryIndex(libRoot))) {
+    if (byName.has(name) || entry.reviewState !== "approved") continue;
+    const dir = librarySkillDirectory(libRoot, name);
+    try {
+      const canonical = await realpath(dir);
+      const file = librarySkillFilePath(name, libRoot);
+      if ((promptText && promptText.includes(file)) || await linkTargetsCanonical(workspaceRoot, name, canonical)) {
+        await register(name, dir);
+      }
+    } catch {
+      // Library skill directory missing.
+    }
+  }
+  for (const name of Object.keys(readImportedSkills())) {
+    if (byName.has(name)) continue;
+    const dir = join(IMPORTED_SKILLS_DIR, name);
+    try {
+      const canonical = await realpath(dir);
+      if (await linkTargetsCanonical(workspaceRoot, name, canonical)) await register(name, dir);
+    } catch {
+      // Imported skill directory missing.
+    }
+  }
+  return byName;
+}
+
+export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSignal, options: WorkspaceToolsOptions = {}): Promise<LocalChatTools> {
   const folder = turn.cwd ?? turn.toolResultFolder;
   const offered = !folder ? [] : definitions.filter(({ function: fn }) => allowsTool(turn.toolScope, { kind: "native", name: fn.name }) && (!turn.guestConfined || ["workspace_list", "workspace_read", "workspace_search"].includes(fn.name)));
   const available = new Set(offered.map(({ function: fn }) => fn.name));
   const root = folder ? await realpath(folder) : "";
   const resolvedFolder = folder ? resolve(folder) : "";
+  const skillRootsByName = folder ? await resolveTrustedSkillRoots(turn, root, options.skillRoots) : new Map<string, TrustedSkillRoot>();
+  const skillRoots = [...skillRootsByName.values()];
   const running = new Set<ReturnType<typeof spawnCli>>();
   let closed = false;
   const live = (callSignal: AbortSignal) => { signal.throwIfAborted(); callSignal.throwIfAborted(); if (closed) throw new Error("Workspace tools are closed"); };
+  const checkedWithin = async (baseRoot: string, components: readonly string[], creating = false) => {
+    let current = baseRoot;
+    for (const [index, component] of components.entries()) {
+      current = join(current, component);
+      try {
+        const info = await lstat(current);
+        if (info.isSymbolicLink()) throw new Error("Symlinks are not allowed in workspace tools");
+        if (index < components.length - 1 && !info.isDirectory()) throw new Error("Parent path is not a directory");
+      } catch (error) {
+        if (creating && index === components.length - 1 && (error as NodeJS.ErrnoException).code === "ENOENT") return current;
+        throw error;
+      }
+    }
+    if (!within(baseRoot, current)) throw new Error("Path leaves the selected working folder");
+    return current;
+  };
   const normalizeRelative = (path: string) => {
     if (!root) throw new Error("Use a relative path inside the selected working folder");
     if (!isAbsolute(path)) return path;
@@ -58,20 +158,53 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
     if (await realpath(folder!) !== root) throw new Error("The selected working folder changed");
     const target = resolve(root, rel);
     if (!within(root, target)) throw new Error("Path leaves the selected working folder");
-    let current = root;
-    const components = relative(root, target).split(sep).filter(Boolean);
-    for (const [index, component] of components.entries()) {
-      current = join(current, component);
-      try {
-        const info = await lstat(current);
-        if (info.isSymbolicLink()) throw new Error("Symlinks are not allowed in workspace tools");
-        if (index < components.length - 1 && !info.isDirectory()) throw new Error("Parent path is not a directory");
-      } catch (error) {
-        if (creating && index === components.length - 1 && (error as NodeJS.ErrnoException).code === "ENOENT") return target;
-        throw error;
+    return checkedWithin(root, relative(root, target).split(sep).filter(Boolean), creating);
+  };
+  const resolveSkillAbsoluteRead = async (candidate: string): Promise<{ target: string; displayPath: string } | null> => {
+    for (const skill of skillRoots) {
+      for (const base of [skill.canonical, skill.raw]) {
+        if (!within(base, candidate)) continue;
+        const sub = relative(base, candidate);
+        const components = sub ? sub.split(sep).filter(Boolean) : [];
+        const target = await checkedWithin(skill.canonical, components, false);
+        return { target, displayPath: target };
       }
     }
-    return target;
+    return null;
+  };
+  const checkedRead = async (path: string): Promise<{ target: string; displayPath: string; inSkillRoot: boolean }> => {
+    if (!root) throw new Error("Use a relative path inside the selected working folder");
+    if (await realpath(folder!) !== root) throw new Error("The selected working folder changed");
+    if (isAbsolute(path)) {
+      const candidate = resolve(path);
+      if (!within(root, candidate) && !(resolvedFolder && within(resolvedFolder, candidate))) {
+        const skillTarget = await resolveSkillAbsoluteRead(candidate);
+        if (skillTarget) return { ...skillTarget, inSkillRoot: true };
+        throw new Error("Path leaves the selected working folder");
+      }
+    }
+    const rel = normalizeRelative(path);
+    const target = resolve(root, rel);
+    if (!within(root, target)) throw new Error("Path leaves the selected working folder");
+    const components = relative(root, target).split(sep).filter(Boolean);
+    if (components.length >= 3 && NATIVE_SKILL_PREFIXES.has(components[0]!) && components[1] === "skills") {
+      const skillName = components[2]!;
+      const trusted = skillRootsByName.get(skillName);
+      if (trusted) {
+        const skillsParent = await checkedWithin(root, components.slice(0, 2), false);
+        const linkPath = join(skillsParent, skillName);
+        if (await realpath(linkPath) === trusted.canonical) {
+          const resolvedTarget = await checkedWithin(trusted.canonical, components.slice(3), false);
+          return { target: resolvedTarget, displayPath: rel, inSkillRoot: true };
+        }
+      }
+    }
+    return { target: await checkedWithin(root, components, false), displayPath: rel, inSkillRoot: false };
+  };
+  const isTrustedSkillLinkDir = (targetDir: string) => {
+    const rel = relative(root, targetDir);
+    const parts = rel ? rel.split(sep).filter(Boolean) : [];
+    return parts.length === 2 && NATIVE_SKILL_PREFIXES.has(parts[0]!) && parts[1] === "skills";
   };
   const textAt = async (target: string) => {
     const file = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
@@ -155,33 +288,48 @@ export async function createWorkspaceTools(turn: SendTurnInput, signal: AbortSig
         return write(args.path, text.replace(args.old_text, () => args.new_text), callSignal, args.expected_sha256);
       }
       if (name === "workspace_read") {
-        const args = schemas.workspace_read.parse(raw), rel = normalizeRelative(args.path), text = await textAt(await checked(rel));
+        const args = schemas.workspace_read.parse(raw), resolved = await checkedRead(args.path), text = await textAt(resolved.target);
         const offset = args.offset ?? 0, end = offset + (args.limit ?? 24_000);
-        return { ok: true, text: JSON.stringify({ path: rel, sha256: sha(text), text: text.slice(offset, end), offset, totalCharacters: text.length, truncated: end < text.length }) };
+        return { ok: true, text: JSON.stringify({ path: resolved.displayPath, sha256: sha(text), text: text.slice(offset, end), offset, totalCharacters: text.length, truncated: end < text.length }) };
       }
       if (name === "workspace_list") {
-        const args = schemas.workspace_list.parse(raw), entries = await readdir(await checked(args.path ?? "."), { withFileTypes: true });
-        return { ok: true, text: JSON.stringify({ entries: entries.slice(0, 1000).map((entry) => ({ name: entry.name, kind: entry.isSymbolicLink() ? "symlink" : entry.isDirectory() ? "directory" : "file" })), truncated: entries.length > 1000 }) };
+        const args = schemas.workspace_list.parse(raw), resolved = await checkedRead(args.path ?? "."), entries = await readdir(resolved.target, { withFileTypes: true });
+        const trustedLinkDir = !resolved.inSkillRoot && isTrustedSkillLinkDir(resolved.target);
+        const mapped = await Promise.all(entries.slice(0, 1000).map(async (entry) => {
+          if (entry.isSymbolicLink()) {
+            if (trustedLinkDir) {
+              const trusted = skillRootsByName.get(entry.name);
+              if (trusted && await realpath(join(resolved.target, entry.name)).catch(() => "") === trusted.canonical) {
+                return { name: entry.name, kind: "directory" as const };
+              }
+            }
+            return { name: entry.name, kind: "symlink" as const };
+          }
+          return { name: entry.name, kind: entry.isDirectory() ? "directory" as const : "file" as const };
+        }));
+        return { ok: true, text: JSON.stringify({ entries: mapped, truncated: entries.length > 1000 }) };
       }
       const args = schemas.workspace_search.parse(raw), matches: Array<{ path: string; line: number; text: string }> = [];
       let scanned = 0, truncated = false;
-      const visit = async (path: string) => {
+      const start = await checkedRead(args.path ?? ".");
+      const visit = async (target: string, displayPath: string) => {
         live(callSignal);
         if (++scanned > 2000 || matches.length >= 100) { truncated = true; return; }
-        const target = await checked(path), info = await lstat(target);
+        const info = await lstat(target);
+        if (info.isSymbolicLink()) return;
         if (info.isDirectory()) {
           for (const entry of await readdir(target, { withFileTypes: true })) {
             if (entry.isSymbolicLink() || [".git", "node_modules", ".donebot-tmp"].includes(entry.name)) continue;
             if (scanned >= 2000 || matches.length >= 100) { truncated = true; break; }
-            await visit(join(path, entry.name));
+            await visit(join(target, entry.name), displayPath === "." ? entry.name : join(displayPath, entry.name));
           }
         } else if (info.isFile() && info.size <= MAX_FILE) {
           let text: string;
           try { text = await textAt(target); } catch { return; }
-          for (const [index, line] of text.split("\n").entries()) if (line.includes(args.query)) { matches.push({ path, line: index + 1, text: line.slice(0, 500) }); if (matches.length >= 100) { truncated = true; break; } }
+          for (const [index, line] of text.split("\n").entries()) if (line.includes(args.query)) { matches.push({ path: displayPath, line: index + 1, text: line.slice(0, 500) }); if (matches.length >= 100) { truncated = true; break; } }
         }
       };
-      await visit(normalizeRelative(args.path ?? "."));
+      await visit(start.target, start.displayPath);
       return { ok: true, text: JSON.stringify({ matches, truncated, scanned }) };
     },
     async close() { closed = true; const results = await Promise.all([...running].map((child) => killCliTree(child))); if (results.some((stopped) => !stopped)) throw new Error("Workspace process shutdown could not be confirmed"); },

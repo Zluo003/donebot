@@ -52,6 +52,16 @@ describe("sidebar previews", () => {
     expect(botPreview(bot, notice, [], false)).toBe("Switched to a backup model");
   });
 
+  it("quotes the bot's reply in Simple mode when a completed turn ends with a partial step notice", () => {
+    const partial = [
+      message({ role: "user", text: "Check the skill" }),
+      message({ text: "The set-design skill is already enabled." }),
+      message({ kind: "activity", tool: { name: "error: Stopped because the tool call “agents_skill_import” failed.", ok: false, partial: true } } as Partial<Message>),
+    ];
+    expect(botPreview(bot, partial, [], false)).toBe("The set-design skill is already enabled.");
+    expect(botPreview(bot, partial, [], true)).toBe("Partly done: a step didn't work");
+  });
+
   it("says a helper's intro card by its first line in the reader's language instead of its stored English title", () => {
     const intro = message({ kind: "options", helperIntro: true, card: { title: "Hi! I'm Ada, your Chief of Staff.", options: [] } } as unknown as Partial<Message>);
     expect(botPreview({ ...bot, chiefOfStaff: true } as Bot, [intro], [], false)).toBe("Hey! I'm Ada. I'm new here.");

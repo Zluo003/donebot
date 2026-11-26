@@ -2381,8 +2381,13 @@
   "chat.notice.signInHint": "打开 AI 设置以重新登录",
   "chat.error.pastUsageLimit": "之前的用量限制通知（重置时间已过；请检查当前用量）",
   "chat.error.details": "详情",
-  "chat.error.partial": "部分完成。已收到回复，但有一个步骤没有成功，请先检查该步骤再依赖这个结果。",
-  "chat.error.partialPreview": "部分完成：有一个步骤没有成功",
+  "chat.error.partial": "已收到回复，但有 1 个中间步骤未执行成功",
+  "chat.error.partialPreview": "已回复（有步骤未成功）",
+  "chat.error.partialStepFailed": "已回复 · 中间步骤「{steps}」未执行成功",
+  "chat.error.partialStepRefused": "已回复 · 步骤「{steps}」未获授权，因此未执行",
+  "chat.error.partialStepMixed": "已回复 · 中间步骤「{steps}」未全部执行",
+  "chat.error.partialDetailFailed": "本次回复已正常完成，仅中间调用该步骤时返回了报错。若结果已满足预期可忽略；如需核对原因，可查看上方对应步骤或重试。",
+  "chat.error.partialDetailRefused": "本次回复已完成，但对应步骤未获得执行权限而跳过。如需执行该操作，可在授权后重试。",
   "chat.error.requestTooLarge": "这条消息对 {model} 来说太大了。请开始新的对话，或选择能接受更多内容的模型。",
   "chat.error.dismiss": "关闭",
   "error.plain.unreachable": "无法连接 {app}。请确认它正在运行，然后重试。",
@@ -8040,5 +8045,8 @@
   "templateRepo.queryAfterDisconnect": "响应已中断。请先查询此回执，再进行其他操作；不会再次提交发布。",
   "teamFiles.intro": "与 {team} 所有成员共享的文件。",
   "teamFiles.empty.body": "将文件拖到这里或上传，所有团队成员都可以查看。",
-  "teamFiles.previewLoading": "正在加载预览…"
+  "teamFiles.previewLoading": "正在加载预览…",
+  "chat.notice.restartInterrupted": "回合已中断：DoneBot 已重启",
+  "chat.notice.resumingAfterRestart": "重启后继续",
+  "chat.notice.cutOffByRestart": "{name} 因重启而中断；正在继续"
 }

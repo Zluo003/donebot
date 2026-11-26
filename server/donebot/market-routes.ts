@@ -9,7 +9,7 @@ import { importPackageDocument, PackageImportError, type PackageImportDeps } fro
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { ownSkillFiles } from "../skill-side-files.ts";
-import type { SkillListing } from "../skills.ts";
+import { portableSkillSource, type SkillListing } from "../skills.ts";
 import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import type { Routine } from "../../shared/routines.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
@@ -107,6 +107,24 @@ export interface DoneBotMarketRouteDeps {
 
 function visibleBotIds(store: Store): Set<string> {
   return new Set(store.bots.filter(bot => !bot.hidden).map(bot => bot.id));
+}
+
+function sanitizeMarketSkillsByBot(
+  skillsByBot: Map<string, ExportablePackageSkill[]>,
+): Map<string, ExportablePackageSkill[]> {
+  const sanitized = new Map<string, ExportablePackageSkill[]>();
+  for (const [botId, skills] of skillsByBot) {
+    sanitized.set(
+      botId,
+      skills.map((skill) => {
+        const source = portableSkillSource(skill.name, skill.source);
+        if (source === skill.source) return skill;
+        const { source: _dropped, ...rest } = skill;
+        return source === undefined ? rest : { ...rest, source };
+      }),
+    );
+  }
+  return sanitized;
 }
 
 function enableInstalledSkills(
@@ -323,7 +341,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           bots: exportedBots,
           groups: [],
           routines: [],
-          skillsByBot: collected.skillsByBot,
+          skillsByBot: sanitizeMarketSkillsByBot(collected.skillsByBot),
           skillSelection: collected.all ? "all" : "chosen",
           // Auto-redacted: never include MEMORY.md, starter notes, conversation logs, MCP keys, or local permissions.
           published: null,
@@ -421,7 +439,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           groups: deps.store.groups ?? [],
           routines: input.include_routines ? (deps.listRoutines?.() ?? []) : [],
           brief,
-          skillsByBot: collected.skillsByBot,
+          skillsByBot: sanitizeMarketSkillsByBot(collected.skillsByBot),
           skillSelection: collected.all ? "all" : "chosen",
           // Public marketplace packages always strip private starter memory, local MCP servers, and personal defaults.
           published: null,

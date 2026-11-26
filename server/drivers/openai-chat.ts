@@ -33,7 +33,7 @@ import { appendNative } from "./native.ts";
 import { classifyError, computeBackoff, interruptibleDelay, RETRY_MAX_ATTEMPTS } from "./retry.ts";
 import { plainFailure } from "./engine-errors.ts";
 import { noticeFailure } from "../chat-notices.ts";
-import { toolFailureMessage } from "./tool-failure.ts";
+import { isExploratoryReadOnlyProbe, toolFailureMessage } from "./tool-failure.ts";
 import { refusesRequestSize, RequestTooLargeError, sizeChange, smallerResend } from "./chat-size-limit.ts";
 import { requestTooLargeMessage } from "../../shared/request-too-large.ts";
 import { toolSchemaProfileFor } from "../tool-schema-profile.ts";
@@ -572,8 +572,9 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
       let failure: string | undefined;
       let failureText: ReturnType<typeof runtimeErrorText>;
       let toolFailed = false;
+      let succeededTools = 0;
       let correctiveRounds = 0;
-      const denials: string[] = [], failedCalls: string[] = [];
+      const denials: string[] = [], failedCalls: string[] = [], probeFailedCalls: string[] = [];
       const seenCalls = new Set<string>();
       let nudges = 0;
       let unread: string[] = [];
@@ -736,7 +737,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             if (completion.finishReason && completion.finishReason !== "stop") {
               throw new ChatProtocolError(`provider did not finish the response (${completion.finishReason})`);
             }
-            if (toolFailed) {
+            if (toolFailed || (probeFailedCalls.length > 0 && succeededTools === 0)) {
               // A person's "no" is never answered with another attempt; a failure may first get the configured corrective rounds.
               if (!denials.length && !turnEntry.ending && correctiveRounds < Math.max(turn.toolErrorCorrectiveRounds ?? 0, options.localModel ? LOCAL_CORRECTIVE_ROUNDS : 0)) {
                 correctiveRounds += 1;
@@ -744,7 +745,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                 continue;
               }
               stopReason = "tool_error";
-              throw new ChatProtocolError(toolFailureMessage(failedCalls, denials.filter((name) => name !== ASK_USER_TOOL)));
+              throw new ChatProtocolError(toolFailureMessage(toolFailed ? failedCalls : probeFailedCalls, denials.filter((name) => name !== ASK_USER_TOOL)));
             }
             if (options.nudgeAnnouncedAction && tools.definitions.length && announcesAction(completion.text)) {
               if (nudges >= MAX_ANNOUNCEMENT_NUDGES || turnEntry.ending) {
@@ -778,18 +779,20 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
           // A failure stays pending only until the bot runs tools again: one that went on to use more tools has read the error
           // and reacted (a wrong guess, a bad query, then the right call), so its turn is not failed for it, on any model. The
           // failed step still shows as failed; a failure in the last calls before the answer, or a person's no, still ends it.
-          if (!denials.length) { toolFailed = false; failedCalls.length = 0; }
+          if (!denials.length) { toolFailed = false; failedCalls.length = 0; probeFailedCalls.length = 0; }
           const screenshotParts: ChatContentPart[] = [];
           for (const call of completion.toolCalls) {
             abort.signal.throwIfAborted();
             let result: ChatToolResult;
             let started = false;
             let fatal: Error | undefined, title = call.function.name, skipRepeatCount = false;
+            let parsedArgs: unknown, shownInput: unknown, shownAsk = false, denied = false;
             try {
               let args: unknown;
               try { args = JSON.parse(call.function.arguments); }
               catch { throw new ChatProtocolError("tool arguments are not complete JSON"); }
               if (!object(args)) throw new ChatProtocolError("tool arguments must be a JSON object");
+              parsedArgs = shownInput = args;
               const inputPreview = preview(args);
               if (call.function.name === ASK_USER_TOOL) {
                 if (!questionAllowed || !allowsTool(scope, { kind: "native", name: ASK_USER_TOOL })) throw new Error("Tool selection excludes this tool");
@@ -801,7 +804,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                 });
                 started = true;
                 if (!questions) {
-                  denials.push(ASK_USER_TOOL);
+                  denials.push(ASK_USER_TOOL); denied = true;
                   result = { ok: false, text: "The ask_user arguments are malformed: pass a JSON object with a questions array of one to six questions, each with a question string and at most twelve options carrying a label. Ask again with valid arguments." };
                 } else {
                   const answer = await approval.question(ASK_USER_TOOL, askQuestionSummary(questions), questions);
@@ -816,7 +819,8 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                 const refused = repeats?.refuses(call.function.name, call.function.arguments);
                 if (refused) { skipRepeatCount = true; throw new Error(refused); }
                 tools.validate(call.function.name, args);
-                const shown = tools.view(call.function.name, args as Record<string, unknown>); title = shown.title;
+                const shown = tools.view(call.function.name, args as Record<string, unknown>);
+                title = shown.title; shownInput = shown.input; shownAsk = shown.ask;
                 const shownPreview = shown.input === args ? inputPreview : preview(shown.input);
                 // This runtime has no provider reviewer, so Full access is honoured here.
                 const full = (turn.approvalModeNow?.() ?? turn.approvalMode) === "full";
@@ -844,7 +848,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                     }
                   }
                 } else {
-                  denials.push(shown.title);
+                  denials.push(shown.title); denied = true;
                   result = { ok: false, text: refusal(floored, (message) => emit({ ...base(turn.threadId, turnId), type: "runtime.notice", message })) };
                 }
               }
@@ -859,7 +863,9 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             const text = safeText(result.text);
             const output = preview({ ok: result.ok, result: text });
             emit({ ...base(turn.threadId, turnId), type: "item.completed", itemType: "tool", itemId: call.id, ok: result.ok, output });
-            if (!result.ok) { toolFailed = true; failedCalls.push(title); }
+            if (result.ok) succeededTools += 1;
+            else if (!denied && isExploratoryReadOnlyProbe(title, shownInput ?? parsedArgs, shownAsk)) probeFailedCalls.push(title);
+            else { toolFailed = true; failedCalls.push(title); }
             messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ ok: result.ok, result: repeatNote ? `${text}\n\n${repeatNote}` : text }) });
             screenshotParts.push(...chatToolImages(call.id, result.images));
             abort.signal.throwIfAborted();

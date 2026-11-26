@@ -9,7 +9,7 @@ export interface MemberOwnBotDeps {
   activeGroupTurnForBot(botId: string): { group: { id: string }; threadId: string } | null;
   cancelGroupTurnOperations(groupId: string, threadId: string): void;
   revokeInternalCapabilitiesForThread(threadId: string): void;
-  interruptAllDirectThreads(botId: string): Promise<void>;
+  interruptAllDirectThreads(botId: string, cause?: string): Promise<void>;
   /** Interrupts the bot's running turn in this conversation, if it has one. */
   interruptTurn(bot: BotRecord, threadId: string): Promise<unknown> | undefined;
   closeOpenApprovals(threadId: string): void;
@@ -31,7 +31,7 @@ export function createMemberOwnBot(deps: MemberOwnBotDeps) {
         deps.revokeInternalCapabilitiesForThread(groupTurn.threadId);
       }
       await Promise.allSettled([
-        deps.interruptAllDirectThreads(botId),
+        deps.interruptAllDirectThreads(botId, cause),
         run ? routines!.cancelRun(run.id, cause) : undefined,
         groupTurn ? deps.interruptTurn(bot, groupTurn.threadId) : undefined,
       ]);

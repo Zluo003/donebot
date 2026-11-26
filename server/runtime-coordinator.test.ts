@@ -1036,6 +1036,28 @@ describe("RuntimeCoordinator: a stop the person made is remembered", () => {
     expect(r.coordinator.node(nightly.node.id)?.status).toBe("cancelled");
     expect(r.coordinator.enqueue(chief, "gen-run", undefined, builder, "Export again", {}).node).toMatchObject({ botId: "builder" });
   });
+
+  it("lifts the stop lock for that root once the person steers mid-turn, without unlocking other threads or surviving a later stop", async () => {
+    const w = world(hold);
+    const { node } = send(w, chief, "gen-1", undefined, builder, "Build it");
+    begun(w, { botId: "tester", threadId: "tester-chat" }, "gen-2");
+    w.coordinator.tick();
+    await tick();
+    w.coordinator.stopAwaitingDirect("builder-work");
+    expect(w.coordinator.node(node.id)?.status).toBe("cancelled");
+    expect(() => send(w, chief, "gen-1", undefined, builder, "Try again unasked")).toThrow(/stopped this teammate's work/);
+
+    w.coordinator.personSteered(chief.threadId);
+    expect(() => send(w, { botId: "tester", threadId: "tester-chat" }, "gen-2", undefined, builder, "Still blocked elsewhere")).toThrow(/stopped this teammate's work/);
+    const restarted = send(w, chief, "gen-1", undefined, builder, "Restart builder after mid-turn steer");
+    expect(restarted.node).toMatchObject({ botId: "builder", status: "queued" });
+
+    w.coordinator.tick();
+    await tick();
+    w.coordinator.stopAwaitingDirect("builder-work");
+    expect(w.coordinator.node(restarted.node.id)?.status).toBe("cancelled");
+    expect(() => send(w, chief, "gen-1", undefined, builder, "Try again after second stop")).toThrow(/stopped this teammate's work/);
+  });
 });
 
 describe("RuntimeCoordinator: read models", () => {

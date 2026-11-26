@@ -423,6 +423,55 @@ describe("createOpenAIChatRuntime tool approvals", () => {
       expect(await run([toolCall("c1", "fx_write"), toolCall("c2", "nope"), answer], undefined, { custom: { fx: toolServer() } }))
         .toEqual({ requests: 3, corrective: 0, ok: false, stopReason: "tool_error" });
     }, 20_000);
+
+    it("does not fail a completed turn when only a trailing read-only preview probe fails after successful tool work", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "openai-chat-probe-"));
+      try {
+        const script = join(dir, "agents-probe.mjs");
+        writeFileSync(script, `#!/usr/bin/env node
+let buf = "";
+process.stdin.on("data", (c) => {
+  buf += c.toString("utf8");
+  const lines = buf.split("\\n");
+  buf = lines.pop() ?? "";
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const msg = JSON.parse(line);
+    if (msg.method === "initialize") process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "agents", version: "1" } } }) + "\\n");
+    else if (msg.method === "tools/list") process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { tools: [
+      { name: "skills_list", description: "list", inputSchema: { type: "object", properties: {} } },
+      { name: "skill_import", description: "import", inputSchema: { type: "object", properties: { source: { type: "string" }, preview: { type: "boolean" } } } },
+    ] } }) + "\\n");
+    else if (msg.method === "tools/call") {
+      const bad = msg.params.name === "skill_import";
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { isError: bad, content: [{ type: "text", text: bad ? "invalid source" : "ok" }] } }) + "\\n");
+    }
+  }
+});
+`);
+        chmodSync(script, 0o755);
+        const agents = { command: script, args: [], env: {} };
+        // 1) Successful skills_list followed by a failed preview-only skill_import -> clean completion, no false tool_error.
+        expect(await run([
+          toolCall("c1", "agents_skills_list", {}),
+          toolCall("c2", "agents_skill_import", { source: "set-design", preview: true }),
+          answer,
+        ], undefined, { agents })).toEqual({ requests: 3, corrective: 0, ok: true, stopReason: null });
+        // 2) Mutating skill_import (preview: false) failing still triggers tool_error.
+        expect(await run([
+          toolCall("c1", "agents_skills_list", {}),
+          toolCall("c2", "agents_skill_import", { source: "set-design", preview: false }),
+          answer,
+        ], undefined, { agents })).toEqual({ requests: 3, corrective: 0, ok: false, stopReason: "tool_error" });
+        // 3) Preview probe failing with zero prior successful tools still triggers tool_error.
+        expect(await run([
+          toolCall("c1", "agents_skill_import", { source: "set-design", preview: true }),
+          answer,
+        ], undefined, { agents })).toEqual({ requests: 2, corrective: 0, ok: false, stopReason: "tool_error" });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 30_000);
   });
 
   it("completes the turn when a question goes unanswered, without tainting the final answer", async () => {

@@ -429,6 +429,78 @@ async function readChat(response: Response, input: CompletionTransportInput): Pr
   return result;
 }
 
+const BUILTIN_TOOL_PREFIXES = ["agents_", "browser_", "data_"] as const;
+
+function normalizeBuiltinToolCalls(result: Completion, tools: CompletionTransportInput["tools"]): Completion {
+  if (!result.toolCalls.length || !tools.length) return result;
+  const advertised = new Set(tools.map((tool) => tool.function.name));
+  const resolveName = (name: string): string => {
+    if (advertised.has(name)) return name;
+    const matches = BUILTIN_TOOL_PREFIXES.map((prefix) => `${prefix}${name}`).filter((candidate) => advertised.has(candidate));
+    return matches.length === 1 ? matches[0]! : name;
+  };
+  let changed = false;
+  const toolCalls = result.toolCalls.map((call) => {
+    const resolved = resolveName(call.function.name);
+    if (resolved === call.function.name) return call;
+    changed = true;
+    return { ...call, function: { ...call.function, name: resolved } };
+  });
+  if (!changed) return result;
+  const rewriteNative = (native: unknown): unknown => {
+    const saved = object(native);
+    if (!saved || !Array.isArray(saved.content)) return native;
+    if (saved.protocol === "messages") {
+      return {
+        ...saved,
+        content: saved.content.map((entry) => {
+          const block = object(entry);
+          if (!block || block.type !== "tool_use" || typeof block.name !== "string") return entry;
+          const resolved = resolveName(block.name);
+          return resolved === block.name ? entry : { ...block, name: resolved };
+        }),
+      };
+    }
+    if (saved.protocol === "gemini") {
+      return {
+        ...saved,
+        content: saved.content.map((entry) => {
+          const part = object(entry);
+          const fnCall = object(part?.functionCall);
+          if (!part || !fnCall || typeof fnCall.name !== "string") return entry;
+          const resolved = resolveName(fnCall.name);
+          return resolved === fnCall.name ? entry : { ...part, functionCall: { ...fnCall, name: resolved } };
+        }),
+      };
+    }
+    if (saved.protocol === "responses") {
+      return {
+        ...saved,
+        content: saved.content.map((entry) => {
+          const item = object(entry);
+          if (!item || item.type !== "function_call" || typeof item.name !== "string") return entry;
+          const resolved = resolveName(item.name);
+          return resolved === item.name ? entry : { ...item, name: resolved };
+        }),
+      };
+    }
+    return native;
+  };
+  const responseOutput = Array.isArray(result.responseOutput)
+    ? result.responseOutput.map((item) => {
+        if (item.type !== "function_call" || typeof item.name !== "string") return item;
+        const resolved = resolveName(item.name);
+        return resolved === item.name ? item : { ...item, name: resolved };
+      })
+    : result.responseOutput;
+  return {
+    ...result,
+    toolCalls,
+    ...(result.nativeOutput !== undefined ? { nativeOutput: rewriteNative(result.nativeOutput) } : {}),
+    ...(responseOutput !== undefined ? { responseOutput } : {}),
+  };
+}
+
 export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: (model: string) => DoneBotLlmProtocol) {
   return async (input: CompletionTransportInput): Promise<Completion> => {
     input.signal.throwIfAborted();
@@ -467,6 +539,6 @@ export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: 
     }
     input.signal.throwIfAborted();
     if (!result.text.trim() && result.reasoning.trim() && !result.toolCalls.length) throw new ChatProtocolError("DoneBot gateway returned reasoning without an assistant answer");
-    return result;
+    return normalizeBuiltinToolCalls(result, input.tools);
   };
 }

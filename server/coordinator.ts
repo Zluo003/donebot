@@ -222,6 +222,8 @@ export interface Coordinator {
   liveEdges(): LiveHandoffEdge[];
   /** The conversation stopped: its work and everything that work handed out end, and nothing resumes it. */
   stopAwaitingDirect(threadId: string, reason?: string): void;
+  /** The person sent a mid-turn follow-up into this conversation, superseding prior stop memory for its live root(s). */
+  personSteered(threadId: string): void;
   /** The next start goes on with this thread's turn, so a shutdown's "cut" line would be false. */
   continuesAfterRestart(threadId: string): boolean;
   note(id: string): string | undefined;

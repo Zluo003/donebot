@@ -1,7 +1,7 @@
 import { BOT_PACKAGE_MAX_SKILLS } from "./bot-package.ts";
 import type { SkillsLibraryHost } from "./host/skills-library.ts";
 import type { ExportablePackageSkill, TeamExportSkip } from "./package-export.ts";
-import { isSkillName } from "./skills.ts";
+import { isSkillName, portableSkillSource } from "./skills.ts";
 import type { BotRecord } from "./store.ts";
 import { admitSkillFiles, skillFileRefusalWords } from "../shared/skill-files.ts";
 
@@ -51,10 +51,11 @@ export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "rea
         const beside = filesFor(bot, listing.name);
         if (!beside) throw new Error(`Skill "${listing.name}" has changed files and cannot be exported safely`);
         if (beside.refused.length) throw new Error(`Skill "${listing.name}" cannot include ${beside.refused.map(file => `${file.path}, which ${skillFileRefusalWords(file.reason)}`).join("; ")}`);
+        const source = portableSkillSource(listing.name, listing.source);
         const skill: ExportablePackageSkill = {
           name: listing.name,
           description: listing.description,
-          ...(listing.source ? { source: listing.source } : {}),
+          ...(source ? { source } : {}),
           ...(listing.license ? { license: listing.license } : {}),
           ...(listing.compatibility ? { compatibility: listing.compatibility } : {}),
           instructions,
@@ -97,10 +98,11 @@ export function skillExport(host: Pick<SkillsLibraryHost, "listBotSkills" | "rea
           const part = `skills[${listing.name}].files[${file.path}]`;
           if (!skipped.some(skip => skip.part === part)) skipped.push({ part, reason: `skill_file_${file.reason}` });
         }
+        const source = portableSkillSource(listing.name, listing.source);
         assigned.push({
           name: listing.name,
           description: listing.description,
-          ...(listing.source ? { source: listing.source } : {}),
+          ...(source ? { source } : {}),
           ...(listing.license ? { license: listing.license } : {}),
           ...(listing.compatibility ? { compatibility: listing.compatibility } : {}),
           instructions,

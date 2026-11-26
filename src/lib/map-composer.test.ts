@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { everyoneChief, mapDelivery, mapMessageTargets, sentToSummary } from "./map-composer";
+import { everyoneChief, mapDelivery, mapMessageTargets, sentToSummary, teamChief } from "./map-composer";
 
 const bots = [
   { id: "maya", name: "Maya Chen", section: "Research" },
@@ -65,17 +65,40 @@ describe("Team map delivery", () => {
     expect(mapDelivery(targets("@Research @everyone status?"), team, false).botIds).toEqual(["chief", "maya", "theo"]);
   });
 
-  it("sends a stop to every bot, as its own words, so each bot stops at once", () => {
+  it("sends @<department> to that department's coordinator alone, falling back to all department bots when none exists", () => {
+    expect(mapDelivery(targets("@Design start"), team, false)).toEqual({ botIds: ["design-chief"], chief: team[1] });
+    expect(mapDelivery(targets("@General hello"), team, false)).toEqual({ botIds: ["chief"], chief: team[0] });
+    expect(mapDelivery(targets("@Research start"), team, false)).toEqual({ botIds: ["maya", "theo"] });
+    expect(mapDelivery(targets("@Design @Research start"), team, false)).toEqual({
+      botIds: ["design-chief", "maya", "theo"],
+      chief: team[1],
+    });
+    const twoDepts = [...team, { id: "research-chief", name: "Rhea", section: "Research", chiefOfStaff: true }];
+    expect(mapDelivery(targets("@Design @Research start", twoDepts), twoDepts, false)).toEqual({
+      botIds: ["design-chief", "research-chief"],
+      chief: team[1],
+      chiefs: [team[1], twoDepts[twoDepts.length - 1]],
+    });
+  });
+
+  it("sends a stop to every bot in the tagged scope, as its own words, so each bot stops at once", () => {
     const stop = mapDelivery(targets("@everyone   stop now"), team, true);
     expect(stop.botIds).toEqual(targets("@everyone").botIds);
     expect(stop.text).toBe("stop now");
     expect(stop.chief).toBeUndefined();
+
+    const deptStop = mapDelivery(targets("@Design  stop now"), team, true);
+    expect(deptStop.botIds).toEqual(["design-chief", "theodora", "nora"]);
+    expect(deptStop.text).toBe("stop now");
+    expect(deptStop.chief).toBeUndefined();
   });
 
-  it("sends to everyone as before when there is no Chief, and leaves lines without @everyone alone", () => {
+  it("sends to everyone as before when there is no Chief, and leaves direct bot lines alone", () => {
     expect(mapDelivery(targets("@everyone hello", bots), bots, false)).toEqual({ botIds: ["maya", "theo", "theodora", "nora", "solo"] });
-    expect(mapDelivery(targets("@Design start"), team, false)).toEqual({ botIds: ["design-chief", "theodora", "nora"] });
+    expect(mapDelivery(targets("@Design start", bots), bots, false)).toEqual({ botIds: ["theodora", "nora"] });
     expect(mapDelivery(targets("@Theo stop"), team, true)).toEqual({ botIds: ["theo"] });
+    expect(teamChief(team, "Design")?.id).toBe("design-chief");
+    expect(teamChief(team, "Research")).toBeUndefined();
   });
 
   it("prefers the Chief over the whole team to a department's, and never a hidden one", () => {

@@ -2366,14 +2366,14 @@ async function interruptParkedTurn(botId: string, threadId: string): Promise<voi
   if (directTurnGenerationByThread.get(threadId) === generation) closeOpenApprovals(threadId);
 }
 
-async function interruptAllDirectThreads(botId: string): Promise<void> {
+async function interruptAllDirectThreads(botId: string, cause?: string): Promise<void> {
   const threads = store.tasks(botId).filter((task) => task.busy || directTurnDispatchClaims.has(task.threadId) || coordinator.activeDirect(task.threadId));
   // Revoke every sibling before yielding to any provider teardown.
   for (const task of threads) {
     cancelDirectTurnDispatch(botId, task.threadId);
     revokeInternalCapabilitiesForThread(task.threadId);
   }
-  await Promise.all(threads.map((task) => interruptDirectThread(botId, task.threadId)));
+  await Promise.all(threads.map((task) => interruptDirectThread(botId, task.threadId, cause)));
 }
 const retiredProviderTurns = new RetiredTurnRegistry();
 const pendingCancelledProviderHandshakes = new PendingTurnCancellations();
@@ -7381,7 +7381,7 @@ async function acceptDirectSend(
           store.setTaskAskedAt(botId, threadId, message.at);
           handoffs.steered(threadId, steerTarget, instance?.instanceId, message.id);
           signInSettle.answerInChat(botId, threadId);
-          if (personsOwn) personFirst.wait(threadId, { requeue: (note) => void queueSteeredMessage(current.id, threadId, text, { prompt: note ? `${queuedPrompt}\n\n${note}` : queuedPrompt, rowId: message.id, first: true, queuedAt: message.at, replyToId: replyTo?.id, dataContext, sender, trigger, via, callId, mentions, aheadOfOthers: runOwners.askerFirst(threadId) }) });
+          if (personsOwn) { coordinator.personSteered(threadId); personFirst.wait(threadId, { requeue: (note) => void queueSteeredMessage(current.id, threadId, text, { prompt: note ? `${queuedPrompt}\n\n${note}` : queuedPrompt, rowId: message.id, first: true, queuedAt: message.at, replyToId: replyTo?.id, dataContext, sender, trigger, via, callId, mentions, aheadOfOthers: runOwners.askerFirst(threadId) }) }); }
           return { ok: true as const, steered: true as const, threadId, message };
         }
         if (!current.busy) {
@@ -8135,7 +8135,7 @@ async function beginTurn(
           resourceOwner.lazyClaimFailureReported = true;
         }
         opts?.onDispatchError?.(message);
-        void interruptDirectThread(bot.id, threadId).catch(() => {});
+        void interruptDirectThread(bot.id, threadId, message).catch(() => {});
       };
 
       /** A poller started after its own turn.completed would never stop: same still-running guard as dispatch. */
@@ -8790,7 +8790,7 @@ async function interruptRoutineGroupGoal(
   if (!groupId) {
     oneOnOneGoals.stop(threadId, outcome);
     const owner = store.botByThread(threadId);
-    if (owner) await interruptDirectThread(owner.id, threadId);
+    if (owner) await interruptDirectThread(owner.id, threadId, outcome?.detail);
     return;
   }
   const speaker = groupSpeakers.get(threadId);
@@ -9215,7 +9215,7 @@ async function deleteBotWithLifecycle(botId: string, revalidate: () => void = ()
           }
           // Invalidate every bot-callable bearer before the first asynchronous teardown step.
           for (const task of store.tasks(bot.id)) revokeInternalCapabilitiesForThread(task.threadId);
-          await interruptAllDirectThreads(bot.id);
+          await interruptAllDirectThreads(bot.id, "The bot was deleted while it was working");
           for (const task of store.tasks(bot.id)) {
             purgeTurnAttachmentsForThread(task.threadId);
             clearTurnDigestState(task.threadId);
@@ -12077,7 +12077,7 @@ async function stopCompanyInstances(ids: string[]) {
     .map(task => ({ botId: bot.id, threadId: task.threadId, owner: turnResourceOwners.get(task.threadId), generation: directTurnGenerationByThread.get(task.threadId) })));
   // Mark stopping first: a turn's own end can settle its requester before the loop below.
   for (const { threadId } of direct) turnStops.stopping(threadId, liveTurnByThread.get(threadId), cause);
-  await Promise.all(direct.map(task => interruptDirectThread(task.botId, task.threadId)));
+  await Promise.all(direct.map(task => interruptDirectThread(task.botId, task.threadId, cause)));
   for (const { botId, threadId, owner, generation } of direct) {
     const interrupted = stoppedTurnText(threadId, liveTurnByThread.get(threadId), cause);
     releaseTurnResources(owner);

@@ -814,6 +814,16 @@ function commitNewSkillFiles(
   }
 }
 
+const LOCAL_PATH_SKILL_SOURCE = /^(?:[a-z]:[\\/]|[\\/]|\\\\|~[\\/]|file:)/i;
+
+/** Replaces host-specific filesystem paths with a portable identifier so installed skills travel cleanly in packages. */
+export function portableSkillSource(name: string, source: string | undefined): string | undefined {
+  const trimmed = source?.trim();
+  if (!trimmed) return undefined;
+  if (LOCAL_PATH_SKILL_SOURCE.test(trimmed)) return name ? `local:${name}` : "local";
+  return trimmed;
+}
+
 function installPreparedSkill(
   botId: string,
   source: string,
@@ -821,6 +831,7 @@ function installPreparedSkill(
   options: { enabled: boolean; appliedStageId?: string; package?: SkillPackageStamp; github?: GitHubSkillOrigin },
 ): SkillListing | { error: string } {
   const name = prepared.parsed.name;
+  const storedSource = portableSkillSource(name, source) ?? source;
   const manifest = readManifest(botId);
   const skillMd = prepared.files[0]!.content;
   const sha256 = createHash("sha256").update(skillMd).digest("hex");
@@ -843,7 +854,7 @@ function installPreparedSkill(
   const entry: SkillManifestEntry = {
     description: prepared.parsed.description,
     enabled: options.enabled,
-    source,
+    source: storedSource,
     sha256,
     importedAt: new Date().toISOString(),
     license: prepared.parsed.license,
@@ -927,13 +938,14 @@ function updatePreparedSkill(
     if (!latest || !baseRevisionMatches(latest, options) || !installedLearnedSkillMatches(botId, name, latest)) {
       return { error: "the installed skill changed after this update was proposed — review a fresh update" };
     }
+    const storedSource = portableSkillSource(name, source) ?? source;
     const { referencesSha256: _prevRefs, files: _prevFiles, filesSha256: _prevFilesSha, installId: _prevInstallId, ...unchanged } = latest;
     const entry: SkillManifestEntry = {
       ...unchanged,
       ...(published.referencesSha256 ? { referencesSha256: published.referencesSha256 } : {}),
       ...(published.files && published.filesSha256 ? { files: published.files, filesSha256: published.filesSha256 } : {}),
       description: prepared.parsed.description,
-      source,
+      source: storedSource,
       sha256,
       importedAt: new Date().toISOString(),
       license: prepared.parsed.license,

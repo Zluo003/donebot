@@ -2422,7 +2422,7 @@
   "chat.notice.signInHint": "Abrir as configurações de IA para entrar novamente",
   "chat.error.pastUsageLimit": "Aviso antigo de limite de uso (horário de redefinição já passou; confira o uso atual)",
   "chat.error.details": "Detalhes",
-  "chat.error.partial": "Concluído em parte. A resposta chegou, mas uma etapa não deu certo. Confira essa etapa antes de confiar no resultado.",
+  "chat.error.partial": "Resposta recebida, mas uma etapa intermediária não foi concluída.",
   "chat.error.partialPreview": "Concluído em parte: uma etapa não deu certo",
   "chat.error.requestTooLarge": "Esta mensagem é grande demais para {model}. Inicie uma nova conversa ou escolha um modelo que aceite mais conteúdo.",
   "chat.error.dismiss": "Dispensar",

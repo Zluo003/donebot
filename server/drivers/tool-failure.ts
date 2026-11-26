@@ -13,6 +13,18 @@ function list(names: readonly string[]): string {
   return shown.length > 1 ? `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}` : shown[0] ?? "";
 }
 
+const EXPLORATORY_PROBE_TOOLS = new Set(["skill_find", "skills_list", "session_search"]);
+
+export function isExploratoryReadOnlyProbe(toolName: string, args: unknown, asksPermission: boolean): boolean {
+  if (asksPermission) return false;
+  const normalized = toolName.replace(/^(?:mcp__agents__|agents_)/, "");
+  if (EXPLORATORY_PROBE_TOOLS.has(normalized)) return true;
+  if (normalized === "skill_import") {
+    return Boolean(args && typeof args === "object" && !Array.isArray(args) && (args as Record<string, unknown>).preview !== false);
+  }
+  return false;
+}
+
 /** `failed`: the calls whose result was a failure, in order, refused ones included; `refused`: the ones not allowed. */
 export function toolFailureMessage(failed: readonly string[], refused: readonly string[]): string {
   const notAllowed = [...new Set(refused)];

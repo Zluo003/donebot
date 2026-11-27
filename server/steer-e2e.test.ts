@@ -912,16 +912,27 @@ posixOnly("mid-turn steering e2e", () => {
     });
     expect(steered.status).toBe(200);
     expect(steered.body.steered).toBe(true);
-    expect(steered.body.queueIds).toEqual([replying.body.queueId, plain.body.queueId]);
+    expect(steered.body.queueIds).toEqual([replying.body.queueId]);
+
+    const steeredPlain = await api("POST", `/api/groups/${room.id}/queue/${plain.body.queueId}/steer`, {
+      threadId: room.threadId,
+    });
+    expect(steeredPlain.status).toBe(200);
+    expect(steeredPlain.body.steered).toBe(true);
+    expect(steeredPlain.body.queueIds).toEqual([plain.body.queueId]);
 
     const nativeRows = readFileSync(join(home, ".donebot", "native", `${room.threadId}.ndjson`), "utf8")
       .trim().split("\n").map((line) => JSON.parse(line));
-    const foldRow = nativeRows.find((row) => row.dir === "out" && row.msg?.method === "turn/steer")?.msg;
-    const foldedText = foldRow?.params.input.map((block: any) => block.text).join("\n") ?? "";
-    expect(foldedText).toContain("steer this reply line");
-    expect(foldedText).toContain("and this plain line");
-    expect(foldedText.match(/The current message is a reply to/g)).toHaveLength(1);
-    expect(foldedText).toContain("first room turn");
+    const steerRows = nativeRows
+      .filter((row) => row.dir === "out" && row.msg?.method === "turn/steer")
+      .map((row) => row.msg?.params.input.map((block: any) => block.text).join("\n") ?? "");
+    expect(steerRows).toHaveLength(2);
+    expect(steerRows[0]).toContain("steer this reply line");
+    expect(steerRows[0]).not.toContain("and this plain line");
+    expect(steerRows[0]!.match(/The current message is a reply to/g)).toHaveLength(1);
+    expect(steerRows[0]).toContain("first room turn");
+    expect(steerRows[1]).toContain("and this plain line");
+    expect(steerRows[1]).not.toContain("The current message is a reply to");
 
     await api("POST", `/api/groups/${room.id}/interrupt`, {});
     await waitFor(async () => (await getGroup())?.working === false, "the steered room turn to settle");

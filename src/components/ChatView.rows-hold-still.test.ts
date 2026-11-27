@@ -77,7 +77,10 @@ function Shell() {
 
 let root: Root;
 let cursor = 0;
-const task = () => new Promise((resolve) => setTimeout(resolve, 0));
+const task = () => new Promise<void>((resolve) => {
+  if (typeof setImmediate === "function") setImmediate(resolve);
+  else setTimeout(resolve, 0);
+});
 const settle = async () => { for (let i = 0; i < 12; i++) await task(); };
 const stream = () => FixtureEventSource.opened[0]!;
 const send = async (frame: object) => { stream().send(frame, `run:${++cursor}`); await settle(); };
@@ -145,6 +148,8 @@ describe("a long chat on screen", () => {
   });
 
   it("draws no row again while another bot works", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 560));
+    await settle();
     const mark = renderMark();
     await send({ kind: "bot", bot: { ...announced("a", "Ada"), busy: true, activity: "working" } });
     await runtime("a-thread", { type: "turn.started" });

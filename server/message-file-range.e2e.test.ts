@@ -33,12 +33,12 @@ it("serves versioned ranges for all attachment types through the original messag
       expect(first.headers.get("content-range")).toBe(`bytes 0-1048575/${asset.bytes.length}`);
       const tag = first.headers.get("etag")!;
       expect(tag).toMatch(/^"[a-f0-9]{64}"$/);
-      expect(Buffer.from(await first.arrayBuffer())).toEqual(asset.bytes.subarray(0, 1048576));
+      expect(Buffer.from(await first.arrayBuffer()).equals(asset.bytes.subarray(0, 1048576))).toBe(true);
       const next = await fetchFile({ range: "bytes=1048576-", "if-range": tag });
       expect(next.status).toBe(206); expect(next.headers.get("etag")).toBe(tag);
-      expect(Buffer.from(await next.arrayBuffer())).toEqual(asset.bytes.subarray(1048576));
+      expect(Buffer.from(await next.arrayBuffer()).equals(asset.bytes.subarray(1048576))).toBe(true);
       const suffix = await fetchFile({ range: "bytes=-17" });
-      expect(suffix.status).toBe(206); expect(Buffer.from(await suffix.arrayBuffer())).toEqual(asset.bytes.subarray(-17));
+      expect(suffix.status).toBe(206); expect(Buffer.from(await suffix.arrayBuffer()).equals(asset.bytes.subarray(-17))).toBe(true);
       const invalid = await fetchFile({ range: `bytes=${asset.bytes.length}-` });
       expect(invalid.status).toBe(416); expect(invalid.headers.get("content-range")).toBe(`bytes */${asset.bytes.length}`);
       await invalid.arrayBuffer();
@@ -48,7 +48,7 @@ it("serves versioned ranges for all attachment types through the original messag
       writeFileSync(file.path, replacement);
       const changed = await fetchFile({ range: "bytes=1048576-", "if-range": tag });
       expect(changed.status).toBe(200); expect(changed.headers.get("etag")).not.toBe(tag);
-      expect(Buffer.from(await changed.arrayBuffer())).toEqual(replacement);
+      expect(Buffer.from(await changed.arrayBuffer()).equals(replacement)).toBe(true);
     }
   } finally { await fixture.close(); }
 }, hostTimeout(90_000));

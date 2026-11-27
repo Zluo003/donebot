@@ -50,6 +50,7 @@ test("the shipped Mac updater detects a newer gateway release over HTTP and reje
     updater.httpExecutor = new NodeHttpExecutor();
     updater.logger = { info() {}, warn() {}, error() {}, debug() {} };
     updater.autoDownload = false;
+    updater._testOnlyOptions = { platform: "darwin" };
     updater.setFeedURL(feed);
     const result = await updater.checkForUpdates();
     assert.equal(result.isUpdateAvailable, version === "0.1.0");

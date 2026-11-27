@@ -32,7 +32,7 @@ export interface AppStore<State, Action, Frame> {
   /** Applies the queued frames now, in order, as one change to subscribers. */
   flushFrames(): void;
   /** Sets what applies a frame; the returned stop drops the queue. */
-  handleFrames(handler: (frame: Frame) => void): () => void;
+  handleFrames(handler: (frame: Frame, flushId: number) => void): () => void;
 }
 
 export function createAppStore<State, Action, Frame>(
@@ -45,7 +45,8 @@ export function createAppStore<State, Action, Frame>(
   let held = 0;
   let changedWhileHeld = false;
   let queue: Frame[] = [];
-  let handler: ((frame: Frame) => void) | null = null;
+  let flushId = 0;
+  let handler: ((frame: Frame, flushId: number) => void) | null = null;
   let cancelScheduled: (() => void) | null = null;
 
   const notify = () => {
@@ -62,11 +63,12 @@ export function createAppStore<State, Action, Frame>(
     if (!apply || queue.length === 0) return;
     const frames = queue;
     queue = [];
+    const currentFlush = ++flushId;
     held++;
     try {
       for (const frame of frames) {
         try {
-          apply(frame);
+          apply(frame, currentFlush);
         } catch (error) {
           // One bad frame must not drop the frames after it, as it could not when each frame had its own task.
           queueMicrotask(() => { throw error; });

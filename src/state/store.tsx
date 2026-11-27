@@ -3093,16 +3093,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
     const hydrationFallback = setTimeout(hydrate, 1_000);
 
-    // One read per conversation at a time; an unread frame meanwhile asks for exactly one more once it finishes.
-    const readsInFlight = new Map<string, boolean>();
-    const sendRead = (botId: string, threadId: string | undefined, key: string): void => {
-      readsInFlight.set(key, false);
+    // One read per conversation at a time; an unread frame in a later flush asks for exactly one more once it finishes.
+    const readsInFlight = new Map<string, { again: boolean; flushId: number }>(); let currentFlushId = 0;
+    const sendRead = (botId: string, threadId: string | undefined, key: string, flushId: number): void => {
+      readsInFlight.set(key, { again: false, flushId });
       void fetch(`/api/bots/${botId}/read`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ threadId }) }).catch(() => {}).finally(() => {
-        const again = readsInFlight.get(key); readsInFlight.delete(key);
-        if (again && alive) sendRead(botId, threadId, key);
+        const entry = readsInFlight.get(key); readsInFlight.delete(key);
+        if (entry?.again && alive) sendRead(botId, threadId, key, -1);
       });
     };
-    const stopFrames = store.handleFrames((frame) => { handleFrame(frame); stateRef.current = store.getState(); });
+    const stopFrames = store.handleFrames((frame, flushId) => { currentFlushId = flushId; handleFrame(frame); stateRef.current = store.getState(); });
     handleFrame = (frame) => {
       if (frame.kind === "config") bumpPeripheralVersion("config", "instances");
       else if (frame.kind === "routine" || frame.kind === "routine.deleted" || frame.kind === "routine.run") {
@@ -3152,9 +3152,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const bot = frame.bot as BotAnnouncement;
           const selected = stateRef.current.bots.find((candidate) => candidate.id === bot.id);
           markVisibleBotThreadsRead(stateRef.current, bot, document.hasFocus(), (_path, threadId) => {
-            const read = `${bot.id}:${threadId}`;
-            if (readsInFlight.has(read)) readsInFlight.set(read, true);
-            else sendRead(bot.id, threadId, read);
+            const read = `${bot.id}:${threadId}`, inFlight = readsInFlight.get(read);
+            if (inFlight) { if (inFlight.flushId !== currentFlushId) inFlight.again = true; }
+            else sendRead(bot.id, threadId, read, currentFlushId);
           });
           if (frame.tasksPartial) bot.unread = unreadBeyondFrame(selected, bot);
           rawDispatch({

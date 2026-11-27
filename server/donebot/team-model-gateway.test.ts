@@ -231,8 +231,10 @@ it("persists queued actors without refreshing versions and refuses forged sessio
   expect(() => restarted.bind({ sourceId: "renewed-message", sourceIds: [fx.message.id], botId: "fixture-bot", threadId: "fixture-thread", audience: "team", generation: 1 })).toThrow();
   restarted.captureMessage("fixture-thread", { ...fx.message, id: "forged-message", sender: { ...fx.sender } });
   expect(() => restarted.bind({ sourceId: "forged-message", botId: "fixture-bot", threadId: "fixture-thread", audience: "team", generation: 1 })).toThrow();
-  await chmod(fx.coordinatorFile, 0o644);
-  expect(() => fx.gateway.coordinator()).toThrow("Private team state");
+  if (process.platform !== "win32") {
+    await chmod(fx.coordinatorFile, 0o644);
+    expect(() => fx.gateway.coordinator()).toThrow("Private team state");
+  }
 });
 
 it("carries provenance through the real native driver, separates reasoning, and never retries an uncertain team response", async () => {

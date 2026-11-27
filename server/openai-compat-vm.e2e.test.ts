@@ -147,6 +147,7 @@ beforeAll(async () => {
   ], {
     cwd: ROOT,
     env: {
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
       PATH: [fakebin, dirname(process.execPath), "/usr/bin", "/bin"].join(delimiter),
       HOME: fixtureHome, USERPROFILE: fixtureHome, DONEBOT_DATA_DIR: data,
       DONEBOT_AGENTS_TOOL_BRIDGE: "0",

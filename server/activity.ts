@@ -106,6 +106,7 @@ const TEAM_ACTION_KEYS: Record<string, string> = {
   list_threads: "activity.tool.team.listThreads",
   list_trigger_events: "activity.tool.team.listTriggerEvents",
   list_triggers: "activity.tool.team.listTriggers",
+  manage_department_instructions: "activity.tool.team.manageDepartmentInstructions",
   manage_room: "activity.tool.team.manageRoom",
   manage_trigger: "activity.tool.team.manageTrigger",
   mcp_server: "activity.tool.team.mcpServer",

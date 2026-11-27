@@ -46,7 +46,10 @@ function Probe() {
   return null;
 }
 let root: Root;
-const task = () => new Promise((resolve) => setTimeout(resolve, 0));
+const task = () => new Promise<void>((resolve) => {
+  if (typeof setImmediate === "function") setImmediate(resolve);
+  else setTimeout(resolve, 0);
+});
 const settle = async () => { for (let i = 0; i < 12; i++) await task(); };
 const paint = async () => {
   painting = true;

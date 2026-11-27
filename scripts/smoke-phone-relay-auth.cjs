@@ -4,7 +4,7 @@
 const { app, utilityProcess } = require("electron");
 const assert = require("node:assert/strict");
 const { randomBytes } = require("node:crypto");
-const { mkdtempSync, writeFileSync, rmSync } = require("node:fs");
+const { chmodSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { createServer } = require("node:net");
@@ -58,11 +58,18 @@ app.whenReady().then(async () => {
   const ports = new Set();
   while (ports.size < 4) ports.add(await freePort());
   const [harnessPort, webhookPort, phonePort, controlPort] = [...ports];
-  writeFileSync(join(home, "config.json"), JSON.stringify({ instances: {
-    claude: { driver: "claudeAgent", config: { cli: join(root, "server/testing/fake-claude-cli.ts") } },
-  } }));
+  const fakeBin = join(home, "bin");
+  mkdirSync(fakeBin, { recursive: true });
+  const fakeClaude = join(root, "server/testing/fake-claude-cli.ts");
+  if (process.platform === "win32") {
+    writeFileSync(join(fakeBin, "claude.cmd"), `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" --experimental-strip-types "${fakeClaude}" %*\r\n`);
+  } else {
+    const sh = join(fakeBin, "claude");
+    writeFileSync(sh, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" --experimental-strip-types "${fakeClaude}" "$@"\n`);
+    chmodSync(sh, 0o755);
+  }
   const env = {
-    HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: home, PATH: "",
+    HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: home, PATH: fakeBin, DONEBOT_TEST_SEALED_PATH: "1",
     ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
     DONEBOT_PORT: String(harnessPort), DONEBOT_WEBHOOK_PORT: String(webhookPort),
     DONEBOT_COMPANION_PORT: String(phonePort), DONEBOT_CONTROL_PORT: String(controlPort),
@@ -90,7 +97,7 @@ app.whenReady().then(async () => {
   })).status, 403);
   sidecar.postMessage({ type: "donebot:companion-mutation-token", token: relay });
   await until(async () => (await phone("/api/bots")).status === 200);
-  const created = await phone("/api/bots", "POST", { modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } }, {
+  const created = await phone("/api/bots", "POST", { modelSelection: { instanceId: "coding-claude", model: "claude-sonnet-5" } }, {
     "x-donebot-companion-auth": "forged", "x-donebot-desktop-owner": "forged",
     "x-donebot-companion-device": "forged-device",
   });

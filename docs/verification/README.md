@@ -112,6 +112,7 @@ Use only mapped, tested commands:
 - [模板附带技能脚本](template-skill-files.md)
 - [文件夹与私有 GitHub 模板](template-folders.md)
 - [团队共享文件接口](team-files.md)
+- [团队模板库](team-templates.md)
 - [The organization library](org-library.md)
 - [Preset bots](presets.md)
 - [Teams and shared instructions](teams.md)

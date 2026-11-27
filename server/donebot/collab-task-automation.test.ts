@@ -600,7 +600,7 @@ describe("team task bot automation", () => {
       availableSpecialists: [],
       targetIsChief: true,
     });
-    expect(promptAutoSubmit.full).toContain("已开启（一审通过后可直接代主人自动提交团队验收）");
+    expect(promptAutoSubmit.full).toContain("已开启（一审通过后可直接代本人自动提交团队验收）");
 
     // Reviewer Chief Bot second-pass prompt must forbid final approval (done) / human_decision.
     const submittedEvent: DoneBotClaimedTaskBotEvent = {

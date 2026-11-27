@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const fixture = vi.hoisted(() => ({ api: vi.fn(), config: {} as Record<string, unknown> }));
 vi.mock("@/state/api", () => ({ api: fixture.api }));
-vi.mock("@/state/store", () => ({ useStore: () => ({ state: { config: fixture.config } }) }));
+vi.mock("@/state/store", () => ({ useStore: () => ({ state: { config: fixture.config }, dispatch: vi.fn() }) }));
 vi.mock("@/components/DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({ capabilities: { windowChrome: "native" } }) }));
 vi.mock("./MediaSettings", () => ({ DoneBotMediaSettingsPanel: () => "Fixture media preferences" }));
 const { DoneBotAccountGate, DoneBotAccountSettings } = await import("./Account");
@@ -25,7 +25,7 @@ it("keeps account and media preferences cleanly separated from Cloud and team pa
   expect(host.textContent).toContain("Fixture media preferences");
   expect(host.textContent).not.toContain("可用模型");
   expect(host.textContent).not.toContain("刷新模型");
-  expect(fixture.api.mock.calls.map(([path]) => path)).toEqual(["/api/donebot/account"]);
+  expect(fixture.api.mock.calls.map(([path]) => path)).toEqual(["/api/donebot/account", "/api/donebot/collab/profile"]);
 });
 it("retains account error feedback after the model list is removed", async () => {
   fixture.api.mockRejectedValue(new Error("隔离测试：账号同步失败"));

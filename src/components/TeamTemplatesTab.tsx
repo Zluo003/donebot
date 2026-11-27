@@ -6,6 +6,7 @@ import { api } from "@/state/store";
 import type { TeamTemplate } from "../../shared/team-templates";
 import type { TemplateScope } from "../../shared/share-folder";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Select } from "./Select";
 
 export interface TeamTemplatePublishTarget {
   slug: string;
@@ -135,15 +136,15 @@ export function TeamTemplatesTab({
               <input value={slug} maxLength={48} disabled={replacing !== null} onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} placeholder="support-team" className="mt-1 w-full rounded-lg border border-hairline/50 bg-inset px-3 py-2 text-[13px] text-ink" />
             </label>
             <label className="text-[12px] text-ink-secondary">{t("teamTemplates.sourceTeam")}
-              <select value={selectedTeam} onChange={(event) => setSelectedTeam(event.target.value)} disabled={teams.length === 0} className="mt-1 w-full rounded-lg border border-hairline/50 bg-inset px-3 py-2 text-[13px] text-ink">
+              <Select value={selectedTeam} onChange={(event) => setSelectedTeam(event.target.value)} disabled={teams.length === 0} className="mt-1 w-full">
                 {sourceTeams.map((team) => <option key={team.name || "general"} value={team.name}>{team.name || t("teamLibrary.general")} · {team.bots}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="text-[12px] text-ink-secondary">{t("teamTemplates.scope")}
-              <select value={scope} disabled={replacing !== null} onChange={(event) => setScope(event.target.value as TemplateScope)} className="mt-1 w-full rounded-lg border border-hairline/50 bg-inset px-3 py-2 text-[13px] text-ink">
+              <Select value={scope} disabled={replacing !== null} onChange={(event) => setScope(event.target.value as TemplateScope)} className="mt-1 w-full">
                 <option value="department">{t("teamTemplates.scope.department")}</option>
                 {botScopeAllowed && <option value="bot">{t("teamTemplates.scope.bot")}</option>}
-              </select>
+              </Select>
             </label>
             <div className="flex items-end gap-2">
               <button onClick={replacing ? replaceTemplate : publish} disabled={sourceTeams.length === 0 || (replacing === null && !/^[a-z0-9][a-z0-9-]{0,47}$/.test(slug.trim().toLowerCase()))} className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-white hover:bg-accent/90 disabled:opacity-40">

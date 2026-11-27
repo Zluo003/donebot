@@ -4,6 +4,7 @@ import { ChatProtocolError, ChatReasoningDetails, ChatToolCalls, object } from "
 import { readResponsesStream, responsesRequest, type ResponseItem } from "../drivers/openai-responses.ts";
 import { isGpt62 } from "./capabilities.ts";
 import { TaggedReasoning } from "./llm-reasoning.ts";
+import { TeamModelRequestHeld } from "./team-model-gateway.ts";
 import type { TeamModelRequestContext } from "./team-requests.ts";
 
 export type DoneBotLlmProtocol = "messages" | "gemini" | "responses" | "chat";
@@ -523,7 +524,7 @@ export function createDoneBotCompletion(request: DoneBotLlmRequest, protocolOf: 
       response = await (input.teamExecution ? request(path, init, input.teamExecution) : request(path, init));
     } catch (error) {
       input.signal.throwIfAborted();
-      if (error instanceof ChatProtocolError || (error instanceof Error && error.name === "AbortError")) throw error;
+      if (error instanceof ChatProtocolError || error instanceof TeamModelRequestHeld || (error instanceof Error && error.name === "AbortError")) throw error;
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(`DoneBot gateway connection failed: ${detail}`, error instanceof Error ? { cause: error } : undefined);
     }

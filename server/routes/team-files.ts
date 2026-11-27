@@ -6,6 +6,8 @@ import { teamFileName, teamFilePath, TeamFilesError, type TeamFileEntry, type Te
 import { PASS, type RouteContext, type RouteHandler } from "./table.ts";
 
 export const TEAM_FILES_PATH = "/api/team-files";
+const TEAM_FILES_FILE_PATH = "/api/team-files/file";
+const TEAM_FILES_FOLDER_PATH = "/api/team-files/folder";
 
 export interface TeamFilesRouteDeps {
   files: TeamFiles | null;
@@ -68,7 +70,7 @@ export function createTeamFilesRoutes(deps: TeamFilesRouteDeps): RouteHandler {
           used: files.used(), cap: files.cap, uploadMax: files.uploadMax, admin: actor.admin,
         });
       }
-      if (path === `${TEAM_FILES_PATH}/file` && method === "GET") {
+      if (path === TEAM_FILES_FILE_PATH && method === "GET") {
         const file = teamFilePath(url.searchParams.get("path") ?? "");
         if (!file) return json(res, 400, { error: "That isn't a file in team files.", code: "bad_path" });
         const opened = files.open(file);
@@ -82,7 +84,7 @@ export function createTeamFilesRoutes(deps: TeamFilesRouteDeps): RouteHandler {
         await pipeline(files.stream(opened.fd), res).catch(() => {});
         return;
       }
-      if (path === `${TEAM_FILES_PATH}/file` && method === "PUT") {
+      if (path === TEAM_FILES_FILE_PATH && method === "PUT") {
         const folder = teamFilePath(url.searchParams.get("path") ?? "");
         const name = teamFileName(url.searchParams.get("name") ?? "");
         if (folder === null || !name) { req.resume(); return json(res, 400, { error: "Name the file and the folder it goes in.", code: "bad_path" }); }
@@ -96,7 +98,7 @@ export function createTeamFilesRoutes(deps: TeamFilesRouteDeps): RouteHandler {
       const body = await readBody(req) as Record<string, unknown> | null;
       assertActor();
       if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !(path.endsWith("/rename") ? ["from", "to"] : ["path"]).includes(key))) return json(res, 400, { error: "send a JSON object with only the file path", code: "bad_path" });
-      if (path === `${TEAM_FILES_PATH}/folder`) {
+      if (path === TEAM_FILES_FOLDER_PATH) {
         const folder = teamFilePath(body.path);
         if (!folder) return json(res, 400, { error: "Name the new folder.", code: "bad_path" });
         files.folder(folder, actor);

@@ -89,6 +89,10 @@ export function teamRuntimeActor(runtime: DoneBotTeamRuntime, session: SessionRe
 }
 
 /** Team shells cannot read shared HTTP data using loopback trust; internal routes still require their own turn capabilities. */
+export function teamRuntimeHealthPath(method: string, path: string): boolean {
+  return method === "GET" && path === "/api/health";
+}
+
 export function teamRuntimePublicPath(method: string, path: string): boolean {
-  return method === "GET" && path === "/api/health" || path.startsWith("/api/internal/");
+  return teamRuntimeHealthPath(method, path) || path.startsWith("/api/internal/");
 }

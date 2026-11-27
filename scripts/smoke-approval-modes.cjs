@@ -96,6 +96,7 @@ app.whenReady().then(async () => {
     execArgv: ["--experimental-strip-types"],
     env: {
       HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: home, PATH: "",
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(webhookPort),
       DONEBOT_TEST_INTERNAL_CAPABILITY_KEY: testCapabilityKey,

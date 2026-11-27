@@ -49,6 +49,8 @@ export class LocalVmWorld extends BaseWorld {
     const port = await freePortBlock([0, 1]);
     const hooks = pathToFileURL(join(ROOT, "server", "testing", "group-local-vm-hooks.mjs")).href;
     const env: NodeJS.ProcessEnv = {
+      NODE_ENV: "test",
+      DONEBOT_UPSTREAM_FIXTURE: "1",
       PATH: dirname(process.execPath),
       HOME: this.fixtureHome,
       USERPROFILE: this.fixtureHome,

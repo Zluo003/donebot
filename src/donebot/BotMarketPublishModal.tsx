@@ -10,6 +10,7 @@ import type {
   MarketLocalBotOption,
 } from "../../shared/donebot-market";
 import { BotAvatar } from "@/components/Avatar";
+import { Select } from "@/components/Select";
 import { cn } from "@/lib/cn";
 import { marketApi, marketStatusMeta, safeMarketColor } from "./market-api";
 import { opcApi } from "./opc-api";
@@ -468,16 +469,16 @@ export function BotMarketPublishModal({
                 </div>
                 <div>
                   <label className="mb-1 block text-[12.5px] font-medium text-ink">分类 *</label>
-                  <select
+                  <Select
                     value={categoryId}
                     onChange={e => setCategoryId(Number(e.target.value))}
-                    className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                    className="w-full"
                     required
                   >
                     {categories.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
@@ -530,15 +531,15 @@ export function BotMarketPublishModal({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-[12.5px] font-medium text-ink">预估算力档位</label>
-                  <select
+                  <Select
                     value={costTier}
                     onChange={e => setCostTier(e.target.value as MarketCostTier)}
-                    className="w-full rounded-xl border border-hairline bg-app px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                    className="w-full"
                   >
                     <option value="light">省流（轻量文本为主）</option>
                     <option value="standard">标准算力（常规多步任务）</option>
                     <option value="heavy">高算力（重度生图 / 视频 / 深度调研）</option>
-                  </select>
+                  </Select>
                 </div>
                 {evalSamples.length > 0 && (
                   <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[12px]">

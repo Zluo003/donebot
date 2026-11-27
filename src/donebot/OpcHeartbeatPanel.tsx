@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { OpcHeartbeatConfig } from "../../shared/donebot-opc";
 import { cn } from "@/lib/cn";
+import { Select } from "@/components/Select";
 import { Switch } from "@/components/SettingsPrimitives";
 import type { Bot } from "@/state/store";
 import { opcApi } from "./opc-api";
@@ -205,13 +206,13 @@ export function OpcHeartbeatPanel({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1">
               <span className="text-[12px] font-medium text-ink-secondary">值班员工</span>
-              <select
+              <Select
                 value={botId}
                 onChange={(e) => setBotId(e.target.value)}
-                className="w-full rounded-xl border border-hairline/70 bg-panel px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                className="w-full"
               >
                 {bots.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="block space-y-1">
               <span className="text-[12px] font-medium text-ink-secondary">巡检名称</span>

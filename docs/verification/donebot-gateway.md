@@ -67,7 +67,7 @@ donebot-api 网页专项 7 项、vue-tsc 及修改文件 ESLint 通过。主控�
 验证运行租约、HTTP、网页会话 Cookie 和已有 WebSocket 在续费切换后继续可用，
 并验证到期停机、保留期和回收。迁移 269 专项验证旧取消状态只恢复未退款的
 付费订阅及运行意图，不恢复已退款服务、不增加扣款。具体命令和范围见
-[Cloud 验证记录](../../../DoneBot-Cloud/docs/verification.md)。
+`DoneBot-Cloud/docs/verification.md`。
 
 本轮没有访问生产账号、余额或实例，也没有部署网关或重新打包客户端。
 生效需要发布包含迁移 269 的网关后端、网页前端和新版客户端；节点生产协议不变。

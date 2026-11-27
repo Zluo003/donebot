@@ -34395,7 +34395,8 @@
       "teamFiles.error.notFound": "94dc31e46a9f6aadcc1ff1ca71dc3a1bd87dfcb4fd371997d7a797de1b9667a5",
       "teamFiles.error.badName": "b750786a0a3f9c715e0761efa4e2ea022ff0a073e732b57f0f8a6bde6484de70",
       "teamFiles.error.failed": "d010a8621f3358d1491856e8ce9da938f4e64d596f8fbdd240ee36b3972485c0",
-      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f"
+      "teamFiles.previewLoading": "c4cf2b2ccb5d8dec9a0412c84a7c04c739ff0b298eb83d02bd8cabde8663dd7f",
+      "native.menu.openDoneBotCloud": "88363846674542694a81e65a2476399a0654fcc69f9f6b358579767a5c12388d"
     },
     "zh": {
       "pro.fromPrice": "94c0c0e32bdb7d8f78bc03cc85ead1d08d8ca37b1f4959d867fba51bb8341401",

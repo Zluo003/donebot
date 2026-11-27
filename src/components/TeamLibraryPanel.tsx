@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { catalogCopy, catalogMatches, type TeamCatalog, type TeamCatalogEntry } from "@/lib/team-catalog";
 
+import { Select } from "./Select";
 import { TEAM_GLYPHS, TeamImportDetails } from "./TeamImportDetails";
 import { ReadyBotGallery } from "./ReadyBotGallery";
 import { ShareTeamDialog } from "./ShareTeamDialog";
@@ -854,10 +855,10 @@ export function TeamLibraryPanel({
                       </label>
                       {privateGithub && <label className="mt-3 block text-[13px] text-ink-secondary">
                         {t("templates.githubAccount")}
-                        <select aria-label={t("templates.githubAccount")} value={githubAccount} disabled={accountsLoading || githubLoading} onChange={event => setGithubAccount(event.target.value)} className="mt-1 block w-full rounded-lg border border-border bg-card p-2 text-ink">
+                        <Select aria-label={t("templates.githubAccount")} value={githubAccount} disabled={accountsLoading || githubLoading} onChange={event => setGithubAccount(event.target.value)} className="mt-1 w-full">
                           <option value="">{accountsLoading ? t("templates.loadingShort") : t("templates.chooseGithubAccount")}</option>
                           {githubAccounts.map(account => <option key={account.id} value={account.id}>{account.alias || account.id}</option>)}
-                        </select>
+                        </Select>
                         {!accountsLoading && githubAccounts.length === 0 && <span className="mt-2 block">{t("templates.connectGithubFirst")}</span>}
                       </label>}
                     </div>

@@ -4,6 +4,7 @@ import type { OpcOrgChartState, OpcOrgNodeConfig } from "../../shared/donebot-op
 import { validateOrgReportsTo } from "../../shared/donebot-opc-org-sync";
 import { BotAvatar } from "@/components/Avatar";
 import { openBotSettings } from "@/components/bot-panel/panel-link";
+import { Select } from "@/components/Select";
 import { Switch } from "@/components/SettingsPrimitives";
 import { openBot, useStore, type Bot } from "@/state/store";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -102,19 +103,20 @@ export function OpcOrgInspector({
         <div className="space-y-3 border-t border-hairline/40 pt-4">
           <label className="block space-y-1.5">
             <span className="text-[11.5px] font-medium text-ink-tertiary">所属部门</span>
-            <select
+            <Select
               value={botSection}
               disabled={saving}
               onChange={e => {
                 const nextSection = e.target.value;
                 if (nextSection !== botSection) void onMoveDepartment(bot, nextSection);
               }}
-              className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[12.5px] text-ink outline-none focus:border-ink/40"
+              size="sm"
+              className="w-full"
             >
               {sectionOptions.map(opt => (
                 <option key={opt.key || "__general__"} value={opt.key}>{opt.label}</option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <div className="flex items-center justify-between gap-3">
@@ -141,7 +143,7 @@ export function OpcOrgInspector({
           <label htmlFor={reportsSelectId} className="block text-[11.5px] font-medium text-ink-tertiary">
             直属上级（汇报对象 · 支持部门内多级）
           </label>
-          <select
+          <Select
             id={reportsSelectId}
             aria-describedby={reportsHelpId}
             value={cfg.reportsToBotId ?? BOSS_ROOT_ID}
@@ -150,7 +152,8 @@ export function OpcOrgInspector({
               const val = e.target.value === BOSS_ROOT_ID ? null : e.target.value;
               void onUpdateNode(bot.id, { reportsToBotId: val });
             }}
-            className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[12.5px] text-ink outline-none focus:border-ink/40"
+            size="sm"
+            className="w-full"
           >
             <option value={BOSS_ROOT_ID} disabled={Boolean(bossRefusal)}>
               你（直接汇报）{bossRefusal ? " · 须归属部门负责人下级" : ""}
@@ -172,7 +175,7 @@ export function OpcOrgInspector({
                 </option>
               );
             })}
-          </select>
+          </Select>
           <p id={reportsHelpId} className="text-[11.5px] leading-relaxed text-ink-tertiary">
             {reportsHelpText}
           </p>

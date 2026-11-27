@@ -159,9 +159,9 @@ test("the Cloud entry checks the owned server, waits for the saved sign-in, and 
 
 test("Add a Cloud… is always the sheet on this computer's page, never a native box: the sheet says setting up or one Cloud for now", () => {
   const add = between("async function openCloudAdd(source)", "\n}\n");
-  assert.ok(add.indexOf("if (!cloudOffersAllowed() || !serverReady) return;") < add.indexOf("await cloudAccountRestored();"));
-  const restored = add.indexOf("await cloudAccountRestored();");
-  for (const action of ["persistEnvironments(", "createWindow(", "win.webContents.send(", "win.loadURL("]) assert.ok(add.indexOf(action) > restored, `${action} after the restore`);
+  const guard = add.indexOf("if (desktopRemoteAccess || !serverReady) return;");
+  assert.ok(guard !== -1, "openCloudAdd guards remote companion mode and server readiness");
+  for (const action of ["persistEnvironments(", "createWindow(", "win.webContents.send(", "win.loadURL("]) assert.ok(add.indexOf(action) > guard, `${action} after the guard`);
   assert.doesNotMatch(add, /dialog\.|anotherCloudBox|cloudOwned/);
   assert.equal(main.includes("You already have My Cloud"), false, "the native box is gone");
   assert.ok(add.indexOf("persistEnvironments(withActive(environmentsState, LOCAL_ID))") < add.indexOf("win.webContents.send("));

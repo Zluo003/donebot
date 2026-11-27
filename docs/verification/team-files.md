@@ -19,7 +19,7 @@
 ```sh
 pnpm exec vitest run server/host/team-files.test.ts server/host/team-files.concurrent.test.ts server/donebot/team-files.test.ts server/routes/team-files.test.ts server/request-auth.test.ts server/donebot-team-files.e2e.test.ts server/workspace-backup-policy.test.ts
 pnpm exec tsc -p tsconfig.server.json
-pnpm exec oxlint --deny-warnings server/host/team-files.ts server/host/team-files.test.ts server/host/team-files.concurrent.test.ts server/routes/team-files.ts server/routes/team-files.test.ts server/donebot/team-files.ts server/donebot/team-files.test.ts server/donebot-team-files.e2e.test.ts server/index.ts server/request-auth.ts scripts/control-omb.ts shared/team-files.ts
+pnpm exec oxlint --deny-warnings server/host/team-files.ts server/host/team-files.test.ts server/host/team-files.concurrent.test.ts server/routes/team-files.ts server/routes/team-files.test.ts server/donebot/team-files.ts server/donebot/team-files.test.ts server/donebot-team-files.e2e.test.ts server/index.ts server/request-auth.ts shared/team-files.ts scripts/control-omb.ts
 ```
 
 真实服务流程通过 `launchVerificationServer` 建立临时 home/data、合成网关和 Ed25519 签名，覆盖 Owner/Admin/两名 Member、另一团队及默认关闭的第三个实例。验证原始脚本字节下载且不执行、配额、非法路径、角色注入、归属、管理员模板和关闭时不创建数据目录。服务关闭后保留 `.team-files.json` 回执及日志。

@@ -11,7 +11,7 @@ import { rm as removeDirectory } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { finishStartedResponse } from "./donebot/http-failure.ts";
 import { ToolResults, TOOL_RESULT_MAX_CHARS } from "./tool-results.ts";
-import { basename, isAbsolute, join } from "node:path";
+import { basename, join } from "node:path";
 import { authorizeExternalRuntime, externalRuntimeIsActive, type ExternalRuntimeGrant } from "./external-runtime.ts";
 import { z } from "zod";
 import { selectReplay, replayToolCalls, DEFAULT_REBUILD_BYTES } from "./context-rebuild.ts";
@@ -76,7 +76,7 @@ import { doneBotConfigRefusal, doneBotModelRoutes } from "./donebot/model-policy
 import { doneBotCredentialRefusal } from "./donebot/credential-policy.ts";
 import { createDoneBotRuntimeHost } from "./donebot/runtime-host.ts";
 import { createDoneBotDesktopHost } from "./donebot/desktop-host.ts";
-import { DONEBOT_TEAM_LENDING, teamRuntimeActor, teamRuntimeConfiguration, teamRuntimePublicPath, teamRuntimeSession, teamRuntimeSessionLive, teamSharedComputersEnabled } from "./donebot/team-runtime.ts";
+import { DONEBOT_TEAM_LENDING, teamRuntimeActor, teamRuntimeConfiguration, teamRuntimeHealthPath, teamRuntimePublicPath, teamRuntimeSession, teamRuntimeSessionLive, teamSharedComputersEnabled } from "./donebot/team-runtime.ts";
 import { createDoneBotTeamFiles } from "./donebot/team-files.ts"; import { createDoneBotCollabRoutes, handleDoneBotCollabInternal } from "./donebot/collab-routes.ts"; import { createDoneBotMarketRoutes } from "./donebot/market-routes.ts"; import { createDoneBotCodingAgentRoutes, externalCodingAgentSwitchRefusal } from "./donebot/coding-agents.ts"; import { DoneBotOpcStore } from "./donebot/opc-store.ts"; import { createDoneBotOpcRoutes } from "./donebot/opc-routes.ts"; import { DoneBotOrgWorkflowStore, createDoneBotOrgWorkflowRoutes } from "./donebot/opc-org-workflow.ts"; import { createWorkflowTurnRunner } from "./donebot/opc-workflow-runner.ts"; import { handleDoneBotOpcWorkflowInternal } from "./donebot/opc-workflow-tools.ts";
 import { createTeamFilesRoutes } from "./routes/team-files.ts";
 import { createTeamTemplateRoutes } from "./routes/team-templates.ts";
@@ -411,9 +411,7 @@ import {
   undoSkillWrite,
 } from "./skills.ts";
 import { fetchSkillFromSource } from "./skill-fetch.ts";
-import { discoverSkills } from "./skill-discovery.ts";
-import { fetchLocalSkill } from "./skill-import-local.ts";
-import { skillImportSummary } from "./skill-folder.ts";
+import { createInternalSkillImportRoutes } from "./routes/internal-skill-import.ts";
 import { ensureTaskWorkspaceWithSkills, harnessSkillLinks } from "./skill-task-links.ts"; import { changedWords, createLendingLifts, handedInSince } from "./host/lending-lifts.ts"; import { deviceWord } from "./lent-computers.ts";
 import { importedSkillRequest, parseSkillManageReferences, previousSkillVersion, skillCardCopy, skillRequestReferences } from "./skill-request-card.ts";
 import { skillReferencesSha256 } from "./skill-storage.ts";
@@ -640,7 +638,7 @@ import { createHandoffStatus } from "./host/handoff-status.ts";
 import { createCheckBacks, type CheckBackRecord } from "./host/check-backs.ts";
 import { writeCheckBackLine } from "./host/check-back-host.ts";
 import { checkBackRefusal, createCheckBackRoutes, createCheckBackToolRoutes } from "./routes/check-backs.ts";
-import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalDepartmentInstructionsRoutes } from "./routes/internal-department-instructions.ts"; import { buildCoordinatorSkillFindPayload, collectInternalRoomsPayload, createTeamSetupDepartmentHooks, fillTeamSetupDefaultModels, resolveCreateBotDepartment, resolveCreateRoomTarget } from "./host/coordinator-departments.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
+import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalDepartmentInstructionsRoutes } from "./routes/internal-department-instructions.ts"; import { collectInternalRoomsPayload, createTeamSetupDepartmentHooks, fillTeamSetupDefaultModels, resolveCreateBotDepartment, resolveCreateRoomTarget } from "./host/coordinator-departments.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
 import { createRoomHoldRoutes } from "./routes/room-holds.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
@@ -12792,7 +12790,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
   }
   const path = url.pathname;
   const method = req.method ?? "GET"; cloudPower?.arrived(path, req.headers); // a Cloud home's first request after a wake: what woke it
-  if (DONEBOT_TEAM_RUNTIME && method === "GET" && path === "/api/health") {
+  if (DONEBOT_TEAM_RUNTIME && teamRuntimeHealthPath(method, path)) {
     const ready = teamIsolationReady();
     res.setHeader("cache-control", "no-store");
     return json(res, ready ? 200 : 503, { app: "donebot", team_protocol: "donebot.teams.v1", ready });
@@ -13841,53 +13839,14 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           task: store.taskByThread(from.id, threadId)?.title,
         });
       }
-      if (method === "POST" && (path === "/api/internal/skills/find" || path === "/api/internal/skills/import")) {
-        if (!skillAuthoringEnabled(cfg) || !internalCapability.skillAuthoring) return json(res, 403, { error: "skill authoring is not enabled for this turn" });
-        const from = internalSender;
-        const threadId = internalCapability.threadId;
-        if (!connectorThread(from.id, threadId)) return json(res, 403, { error: "source conversation does not belong to sender" });
-        const body = await readInternalBody();
-        const target = skillTarget(from, body.bot_id);
-        if ("error" in target) return json(res, 403, target);
-        if (path.endsWith("/find")) {
-          if (typeof body.query !== "string" || !body.query.trim() || body.query.length > 300 || (body.online !== undefined && typeof body.online !== "boolean")) return json(res, 400, { error: "query must contain 1–300 characters and online must be a boolean" });
-          const result = await discoverSkills(body.query.trim(), listBotSkills(target), body.online !== false);
-          requireActiveInternalCapability();
-          if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
-          const current = skillTarget(internalSender, target.id);
-          if ("error" in current) return json(res, 403, current);
-          return json(res, 200, { botId: target.id, botName: target.name, ...buildCoordinatorSkillFindPayload(internalSender, target, result) });
-        }
-        if (typeof body.source !== "string" || !body.source.trim() || body.source.length > 2000 || (body.preview !== undefined && typeof body.preview !== "boolean")) return json(res, 400, { error: "source must be a skill URL or local path, and preview must be a boolean" });
-        const source = body.source.trim();
-        const roots = messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR);
-        const attached = store.messagesFor(threadId).flatMap((message) => message.attachments?.map((file) => file.path) ?? []);
-        const fetched = isAbsolute(source) ? fetchLocalSkill(source, roots, attached) : await fetchSkillFromSource(source, fetch, callSignal);
-        requireActiveInternalCapability();
-        if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
-        const current = skillTarget(internalSender, target.id);
-        if ("error" in current) return json(res, 403, current);
-        if ("error" in fetched) return json(res, 422, fetched);
-        const summaries = fetched.skills.map((skill) => {
-          const text = skill.files.find((file) => file.path === "SKILL.md")?.content.toString("utf8") ?? "";
-          const parsed = parseSkillMd(text);
-          return { source: skill.source, ...(skill.github ? { github: skill.github } : {}),
-            error: "error" in parsed ? parsed.error : undefined,
-            description: "error" in parsed ? undefined : parsed.description, skill_md: text,
-            ...skillImportSummary("error" in parsed ? "invalid" : parsed.name, skill.files, skill.skipped) };
-        });
-        if (body.preview !== false) return json(res, 200, { botId: target.id, botName: target.name, preview: true, skills: summaries });
-        if (fetched.skills.length !== 1) return json(res, 422, { error: "Select one specific skill folder or skills.sh skill URL before installing.", skills: summaries });
-        const skill = fetched.skills[0]!;
-        const name = summaries[0]!.name;
-        if (summaries[0]!.error) return json(res, 422, { error: summaries[0]!.error });
-        if (name && listBotSkills(current).some((entry) => entry.name === name && entry.source.startsWith("builtin:"))) return json(res, 409, { error: "This skill is built into the Chief and cannot be replaced." });
-        const installed = installSkill(current.id, skill.source, skill.files, skill.github);
-        if ("error" in installed) return json(res, 422, installed);
-        return json(res, 201, { botId: current.id, botName: current.name, installed, enabled: false,
-          imported: skillImportSummary(installed.name, skill.files, skill.skipped),
-          summary: `Imported ${installed.name} into ${current.name}, disabled. Enable it with skill_manage using this same bot_id.` });
-      }
+      if (await dispatchRoutes([createInternalSkillImportRoutes({
+        sender: internalSender, threadId: internalCapability.threadId, skillAuthoring: Boolean(internalCapability.skillAuthoring),
+        skillAuthoringEnabled: () => skillAuthoringEnabled(cfg), ownsThread: (botId, threadId) => Boolean(connectorThread(botId, threadId)),
+        readInternalBody, requireActive: requireActiveInternalCapability, skillTarget, listBotSkills,
+        messageFileRoots: (botId, threadId) => messageFileRootsForThread(botId, threadId).filter((root) => root !== ATTACHMENTS_DIR),
+        attachedPaths: (threadId) => store.messagesFor(threadId).flatMap((message) => message.attachments?.map((file) => file.path) ?? []),
+        signal: callSignal,
+      })], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "GET" && path === "/api/internal/skills") {
         if (!skillAuthoringEnabled(cfg)) return json(res, 403, { error: "skill authoring is not enabled in Settings" });
         if (!internalCapability.skillAuthoring) return json(res, 403, { error: store.groupByThread(internalCapability.threadId) ? roomSkillsRefusal(Boolean(internalCapability.roomHandoffId)) : "skill authoring is not enabled for this turn" });

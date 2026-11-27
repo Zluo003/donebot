@@ -65,7 +65,7 @@ try {
   cpSync(join(process.env.DONEBOT_SMOKE_DIST ? dirname(resolve(process.env.DONEBOT_SMOKE_DIST)) : root, "skills"), join(staging, "skills"), { recursive: true });
   mkdirSync(join(home, ".donebot"), { mode: 0o700 });
   writeFileSync(join(home, ".donebot", "bots.json"), JSON.stringify([{
-    id: skillBotId, threadId: randomUUID(), name: "Bundled skills fixture", section: "Package smoke", chiefOfStaff: true,
+    id: skillBotId, threadId: randomUUID(), name: "Bundled skills fixture", section: "", chiefOfStaff: true,
     color: "blue", modelSelection: { instanceId: "", model: "" }, soul: "Verify local bundled skills.",
     createdAt: Date.now(), busy: false, activity: "idle", autoApprove: false, approvalMode: "ask", tasks: [], resumeCursors: {},
   }]), { mode: 0o600 });

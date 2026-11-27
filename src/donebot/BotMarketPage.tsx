@@ -22,6 +22,7 @@ import type {
   MarketListingType,
 } from "../../shared/donebot-market";
 import { BotAvatar } from "@/components/Avatar";
+import { Select } from "@/components/Select";
 import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/state/store";
@@ -297,14 +298,15 @@ export function BotMarketPage() {
                       className="w-52 rounded-xl border border-hairline bg-card py-1.5 pl-8 pr-3 text-[12.5px] text-ink outline-none focus:border-accent"
                     />
                   </form>
-                  <select
+                  <Select
                     value={sort}
                     onChange={e => setSort(e.target.value as "installs" | "newest")}
-                    className="rounded-xl border border-hairline bg-card px-2.5 py-1.5 text-[12.5px] text-ink outline-none"
+                    size="sm"
+                    className="shrink-0"
                   >
                     <option value="installs">按热门安装</option>
                     <option value="newest">按最新发布</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 

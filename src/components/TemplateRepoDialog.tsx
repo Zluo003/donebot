@@ -5,6 +5,7 @@ import { t } from "@/lib/i18n";
 import { api } from "@/state/store";
 import type { PackageDocument } from "../../shared/package-format";
 import type { TemplatePublication } from "../../shared/template-publication";
+import { Select } from "./Select";
 
 export function TemplateRepoDialog({ document: template, returnFocus, onClose }: { document: PackageDocument; returnFocus: RefObject<HTMLElement | null>; onClose(): void }) {
   const dialog = useRef<HTMLDivElement>(null);
@@ -86,10 +87,10 @@ export function TemplateRepoDialog({ document: template, returnFocus, onClose }:
         </header>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-5 text-[13px]">
           {!review ? <fieldset disabled={busy} className="space-y-3">
-            <label className="block">{t("templates.githubAccount")}<select value={account} onChange={event => setAccount(event.target.value)} className={field}>
+            <label className="block">{t("templates.githubAccount")}<Select value={account} onChange={event => setAccount(event.target.value)} className="mt-1 w-full">
               <option value="">{t("templates.chooseGithubAccount")}</option>
               {accounts.map(item => <option key={item.id} value={item.id}>{item.alias || item.id}</option>)}
-            </select></label>
+            </Select></label>
             <label className="block">{t("templateRepo.repository")}<input value={repository} maxLength={300} placeholder="owner/repository" onChange={event => setRepository(event.target.value)} className={field} /></label>
             <label className="block">{t("templateRepo.folder")}<input value={folder} maxLength={600} onChange={event => setFolder(event.target.value)} className={field} /></label>
             <label className="flex items-start gap-2"><input type="checkbox" checked={direct} onChange={event => setDirect(event.target.checked)} className="mt-0.5 accent-accent" />{t("templateRepo.direct")}</label>

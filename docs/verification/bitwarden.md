@@ -14,7 +14,7 @@ node scripts/generate-locale.mjs --check
 
 覆盖固定下载大小/摘要、进程环境隔离、错误信息脱敏、名称歧义、各类字段、会话过期、连接替换、取消和撤权竞态。真实加密存储和 MCP 缓存流程验证重启后的引用及重连后的失效。磁盘保存失败不能留下候选账号的元数据或解锁会话。
 
-`bitwarden-workflow.e2e.test.ts` 启动真实临时服务，安装独立 fake CLI，通过真实路由和注入的 `request_credential` 工具完成连接、引用、重启、断开。公共响应、服务日志和引擎转录不得包含合成凭据 canary。测试写出 `*.bitwarden.json` 证据，并在结束时清理临时数据和子进程。
+`server/bitwarden-workflow.e2e.test.ts` 启动真实临时服务，安装独立 fake CLI，通过真实路由和注入的 `request_credential` 工具完成连接、引用、重启、断开。公共响应、服务日志和引擎转录不得包含合成凭据 canary。测试写出 `*.bitwarden.json` 证据，并在结束时清理临时数据和子进程。
 
 2026-11-21：主回归 14 文件 / 201 项通过，1 项因大小写不敏感文件系统跳过；相邻回归 3 文件 / 53 项通过。类型、定向 lint 和 16 个语言目录校验通过。日志为 `/tmp/donebot-bitwarden-regression-final.log`、`/tmp/donebot-bitwarden-adjacent-final.log` 和 `/tmp/donebot-bitwarden-{client-types,server-types,lint,i18n}-final.log`。
 

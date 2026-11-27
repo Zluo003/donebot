@@ -254,9 +254,9 @@ jobs:
           session=$(curl -sf "${H[@]}" -X POST -H 'content-type: application/json' -d "{\"code\":\"$pcode\"}" $E/api/auth/pair | jq -r .token)
           test "$(code "${H[@]}" -H "Authorization: Bearer $session" $E/api/bots)" = 200
           test "$(code "${H[@]}" -X POST -H 'content-type: application/json' -d "{\"code\":\"$pcode\"}" $E/api/auth/pair)" = 401   # single use
-          # No included models: only the person's own engines, and the app opens its engine sign-in.
+          # No included OpenMausBot models: only DoneBot's gateway or the person's own engines.
           curl -sf "${H[@]}" -H "Authorization: Bearer $session" $E/api/instances \
-            | jq -e '(.instances | length) > 0 and ([.instances[] | select((.instanceId | startswith("included.")) or has("included") or .readOnly == true)] | length == 0)'
+            | jq -e '(.instances | length) > 0 and ([.instances[] | select((.instanceId | startswith("included.")) or has("included") or (.readOnly == true and .instanceId != "donebot"))] | length == 0)'
           curl -sf "${H[@]}" -H "Authorization: Bearer $session" $E/api/auth/session | jq -e '.cloudHome == true and (has("hosted") | not)'
           # Only the edge is reachable from the network, never the server itself.
           ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' home)

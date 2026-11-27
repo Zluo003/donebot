@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { OpcWorkflowScheduleKind } from "../../shared/donebot-opc";
 import { wouldCreateWorkflowCycle } from "../../shared/donebot-opc-graph";
+import { Select } from "@/components/Select";
 import { Switch } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
 import type { Bot } from "@/state/store";
@@ -95,15 +96,16 @@ export function OpcWorkflowInspector({
 
             <div className="space-y-2 border-t border-hairline/40 pt-4">
               <span className="text-[11.5px] font-medium text-ink-tertiary">触发方式</span>
-              <select
+              <Select
                 value={scheduleKind}
                 onChange={e => onScheduleKindChange(e.target.value as OpcWorkflowScheduleKind)}
-                className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-ink outline-none focus:border-ink/40"
+                size="sm"
+                className="w-full"
               >
                 <option value="daily">每天定时</option>
                 <option value="interval">按间隔周期</option>
                 <option value="manual">仅手动触发</option>
-              </select>
+              </Select>
               {scheduleKind === "daily" && (
                 <input
                   type="time"
@@ -113,17 +115,18 @@ export function OpcWorkflowInspector({
                 />
               )}
               {scheduleKind === "interval" && (
-                <select
+                <Select
                   value={intervalMinutes}
                   onChange={e => onIntervalMinutesChange(Number(e.target.value))}
-                  className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-ink outline-none"
+                  size="sm"
+                  className="w-full"
                 >
                   <option value={30}>每 30 分钟</option>
                   <option value={60}>每 1 小时</option>
                   <option value={120}>每 2 小时</option>
                   <option value={360}>每 6 小时</option>
                   <option value={720}>每 12 小时</option>
-                </select>
+                </Select>
               )}
             </div>
 
@@ -183,13 +186,14 @@ export function OpcWorkflowInspector({
 
             <label className="block space-y-1.5">
               <span className="text-[11.5px] text-ink-tertiary">执行 AI 员工</span>
-              <select
+              <Select
                 value={selectedNode.botId}
                 onChange={e => onPatchNode(selectedNode.id, { botId: e.target.value })}
-                className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-ink outline-none focus:border-ink/40"
+                size="sm"
+                className="w-full"
               >
                 {bots.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
+              </Select>
             </label>
 
             <label className="block space-y-1.5">

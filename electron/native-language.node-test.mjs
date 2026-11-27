@@ -85,7 +85,7 @@ test("a new language redraws main's menu, both trays, the window title and the b
     desktopTray, lendingTray, nativeT: text.t, relabelDesktop,
     refreshApplicationMenu: () => calls.push(["menu", text.t("native.menu.server")]),
     applyUnreadBadge: () => calls.push(["badge", text.t("native.badge.none")]),
-    mainWindow: { isDestroyed: () => false, setTitle: (title) => calls.push(["title", title]) },
+    mainWindow: { isDestroyed: () => false, setTitle: (title) => calls.push(["title", title]), webContents: { send: (channel) => calls.push(["send", channel]) } },
     environmentsState: { environments: [office], activeId: "o" }, desktopRemoteAccess: null,
     homeWindow: { cloudOrigin: () => null }, workspaceWindowTitle: environments.workspaceWindowTitle,
   });
@@ -98,7 +98,7 @@ test("a new language redraws main's menu, both trays, the window title and the b
 
   text.set("pt-br");
   context.applyNativeLanguage();
-  assert.deepEqual(calls, [["menu", "Servidor"], ["title", "DoneBot — Hospedado: Office (office.example.test)"], ["badge", "Nenhuma conversa não lida"]]);
+  assert.deepEqual(calls, [["menu", "Servidor"], ["title", "DoneBot — Hospedado: Office (office.example.test)"], ["badge", "Nenhuma conversa não lida"], ["send", "workspaces:changed"]]);
   assert.deepEqual(said(trays[0]), ["Abrir o DoneBot", "Sair do DoneBot"]);
   assert.deepEqual(said(trays[1]), ["My Cloud com acesso a este PC", "Pausar", "Permitir que os Clouds executem comandos neste PC", "Ver atividade"]);
   assert.equal(trays[1].tip, "DoneBot: My Cloud com acesso a este PC");

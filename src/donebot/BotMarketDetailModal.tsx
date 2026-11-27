@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronRight, Download, Flag, FlaskConical, Loader2, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import type { MarketInstalledBotInfo } from "../../shared/donebot-market";
 import { BotAvatar } from "@/components/Avatar";
+import { Select } from "@/components/Select";
 import { cn } from "@/lib/cn";
 import { costTierLabel, marketApi, safeMarketColor, type MarketDetailResponse } from "./market-api";
 
@@ -350,15 +351,16 @@ export function BotMarketDetailModal({
               {reportOpen && (
                 <form onSubmit={handleReport} className="rounded-xl border border-danger/30 bg-danger/5 p-3.5 space-y-2.5">
                   <div className="text-[12.5px] font-medium text-danger">举报该 Bot</div>
-                  <select
+                  <Select
                     value={reportReason}
                     onChange={e => setReportReason(e.target.value)}
-                    className="w-full rounded-lg border border-hairline bg-app px-3 py-1.5 text-[12.5px] text-ink"
+                    size="sm"
+                    className="w-full"
                   >
                     {REPORT_REASONS.map(r => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
-                  </select>
+                  </Select>
                   <textarea
                     value={reportDetail}
                     onChange={e => setReportDetail(e.target.value)}

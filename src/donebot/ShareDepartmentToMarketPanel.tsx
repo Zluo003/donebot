@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Loader2, ShieldCheck, Store, Users } from "l
 import { isExternalCodingAgentBot } from "../../shared/coding-agents";
 import type { MarketCategory, MarketCostTier, MarketListingDetail } from "../../shared/donebot-market";
 import type { Bot } from "@/state/store";
+import { Select } from "@/components/Select";
 import { cn } from "@/lib/cn";
 import { marketApi, marketStatusMeta } from "./market-api";
 
@@ -274,9 +275,9 @@ export function ShareDepartmentToMarketPanel({
                 <Loader2 size={13} className="animate-spin" />正在加载分类…
               </div>
             ) : (
-              <select id={catId} value={categoryId} disabled={submitting || categories.length === 0} onChange={e => setCategoryId(Number(e.target.value))} className={field} required>
+              <Select id={catId} value={categoryId} disabled={submitting || categories.length === 0} onChange={e => setCategoryId(Number(e.target.value))} className="mt-1 w-full" required>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             )}
           </div>
         </div>
@@ -312,11 +313,11 @@ export function ShareDepartmentToMarketPanel({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor={tierId} className="block text-[13px] text-ink-secondary">预估算力档位</label>
-            <select id={tierId} value={costTier} disabled={submitting} onChange={e => setCostTier(e.target.value as MarketCostTier)} className={field}>
+            <Select id={tierId} value={costTier} disabled={submitting} onChange={e => setCostTier(e.target.value as MarketCostTier)} className="mt-1 w-full">
               <option value="light">省流（轻量文本为主）</option>
               <option value="standard">标准算力（常规多步协作）</option>
               <option value="heavy">高算力（含深度调研或媒体生成）</option>
-            </select>
+            </Select>
           </div>
           <div>
             <label htmlFor={tagsId} className="block text-[13px] text-ink-secondary">标签（逗号分隔，最多 6 个）</label>

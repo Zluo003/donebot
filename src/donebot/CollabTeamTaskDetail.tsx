@@ -508,7 +508,7 @@ export function CollabTeamTaskDetailPanel({
             </span>
           )}
           {task && (
-            <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-ink-tertiary">
+            <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-ink-tertiary">
               <span className={cn("size-1.5 rounded-full", TASK_PRIORITY_DOT[task.priority])} />
               {TASK_PRIORITY_LABEL[task.priority]}优先级
             </span>
@@ -592,7 +592,7 @@ export function CollabTeamTaskDetailPanel({
                   data-collab-task-start=""
                   disabled={busy}
                   onClick={() => void quickStatus("in_progress")}
-                  className={`${COLLAB_BUTTON} ui-button-primary h-8 px-3.5 text-[12.5px]`}
+                  className={`${COLLAB_BUTTON} ui-button-primary h-8 px-3.5 text-[13px]`}
                 >
                   <Play size={12.5} aria-hidden="true" />开始处理
                 </button>
@@ -605,7 +605,7 @@ export function CollabTeamTaskDetailPanel({
                   disabled={busy}
                   onClick={() => setActionPane(prev => (prev === "submit" ? null : "submit"))}
                   className={cn(
-                    `${COLLAB_BUTTON} h-8 px-3.5 text-[12.5px]`,
+                    `${COLLAB_BUTTON} h-8 px-3.5 text-[13px]`,
                     task.status !== "todo" && "ui-button-primary",
                   )}
                 >
@@ -620,7 +620,7 @@ export function CollabTeamTaskDetailPanel({
                     data-collab-task-open-approve=""
                     disabled={busy}
                     onClick={() => setActionPane(prev => (prev === "approve" ? null : "approve"))}
-                    className={`${COLLAB_BUTTON} h-8 bg-success/16 px-3.5 text-[12.5px] font-medium text-success ring-1 ring-inset ring-success/30 hover:bg-success/24`}
+                    className={`${COLLAB_BUTTON} h-8 bg-success/16 px-3.5 text-[13px] font-medium text-success ring-1 ring-inset ring-success/30 hover:bg-success/24`}
                   >
                     <CheckCircle2 size={13.5} aria-hidden="true" />验收通过
                   </button>
@@ -629,7 +629,7 @@ export function CollabTeamTaskDetailPanel({
                     data-collab-task-open-reject=""
                     disabled={busy}
                     onClick={() => setActionPane(prev => (prev === "reject" ? null : "reject"))}
-                    className={`${COLLAB_BUTTON} h-8 bg-orange-500/14 px-3.5 text-[12.5px] font-medium text-orange-500 ring-1 ring-inset ring-orange-500/30 hover:bg-orange-500/22`}
+                    className={`${COLLAB_BUTTON} h-8 bg-orange-500/14 px-3.5 text-[13px] font-medium text-orange-500 ring-1 ring-inset ring-orange-500/30 hover:bg-orange-500/22`}
                   >
                     <RotateCcw size={13} aria-hidden="true" />退回修改
                   </button>
@@ -671,7 +671,7 @@ export function CollabTeamTaskDetailPanel({
               )}
 
               {!hasActionButtons && (
-                <span data-collab-task-passive-status="" className="text-[12.5px] text-ink-secondary">
+                <span data-collab-task-passive-status="" className="text-[13px] text-ink-secondary">
                   {passiveStatusNote}
                 </span>
               )}
@@ -824,7 +824,7 @@ export function CollabTeamTaskDetailPanel({
                   <span className="text-[13px] font-medium text-ink">选择一个本机助手私下协助</span>
                   <button type="button" onClick={() => setActionPane(null)} className="text-ink-tertiary hover:text-ink"><X size={13} /></button>
                 </div>
-                <p className="text-[11.5px] leading-relaxed text-ink-tertiary">
+                <p className="text-[12px] leading-relaxed text-ink-tertiary">
                   选择主协调助手时会自动派发给匹配的专长子助手（缺人则自动创建并配好 Skill 与 SOUL.md）并由主协调一审；也可直接指定某位专长子助手干活。
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -835,7 +835,7 @@ export function CollabTeamTaskDetailPanel({
                       disabled={busy}
                       data-collab-handoff-bot-pick={bot.id}
                       onClick={() => void handOffToLocalBot(bot.id)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-inset px-3 py-1.5 text-[12.5px] font-medium text-ink ring-1 ring-inset ring-ink/[0.08] hover:bg-accent/14 hover:text-accent-text hover:ring-accent/30 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-inset px-3 py-1.5 text-[13px] font-medium text-ink ring-1 ring-inset ring-ink/[0.08] hover:bg-accent/14 hover:text-accent-text hover:ring-accent/30 disabled:opacity-50"
                     >
                       <Bot size={13} aria-hidden="true" />
                       <span>{bot.name}</span>
@@ -881,7 +881,7 @@ export function CollabTeamTaskDetailPanel({
                   <div className="text-ink-tertiary">协作者</div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {task.collaborator_ids.map(uid => (
-                      <span key={uid} className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11.5px] text-ink">
+                      <span key={uid} className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[12px] text-ink">
                         {personLabel(uid)}
                       </span>
                     ))}

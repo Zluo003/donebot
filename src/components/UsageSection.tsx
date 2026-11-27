@@ -101,7 +101,7 @@ export function GroupBars({ groupBy, groups }: { groupBy: UsageGroupBy; groups: 
   const { state } = useStore();
   const top = [...groups].sort((a, b) => headlineTokens(b) - headlineTokens(a)).slice(0, 6);
   const max = Math.max(...top.map(headlineTokens), 0);
-  if (!top.length || max <= 0) return <p className="py-2 text-[12.5px] text-ink-tertiary">{t("usage.page.whereEmpty")}</p>;
+  if (!top.length || max <= 0) return <p className="py-2 text-[13px] text-ink-tertiary">{t("usage.page.whereEmpty")}</p>;
   return (
     <ul className="flex flex-col gap-2.5">
       {top.map((group) => {
@@ -111,7 +111,7 @@ export function GroupBars({ groupBy, groups }: { groupBy: UsageGroupBy; groups: 
         return (
           <li
             key={group.key}
-            className="grid grid-cols-[minmax(0,10.5rem)_1fr_auto] items-center gap-3 text-[12.5px]"
+            className="grid grid-cols-[minmax(0,10.5rem)_1fr_auto] items-center gap-3 text-[13px]"
             title={t("usage.page.turns", { count: String(group.turns) })}
           >
             <span className="flex min-w-0 items-center gap-2 text-ink">
@@ -145,8 +145,8 @@ function GatewaySpendCard({ spend, periodLabel }: { spend: OpcSpendResponse; per
     <section className="@container overflow-hidden rounded-2xl border border-hairline/55 bg-card" aria-label="网关真实算力消费">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline/40 px-4 py-3">
         <div className="flex items-baseline gap-2">
-          <h3 className="text-[13.5px] font-semibold text-ink">真实算力消费</h3>
-          <span className="text-[11.5px] text-ink-tertiary">{periodLabel} · 网关实时结算</span>
+          <h3 className="text-[14px] font-semibold text-ink">真实算力消费</h3>
+          <span className="text-[12px] text-ink-tertiary">{periodLabel} · 网关实时结算</span>
         </div>
         <span className="whitespace-nowrap text-[20px] font-semibold tracking-tight tabular-nums text-ink">
           {formatCny(spend.totalCost)}
@@ -188,7 +188,7 @@ function WhereItWent({
       <h3 className="text-[14px] font-semibold text-ink">{t("usage.page.where")}</h3>
       <div className="mt-4 grid grid-cols-1 gap-5 @[680px]:grid-cols-2 @[680px]:gap-6">
         <div className="min-w-0">
-          <div className="mb-3 text-[11.5px] font-medium text-ink-tertiary">{t(GROUP_LABEL_KEYS.bot)}</div>
+          <div className="mb-3 text-[12px] font-medium text-ink-tertiary">{t(GROUP_LABEL_KEYS.bot)}</div>
           {byBot ? <GroupBars groupBy="bot" groups={byBot.groups} /> : <Loader2 size={14} className="animate-spin text-ink-secondary" />}
         </div>
         <div className="min-w-0 border-t border-hairline/40 pt-4 @[680px]:border-l @[680px]:border-t-0 @[680px]:pl-6 @[680px]:pt-0">
@@ -205,7 +205,7 @@ function WhereItWent({
                 aria-selected={activeOther === option}
                 onClick={() => setOther(option)}
                 className={cn(
-                  "whitespace-nowrap rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+                  "whitespace-nowrap rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors",
                   activeOther === option
                     ? "bg-card text-ink shadow-2xs ring-[0.5px] ring-hairline/60"
                     : "text-ink-secondary hover:text-ink",
@@ -247,8 +247,8 @@ export function RunRow({ root, onOpen }: { root: TraceRootSummary; onOpen: () =>
           })}
         </span>
         <span className="min-w-0">
-          <span className="block truncate text-[13.5px] font-medium text-ink">{title}</span>
-          <span className="mt-0.5 block truncate text-[11.5px] text-ink-tertiary">
+          <span className="block truncate text-[14px] font-medium text-ink">{title}</span>
+          <span className="mt-0.5 block truncate text-[12px] text-ink-tertiary">
             {startedLabel(root.startedAt)} · {root.bots.map((bot) => bot.name).join("、")}
           </span>
         </span>
@@ -332,7 +332,7 @@ export function UsageSection() {
   return (
     <div className="@container flex flex-col gap-4" data-testid="usage-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink-secondary">{t("usage.page.subtitle")}</p>
+        <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-ink-secondary">{t("usage.page.subtitle")}</p>
         <div className="flex shrink-0 items-center gap-2">
           <Select size="sm" value={period} onChange={(event) => { setPeriod(event.target.value as UsagePeriod); setOpen(null); }} aria-label={t("usage.history.period")}>
             {USAGE_PERIODS.map((option) => <option key={option} value={option}>{t(PERIOD_LABEL_KEYS[option])}</option>)}
@@ -367,14 +367,14 @@ export function UsageSection() {
               <h3 className="text-[14px] font-semibold text-ink">{t("usage.page.runs")}</h3>
               <p className="mt-0.5 text-[12px] text-ink-tertiary">{t("usage.page.runsHint")}</p>
             </div>
-            {list && !list.roots.length && <p className="px-3 py-4 text-[12.5px] text-ink-tertiary">{t("usage.page.runsEmpty")}</p>}
+            {list && !list.roots.length && <p className="px-3 py-4 text-[13px] text-ink-tertiary">{t("usage.page.runsEmpty")}</p>}
             <ul className="flex flex-col divide-y divide-hairline/30">
               {list?.roots.map((root) => <RunRow key={root.id} root={root} onOpen={() => setOpen({ id: root.id, at: root.startedAt })} />)}
             </ul>
             {list?.next !== undefined && (
-              <button type="button" onClick={more} className="m-2 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-accent hover:bg-raised/60">{t("usage.page.more")}</button>
+              <button type="button" onClick={more} className="m-2 rounded-lg px-3 py-1.5 text-[13px] font-medium text-accent hover:bg-raised/60">{t("usage.page.more")}</button>
             )}
-            {untimed && <p className="px-3 pb-3 pt-1 text-[11.5px] text-ink-tertiary">{t("usage.page.untimedNote")}</p>}
+            {untimed && <p className="px-3 pb-3 pt-1 text-[12px] text-ink-tertiary">{t("usage.page.untimedNote")}</p>}
           </section>
         </>
       )}

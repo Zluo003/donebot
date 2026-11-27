@@ -86,7 +86,7 @@ export function CollabMediaBubble({
             </span>
           </span>
           {msg.file_size !== undefined && (
-            <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10.5px] font-medium tabular-nums text-white/90 backdrop-blur-xs">
+            <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white/90 backdrop-blur-xs">
               {formatFileSize(msg.file_size)}
             </span>
           )}
@@ -118,7 +118,7 @@ export function CollabMediaBubble({
             <Play size={16} className="ml-0.5 fill-current" aria-hidden="true" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13.5px] font-medium leading-5">{fileName}</span>
+            <span className="block truncate text-[14px] font-medium leading-5">{fileName}</span>
             <span className={cn("mt-0.5 flex items-center gap-1.5 text-[11px]", mine ? "opacity-75" : "text-ink-tertiary")}>
               <Music size={11} aria-hidden="true" />
               <span className="tabular-nums">{formatFileSize(msg.file_size) || "点击试听"}</span>
@@ -205,7 +205,7 @@ export function CollabMediaPreviewDialog({
             <div className="min-w-0">
               <div id={titleId} className="truncate text-[14px] font-medium text-white">{preview.name}</div>
               {preview.size !== undefined && (
-                <div className="text-[11.5px] tabular-nums text-white/65">{formatFileSize(preview.size)}</div>
+                <div className="text-[12px] tabular-nums text-white/65">{formatFileSize(preview.size)}</div>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2">

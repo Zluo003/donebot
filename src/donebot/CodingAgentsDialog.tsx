@@ -310,7 +310,7 @@ export function CodingAgentsDialog({
             <h2 id={titleId} className="text-[16px] font-semibold tracking-tight text-ink">
               接入外部编程 Agent
             </h2>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-secondary">
+            <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">
               自动检测本机已安装的官方桌面应用或 CLI，继续使用你自己的订阅或账号，不经过 DoneBot 网关。
             </p>
           </div>
@@ -344,14 +344,14 @@ export function CodingAgentsDialog({
           {error && (
             <div
               role="alert"
-              className="mb-3 rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[12.5px] text-danger"
+              className="mb-3 rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger"
             >
               {error}
             </div>
           )}
 
           {authFlow && (
-            <div className="mb-3 rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-3 text-[12.5px] text-ink">
+            <div className="mb-3 rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-3 text-[13px] text-ink">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 font-medium">
                   <Loader2 size={14} className="animate-spin text-accent" aria-hidden="true" />
@@ -431,7 +431,7 @@ export function CodingAgentsDialog({
 
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[14.5px] font-semibold text-ink">{agent.displayName}</span>
+                          <span className="text-[15px] font-semibold text-ink">{agent.displayName}</span>
                           <span className="rounded-md bg-inset px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">
                             {agent.vendor}
                           </span>
@@ -460,18 +460,18 @@ export function CodingAgentsDialog({
                           )}
                         </div>
 
-                        <p className="mt-1 text-[12.5px] leading-relaxed text-ink-secondary">
+                        <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">
                           {agent.tagline}
                         </p>
 
                         {agent.account && (
-                          <div className="mt-1 text-[11.5px] text-ink-tertiary">
+                          <div className="mt-1 text-[12px] text-ink-tertiary">
                             当前账号：{agent.account}
                           </div>
                         )}
 
                         {!ready && (
-                          <div className="mt-1.5 text-[11.5px] leading-relaxed text-ink-tertiary">
+                          <div className="mt-1.5 text-[12px] leading-relaxed text-ink-tertiary">
                             {agent.reason || agent.loginGuide}
                           </div>
                         )}
@@ -483,7 +483,7 @@ export function CodingAgentsDialog({
                                 key={bot.id}
                                 type="button"
                                 onClick={() => openExistingBot(bot.id)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-hairline/40 bg-inset/80 px-2 py-1 text-[11.5px] font-medium text-ink hover:bg-raised"
+                                className="inline-flex items-center gap-1 rounded-lg border border-hairline/40 bg-inset/80 px-2 py-1 text-[12px] font-medium text-ink hover:bg-raised"
                               >
                                 <MessageSquare size={11} className="text-accent" aria-hidden="true" />
                                 <span>打开 {bot.name}</span>
@@ -499,7 +499,7 @@ export function CodingAgentsDialog({
                             type="button"
                             disabled={busy}
                             onClick={() => void installManagedRuntime(agent)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[12.5px] font-medium text-white hover:brightness-110 disabled:opacity-50"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50"
                           >
                             {busy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                             一键安装
@@ -509,7 +509,7 @@ export function CodingAgentsDialog({
                             type="button"
                             disabled={busy}
                             onClick={() => void startInAppAuth(agent)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[12.5px] font-medium text-white hover:brightness-110 disabled:opacity-50"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50"
                           >
                             {busy ? <Loader2 size={13} className="animate-spin" /> : <LogIn size={13} />}
                             立即登录
@@ -518,7 +518,7 @@ export function CodingAgentsDialog({
                           <button
                             type="button"
                             onClick={() => openExistingBot(agent.bots[0]!.id)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline/50 bg-raised/80 px-3 text-[12.5px] font-medium text-ink hover:bg-raised"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline/50 bg-raised/80 px-3 text-[13px] font-medium text-ink hover:bg-raised"
                           >
                             <MessageSquare size={13} className="text-accent" aria-hidden="true" />
                             进入对话
@@ -528,7 +528,7 @@ export function CodingAgentsDialog({
                             type="button"
                             disabled={busy}
                             onClick={() => void createCodingAgentBot(agent)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[12.5px] font-medium text-white hover:brightness-110 disabled:opacity-50"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50"
                           >
                             {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
                             添加为 Bot
@@ -547,7 +547,7 @@ export function CodingAgentsDialog({
 
                         <div className="flex items-center gap-1">
                           {alreadyAdded && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11.5px] text-ink-tertiary">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[12px] text-ink-tertiary">
                               <CheckCircle2 size={11} className="text-success" aria-hidden="true" />
                               已添加
                             </span>
@@ -565,7 +565,7 @@ export function CodingAgentsDialog({
                                   setCustomCwd("");
                                 }
                               }}
-                              className="rounded-md px-2 py-1 text-[11.5px] text-ink-secondary hover:bg-raised hover:text-ink"
+                              className="rounded-md px-2 py-1 text-[12px] text-ink-secondary hover:bg-raised hover:text-ink"
                             >
                               {expanded ? "收起配置" : "绑定项目目录"}
                             </button>
@@ -586,7 +586,7 @@ export function CodingAgentsDialog({
                     {expanded && ready && (
                       <div className="mt-3 flex flex-col gap-2 rounded-xl border border-hairline/40 bg-inset/60 p-3">
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <label className="flex flex-col gap-1 text-[11.5px] text-ink-secondary">
+                          <label className="flex flex-col gap-1 text-[12px] text-ink-secondary">
                             <span>机器人名称</span>
                             <input
                               type="text"
@@ -594,10 +594,10 @@ export function CodingAgentsDialog({
                               maxLength={80}
                               onChange={(event) => setCustomName(event.target.value)}
                               placeholder={agent.name}
-                              className="h-8 rounded-lg border border-hairline/50 bg-panel px-2.5 text-[12.5px] text-ink focus:border-accent focus:outline-none"
+                              className="h-8 rounded-lg border border-hairline/50 bg-panel px-2.5 text-[13px] text-ink focus:border-accent focus:outline-none"
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-[11.5px] text-ink-secondary">
+                          <label className="flex flex-col gap-1 text-[12px] text-ink-secondary">
                             <span className="inline-flex items-center gap-1">
                               <FolderOpen size={11} aria-hidden="true" />
                               默认代码仓库目录（可选）
@@ -607,7 +607,7 @@ export function CodingAgentsDialog({
                               value={customCwd}
                               onChange={(event) => setCustomCwd(event.target.value)}
                               placeholder="例如 /Users/name/Dev/my-project"
-                              className="h-8 rounded-lg border border-hairline/50 bg-panel px-2.5 text-[12.5px] text-ink focus:border-accent focus:outline-none"
+                              className="h-8 rounded-lg border border-hairline/50 bg-panel px-2.5 text-[13px] text-ink focus:border-accent focus:outline-none"
                             />
                           </label>
                         </div>

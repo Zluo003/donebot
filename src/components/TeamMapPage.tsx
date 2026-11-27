@@ -500,7 +500,7 @@ export function TeamMapPage() {
           <div className="flex items-center gap-2.5">
             <UsersRound size={17} className="shrink-0 text-ink-secondary" />
             <h1 className="truncate text-[16px] font-semibold">{opcOrgEnabled ? "组织与流程" : t("canvas.title")}</h1>
-            <span className="ml-0.5 shrink-0 text-[11.5px] tabular-nums text-ink-tertiary">{teamMapBotCount(bots.length)}</span>
+            <span className="ml-0.5 shrink-0 text-[12px] tabular-nums text-ink-tertiary">{teamMapBotCount(bots.length)}</span>
           </div>
           <p className="mt-0.5 truncate text-[12px] text-ink-tertiary">
             {opcOrgEnabled
@@ -736,12 +736,12 @@ export function TeamMapPage() {
         className="w-[min(92vw,420px)]"
       >
         <div className="flex items-center justify-between border-b border-hairline/60 px-5 py-3.5">
-          <h3 className="text-[14.5px] font-semibold text-ink">重命名默认部门</h3>
+          <h3 className="text-[15px] font-semibold text-ink">重命名默认部门</h3>
           <button type="button" onClick={() => setGeneralRenameOpen(false)} aria-label="关闭" className="rounded-full p-1 text-ink-tertiary hover:bg-ink/[0.06]">
             <X size={15} />
           </button>
         </div>
-        <div className="space-y-2.5 px-5 py-4 text-[12.5px]">
+        <div className="space-y-2.5 px-5 py-4 text-[13px]">
           <label className="block space-y-1.5">
             <span className="text-[12px] text-ink-secondary">部门名称（留空则恢复为「通用」）</span>
             <input
@@ -757,19 +757,19 @@ export function TeamMapPage() {
               className="h-9 w-full rounded-xl border border-hairline/70 bg-inset px-3 text-[13px] text-ink outline-none focus:border-ink/40"
             />
           </label>
-          <p className="text-[11.5px] text-ink-tertiary">
+          <p className="text-[12px] text-ink-tertiary">
             修改名称不会影响原有对话、共享指示和部门记忆，也会同步生效到 @ 指挥栏和 AI 组织提示词。
           </p>
         </div>
         <div className="flex justify-end gap-2 border-t border-hairline/60 px-5 py-3.5">
-          <button type="button" onClick={() => setGeneralRenameOpen(false)} className="h-8 rounded-full px-3 text-[12.5px] text-ink-secondary hover:bg-ink/[0.06]">
+          <button type="button" onClick={() => setGeneralRenameOpen(false)} className="h-8 rounded-full px-3 text-[13px] text-ink-secondary hover:bg-ink/[0.06]">
             取消
           </button>
           <button
             type="button"
             disabled={orgModeBusy}
             onClick={() => void patchOrgSettings({ generalDepartmentName: generalNameDraft.trim() || null }).then(() => setGeneralRenameOpen(false))}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink px-4 text-[12.5px] font-medium text-app hover:opacity-85 disabled:opacity-45"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-ink px-4 text-[13px] font-medium text-app hover:opacity-85 disabled:opacity-45"
           >
             保存名称
           </button>

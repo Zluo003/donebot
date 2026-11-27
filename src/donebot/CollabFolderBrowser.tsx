@@ -382,7 +382,7 @@ export function CollabFolderBrowser({ folder, compact = false }: { folder: DoneB
               <label
                 htmlFor={uploadInputId}
                 className={cn(
-                  `${COLLAB_BUTTON} ui-button-primary h-7 cursor-pointer px-2.5 text-[11.5px]`,
+                  `${COLLAB_BUTTON} ui-button-primary h-7 cursor-pointer px-2.5 text-[12px]`,
                   uploading && "pointer-events-none opacity-50",
                 )}
               >
@@ -397,7 +397,7 @@ export function CollabFolderBrowser({ folder, compact = false }: { folder: DoneB
             title="刷新目录"
             disabled={loading}
             onClick={() => void loadDir(browsePath)}
-            className={`${COLLAB_BUTTON} h-7 px-2 text-[11.5px]`}
+            className={`${COLLAB_BUTTON} h-7 px-2 text-[12px]`}
           >
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} aria-hidden="true" />
           </button>
@@ -459,12 +459,12 @@ export function CollabFolderBrowser({ folder, compact = false }: { folder: DoneB
                 type="button"
                 disabled={downloadingPath === preview.path}
                 onClick={() => void downloadFile(preview.path, preview.path.split("/").pop() || "download")}
-                className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11.5px]`}
+                className={`${COLLAB_BUTTON} h-7 px-2.5 text-[12px]`}
               >
                 {downloadingPath === preview.path ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}
                 下载原文件
               </button>
-              <button type="button" onClick={closePreview} className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11.5px]`}>
+              <button type="button" onClick={closePreview} className={`${COLLAB_BUTTON} h-7 px-2.5 text-[12px]`}>
                 返回列表
               </button>
             </div>
@@ -474,7 +474,7 @@ export function CollabFolderBrowser({ folder, compact = false }: { folder: DoneB
               <img src={preview.objectUrl} alt={preview.path} className="max-h-72 max-w-full rounded-lg object-contain" />
             </div>
           ) : (
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-app/90 p-3.5 font-mono text-[11.5px] leading-relaxed text-ink ring-1 ring-inset ring-ink/[0.07]">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-app/90 p-3.5 font-mono text-[12px] leading-relaxed text-ink ring-1 ring-inset ring-ink/[0.07]">
               {preview.text}
             </pre>
           )}
@@ -493,7 +493,7 @@ export function CollabFolderBrowser({ folder, compact = false }: { folder: DoneB
                 <button
                   type="button"
                   onClick={() => entry.kind === "dir" ? void loadDir(fullPath) : void openFilePreview(entry, fullPath)}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left text-[12.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                 >
                   <FileTypeIcon name={entry.name} kind={entry.kind} />
                   <span className="truncate font-medium text-ink">{entry.name}</span>

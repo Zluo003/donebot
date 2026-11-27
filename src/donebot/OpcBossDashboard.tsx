@@ -131,7 +131,7 @@ function CompactReportCard({
           >
             <div className="truncate text-[13px] font-medium text-ink hover:underline">{report.title}</div>
             {report.summary && (
-              <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-relaxed text-ink-secondary">
+              <p className="mt-0.5 line-clamp-2 text-[12px] leading-relaxed text-ink-secondary">
                 {report.summary}
               </p>
             )}
@@ -166,7 +166,7 @@ function CompactReportCard({
         )}
       </OpcInsetPanel>
 
-      {error && <p role="alert" className="text-[11.5px] text-danger">{error}</p>}
+      {error && <p role="alert" className="text-[12px] text-danger">{error}</p>}
 
       <OpcDecisionCardFooter
         leading={
@@ -175,7 +175,7 @@ function CompactReportCard({
               type="button"
               disabled={busy}
               onClick={() => updateDraft({ revising: false })}
-              className="text-[11.5px] text-ink-tertiary hover:text-ink"
+              className="text-[12px] text-ink-tertiary hover:text-ink"
             >
               取消批注
             </button>
@@ -183,7 +183,7 @@ function CompactReportCard({
             <button
               type="button"
               onClick={onOpenBoss}
-              className="text-[11.5px] text-accent hover:underline"
+              className="text-[12px] text-accent hover:underline"
             >
               展开完整报告
             </button>
@@ -288,11 +288,11 @@ export function OpcBossDashboard() {
   return (
     <section aria-label="工作台概览" className="mx-[13px] mb-2 mt-1 space-y-2.5">
       <div className="flex items-center justify-between px-0.5">
-        <span className="text-[11.5px] font-medium text-ink-secondary">工作台</span>
+        <span className="text-[12px] font-medium text-ink-secondary">工作台</span>
         <button
           type="button"
           onClick={openBoss}
-          className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-accent hover:underline"
+          className="inline-flex items-center gap-0.5 text-[12px] font-medium text-accent hover:underline"
         >
           打开完整工作台 <ArrowUpRight size={12} aria-hidden="true" />
         </button>
@@ -329,7 +329,7 @@ export function OpcBossDashboard() {
           aria-label="单 Bot 近 30 日真实算力消耗明细"
           className="max-h-56 overflow-auto rounded-xl bg-card ring-[0.5px] ring-hairline/60"
         >
-          <div className="flex items-center justify-between border-b border-hairline/40 px-3 py-2 text-[11.5px] text-ink-secondary">
+          <div className="flex items-center justify-between border-b border-hairline/40 px-3 py-2 text-[12px] text-ink-secondary">
             <span className="font-medium text-ink">近 {overview.spend.days} 日实际消费透视</span>
             <span className="tabular-nums text-ink-tertiary">
               LLM {formatCny(overview.spend.llmCost)} · 图 {formatCny(overview.spend.imageCost)} · 视 {formatCny(overview.spend.videoCost)} · 乐 {formatCny(overview.spend.musicCost)}
@@ -369,7 +369,7 @@ export function OpcBossDashboard() {
 
       {approvalsExpanded && totalPendingCount > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between px-0.5 text-[11.5px] text-ink-tertiary">
+          <div className="flex items-center justify-between px-0.5 text-[12px] text-ink-tertiary">
             <span>待审批汇报</span>
             <span className="tabular-nums">{totalPendingCount} 份</span>
           </div>

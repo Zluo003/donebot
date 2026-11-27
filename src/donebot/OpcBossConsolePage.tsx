@@ -197,7 +197,7 @@ export function OpcBossConsolePage() {
                 <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.025em] text-ink">
                   {greetingByHour()}
                 </h1>
-                <p className="mt-1.5 text-[13.5px] text-ink-secondary">
+                <p className="mt-1.5 text-[14px] text-ink-secondary">
                   {statusLine}
                 </p>
               </div>
@@ -236,7 +236,7 @@ export function OpcBossConsolePage() {
             </header>
 
             {runtimeNotice && (
-              <div role="status" className="flex items-start gap-2.5 rounded-xl bg-ink/[0.04] px-4 py-3 text-[12.5px] text-ink-secondary">
+              <div role="status" className="flex items-start gap-2.5 rounded-xl bg-ink/[0.04] px-4 py-3 text-[13px] text-ink-secondary">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
                 <span>{runtimeNotice}</span>
               </div>
@@ -257,7 +257,7 @@ export function OpcBossConsolePage() {
                   {pendingCount}
                 </div>
                 {pendingCount > 0 && (
-                  <div className="mt-2 text-[11.5px] text-ink-secondary">点击展开汇报并一次通过</div>
+                  <div className="mt-2 text-[12px] text-ink-secondary">点击展开汇报并一次通过</div>
                 )}
               </div>
 
@@ -273,7 +273,7 @@ export function OpcBossConsolePage() {
                   {activeRoutineCount + activeWorkflowCount}
                 </div>
                 {(activeRoutineCount > 0 || activeWorkflowCount > 0) && (
-                  <div className="mt-2 truncate text-[11.5px] tabular-nums text-ink-tertiary">
+                  <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
                     自动化 {activeRoutineCount} · 工作流 {activeWorkflowCount}
                   </div>
                 )}
@@ -285,7 +285,7 @@ export function OpcBossConsolePage() {
                   {formatCny(totalSpend)}
                 </div>
                 {totalSpend > 0 && overview?.spend.available && (
-                  <div className="mt-2 truncate text-[11.5px] tabular-nums text-ink-tertiary">
+                  <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
                     LLM {formatCny(overview.spend.llmCost)} · 媒体 {formatCny(mediaTotalSpend)}
                   </div>
                 )}
@@ -304,7 +304,7 @@ export function OpcBossConsolePage() {
                     <button
                       type="button"
                       onClick={() => setArchiveOpen(true)}
-                      className="inline-flex items-center gap-1 text-[12.5px] font-medium text-ink transition-opacity hover:opacity-75"
+                      className="inline-flex items-center gap-1 text-[13px] font-medium text-ink transition-opacity hover:opacity-75"
                     >
                       查看已通过汇报（{approvedCount}） <ArrowRight size={13} aria-hidden="true" />
                     </button>
@@ -357,7 +357,7 @@ export function OpcBossConsolePage() {
                   </div>
                 ) : (
                   <table className="w-full border-collapse text-left text-[13px]">
-                    <thead className="border-b border-hairline/40 text-[11.5px] text-ink-tertiary">
+                    <thead className="border-b border-hairline/40 text-[12px] text-ink-tertiary">
                       <tr>
                         <th scope="col" className="py-2.5 pr-4 font-normal">员工</th>
                         <th scope="col" className="px-3 py-2.5 text-right font-normal">LLM</th>
@@ -375,7 +375,7 @@ export function OpcBossConsolePage() {
                               <div className="min-w-0">
                                 <div className="truncate text-[14px] font-medium text-ink">{bot.name}</div>
                                 {bot.section && (
-                                  <div className="truncate text-[11.5px] text-ink-tertiary">{bot.section}</div>
+                                  <div className="truncate text-[12px] text-ink-tertiary">{bot.section}</div>
                                 )}
                               </div>
                             </div>

@@ -152,8 +152,8 @@ export function ShareDepartmentToMarketPanel({
             <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-500" />
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[14.5px] font-semibold text-ink">{result.name}</span>
-                <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-medium", status.className)}>
+                <span className="text-[15px] font-semibold text-ink">{result.name}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-medium", status.className)}>
                   {status.label}
                 </span>
                 <span className="text-[12px] text-ink-secondary">v{result.latest_version}</span>
@@ -169,7 +169,7 @@ export function ShareDepartmentToMarketPanel({
           </div>
 
           {result.status !== "published" && result.latest_release?.ai_report && (
-            <div className="mt-3 space-y-2 rounded-xl border border-hairline bg-card p-4 text-[12.5px]">
+            <div className="mt-3 space-y-2 rounded-xl border border-hairline bg-card p-4 text-[13px]">
               <div className="font-medium text-ink">
                 AI 审核反馈（风险分：{result.latest_release.ai_report.risk_score}）
               </div>
@@ -205,12 +205,12 @@ export function ShareDepartmentToMarketPanel({
     );
   }
 
-  const field = "mt-1 w-full rounded-lg border border-hairline/50 bg-inset px-3 py-2 text-[13.5px] text-ink disabled:opacity-60";
+  const field = "mt-1 w-full rounded-lg border border-hairline/50 bg-inset px-3 py-2 text-[14px] text-ink disabled:opacity-60";
 
   return (
     <>
       <form id="share-dept-market-form" onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-2">
-        <div className="flex items-start gap-2.5 rounded-xl bg-accent/10 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-secondary">
+        <div className="flex items-start gap-2.5 rounded-xl bg-accent/10 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-secondary">
           <ShieldCheck size={16} className="mt-0.5 shrink-0 text-accent" />
           <div>
             <span className="font-medium text-ink">部门专项脱敏与 AI 自动审核：</span>
@@ -219,13 +219,13 @@ export function ShareDepartmentToMarketPanel({
         </div>
 
         <div className="rounded-xl border border-hairline/60 bg-raised/35 p-3.5">
-          <div className="flex items-center justify-between text-[12.5px]">
+          <div className="flex items-center justify-between text-[13px]">
             <span className="inline-flex items-center gap-1.5 font-medium text-ink">
               <Users size={14} className="text-accent" />
               待发布成员（{teamBots.length} 位 · {teamBots.length >= 2 ? "部门整包" : "专家 Bot"}）
             </span>
             {routineCount > 0 && (
-              <span className="text-[11.5px] text-ink-secondary">{routineCount} 条例行任务（安装后默认暂停）</span>
+              <span className="text-[12px] text-ink-secondary">{routineCount} 条例行任务（安装后默认暂停）</span>
             )}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -240,7 +240,7 @@ export function ShareDepartmentToMarketPanel({
                 )}
               >
                 <span className="font-medium">{bot.name}</span>
-                {bot.chiefOfStaff && <span className="rounded bg-accent/15 px-1 text-[10.5px] text-accent">部门主 Bot</span>}
+                {bot.chiefOfStaff && <span className="rounded bg-accent/15 px-1 text-[11px] text-accent">部门主 Bot</span>}
                 <span className="text-[11px] opacity-80">
                   {external ? "外部代理不可发布" : `SOUL ${soulRunes} 字`}
                 </span>
@@ -250,14 +250,14 @@ export function ShareDepartmentToMarketPanel({
         </div>
 
         {precheckBlocker && (
-          <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[12.5px] text-danger">
+          <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
             <AlertCircle size={15} className="mt-0.5 shrink-0" />
             <span>{precheckBlocker}</span>
           </div>
         )}
 
         {error && (
-          <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[12.5px] text-danger">
+          <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
             <AlertCircle size={15} className="mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
@@ -271,7 +271,7 @@ export function ShareDepartmentToMarketPanel({
           <div>
             <label htmlFor={catId} className="block text-[13px] text-ink-secondary">广场分类 *</label>
             {loadingCats ? (
-              <div className="mt-2 flex items-center gap-1.5 text-[12.5px] text-ink-secondary">
+              <div className="mt-2 flex items-center gap-1.5 text-[13px] text-ink-secondary">
                 <Loader2 size={13} className="animate-spin" />正在加载分类…
               </div>
             ) : (

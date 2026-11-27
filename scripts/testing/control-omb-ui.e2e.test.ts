@@ -11,6 +11,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { removeTempDir, waitForExit } from "../../server/testing/cleanup.ts";
+import { UPSTREAM_SETTINGS } from "../../src/donebot/services.ts";
 import { runControlOmb } from "../control-omb.ts";
 import { UI_TOOLS_DIR } from "./control-omb-ui.ts";
 import { fixtureApi } from "./preview-fixture.ts";
@@ -156,7 +157,7 @@ describe("control-omb ui drives the real renderer", () => {
     expect(launched.child.exitCode).toBe(0);
   }, LAUNCH_TIMEOUT_MS + 90_000);
 
-  run("saves a key on Enter, checks it once saved, shows it masked, and keeps a refused or failed draft", async () => {
+  (enabled && UPSTREAM_SETTINGS.apiKeys ? it : it.skip)("saves a key on Enter, checks it once saved, shows it masked, and keeps a refused or failed draft", async () => {
     launched = await launch([]);
     const { info } = launched;
     await fixtureApi(info.url)("PUT", "/api/config", {

@@ -171,7 +171,7 @@ export function OpcSkillStudioModal({
             <h1 id={titleId} className="truncate text-[15px] font-semibold text-ink">
               能力实验室 · {bot.name}
             </h1>
-            <p className="text-[11.5px] text-ink-tertiary">
+            <p className="text-[12px] text-ink-tertiary">
               SOUL 与技能版本快照防翻车 · 真题试岗实测对比
             </p>
           </div>
@@ -199,7 +199,7 @@ export function OpcSkillStudioModal({
               aria-selected={tab === item.id}
               onClick={() => setTab(item.id)}
               className={cn(
-                "inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[12.5px] font-medium transition-colors",
+                "inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-medium transition-colors",
                 tab === item.id ? "border-accent text-ink" : "border-transparent text-ink-secondary hover:text-ink",
               )}
             >
@@ -225,13 +225,13 @@ export function OpcSkillStudioModal({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
         {notice && (
-          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3.5 py-2 text-[12.5px] text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3.5 py-2 text-[13px] text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 size={14} className="shrink-0" />
             <span>{notice}</span>
           </div>
         )}
         {error && (
-          <div role="alert" className="rounded-xl bg-danger/10 px-3.5 py-2 text-[12.5px] text-danger">
+          <div role="alert" className="rounded-xl bg-danger/10 px-3.5 py-2 text-[13px] text-danger">
             {error}
           </div>
         )}
@@ -250,7 +250,7 @@ export function OpcSkillStudioModal({
                 type="button"
                 disabled={busy !== null}
                 onClick={() => void handleCreateSnapshot()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-[12.5px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-[13px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
               >
                 {busy === "create-snap" ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                 保存当前快照
@@ -279,7 +279,7 @@ export function OpcSkillStudioModal({
                           onClick={() => setSelectedSnapId(snap.id)}
                           className="min-w-0 flex-1 text-left"
                         >
-                          <div className="truncate text-[12.5px] font-medium text-ink">{snap.label}</div>
+                          <div className="truncate text-[13px] font-medium text-ink">{snap.label}</div>
                           <div className="mt-0.5 text-[11px] tabular-nums text-ink-tertiary">
                             {new Date(snap.createdAt).toLocaleString("zh-CN", { hour12: false })} · {snap.skills.length} 技能
                           </div>
@@ -305,7 +305,7 @@ export function OpcSkillStudioModal({
                         <div className="text-[13px] font-medium text-ink">
                           快照「{selectedSnap.label}」vs 当前 SOUL.md
                         </div>
-                        <div className="text-[11.5px] text-ink-tertiary">
+                        <div className="text-[12px] text-ink-tertiary">
                           {(() => {
                             const supportCount = selectedSnap.skills.reduce((sum, sk) => sum + (sk.files?.length ?? 0), 0);
                             return `包含 ${selectedSnap.skills.length} 个 Skill${supportCount > 0 ? `（含 ${supportCount} 个附属文件）` : ""} · 回滚前将自动保存当前状态备份`;
@@ -323,7 +323,7 @@ export function OpcSkillStudioModal({
                       </button>
                     </div>
 
-                    <div className="max-h-72 overflow-auto rounded-lg bg-app p-2 font-mono text-[11.5px] leading-relaxed">
+                    <div className="max-h-72 overflow-auto rounded-lg bg-app p-2 font-mono text-[12px] leading-relaxed">
                       {soulDiff.every(r => r.kind === "context") ? (
                         <div className="py-6 text-center font-sans text-[12px] text-ink-tertiary">
                           当前 SOUL.md 与该快照完全一致。
@@ -356,7 +356,7 @@ export function OpcSkillStudioModal({
 
                     {selectedSnap.skills.length > 0 && (
                       <div className="space-y-1.5 border-t border-hairline/40 pt-2.5">
-                        <div className="text-[11.5px] font-medium text-ink-secondary">
+                        <div className="text-[12px] font-medium text-ink-secondary">
                           快照包含的技能（{selectedSnap.skills.length}）
                         </div>
                         <div className="space-y-1">
@@ -365,7 +365,7 @@ export function OpcSkillStudioModal({
                             return (
                               <details
                                 key={sk.name}
-                                className="group rounded-lg bg-app/70 px-2.5 py-1.5 text-[11.5px]"
+                                className="group rounded-lg bg-app/70 px-2.5 py-1.5 text-[12px]"
                               >
                                 <summary className="flex cursor-pointer list-none items-center gap-1.5 text-ink [&::-webkit-details-marker]:hidden">
                                   <ChevronRight
@@ -385,7 +385,7 @@ export function OpcSkillStudioModal({
                                       {supportFiles.map(file => (
                                         <span
                                           key={file.path}
-                                          className="rounded bg-card px-1.5 py-0.5 font-mono text-[10.5px] text-ink-secondary ring-[0.5px] ring-hairline/60"
+                                          className="rounded bg-card px-1.5 py-0.5 font-mono text-[11px] text-ink-secondary ring-[0.5px] ring-hairline/60"
                                         >
                                           {file.path}
                                         </span>
@@ -411,7 +411,7 @@ export function OpcSkillStudioModal({
           <div className="space-y-4">
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-[12.5px] font-medium text-ink">黄金试岗题（1–5 条）</span>
+                <span className="text-[13px] font-medium text-ink">黄金试岗题（1–5 条）</span>
                 {draftCases.length < 5 && (
                   <button
                     type="button"
@@ -431,7 +431,7 @@ export function OpcSkillStudioModal({
                       value={c.title}
                       onChange={(e) => setDraftCases(prev => prev.map((x, i) => (i === idx ? { ...x, title: e.target.value } : x)))}
                       placeholder={`题目 ${idx + 1} 标题`}
-                      className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-ink outline-none placeholder:text-ink-tertiary"
+                      className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-ink outline-none placeholder:text-ink-tertiary"
                     />
                     {draftCases.length > 1 && (
                       <button
@@ -449,7 +449,7 @@ export function OpcSkillStudioModal({
                     value={c.prompt}
                     onChange={(e) => setDraftCases(prev => prev.map((x, i) => (i === idx ? { ...x, prompt: e.target.value } : x)))}
                     placeholder="输入一句最能检验该 Bot 真实交付水准的任务指令…"
-                    className="w-full resize-none rounded-lg border border-hairline/60 bg-app/70 px-2.5 py-2 text-[12.5px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
+                    className="w-full resize-none rounded-lg border border-hairline/60 bg-app/70 px-2.5 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
                   />
                 </div>
               ))}
@@ -459,7 +459,7 @@ export function OpcSkillStudioModal({
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void handleSaveCasesAndRun(false)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-raised px-3.5 py-2 text-[12.5px] font-medium text-ink hover:bg-control disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-raised px-3.5 py-2 text-[13px] font-medium text-ink hover:bg-control disabled:opacity-50"
                 >
                   {busy === "save-cases" ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   仅保存题目
@@ -468,7 +468,7 @@ export function OpcSkillStudioModal({
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void handleSaveCasesAndRun(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-[12.5px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
                 >
                   {busy === "run-eval" ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
                   {busy === "run-eval" ? "正在真题试岗…" : "立即运行试岗评测"}

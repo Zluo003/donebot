@@ -57,7 +57,7 @@ it("survives a real server crash: queued sends keep receipts, cancellation and u
       if (["SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "TZ"].includes(key.toUpperCase()) && value) env[key.toUpperCase()] = value;
     }
     Object.assign(env, {
-      HOME: dataDir, USERPROFILE: dataDir, DONEBOT_DATA_DIR: dataDir,
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", HOME: dataDir, USERPROFILE: dataDir, DONEBOT_DATA_DIR: dataDir,
       APPDATA: join(dataDir, "AppData", "Roaming"), LOCALAPPDATA: join(dataDir, "AppData", "Local"),
       XDG_CONFIG_HOME: join(dataDir, ".config"), XDG_CACHE_HOME: join(dataDir, ".cache"),
       XDG_DATA_HOME: join(dataDir, ".local", "share"), HERMES_HOME: join(dataDir, ".hermes"),

@@ -506,7 +506,7 @@ export function OpcOrgChartView({
         )}
 
         {error && (
-          <div role="alert" className="absolute left-5 right-5 top-4 z-20 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-xl bg-danger/12 px-4 py-2.5 text-[12.5px] text-danger backdrop-blur-sm">
+          <div role="alert" className="absolute left-5 right-5 top-4 z-20 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-xl bg-danger/12 px-4 py-2.5 text-[13px] text-danger backdrop-blur-sm">
             <span>{error}</span>
             <button type="button" onClick={() => setError("")} aria-label="关闭错误" className="rounded-full p-1 hover:bg-danger/15">
               <X size={13.5} />
@@ -627,7 +627,7 @@ export function OpcOrgChartView({
             <div className="flex items-center gap-2.5 rounded-2xl bg-panel px-3.5 py-3 text-ink shadow-2xl ring-2 ring-ink/70">
               <BotAvatar bot={draggedBot} size={30} motion="none" motionKey={0} animated={false} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold">{draggedBot.name}</div>
+                <div className="truncate text-[14px] font-semibold">{draggedBot.name}</div>
                 <div className={cn("line-clamp-2 text-[11px]", hoverInvalid ? "text-danger" : "text-ink-tertiary")}>{dragHint}</div>
               </div>
             </div>
@@ -638,7 +638,7 @@ export function OpcOrgChartView({
         <div
           onPointerDown={e => e.stopPropagation()}
           style={{ bottom: bottomInset > 0 ? bottomInset + 10 : 16 }}
-          className="absolute left-4 z-10 flex items-center gap-3 rounded-full bg-panel/90 px-3.5 py-1.5 text-[11.5px] text-ink-tertiary ring-[0.5px] ring-hairline/70 backdrop-blur-md"
+          className="absolute left-4 z-10 flex items-center gap-3 rounded-full bg-panel/90 px-3.5 py-1.5 text-[12px] text-ink-tertiary ring-[0.5px] ring-hairline/70 backdrop-blur-md"
         >
           <span className="hidden items-center gap-1.5 sm:inline-flex">
             <span className="h-px w-4 bg-hairline" /> 拖卡片改汇报/部门

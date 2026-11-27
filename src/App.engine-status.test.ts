@@ -22,7 +22,7 @@ it("keeps a saved conversation visible through an unavailable engine status and 
     modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
     messages: [{ id: "saved", role: "user", text: "Saved conversation before the status failure", timestamp: 1 }],
   } as unknown as Bot;
-  state = { ...initialState, connected: true, hydrated: true, bots: [bot], selectedId: bot.id,
+  state = { ...initialState, connected: true, hydrated: true, config: { donebot: { enabled: false } } as AppState["config"], bots: [bot], selectedId: bot.id,
     instances: [{ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", models: { default: "claude-sonnet-5", options: [{ id: "claude-sonnet-5", label: "Sonnet" }] }, snapshot: { state: "unavailable", reason: "CLI probe timed out" } }],
   };
   const container = document.createElement("div");
@@ -44,7 +44,7 @@ it("keeps a saved conversation visible through an unavailable engine status and 
 
 it("offers AI setup when there is no conversation and every engine is unavailable", () => {
   vi.stubGlobal("fetch", () => new Promise(() => {}));
-  state = { ...initialState, connected: true, hydrated: true,
+  state = { ...initialState, connected: true, hydrated: true, config: { donebot: { enabled: false } } as AppState["config"],
     instances: [{ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", models: { default: "", options: [] }, snapshot: { state: "unavailable" } }],
   };
   const container = document.createElement("div");

@@ -97,7 +97,7 @@ export function CreateGroupDialog({
             <span className="tabular-nums text-ink-tertiary">已选 {selectedIds.length} 人</span>
           </div>
           {friends.length === 0 ? (
-            <p className="rounded-xl bg-inset/60 px-3.5 py-4 text-center text-[12.5px] text-ink-tertiary">
+            <p className="rounded-xl bg-inset/60 px-3.5 py-4 text-center text-[13px] text-ink-tertiary">
               还没有好友，请先添加好友后再发起群聊。
             </p>
           ) : (
@@ -148,11 +148,11 @@ export function CreateGroupDialog({
         )}
 
         <div className="flex items-center justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>取消</button>
+          <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[13px]`}>取消</button>
           <button
             type="submit"
             disabled={busy || selectedIds.length === 0}
-            className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}
+            className={`${COLLAB_BUTTON} ui-button-primary text-[13px]`}
           >
             {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
             创建群聊
@@ -226,7 +226,7 @@ export function AddGroupMembersDialog({
     >
       <form onSubmit={e => void submit(e)} className="flex flex-col gap-4">
         {candidates.length === 0 ? (
-          <p className="rounded-xl bg-inset/60 px-3.5 py-5 text-center text-[12.5px] text-ink-tertiary">
+          <p className="rounded-xl bg-inset/60 px-3.5 py-5 text-center text-[13px] text-ink-tertiary">
             你的所有好友都已在当前群聊中。
           </p>
         ) : (
@@ -276,11 +276,11 @@ export function AddGroupMembersDialog({
         )}
 
         <div className="flex items-center justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>取消</button>
+          <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[13px]`}>取消</button>
           <button
             type="submit"
             disabled={busy || selectedIds.length === 0}
-            className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}
+            className={`${COLLAB_BUTTON} ui-button-primary text-[13px]`}
           >
             {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
             添加到群聊

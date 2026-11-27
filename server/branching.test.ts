@@ -81,6 +81,8 @@ posixOnly("conversation branching e2e (fake ACP fleet)", () => {
     );
 
     const env: NodeJS.ProcessEnv = {
+      NODE_ENV: "test",
+      DONEBOT_UPSTREAM_FIXTURE: "1",
       HOME: home,
       USERPROFILE: home,
       DONEBOT_PORT: String(PORT),

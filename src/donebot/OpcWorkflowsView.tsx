@@ -228,7 +228,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
         </div>
 
         {error && (
-          <div role="alert" className="rounded-xl bg-danger/10 px-4 py-3 text-[12.5px] text-danger">
+          <div role="alert" className="rounded-xl bg-danger/10 px-4 py-3 text-[13px] text-danger">
             {error}
           </div>
         )}
@@ -241,14 +241,14 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
             </div>
           ) : workflows.length === 0 ? (
             <div className="py-6">
-              <p className="text-[13.5px] text-ink-secondary">
+              <p className="text-[14px] text-ink-secondary">
                 还没有固定工作流。点击下方按钮打开画布，把「触发器 → 选题员工 → 写手员工 → 人工审批 → 视觉出图」连成自动流水线。
               </p>
               <button
                 type="button"
                 disabled={bots.length === 0}
                 onClick={openCreateCanvas}
-                className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-4 text-[12.5px] font-medium text-ink hover:bg-ink/[0.11] disabled:opacity-40"
+                className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-4 text-[13px] font-medium text-ink hover:bg-ink/[0.11] disabled:opacity-40"
               >
                 <Plus size={13} /> 打开画布创建第一条工作流
               </button>
@@ -268,7 +268,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                           </span>
                         </div>
                         {wf.description && (
-                          <p className="mt-1 text-[12.5px] text-ink-secondary">{wf.description}</p>
+                          <p className="mt-1 text-[13px] text-ink-secondary">{wf.description}</p>
                         )}
 
                         {/* Ordered DAG pipeline preview */}
@@ -298,7 +298,7 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                               type="button"
                               disabled={busyId !== null}
                               onClick={() => void handleResetBreaker(wf)}
-                              className="inline-flex items-center gap-1 rounded-full bg-danger/12 px-2.5 py-0.5 text-[11.5px] font-medium text-danger hover:bg-danger/20"
+                              className="inline-flex items-center gap-1 rounded-full bg-danger/12 px-2.5 py-0.5 text-[12px] font-medium text-danger hover:bg-danger/20"
                             >
                               <RotateCcw size={11} /> 解除熔断
                             </button>
@@ -373,11 +373,11 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                           {run.status === "running" && <Loader2 size={12} className="animate-spin" />}
                           {meta.label}
                         </span>
-                        <span className="text-[11.5px] text-ink-tertiary">
+                        <span className="text-[12px] text-ink-tertiary">
                           {run.trigger === "schedule" ? "定时触发" : "手动触发"}
                         </span>
                       </div>
-                      <span className="text-[11.5px] tabular-nums text-ink-tertiary">
+                      <span className="text-[12px] tabular-nums text-ink-tertiary">
                         {new Date(run.startedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
@@ -389,11 +389,11 @@ export function OpcWorkflowsView({ bots }: { bots: Bot[] }) {
                           || sr.status === "failed"
                           || (runIdx === 0 && isFinal && Boolean(sr.output));
                         return (
-                          <details key={`${run.id}:${sr.stepId}`} open={defaultOpen} className="text-[12.5px]">
+                          <details key={`${run.id}:${sr.stepId}`} open={defaultOpen} className="text-[13px]">
                             <summary className="flex cursor-pointer select-none items-center gap-2 py-0.5 text-ink-secondary hover:text-ink">
                               <span className="tabular-nums text-ink-tertiary">{idx + 1}.</span>
                               <span className="font-medium text-ink">{sr.stepName}</span>
-                              <span className="text-[11.5px] text-ink-tertiary">{sr.botName}</span>
+                              <span className="text-[12px] text-ink-tertiary">{sr.botName}</span>
                               <div className="ml-auto flex items-center gap-2.5">
                                 {(sr.status === "completed" || sr.status === "waiting_approval" || sr.status === "running") && (
                                   <button

@@ -118,6 +118,8 @@ beforeAll(async () => {
     env: {
       ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+      NODE_ENV: "test",
+      DONEBOT_UPSTREAM_FIXTURE: "1",
       HOME: home,
       USERPROFILE: home,
       DONEBOT_PORT: String(HARNESS_PORT),

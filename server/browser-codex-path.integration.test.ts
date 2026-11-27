@@ -66,7 +66,7 @@ describe.skipIf(process.platform === "win32")("Codex browser turns with a minima
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        PATH: FINDER_PATH, HOME: home, DONEBOT_DATA_DIR: data, DONEBOT_PORT: String(port),
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", PATH: FINDER_PATH, HOME: home, DONEBOT_DATA_DIR: data, DONEBOT_PORT: String(port),
         DONEBOT_AGENT_BROWSER_PATH: browser, VITEST: "1",
       },
       stdio: ["ignore", "pipe", "pipe"],

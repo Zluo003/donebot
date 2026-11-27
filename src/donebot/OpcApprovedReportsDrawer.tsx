@@ -184,7 +184,7 @@ export function OpcApprovedReportsDrawer({
             <button
               type="button"
               onClick={() => setSelectedId(null)}
-              className="inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-[12.5px] font-medium text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink"
+              className="inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-[13px] font-medium text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink"
             >
               <ArrowLeft size={14} aria-hidden="true" />
               <span className="truncate">返回已通过汇报</span>
@@ -192,7 +192,7 @@ export function OpcApprovedReportsDrawer({
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               <Archive size={14} className="shrink-0 text-ink-secondary" aria-hidden="true" />
-              <h2 className="truncate text-[13.5px] font-semibold text-ink">已通过汇报</h2>
+              <h2 className="truncate text-[14px] font-semibold text-ink">已通过汇报</h2>
               <span className="rounded-full bg-ink/[0.07] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink-secondary">
                 {reports.length}
               </span>
@@ -249,7 +249,7 @@ export function OpcApprovedReportsDrawer({
               </div>
             </div>
 
-            <div className="px-5 py-4 text-[13.5px] leading-7 text-ink">
+            <div className="px-5 py-4 text-[14px] leading-7 text-ink">
               <ChatMarkdown text={selected.body} />
             </div>
 
@@ -287,7 +287,7 @@ export function OpcApprovedReportsDrawer({
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     placeholder="按标题、汇报人或部门筛选…"
-                    className="h-8 w-full rounded-lg border border-hairline/60 bg-inset/80 pl-8 pr-3 text-[12.5px] text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/35"
+                    className="h-8 w-full rounded-lg border border-hairline/60 bg-inset/80 pl-8 pr-3 text-[13px] text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/35"
                   />
                 </label>
               </search>
@@ -310,7 +310,7 @@ export function OpcApprovedReportsDrawer({
                 <div className="space-y-5">
                   {groups.map(group => (
                     <section key={group.dayKey} aria-label={group.label}>
-                      <div className="sticky top-0 z-10 -mx-1 mb-2 bg-panel/95 px-1 py-1 text-[11.5px] font-medium text-ink-tertiary backdrop-blur-sm">
+                      <div className="sticky top-0 z-10 -mx-1 mb-2 bg-panel/95 px-1 py-1 text-[12px] font-medium text-ink-tertiary backdrop-blur-sm">
                         {group.label}
                       </div>
                       <ul className="space-y-2">
@@ -325,7 +325,7 @@ export function OpcApprovedReportsDrawer({
                                 className="group block w-full rounded-xl border border-hairline/45 bg-card/85 p-3 text-left transition-colors hover:border-hairline/80 hover:bg-card"
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <span className="line-clamp-1 text-[13.5px] font-medium text-ink group-hover:underline">
+                                  <span className="line-clamp-1 text-[14px] font-medium text-ink group-hover:underline">
                                     {report.title}
                                   </span>
                                   {ts > 0 && (
@@ -334,7 +334,7 @@ export function OpcApprovedReportsDrawer({
                                     </span>
                                   )}
                                 </div>
-                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-tertiary">
+                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-tertiary">
                                   <span className="truncate">{author}</span>
                                   <span aria-hidden="true">·</span>
                                   <span>{report.workflow ? report.workflow.workflowName : "正式汇报"}</span>

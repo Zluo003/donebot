@@ -216,7 +216,7 @@ export function CollabTeamTaskDialog({
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-menu text-ink shadow-2xl ring-1 ring-ink/12">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-ink/[0.07] px-5 py-3.5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <h2 className="shrink-0 text-[15.5px] font-semibold text-ink">
+            <h2 className="shrink-0 text-[16px] font-semibold text-ink">
               {editingTask ? "编辑任务" : seedFromMessage ? "从聊天消息转为任务" : "派发团队任务"}
             </h2>
             {!editingTask && (
@@ -232,7 +232,7 @@ export function CollabTeamTaskDialog({
                   data-collab-task-mode="ai"
                   onClick={() => setCreateMode("ai")}
                   className={cn(
-                    "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11.5px] font-medium transition-colors",
+                    "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium transition-colors",
                     createMode === "ai"
                       ? "bg-composer text-accent-text shadow-xs"
                       : "text-ink-secondary hover:text-ink",
@@ -248,7 +248,7 @@ export function CollabTeamTaskDialog({
                   data-collab-task-mode="manual"
                   onClick={() => setCreateMode("manual")}
                   className={cn(
-                    "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11.5px] font-medium transition-colors",
+                    "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium transition-colors",
                     createMode === "manual"
                       ? "bg-composer text-ink shadow-xs"
                       : "text-ink-secondary hover:text-ink",
@@ -301,7 +301,7 @@ export function CollabTeamTaskDialog({
           )}
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="collab-task-title" className="text-[12.5px] font-medium text-ink-secondary">任务标题</label>
+            <label htmlFor="collab-task-title" className="text-[13px] font-medium text-ink-secondary">任务标题</label>
             <input
               id="collab-task-title"
               autoFocus
@@ -315,7 +315,7 @@ export function CollabTeamTaskDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="collab-task-desc" className="text-[12.5px] font-medium text-ink-secondary">任务背景与详细要求</label>
+            <label htmlFor="collab-task-desc" className="text-[13px] font-medium text-ink-secondary">任务背景与详细要求</label>
             <textarea
               id="collab-task-desc"
               rows={2}
@@ -329,7 +329,7 @@ export function CollabTeamTaskDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="collab-task-criteria" className="text-[12.5px] font-medium text-ink-secondary">
+            <label htmlFor="collab-task-criteria" className="text-[13px] font-medium text-ink-secondary">
               客观验收清单（每行一条，供主协调助手自动初审对照）
             </label>
             <textarea
@@ -346,7 +346,7 @@ export function CollabTeamTaskDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-task-assignee" className="text-[12.5px] font-medium text-ink-secondary">负责人（真人）</label>
+              <label htmlFor="collab-task-assignee" className="text-[13px] font-medium text-ink-secondary">负责人（真人）</label>
               <CollabSelect
                 id="collab-task-assignee"
                 ariaLabel="负责人（真人）"
@@ -359,7 +359,7 @@ export function CollabTeamTaskDialog({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-task-reviewer" className="text-[12.5px] font-medium text-ink-secondary">验收人（最终确认）</label>
+              <label htmlFor="collab-task-reviewer" className="text-[13px] font-medium text-ink-secondary">验收人（最终确认）</label>
               <CollabSelect
                 id="collab-task-reviewer"
                 ariaLabel="验收人（最终确认）"
@@ -374,7 +374,7 @@ export function CollabTeamTaskDialog({
 
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-task-channel" className="text-[12.5px] font-medium text-ink-secondary">所属频道</label>
+              <label htmlFor="collab-task-channel" className="text-[13px] font-medium text-ink-secondary">所属频道</label>
               <CollabSelect
                 id="collab-task-channel"
                 ariaLabel="所属频道"
@@ -386,7 +386,7 @@ export function CollabTeamTaskDialog({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-task-priority" className="text-[12.5px] font-medium text-ink-secondary">优先级</label>
+              <label htmlFor="collab-task-priority" className="text-[13px] font-medium text-ink-secondary">优先级</label>
               <CollabSelect
                 id="collab-task-priority"
                 ariaLabel="优先级"
@@ -399,7 +399,7 @@ export function CollabTeamTaskDialog({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-task-due" className="text-[12.5px] font-medium text-ink-secondary">截止日期</label>
+              <label htmlFor="collab-task-due" className="text-[13px] font-medium text-ink-secondary">截止日期</label>
               <input
                 id="collab-task-due"
                 type="date"
@@ -434,7 +434,7 @@ export function CollabTeamTaskDialog({
                   onChange={setMaxAutoRevisions}
                   disabled={busy}
                 />
-                <label className="flex cursor-pointer items-center gap-2 text-[11.5px] text-ink-tertiary">
+                <label className="flex cursor-pointer items-center gap-2 text-[12px] text-ink-tertiary">
                   <input
                     type="checkbox"
                     checked={assigneeAutoResubmit}
@@ -449,7 +449,7 @@ export function CollabTeamTaskDialog({
 
           {eligibleMembers.length > 1 && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[12.5px] font-medium text-ink-secondary">协作者（可选，配合推进的同事）</span>
+              <span className="text-[13px] font-medium text-ink-secondary">协作者（可选，配合推进的同事）</span>
               <div className="flex flex-wrap gap-1.5">
                 {eligibleMembers
                   .filter(m => String(m.user_id) !== assigneeId)
@@ -461,7 +461,7 @@ export function CollabTeamTaskDialog({
                         type="button"
                         onClick={() => toggleCollaborator(m.user_id)}
                         className={cn(
-                          "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] ring-1 ring-inset transition-colors",
+                          "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] ring-1 ring-inset transition-colors",
                           active
                             ? "bg-accent/14 text-accent-text ring-accent/30"
                             : "bg-inset/70 text-ink-secondary ring-ink/[0.08] hover:text-ink",
@@ -477,7 +477,7 @@ export function CollabTeamTaskDialog({
           )}
 
           {!editingTask && (
-            <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-inset/50 px-3 py-2 text-[12.5px] text-ink-secondary ring-1 ring-inset ring-ink/[0.06]">
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-inset/50 px-3 py-2 text-[13px] text-ink-secondary ring-1 ring-inset ring-ink/[0.06]">
               <input
                 type="checkbox"
                 checked={notifyChannel}
@@ -494,7 +494,7 @@ export function CollabTeamTaskDialog({
             type="button"
             disabled={busy}
             onClick={onClose}
-            className={`${COLLAB_BUTTON} h-8 px-3.5 text-[12.5px]`}
+            className={`${COLLAB_BUTTON} h-8 px-3.5 text-[13px]`}
           >
             取消
           </button>
@@ -502,7 +502,7 @@ export function CollabTeamTaskDialog({
             type="submit"
             data-collab-task-submit=""
             disabled={busy || !title.trim()}
-            className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[12.5px]`}
+            className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[13px]`}
           >
             {busy && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}
             {editingTask ? "保存修改" : "创建任务"}

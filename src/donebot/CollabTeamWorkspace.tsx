@@ -142,7 +142,7 @@ export function CollabTeamWorkspace({
             data-collab-team-view-tab="channels"
             onClick={() => setTeamWorkspaceView(team.id, "channels")}
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-colors",
+              "inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
               activeView === "channels"
                 ? "bg-composer text-ink shadow-[0_1px_2px_rgb(0_0_0/0.12)] ring-[0.5px] ring-ink/10"
                 : "text-ink-secondary hover:text-ink",
@@ -163,7 +163,7 @@ export function CollabTeamWorkspace({
             data-collab-team-view-tab="tasks"
             onClick={() => setTeamWorkspaceView(team.id, "tasks")}
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-colors",
+              "inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
               activeView === "tasks"
                 ? "bg-composer text-ink shadow-[0_1px_2px_rgb(0_0_0/0.12)] ring-[0.5px] ring-ink/10"
                 : "text-ink-secondary hover:text-ink",

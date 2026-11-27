@@ -162,7 +162,7 @@ export function OpcOrgNodeCard({
           </span>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[14px] font-semibold">{node.name}</div>
-            <div className="mt-0.5 truncate text-[11.5px] text-app/75">{node.role}</div>
+            <div className="mt-0.5 truncate text-[12px] text-app/75">{node.role}</div>
           </div>
         </div>
       ) : bot ? (
@@ -171,7 +171,7 @@ export function OpcOrgNodeCard({
             <BotAvatar bot={bot} size={32} motion="none" motionKey={0} animated={false} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="truncate text-[13.5px] font-semibold">{node.name}</span>
+                <span className="truncate text-[14px] font-semibold">{node.name}</span>
                 {bot.chiefOfStaff && <Crown size={11.5} className="shrink-0 text-warning" aria-label={node.section ? "部门协调机器人" : "总协调机器人"} />}
                 {status && status.tone !== "idle" && (
                   <span
@@ -195,7 +195,7 @@ export function OpcOrgNodeCard({
             <GripVertical size={13} className="shrink-0 text-ink-tertiary/40 group-hover:text-ink-tertiary" aria-hidden="true" />
           </div>
 
-          <div className="flex items-center gap-1 border-t border-hairline/35 px-2.5 py-1.5 text-[10.5px] text-ink-tertiary">
+          <div className="flex items-center gap-1 border-t border-hairline/35 px-2.5 py-1.5 text-[11px] text-ink-tertiary">
             <button
               type="button"
               onClick={e => { e.stopPropagation(); openBot(dispatch, bot, showThreads); }}

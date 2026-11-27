@@ -367,7 +367,7 @@ export function CollabContactsTab({
               })}
             </div>
           ) : (
-            <div className="rounded-xl bg-inset/50 px-4 py-6 text-center text-[12.5px] text-ink-tertiary">
+            <div className="rounded-xl bg-inset/50 px-4 py-6 text-center text-[13px] text-ink-tertiary">
               还没有创建或加入团队。点击右上角「新建团队」，即可按团队批量授权共享文件夹和 Bot。
             </div>
           )}
@@ -376,8 +376,8 @@ export function CollabContactsTab({
             <div className="flex flex-col divide-y divide-ink/[0.06] overflow-hidden rounded-xl bg-inset/45 ring-1 ring-inset ring-ink/[0.07]">
               <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-[13.5px] font-semibold text-ink">{team.name}</span>
-                  <span className="text-[11.5px] text-ink-tertiary">成员（{members.length}）</span>
+                  <span className="text-[14px] font-semibold text-ink">{team.name}</span>
+                  <span className="text-[12px] text-ink-tertiary">成员（{members.length}）</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {team.role !== "member" && (
@@ -385,7 +385,7 @@ export function CollabContactsTab({
                       type="button"
                       disabled={busy}
                       onClick={() => { setTeamName(team.name); setTeamPanel(c => c === "rename" ? null : "rename"); }}
-                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11.5px]`}
+                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[12px]`}
                     >
                       <Pencil size={11} aria-hidden="true" />改名
                     </button>
@@ -401,7 +401,7 @@ export function CollabContactsTab({
                           await onReload();
                         });
                       }}
-                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[11.5px] hover:text-danger`}
+                      className={`${COLLAB_BUTTON} h-7 px-2.5 text-[12px] hover:text-danger`}
                     >
                       <LogOut size={11} aria-hidden="true" />退出团队
                     </button>
@@ -502,7 +502,7 @@ export function CollabContactsTab({
                     }}
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
-                      <label htmlFor={teamInviteId} className="text-[11.5px] font-medium text-ink-secondary">邀请成员加入「{team.name}」</label>
+                      <label htmlFor={teamInviteId} className="text-[12px] font-medium text-ink-secondary">邀请成员加入「{team.name}」</label>
                       <input
                         id={teamInviteId}
                         type="email"
@@ -540,7 +540,7 @@ export function CollabContactsTab({
 
                   {latestInvite && (
                     <div className="flex flex-col gap-2 rounded-xl bg-app/75 p-3 ring-1 ring-inset ring-ink/[0.07]">
-                      <p className="text-[11.5px] text-ink-secondary">
+                      <p className="text-[12px] text-ink-secondary">
                         对方登录 <strong className="text-ink">{latestInvite.email}</strong> 后会立即收到通知，也可粘贴以下备用邀请码：
                       </p>
                       <CommandLine command={latestInvite.token} copyLabel="复制邀请码" />
@@ -627,8 +627,8 @@ export function CollabContactsTab({
                     <div className="flex min-w-0 items-center gap-3">
                       <CollabAvatar avatarUrl={friend.avatar_url} remark={friend.remark} nickname={friend.nickname} email={friend.email} size={36} />
                       <div className="min-w-0">
-                        <div className="truncate text-[13.5px] font-medium text-ink">{name}</div>
-                        <div className="truncate text-[11.5px] text-ink-tertiary">{sub || "好友"}</div>
+                        <div className="truncate text-[14px] font-medium text-ink">{name}</div>
+                        <div className="truncate text-[12px] text-ink-tertiary">{sub || "好友"}</div>
                       </div>
                     </div>
                     <button
@@ -650,7 +650,7 @@ export function CollabContactsTab({
               })}
             </ul>
           ) : (
-            <p className="px-5 py-6 text-center text-[12.5px] text-ink-tertiary">
+            <p className="px-5 py-6 text-center text-[13px] text-ink-tertiary">
               还没有添加好友，输入对方 DoneBot 邮箱发送申请即可开始远程协作。
             </p>
           )}

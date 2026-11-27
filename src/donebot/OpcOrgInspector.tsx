@@ -69,7 +69,7 @@ export function OpcOrgInspector({
               <span className="truncate text-[14px] font-semibold text-ink">{bot.name}</span>
               {bot.chiefOfStaff && <Crown size={12} className="shrink-0 text-warning" aria-label={botSection ? "部门协调机器人" : "总协调机器人"} />}
             </div>
-            <div className="text-[11.5px] text-ink-tertiary">岗位、部门与协作规则</div>
+            <div className="text-[12px] text-ink-tertiary">岗位、部门与协作规则</div>
           </div>
         </div>
         <button
@@ -82,9 +82,9 @@ export function OpcOrgInspector({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 text-[12.5px]">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 text-[13px]">
         <label className="block space-y-1.5">
-          <span className="text-[11.5px] font-medium text-ink-tertiary">岗位头衔</span>
+          <span className="text-[12px] font-medium text-ink-tertiary">岗位头衔</span>
           <input
             key={`title:${bot.id}:${cfg.roleTitle ?? ""}`}
             defaultValue={cfg.roleTitle ?? bot.title ?? ""}
@@ -95,14 +95,14 @@ export function OpcOrgInspector({
               }
             }}
             placeholder="如：主编 / 选题侦察 / 视觉设计师"
-            className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[12.5px] text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/40"
+            className="h-8.5 w-full rounded-lg border border-hairline/70 bg-inset px-2.5 text-[13px] text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/40"
           />
         </label>
 
         {/* Department assignment + Chief toggle */}
         <div className="space-y-3 border-t border-hairline/40 pt-4">
           <label className="block space-y-1.5">
-            <span className="text-[11.5px] font-medium text-ink-tertiary">所属部门</span>
+            <span className="text-[12px] font-medium text-ink-tertiary">所属部门</span>
             <Select
               value={botSection}
               disabled={saving}
@@ -121,10 +121,10 @@ export function OpcOrgInspector({
 
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[12.5px] font-medium text-ink">
+              <div className="text-[13px] font-medium text-ink">
                 {botSection ? "设为部门协调机器人" : "设为总协调机器人"}
               </div>
-              <div className="text-[11.5px] text-ink-tertiary">
+              <div className="text-[12px] text-ink-tertiary">
                 {botSection
                   ? `负责「${deptLabelOf(bot)}」内分工调度与本部门工作流编排（非全局总协调）`
                   : "全局唯一总协调：直管未归入部门的机器人，统筹各部门、创建部门与跨部门工作流"}
@@ -140,7 +140,7 @@ export function OpcOrgInspector({
 
         {/* Reporting hierarchy */}
         <div className="space-y-1.5 border-t border-hairline/40 pt-4">
-          <label htmlFor={reportsSelectId} className="block text-[11.5px] font-medium text-ink-tertiary">
+          <label htmlFor={reportsSelectId} className="block text-[12px] font-medium text-ink-tertiary">
             直属上级（汇报对象 · 支持部门内多级）
           </label>
           <Select
@@ -176,15 +176,15 @@ export function OpcOrgInspector({
               );
             })}
           </Select>
-          <p id={reportsHelpId} className="text-[11.5px] leading-relaxed text-ink-tertiary">
+          <p id={reportsHelpId} className="text-[12px] leading-relaxed text-ink-tertiary">
             {reportsHelpText}
           </p>
         </div>
 
         {/* Collaboration & handoff rule summary */}
         <div className="space-y-1.5 border-t border-hairline/40 pt-4">
-          <div className="text-[11.5px] font-medium text-ink-tertiary">协作与交接规则</div>
-          <div className="space-y-1 rounded-xl bg-inset/70 px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-secondary">
+          <div className="text-[12px] font-medium text-ink-tertiary">协作与交接规则</div>
+          <div className="space-y-1 rounded-xl bg-inset/70 px-3 py-2.5 text-[12px] leading-relaxed text-ink-secondary">
             <div>
               <span className="font-medium text-ink">部门内：</span>
               {!deptChief
@@ -211,8 +211,8 @@ export function OpcOrgInspector({
         <div className="space-y-3 border-t border-hairline/40 pt-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[12.5px] font-medium text-ink">产物须审批</div>
-              <div className="text-[11.5px] text-ink-tertiary">关键产出提醒先送工作台审核</div>
+              <div className="text-[13px] font-medium text-ink">产物须审批</div>
+              <div className="text-[12px] text-ink-tertiary">关键产出提醒先送工作台审核</div>
             </div>
             <Switch
               checked={Boolean(cfg.requireBossApproval)}
@@ -223,8 +223,8 @@ export function OpcOrgInspector({
 
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[12.5px] font-medium text-ink">允许跨岗咨询</div>
-              <div className="text-[11.5px] text-ink-tertiary">强约束下仍允许 consult 轻量问询</div>
+              <div className="text-[13px] font-medium text-ink">允许跨岗咨询</div>
+              <div className="text-[12px] text-ink-tertiary">强约束下仍允许 consult 轻量问询</div>
             </div>
             <Switch
               checked={cfg.allowCrossConsult !== false}

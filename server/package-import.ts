@@ -368,7 +368,7 @@ function runImport(source: ImportSource, options: PackageImportOptions, deps: Pa
           look: {
             color: written.color,
             mascotExpression: written.mascotExpression ?? null,
-            mascotBody: written.mascotBody ?? null,
+            mascotBody: !agent.appearance.mascotBody && written.mascotBody === "circle" ? null : (written.mascotBody ?? null),
             avatar: avatarHash,
             crop: written.avatarCrop ?? null,
           },

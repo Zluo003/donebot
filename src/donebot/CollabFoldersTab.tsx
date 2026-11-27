@@ -250,7 +250,7 @@ export function CollabFoldersTab({
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-[12.5px] text-ink-secondary">
+            <p className="mt-0.5 text-[13px] text-ink-secondary">
               文件始终保留在你的本机硬盘，绝不上传云端存储；单个文件支持最大 100 MB 流式读写与下载。
             </p>
           </div>
@@ -260,7 +260,7 @@ export function CollabFoldersTab({
             type="button"
             disabled={busy}
             onClick={() => void startPickFolder()}
-            className={`${COLLAB_BUTTON} ui-button-primary shrink-0 px-3.5 text-[12.5px]`}
+            className={`${COLLAB_BUTTON} ui-button-primary shrink-0 px-3.5 text-[13px]`}
           >
             <FolderPlus size={14} aria-hidden="true" />共享本机文件夹
           </button>
@@ -281,13 +281,13 @@ export function CollabFoldersTab({
         </div>
         <div className={cn(COLLAB_CARD, "overflow-hidden divide-y divide-ink/[0.06]")}>
           {!bridge && (
-            <div className="px-5 py-3.5 text-[12.5px] text-ink-secondary">
+            <div className="px-5 py-3.5 text-[13px] text-ink-secondary">
               请在桌面端本机窗口中添加或管理本机共享文件夹。
             </div>
           )}
 
           {relayStatus?.error && (
-            <div role="alert" className="flex items-start gap-2 bg-danger/8 px-5 py-3 text-[12.5px] text-danger">
+            <div role="alert" className="flex items-start gap-2 bg-danger/8 px-5 py-3 text-[13px] text-danger">
               <AlertCircle size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
               <span>{relayStatus.error}</span>
             </div>
@@ -302,7 +302,7 @@ export function CollabFoldersTab({
                     {draft.isNew ? "配置新共享文件夹" : `编辑「${draft.name}」的共享权限`}
                   </div>
                   {draft.path && (
-                    <div className="mt-1 truncate font-mono text-[11.5px] text-ink-tertiary" title={draft.path}>
+                    <div className="mt-1 truncate font-mono text-[12px] text-ink-tertiary" title={draft.path}>
                       本机路径（仅本地可见）：{draft.path}
                     </div>
                   )}
@@ -329,7 +329,7 @@ export function CollabFoldersTab({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] font-medium text-ink-secondary">选择可访问的团队或好友（可按人/团队精确配置只读或可编辑）</span>
-                  <span className="text-[11.5px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
+                  <span className="text-[12px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
                 </div>
                 {candidates.length > 0 ? (
                   <div className="max-h-60 divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/80 ring-1 ring-inset ring-ink/[0.08]">
@@ -411,7 +411,7 @@ export function CollabFoldersTab({
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="truncate text-[14px] font-semibold text-ink">{folder.name}</span>
                             <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
                               folder.online
                                 ? "bg-success/12 text-success ring-success/25"
                                 : "bg-ink/[0.05] text-ink-tertiary ring-ink/10",
@@ -419,7 +419,7 @@ export function CollabFoldersTab({
                               <span className={cn("size-1.5 rounded-full", folder.online ? "bg-success" : "bg-ink-tertiary/50")} aria-hidden="true" />
                               {folder.online ? "在线" : folder.enabled ? "离线" : "已暂停"}
                             </span>
-                            <span className="text-[11.5px] text-ink-tertiary">
+                            <span className="text-[12px] text-ink-tertiary">
                               {folder.device_name}{isThisDevice ? "（本机）" : ""}
                             </span>
                           </div>
@@ -468,7 +468,7 @@ export function CollabFoldersTab({
                           <span className="opacity-70">· {accessLabel(g.access)}</span>
                         </button>
                       )) : (
-                        <span className="text-[11.5px] text-ink-tertiary">尚未授权任何好友或团队，点击「权限」添加。</span>
+                        <span className="text-[12px] text-ink-tertiary">尚未授权任何好友或团队，点击「权限」添加。</span>
                       )}
                     </div>
                   </li>
@@ -480,7 +480,7 @@ export function CollabFoldersTab({
               <div className="flex size-11 items-center justify-center rounded-2xl bg-ink/[0.05] text-ink-tertiary">
                 <FolderOpen size={19} aria-hidden="true" />
               </div>
-              <p className="text-[13.5px] font-medium text-ink">还没有共享本机文件夹</p>
+              <p className="text-[14px] font-medium text-ink">还没有共享本机文件夹</p>
               <p className="max-w-md text-[12px] leading-relaxed text-ink-tertiary">
                 选择一个本机目录并指定哪些好友或团队只读/可编辑。对方和对方的本机 Bot 即可实时读写（支持最大 100 MB 文件）。
               </p>
@@ -500,7 +500,7 @@ export function CollabFoldersTab({
               {showActivity && (
                 <ul className="mt-2.5 max-h-48 divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/75 ring-1 ring-inset ring-ink/[0.07]">
                   {activity.slice(0, 30).map((entry, idx) => (
-                    <li key={`${entry.at}-${idx}`} className="flex items-center justify-between gap-3 px-3.5 py-2 text-[11.5px]">
+                    <li key={`${entry.at}-${idx}`} className="flex items-center justify-between gap-3 px-3.5 py-2 text-[12px]">
                       <div className="min-w-0 flex-1 truncate text-ink-secondary">
                         <span className="font-medium text-ink">{entry.callerEmail}</span>
                         {" · "}
@@ -523,7 +523,7 @@ export function CollabFoldersTab({
       <section className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-[13px] font-semibold text-ink">共享给我的文件夹（{overview.folders.shared_with_me.length}）</h3>
-          <span className="text-[11.5px] text-ink-tertiary">你的本机 Bot 也可直接访问</span>
+          <span className="text-[12px] text-ink-tertiary">你的本机 Bot 也可直接访问</span>
         </div>
         <div className={cn(COLLAB_CARD, "overflow-hidden")}>
           {overview.folders.shared_with_me.length > 0 ? (
@@ -546,7 +546,7 @@ export function CollabFoldersTab({
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="truncate text-[14px] font-semibold text-ink">{folder.name}</span>
                             <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
                               folder.online
                                 ? "bg-success/12 text-success ring-success/25"
                                 : "bg-ink/[0.05] text-ink-tertiary ring-ink/10",
@@ -555,7 +555,7 @@ export function CollabFoldersTab({
                               {folder.online ? "在线" : "对方离线"}
                             </span>
                             <span className={cn(
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
                               folder.access === "write"
                                 ? "bg-accent/14 text-accent-text ring-accent/25"
                                 : "bg-ink/[0.05] text-ink-secondary ring-ink/10",
@@ -593,7 +593,7 @@ export function CollabFoldersTab({
               })}
             </ul>
           ) : (
-            <div className="px-6 py-10 text-center text-[12.5px] text-ink-tertiary">
+            <div className="px-6 py-10 text-center text-[13px] text-ink-tertiary">
               还没有好友或队友向你共享文件夹。等对方在「共享文件夹」里勾选你或你的团队后，这里会立即显示。
             </div>
           )}

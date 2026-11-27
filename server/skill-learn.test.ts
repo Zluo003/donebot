@@ -45,7 +45,7 @@ describe("expandLearnTurnText", () => {
         expect(expanded).not.toContain("stage it for their review");
         expect(expanded).toContain('source as the exact URL or folder');
         expect(expanded).toContain('action="update"');
-        expect(expanded).toContain("explicitly asked to revise");
+        expect(expanded).toContain("asked to refine, fix, or tailor it to their workflow");
         expect(expanded).toContain("exact SKILL.md path listed for that skill");
     });
 

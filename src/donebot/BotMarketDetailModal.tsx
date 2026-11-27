@@ -123,7 +123,7 @@ export function BotMarketDetailModal({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="truncate text-[15.5px] font-semibold">{detail?.name || "Bot 详情"}</h2>
+                <h2 className="truncate text-[16px] font-semibold">{detail?.name || "Bot 详情"}</h2>
                 {detail && (
                   <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[11px] font-medium text-accent">
                     {detail.category_name}
@@ -168,13 +168,13 @@ export function BotMarketDetailModal({
           ) : detail ? (
             <>
               {error && (
-                <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[12.5px] text-danger">
+                <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
                   <AlertCircle size={15} className="mt-0.5 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
               {notice && (
-                <div className="flex items-start gap-2 rounded-xl bg-emerald-500/12 px-3.5 py-2.5 text-[12.5px] text-emerald-500">
+                <div className="flex items-start gap-2 rounded-xl bg-emerald-500/12 px-3.5 py-2.5 text-[13px] text-emerald-500">
                   <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
                   <span>{notice}</span>
                 </div>
@@ -190,7 +190,7 @@ export function BotMarketDetailModal({
                 {detail.tags?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {detail.tags.map(tag => (
-                      <span key={tag} className="rounded-full bg-raised px-2.5 py-0.5 text-[11.5px] text-ink-secondary">
+                      <span key={tag} className="rounded-full bg-raised px-2.5 py-0.5 text-[12px] text-ink-secondary">
                         #{tag}
                       </span>
                     ))}
@@ -200,19 +200,19 @@ export function BotMarketDetailModal({
 
               {detail.listing_type === "studio" && (detail.bots_summary?.length ?? 0) > 0 && (
                 <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2.5">
-                  <div className="flex items-center justify-between text-[12.5px]">
+                  <div className="flex items-center justify-between text-[13px]">
                     <span className="flex items-center gap-1.5 font-medium text-ink">
                       <Users size={14} className="text-accent" />
                       部门成员编制（{detail.bot_count ?? detail.bots_summary?.length} 位员工）
                     </span>
-                    <span className="text-[11.5px] text-ink-tertiary">一键入职，按实际算力消耗计费</span>
+                    <span className="text-[12px] text-ink-tertiary">一键入职，按实际算力消耗计费</span>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {detail.bots_summary?.map((member, idx) => (
                       <div key={idx} className="flex items-center gap-2.5 rounded-lg bg-app/75 px-3 py-2">
                         <BotAvatar bot={{ name: member.name, color: safeMarketColor(member.color) }} size={28} />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[12.5px] font-medium text-ink">{member.name}</div>
+                          <div className="truncate text-[13px] font-medium text-ink">{member.name}</div>
                           <div className="truncate text-[11px] text-ink-secondary">
                             {member.role || "专业 AI 员工"}{member.skill_count ? ` · ${member.skill_count} 技能` : ""}
                           </div>
@@ -225,7 +225,7 @@ export function BotMarketDetailModal({
 
               {detail.eval_verified && (detail.eval_samples?.length ?? 0) > 0 && (
                 <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2">
-                  <div className="flex items-center justify-between text-[12.5px]">
+                  <div className="flex items-center justify-between text-[13px]">
                     <span className="flex items-center gap-1.5 font-medium text-ink">
                       <FlaskConical size={14} className="text-emerald-500" />
                       能力实验室实测认证样例（{detail.eval_samples?.length}）
@@ -238,7 +238,7 @@ export function BotMarketDetailModal({
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[12px] font-medium text-ink [&::-webkit-details-marker]:hidden">
                           <span className="truncate">{sample.title || `实测样例 ${idx + 1}`}：{sample.prompt}</span>
                           {sample.model && (
-                            <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-ink-tertiary">
+                            <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink-tertiary">
                               {sample.model}{sample.latency_ms ? ` · ${(sample.latency_ms / 1000).toFixed(1)}s` : ""}
                             </span>
                           )}
@@ -254,10 +254,10 @@ export function BotMarketDetailModal({
 
               {detail.sample_prompts?.length > 0 && (
                 <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2">
-                  <div className="text-[12.5px] font-medium text-ink">示例提问</div>
+                  <div className="text-[13px] font-medium text-ink">示例提问</div>
                   <div className="flex flex-col gap-1.5">
                     {detail.sample_prompts.map((prompt, idx) => (
-                      <div key={idx} className="rounded-lg bg-app/70 px-3 py-2 text-[12.5px] text-ink-secondary">
+                      <div key={idx} className="rounded-lg bg-app/70 px-3 py-2 text-[13px] text-ink-secondary">
                         “{prompt}”
                       </div>
                     ))}
@@ -267,8 +267,8 @@ export function BotMarketDetailModal({
 
               <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[12.5px] font-medium text-ink">SOUL.md 人设与规则</span>
-                  <span className="text-[11.5px] text-ink-secondary">安装后可自由迭代调整</span>
+                  <span className="text-[13px] font-medium text-ink">SOUL.md 人设与规则</span>
+                  <span className="text-[12px] text-ink-secondary">安装后可自由迭代调整</span>
                 </div>
                 <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-lg bg-app/70 p-3 text-[12px] leading-relaxed text-ink-secondary">
                   {detail.soul_preview || "（暂无 SOUL 预览）"}
@@ -277,11 +277,11 @@ export function BotMarketDetailModal({
 
               <div className="rounded-xl border border-hairline bg-card p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
+                  <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
                     <Sparkles size={14} className="text-accent" />
                     内置 Skill（{detail.skills?.length ?? 0}）
                   </span>
-                  <span className="text-[11.5px] text-emerald-500">安装后默认启用 · 可对话优化</span>
+                  <span className="text-[12px] text-emerald-500">安装后默认启用 · 可对话优化</span>
                 </div>
                 {!detail.skills?.length ? (
                   <p className="text-[12px] text-ink-secondary">该 Bot 未附带额外 Skill，纯 SOUL 驱动。</p>
@@ -299,20 +299,20 @@ export function BotMarketDetailModal({
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[12.5px] font-medium text-ink">{sk.name}</span>
+                                <span className="text-[13px] font-medium text-ink">{sk.name}</span>
                                 {supportFiles.length > 0 && (
-                                  <span className="rounded bg-raised px-1.5 py-0.5 text-[10.5px] text-ink-tertiary">
+                                  <span className="rounded bg-raised px-1.5 py-0.5 text-[11px] text-ink-tertiary">
                                     +{supportFiles.length} 个附属文件
                                   </span>
                                 )}
                               </div>
                               {sk.description && (
-                                <div className="truncate text-[11.5px] text-ink-secondary">{sk.description}</div>
+                                <div className="truncate text-[12px] text-ink-secondary">{sk.description}</div>
                               )}
                             </div>
                           </summary>
                           <div className="space-y-2 border-t border-hairline bg-app px-3 py-2.5">
-                            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[11.5px] leading-relaxed text-ink-secondary">
+                            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-ink-secondary">
                               {sk.instructions}
                             </pre>
                             {supportFiles.length > 0 && (
@@ -350,7 +350,7 @@ export function BotMarketDetailModal({
 
               {reportOpen && (
                 <form onSubmit={handleReport} className="rounded-xl border border-danger/30 bg-danger/5 p-3.5 space-y-2.5">
-                  <div className="text-[12.5px] font-medium text-danger">举报该 Bot</div>
+                  <div className="text-[13px] font-medium text-danger">举报该 Bot</div>
                   <Select
                     value={reportReason}
                     onChange={e => setReportReason(e.target.value)}
@@ -366,7 +366,7 @@ export function BotMarketDetailModal({
                     onChange={e => setReportDetail(e.target.value)}
                     rows={2}
                     placeholder="请补充具体异常表现（选填）"
-                    className="w-full rounded-lg border border-hairline bg-app px-3 py-1.5 text-[12.5px] text-ink"
+                    className="w-full rounded-lg border border-hairline bg-app px-3 py-1.5 text-[13px] text-ink"
                   />
                   <div className="flex justify-end gap-2">
                     <button
@@ -395,7 +395,7 @@ export function BotMarketDetailModal({
             <button
               type="button"
               onClick={() => setReportOpen(v => !v)}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12.5px] text-ink-secondary hover:bg-raised hover:text-danger"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[13px] text-ink-secondary hover:bg-raised hover:text-danger"
             >
               <Flag size={14} /> 举报违规
             </button>

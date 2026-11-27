@@ -203,7 +203,7 @@ export function CollabRightFoldersTab({
       {draft && (
         <Card label="新建共享文件夹">
           <div className="flex flex-col gap-3 px-3.5 py-3">
-            <div className="truncate font-mono text-[11.5px] text-ink-tertiary" title={draft.path}>
+            <div className="truncate font-mono text-[12px] text-ink-tertiary" title={draft.path}>
               {draft.path}
             </div>
             <input
@@ -245,7 +245,7 @@ export function CollabRightFoldersTab({
                   type="button"
                   disabled={busy}
                   onClick={() => void updateOwnedFolderGrant(folder, "read")}
-                  className={`${COLLAB_BUTTON} h-7 px-2 text-[11.5px]`}
+                  className={`${COLLAB_BUTTON} h-7 px-2 text-[12px]`}
                 >
                   只读
                 </button>
@@ -253,7 +253,7 @@ export function CollabRightFoldersTab({
                   type="button"
                   disabled={busy}
                   onClick={() => void updateOwnedFolderGrant(folder, "write")}
-                  className={`${COLLAB_BUTTON} ui-button-primary h-7 px-2 text-[11.5px]`}
+                  className={`${COLLAB_BUTTON} ui-button-primary h-7 px-2 text-[12px]`}
                 >
                   可编辑
                 </button>
@@ -333,7 +333,7 @@ export function CollabRightFoldersTab({
                       disabled={busy}
                       title="切换只读 / 可编辑权限"
                       onClick={() => void updateOwnedFolderGrant(folder, access === "write" ? "read" : "write")}
-                      className={`${COLLAB_BUTTON} h-7 px-2 text-[11.5px]`}
+                      className={`${COLLAB_BUTTON} h-7 px-2 text-[12px]`}
                     >
                       {access === "write" ? "可编辑" : "只读"}
                     </button>
@@ -501,7 +501,7 @@ export function CollabRightBotsTab({
                     type="button"
                     disabled={busyId !== null}
                     onClick={() => void shareLocalBot(bot.id, bot.name)}
-                    className={`${COLLAB_BUTTON} ui-button-primary h-7 px-2.5 text-[11.5px]`}
+                    className={`${COLLAB_BUTTON} ui-button-primary h-7 px-2.5 text-[12px]`}
                   >
                     {loading ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : "共享"}
                   </button>
@@ -534,7 +534,7 @@ export function CollabRightBotsTab({
                   type="button"
                   disabled={busyId !== null}
                   onClick={() => void installBot(item)}
-                  className={`${COLLAB_BUTTON} ui-button-primary h-7 shrink-0 px-2.5 text-[11.5px]`}
+                  className={`${COLLAB_BUTTON} ui-button-primary h-7 shrink-0 px-2.5 text-[12px]`}
                 >
                   {loading ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}
                   添加
@@ -654,7 +654,7 @@ export function CollabRightFilesTab({
       )}
       <Card label={`聊天文件（${files.length}）`}>
         {loading ? (
-          <div className="flex items-center gap-2 px-3.5 py-4 text-[12.5px] text-ink-secondary">
+          <div className="flex items-center gap-2 px-3.5 py-4 text-[13px] text-ink-secondary">
             <Loader2 size={14} className="animate-spin" aria-hidden="true" />正在加载文件记录…
           </div>
         ) : files.length === 0 ? (

@@ -16,7 +16,7 @@ it("refuses arbitrary Cloud socket paths and non-shared targets", async () => {
   expect(setupCommands("docker").run).toBeNull();
 });
 
-it("routes execution and lifecycle to the private socket and cleans downloaded attachments", async () => {
+it.skipIf(process.platform === "win32")("routes execution and lifecycle to the private socket and cleans downloaded attachments", async () => {
   const dir = await mkdtemp("/tmp/dbc-adapter-"), socket = join(dir, "desktop.sock"), calls: string[] = [];
   const server = createServer(async (req, res) => {
     let body = ""; for await (const chunk of req) body += chunk;

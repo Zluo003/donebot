@@ -514,7 +514,7 @@ export function CollabRightPanel({
                       </span>
                       <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute left-1/2 top-[calc(100%+4px)] z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-hairline bg-menu px-[7px] py-0.5 text-[11.5px] text-ink opacity-0 transition-opacity group-hover:opacity-100"
+                        className="pointer-events-none absolute left-1/2 top-[calc(100%+4px)] z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-hairline bg-menu px-[7px] py-0.5 text-[12px] text-ink opacity-0 transition-opacity group-hover:opacity-100"
                       >
                         更换头像
                       </span>
@@ -703,7 +703,7 @@ export function CollabRightPanel({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="truncate text-[13.5px] font-medium text-ink">{name}</span>
+                              <span className="truncate text-[14px] font-medium text-ink">{name}</span>
                               <span className={cn("inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL[member.role])}>
                                 {TEAM_ROLES[member.role]}
                               </span>
@@ -755,13 +755,13 @@ export function CollabRightPanel({
                                     setEditingJobMemberId(member.user_id);
                                     setJobTitleDraft("");
                                   }}
-                                  className="text-[10.5px] text-ink-tertiary hover:text-accent-text"
+                                  className="text-[11px] text-ink-tertiary hover:text-accent-text"
                                 >
                                   + 岗位
                                 </button>
                               ) : null}
                             </div>
-                            {sub && <div className="truncate text-[11.5px] text-ink-tertiary">{sub}</div>}
+                            {sub && <div className="truncate text-[12px] text-ink-tertiary">{sub}</div>}
                           </div>
                           {manageable && (
                             <div className="flex shrink-0 items-center gap-1">
@@ -849,14 +849,14 @@ export function CollabRightPanel({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="truncate text-[13.5px] font-medium text-ink">{name}</span>
+                              <span className="truncate text-[14px] font-medium text-ink">{name}</span>
                               {isCreator && (
                                 <span className={cn("inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset", TEAM_ROLE_PILL.owner)}>
                                   群主
                                 </span>
                               )}
                             </div>
-                            {sub && <div className="truncate text-[11.5px] text-ink-tertiary">{sub}</div>}
+                            {sub && <div className="truncate text-[12px] text-ink-tertiary">{sub}</div>}
                           </div>
                         </div>
                       );

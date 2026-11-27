@@ -174,7 +174,7 @@ export function CollabTeamChannelsBar({
                 data-collab-channel-pill={ch.id}
                 onClick={() => onSelectChannel(ch.id)}
                 className={cn(
-                  "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[12.5px] font-medium transition-colors",
+                  "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[13px] font-medium transition-colors",
                   selected
                     ? "bg-ink/[0.11] text-ink ring-1 ring-inset ring-ink/[0.12]"
                     : "text-ink-secondary hover:bg-ink/[0.06] hover:text-ink",
@@ -206,7 +206,7 @@ export function CollabTeamChannelsBar({
 
         <div className="flex shrink-0 items-center gap-2">
           {activeChannel?.description && (
-            <span className="hidden max-w-[220px] truncate text-[11.5px] text-ink-tertiary xl:inline">
+            <span className="hidden max-w-[220px] truncate text-[12px] text-ink-tertiary xl:inline">
               {activeChannel.description}
             </span>
           )}
@@ -238,7 +238,7 @@ export function CollabTeamChannelsBar({
             className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-menu p-5 text-ink shadow-2xl ring-1 ring-ink/12"
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-[15.5px] font-semibold text-ink">
+              <h2 className="text-[16px] font-semibold text-ink">
                 {dialogMode === "create" ? "新建团队频道" : `管理 #${activeChannel?.name ?? ""}`}
               </h2>
               <button
@@ -259,7 +259,7 @@ export function CollabTeamChannelsBar({
             )}
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-channel-name" className="text-[12.5px] font-medium text-ink-secondary">频道名称</label>
+              <label htmlFor="collab-channel-name" className="text-[13px] font-medium text-ink-secondary">频道名称</label>
               <input
                 id="collab-channel-name"
                 autoFocus
@@ -287,7 +287,7 @@ export function CollabTeamChannelsBar({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="collab-channel-desc" className="text-[12.5px] font-medium text-ink-secondary">频道简介（可选）</label>
+              <label htmlFor="collab-channel-desc" className="text-[13px] font-medium text-ink-secondary">频道简介（可选）</label>
               <input
                 id="collab-channel-desc"
                 maxLength={200}
@@ -305,7 +305,7 @@ export function CollabTeamChannelsBar({
                     <div className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
                       <Lock size={13} aria-hidden="true" />设为私密频道
                     </div>
-                    <p className="mt-0.5 text-[11.5px] text-ink-tertiary">
+                    <p className="mt-0.5 text-[12px] text-ink-tertiary">
                       仅被选中的团队成员可查看该频道的消息、文件与关联任务。
                     </p>
                   </div>
@@ -320,7 +320,7 @@ export function CollabTeamChannelsBar({
 
                 {isPrivate && (
                   <div className="flex max-h-40 flex-col gap-1 overflow-y-auto border-t border-ink/[0.07] pt-2">
-                    <div className="text-[11.5px] text-ink-tertiary">选择可见成员（含你自己）</div>
+                    <div className="text-[12px] text-ink-tertiary">选择可见成员（含你自己）</div>
                     {members.map(member => {
                       const checked = member.user_id === myUserId || memberIds.includes(member.user_id);
                       const title = jobTitles[member.user_id];
@@ -329,7 +329,7 @@ export function CollabTeamChannelsBar({
                           key={member.user_id}
                           type="button"
                           onClick={() => toggleMember(member.user_id)}
-                          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] hover:bg-ink/[0.05]"
+                          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-ink/[0.05]"
                         >
                           <span className={cn(
                             "flex size-4 shrink-0 items-center justify-center rounded border",
@@ -376,7 +376,7 @@ export function CollabTeamChannelsBar({
                   type="button"
                   disabled={busy}
                   onClick={() => setDialogMode(null)}
-                  className={`${COLLAB_BUTTON} h-8 px-3.5 text-[12.5px]`}
+                  className={`${COLLAB_BUTTON} h-8 px-3.5 text-[13px]`}
                 >
                   取消
                 </button>
@@ -384,7 +384,7 @@ export function CollabTeamChannelsBar({
                   type="submit"
                   data-collab-channel-submit=""
                   disabled={busy || !name.trim()}
-                  className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[12.5px]`}
+                  className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[13px]`}
                 >
                   {busy && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}
                   {dialogMode === "create" ? "创建频道" : "保存"}

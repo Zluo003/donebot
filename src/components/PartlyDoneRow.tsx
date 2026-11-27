@@ -11,18 +11,18 @@ export function PartlyDoneRow({ cause, onRetry }: { cause: string; onRetry?: () 
     : "border-hairline/70 bg-raised/55 text-ink-secondary";
   return (
     <div className="flex justify-start">
-      <div className={`w-fit max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-xl border px-3 py-2 text-[12.5px] ${tone}`}>
+      <div className={`w-fit max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-xl border px-3 py-2 text-[13px] ${tone}`}>
         <details className="group">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
             {view.refused
               ? <CircleAlert size={13} className="shrink-0" />
               : <Info size={13} className="shrink-0 text-ink-tertiary" />}
             <span className="min-w-0 break-words">{view.summary}</span>
-            <span className="ml-1 shrink-0 text-[11.5px] text-ink-tertiary underline-offset-2 group-hover:underline">{t("chat.error.details")}</span>
+            <span className="ml-1 shrink-0 text-[12px] text-ink-tertiary underline-offset-2 group-hover:underline">{t("chat.error.details")}</span>
           </summary>
           <div className="mt-2 space-y-1.5 border-t border-hairline/40 pt-2 text-[12px] text-ink-secondary">
             {view.detail !== cause && <p className="break-words leading-relaxed">{view.detail}</p>}
-            <p className="break-words text-[11.5px] text-ink-tertiary">{cause}</p>
+            <p className="break-words text-[12px] text-ink-tertiary">{cause}</p>
             {onRetry && (
               <button
                 onClick={onRetry}

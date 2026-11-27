@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
+import { DONEBOT_TEMPLATES_ENABLED } from "../../src/donebot/services.ts";
 import { BOT_ROLES } from "../../src/lib/bot-roles.ts";
 import { runControlOmb } from "../control-omb.ts";
 import { UI_TOOLS_DIR } from "./control-omb-ui.ts";
@@ -202,31 +203,33 @@ describe("bot setup and tools in the real renderer", () => {
     await expect.poll(async () => (await bots()).length, { timeout: 10_000 }).toBe(beforeShortcut.length + 1);
     await expect.poll(dialogCount, { timeout: 10_000 }).toBe(0);
 
-    // A failed profile step must roll back the incomplete ready-made bot and
-    // leave its review open, over Templates, for a single successful retry.
-    const beforeFailure = await bots();
-    await evaluate(`(() => {
-      const fetch = window.fetch.bind(window);
-      window.fetch = (input, init) => {
-        const path = input instanceof Request ? input.url : String(input);
-        if (init?.method === 'PATCH' && /\\/api\\/bots\\/[^/]+$/.test(path) && typeof init.body === 'string' && JSON.parse(init.body).soul) {
-          window.fetch = fetch;
-          return Promise.resolve(new Response(JSON.stringify({error:'Fixture preset rejected'}), {status:409, headers:{'content-type':'application/json'}}));
-        }
-        return fetch(input, init);
-      };
-      return true;
-    })()`);
-    const ops = BOT_ROLES.find((role) => role.id === "ops")!;
-    await reviewReadyBot(ops.name, ops.title);
-    await click("Create bot");
-    await expect.poll(snapshot, { timeout: 10_000 }).toContain("Fixture preset rejected");
-    expect((await bots()).map(bot => bot.id)).toEqual(beforeFailure.map(bot => bot.id));
-    expect(await dialogCount()).toBe(2);
-    await click("Create bot");
-    await expect.poll(async () => (await bots()).length, { timeout: 10_000 }).toBe(beforeFailure.length + 1);
-    await expect.poll(dialogCount, { timeout: 10_000 }).toBe(0);
-    expect((await bots()).filter(bot => !beforeFailure.some(old => old.id === bot.id))).toMatchObject([{ name: ops.name, soul: ops.soul }]);
+    if (DONEBOT_TEMPLATES_ENABLED) {
+      // A failed profile step must roll back the incomplete ready-made bot and
+      // leave its review open, over Templates, for a single successful retry.
+      const beforeFailure = await bots();
+      await evaluate(`(() => {
+        const fetch = window.fetch.bind(window);
+        window.fetch = (input, init) => {
+          const path = input instanceof Request ? input.url : String(input);
+          if (init?.method === 'PATCH' && /\\/api\\/bots\\/[^/]+$/.test(path) && typeof init.body === 'string' && JSON.parse(init.body).soul) {
+            window.fetch = fetch;
+            return Promise.resolve(new Response(JSON.stringify({error:'Fixture preset rejected'}), {status:409, headers:{'content-type':'application/json'}}));
+          }
+          return fetch(input, init);
+        };
+        return true;
+      })()`);
+      const ops = BOT_ROLES.find((role) => role.id === "ops")!;
+      await reviewReadyBot(ops.name, ops.title);
+      await click("Create bot");
+      await expect.poll(snapshot, { timeout: 10_000 }).toContain("Fixture preset rejected");
+      expect((await bots()).map(bot => bot.id)).toEqual(beforeFailure.map(bot => bot.id));
+      expect(await dialogCount()).toBe(2);
+      await click("Create bot");
+      await expect.poll(async () => (await bots()).length, { timeout: 10_000 }).toBe(beforeFailure.length + 1);
+      await expect.poll(dialogCount, { timeout: 10_000 }).toBe(0);
+      expect((await bots()).filter(bot => !beforeFailure.some(old => old.id === bot.id))).toMatchObject([{ name: ops.name, soul: ops.soul }]);
+    }
     const logs = await ui("console");
     expect((logs.messages as Array<{ type: string; text: string }>).filter((entry) => entry.type === "error")).toEqual([]);
     if (child?.connected) child.send("stop");

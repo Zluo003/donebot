@@ -114,7 +114,7 @@ export function CollabSidebarSwitch({ compact, listOnly = false }: { compact: bo
               className={cn(
                 "relative flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-colors",
                 FOCUS_RING,
-                compact ? "size-9 rounded-xl" : "h-8 min-w-0 flex-1 px-2.5 text-[12.5px]",
+                compact ? "size-9 rounded-xl" : "h-8 min-w-0 flex-1 px-2.5 text-[13px]",
                 active
                   ? "bg-composer text-ink shadow-[0_1px_2px_rgb(0_0_0/0.12)] ring-[0.5px] ring-ink/10"
                   : "text-ink-secondary hover:text-ink",
@@ -315,13 +315,13 @@ export function CollabSidebarList({
           data-collab-requests-trigger=""
           onClick={() => openCollabDialog({ kind: "requests" })}
           className={cn(
-            "flex items-center gap-2.5 rounded-xl bg-danger/12 px-3 py-2 text-left text-[12.5px] font-medium text-danger ring-1 ring-inset ring-danger/25 transition-colors hover:bg-danger/18",
+            "flex items-center gap-2.5 rounded-xl bg-danger/12 px-3 py-2 text-left text-[13px] font-medium text-danger ring-1 ring-inset ring-danger/25 transition-colors hover:bg-danger/18",
             FOCUS_RING,
           )}
         >
           <Bell size={14} className="shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">有 {pending} 条好友申请或团队邀请</span>
-          <span className="shrink-0 rounded-full bg-danger px-1.5 text-[10.5px] font-semibold leading-4 tabular-nums text-white">
+          <span className="shrink-0 rounded-full bg-danger px-1.5 text-[11px] font-semibold leading-4 tabular-nums text-white">
             处理
           </span>
         </button>
@@ -403,13 +403,13 @@ export function CollabSidebarList({
                         <CollabTeamBadge name={team.name} avatarUrl={team.avatar_url} size={34} />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[13.5px] font-medium text-ink">{team.name}</span>
+                            <span className="truncate text-[14px] font-medium text-ink">{team.name}</span>
                             {timeText && (
-                              <span className="shrink-0 text-[10.5px] tabular-nums text-ink-tertiary">{timeText}</span>
+                              <span className="shrink-0 text-[11px] tabular-nums text-ink-tertiary">{timeText}</span>
                             )}
                           </span>
                           <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[11.5px] text-ink-tertiary">{snippet}</span>
+                            <span className="truncate text-[12px] text-ink-tertiary">{snippet}</span>
                             <span className="flex shrink-0 items-center gap-1">
                               {taskPill && (
                                 <span
@@ -486,13 +486,13 @@ export function CollabSidebarList({
                         <CollabTeamBadge name={group.name} avatarUrl={group.avatar_url} size={34} />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[13.5px] font-medium text-ink">{group.name}</span>
+                            <span className="truncate text-[14px] font-medium text-ink">{group.name}</span>
                             {timeText && (
-                              <span className="shrink-0 text-[10.5px] tabular-nums text-ink-tertiary">{timeText}</span>
+                              <span className="shrink-0 text-[11px] tabular-nums text-ink-tertiary">{timeText}</span>
                             )}
                           </span>
                           <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[11.5px] text-ink-tertiary">{snippet}</span>
+                            <span className="truncate text-[12px] text-ink-tertiary">{snippet}</span>
                             {unread > 0 && (
                               <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white">
                                 {unread > 99 ? "99+" : unread}
@@ -562,13 +562,13 @@ export function CollabSidebarList({
                         />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[13.5px] font-medium text-ink">{name}</span>
+                            <span className="truncate text-[14px] font-medium text-ink">{name}</span>
                             {timeText && (
-                              <span className="shrink-0 text-[10.5px] tabular-nums text-ink-tertiary">{timeText}</span>
+                              <span className="shrink-0 text-[11px] tabular-nums text-ink-tertiary">{timeText}</span>
                             )}
                           </span>
                           <span className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-[11.5px] text-ink-tertiary">{snippet}</span>
+                            <span className="truncate text-[12px] text-ink-tertiary">{snippet}</span>
                             {unread > 0 && (
                               <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 tabular-nums text-white">
                                 {unread > 99 ? "99+" : unread}

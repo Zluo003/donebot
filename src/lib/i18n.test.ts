@@ -139,13 +139,15 @@ describe("t", () => {
 describe("activePackComplete", () => {
   it("is true only for a pack other than English that has every English key", () => {
     expect(activePackComplete()).toBe(false);
-    setLocale("pt-br");
-    expect(activePackComplete()).toBe(true);
+    locales["zz-full"] = { ...locales.en };
     locales["zz"] = { "approval.held.native": "x" };
     try {
+      setLocale("zz-full");
+      expect(activePackComplete()).toBe(true);
       setLocale("zz");
       expect(activePackComplete()).toBe(false);
     } finally {
+      delete locales["zz-full"];
       delete locales["zz"];
     }
   });

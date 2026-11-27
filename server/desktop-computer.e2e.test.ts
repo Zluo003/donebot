@@ -74,7 +74,7 @@ describe("this computer belongs to the desktop app's own server", () => {
     const proc = spawn(process.execPath, [...hooks, join(ROOT, "server/index.ts")], {
       cwd: ROOT, env: {
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data,
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
         TEMP: home, TMP: home, TMPDIR: home,
         DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1), DONEBOT_STATIC_DIR: ui, DONEBOT_TEST_VM_STATE: stateFile,

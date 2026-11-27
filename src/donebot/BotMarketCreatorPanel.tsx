@@ -166,30 +166,30 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
             <div className="rounded-2xl border border-hairline bg-card p-4">
               <div className="text-[12px] text-ink-secondary">可支配收益</div>
               <div className="mt-1 text-[22px] font-semibold text-emerald-500">{formatCny(wallet.available_amount)}</div>
-              <div className="mt-1 text-[11.5px] text-ink-secondary">可转算力或申请提现</div>
+              <div className="mt-1 text-[12px] text-ink-secondary">可转算力或申请提现</div>
             </div>
             <div className="rounded-2xl border border-hairline bg-card p-4">
               <div className="text-[12px] text-ink-secondary">冻结中收益</div>
               <div className="mt-1 text-[22px] font-semibold text-amber-500">{formatCny(wallet.frozen_amount)}</div>
-              <div className="mt-1 text-[11.5px] text-ink-secondary">消费满 {wallet.freeze_days} 天自动解冻</div>
+              <div className="mt-1 text-[12px] text-ink-secondary">消费满 {wallet.freeze_days} 天自动解冻</div>
             </div>
             <div className="rounded-2xl border border-hairline bg-card p-4">
               <div className="text-[12px] text-ink-secondary">累计获得分润</div>
               <div className="mt-1 text-[22px] font-semibold text-ink">{formatCny(wallet.total_earned)}</div>
-              <div className="mt-1 text-[11.5px] text-ink-secondary">仅统计网关真实结算消费</div>
+              <div className="mt-1 text-[12px] text-ink-secondary">仅统计网关真实结算消费</div>
             </div>
             <div className="rounded-2xl border border-hairline bg-card p-4">
               <div className="text-[12px] text-ink-secondary">已转算力 / 已提现</div>
               <div className="mt-1 text-[18px] font-semibold text-ink">
                 {formatCny(wallet.total_transferred)} / {formatCny(wallet.total_withdrawn)}
               </div>
-              <div className="mt-1 text-[11.5px] text-ink-secondary">
+              <div className="mt-1 text-[12px] text-ink-secondary">
                 待处理提现：{wallet.pending_withdraw_count} 笔
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-hairline bg-card px-4 py-3 text-[12.5px]">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-hairline bg-card px-4 py-3 text-[13px]">
             <div className="flex flex-wrap items-center gap-2 text-ink-secondary">
               <Coins size={15} className="text-accent" />
               <span className="font-medium text-ink">当前各品类分润比例：</span>
@@ -209,7 +209,7 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
           </div>
 
           {cloudManaged && (
-            <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-[12.5px] text-amber-500">
+            <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-[13px] text-amber-500">
               <AlertCircle size={15} className="mt-0.5 shrink-0" />
               <span>当前位于云空间，可随时查看创作者收益与明细；为保障资金安全，转入算力余额与申请支付宝提现请切回「这台电脑」本机登录空间操作。</span>
             </div>
@@ -223,7 +223,7 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
                     <ArrowRightLeft size={16} className="text-accent" /> 转为算力余额
                   </div>
                   {transferBonusRate > 0 && (
-                    <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11.5px] font-medium text-emerald-500">
+                    <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[12px] font-medium text-emerald-500">
                       额外赠送 +{transferBonusRate}%
                     </span>
                   )}
@@ -265,7 +265,7 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
                   <div className="flex items-center gap-2 text-[14px] font-semibold text-ink">
                     <Wallet size={16} className="text-accent" /> 申请支付宝提现
                   </div>
-                  <span className="text-[11.5px] text-ink-secondary">
+                  <span className="text-[12px] text-ink-secondary">
                     最低门槛 {formatCny(wallet.min_withdraw_amount)}
                   </span>
                 </div>
@@ -342,7 +342,7 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
             </button>
           </div>
           {subTab === "daily" && (
-            <span className="pb-2.5 text-[11.5px] text-ink-secondary">
+            <span className="pb-2.5 text-[12px] text-ink-secondary">
               每天汇总前一日数据（次日生成，不实时刷新）
             </span>
           )}
@@ -355,7 +355,7 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-[12.5px]">
+              <table className="w-full text-left text-[13px]">
                 <thead className="border-b border-hairline text-ink-secondary">
                   <tr>
                     <th className="px-4 py-2.5 font-medium">日期</th>
@@ -418,7 +418,7 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
           <div className="px-4 py-10 text-center text-[13px] text-ink-secondary">暂无提现申请记录。</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[12.5px]">
+            <table className="w-full text-left text-[13px]">
               <thead className="border-b border-hairline text-ink-secondary">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">申请时间</th>
@@ -441,7 +441,7 @@ export function BotMarketCreatorPanel({ cloudManaged = false }: { cloudManaged?:
                         {w.alipay_account} <span className="text-ink-secondary">（{w.alipay_real_name}）</span>
                       </td>
                       <td className="px-4 py-2.5">
-                        <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-medium", badge.className)}>
+                        <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-medium", badge.className)}>
                           {badge.label}
                         </span>
                       </td>

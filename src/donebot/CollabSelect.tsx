@@ -177,7 +177,7 @@ export function CollabSelect({
             onMouseEnter={() => setHighlightIndex(idx)}
             onClick={() => choose(opt.value)}
             className={cn(
-              "flex min-h-[30px] w-full shrink-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] leading-[18px] transition-colors",
+              "flex min-h-[30px] w-full shrink-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] leading-[18px] transition-colors",
               isSelected
                 ? "bg-accent/12 font-medium text-accent-text"
                 : isHighlighted

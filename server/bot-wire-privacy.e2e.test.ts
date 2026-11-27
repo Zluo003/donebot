@@ -46,7 +46,7 @@ describe("bot wire privacy against the real server", () => {
       cwd: ROOT,
       env: {
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data,
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
         DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1),
       },

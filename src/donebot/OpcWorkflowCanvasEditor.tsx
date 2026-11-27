@@ -596,7 +596,7 @@ export function OpcWorkflowCanvasEditor({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12.5px] text-ink-secondary hover:bg-ink/[0.06] hover:text-ink"
+            className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[13px] text-ink-secondary hover:bg-ink/[0.06] hover:text-ink"
           >
             <ArrowLeft size={14} /> 返回列表
           </button>
@@ -608,7 +608,7 @@ export function OpcWorkflowCanvasEditor({
             placeholder="输入工作流名称（如：每日爆款内容流水线）"
             className="h-8 w-[240px] rounded-lg border border-transparent bg-transparent px-2 text-[14px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink-tertiary hover:bg-ink/[0.04] focus:border-hairline/80 focus:bg-inset sm:w-[300px]"
           />
-          <span className="hidden text-[11.5px] tabular-nums text-ink-tertiary md:inline">
+          <span className="hidden text-[12px] tabular-nums text-ink-tertiary md:inline">
             {nodes.length} 节点 · {edges.length} 连线
           </span>
         </div>
@@ -776,13 +776,13 @@ export function OpcWorkflowCanvasEditor({
                   {scheduleKind === "manual" ? <Zap size={12} /> : <Clock size={12} />}
                   触发起点
                 </span>
-                <span className="rounded-full bg-app/15 px-2 py-0.5 text-[10.5px] text-app/90">
+                <span className="rounded-full bg-app/15 px-2 py-0.5 text-[11px] text-app/90">
                   {entryStepIds.length} 入口
                 </span>
               </div>
               <div>
                 <div className="truncate text-[14px] font-semibold">{triggerSummary}</div>
-                <div className="mt-0.5 truncate text-[11.5px] text-app/70">
+                <div className="mt-0.5 truncate text-[12px] text-app/70">
                   从右侧圆点拉线连接到首位员工
                 </div>
               </div>
@@ -843,7 +843,7 @@ export function OpcWorkflowCanvasEditor({
                     </div>
                     <span
                       className={cn(
-                        "shrink-0 rounded-full px-1.5 py-0.5 text-[10.5px] tabular-nums",
+                        "shrink-0 rounded-full px-1.5 py-0.5 text-[11px] tabular-nums",
                         orderNum ? "bg-ink/[0.07] font-medium text-ink-secondary" : "bg-danger/10 text-danger",
                       )}
                     >
@@ -851,11 +851,11 @@ export function OpcWorkflowCanvasEditor({
                     </span>
                   </div>
 
-                  <p className="line-clamp-2 text-[11.5px] leading-snug text-ink-secondary">
+                  <p className="line-clamp-2 text-[12px] leading-snug text-ink-secondary">
                     {node.instruction.trim() || "点击右侧面板填写该员工本步的任务指令…"}
                   </p>
 
-                  <div className="flex items-center justify-between gap-2 text-[10.5px] text-ink-tertiary">
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-ink-tertiary">
                     <div className="flex items-center gap-1.5">
                       {node.approvalGate && (
                         <span className="inline-flex items-center gap-0.5 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-ink-secondary">
@@ -870,7 +870,7 @@ export function OpcWorkflowCanvasEditor({
                         e.stopPropagation();
                         addNodeAfter(node.id);
                       }}
-                      className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10.5px] text-ink-tertiary opacity-0 transition-opacity hover:bg-ink/[0.07] hover:text-ink group-hover:opacity-100"
+                      className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] text-ink-tertiary opacity-0 transition-opacity hover:bg-ink/[0.07] hover:text-ink group-hover:opacity-100"
                     >
                       <Plus size={10} /> 下一棒
                     </button>
@@ -892,7 +892,7 @@ export function OpcWorkflowCanvasEditor({
           {/* Bottom-left zoom & hint bar */}
           <div
             onPointerDown={e => e.stopPropagation()}
-            className="absolute bottom-4 left-4 z-10 flex items-center gap-3 rounded-full bg-panel/90 px-3.5 py-1.5 text-[11.5px] text-ink-tertiary ring-[0.5px] ring-hairline/70 backdrop-blur-md"
+            className="absolute bottom-4 left-4 z-10 flex items-center gap-3 rounded-full bg-panel/90 px-3.5 py-1.5 text-[12px] text-ink-tertiary ring-[0.5px] ring-hairline/70 backdrop-blur-md"
           >
             <span className="hidden md:inline">从节点右侧圆点拉线连接 · 悬浮连线点 × 断开</span>
             <span className="hidden h-3 w-px bg-hairline/60 md:inline-block" />

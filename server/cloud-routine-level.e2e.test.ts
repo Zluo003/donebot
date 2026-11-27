@@ -93,7 +93,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-co
     const hooks = stallClock ? ["--import", pathToFileURL(join(SERVER_DIR, "testing", "stall-clock-hooks.mjs")).href] : [];
     child = spawnWithSecrets(process.execPath, ["--import", offline, ...hooks, join(SERVER_DIR, "index.ts")], {
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: dataDir, DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1),
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", DONEBOT_BOT_BOX: "0", HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: dataDir, DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1),
       DONEBOT_CLOUD_ROLE: "home", DONEBOT_CLOUD_MACHINE_ID: MACHINE_ID, DONEBOT_CLOUD_ADMIN_URL: "https://cloud.example.test",
       DONEBOT_PUBLIC_URL: `https://${HOST}`, DONEBOT_CLOUD_BOAT_URL: "https://cloud.example.test/api/cloud/services/boat/api/box/v1",
       DONEBOT_CLOUD_SECRETS_FD: "3", ...stall,

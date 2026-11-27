@@ -176,7 +176,7 @@ export function CollabBotsTab({
           </span>
           <div className="min-w-0">
             <h2 className="text-[16px] font-semibold text-ink">共享你的得力 Bot</h2>
-            <p className="mt-0.5 text-[12.5px] text-ink-secondary">
+            <p className="mt-0.5 text-[13px] text-ink-secondary">
               打包 SOUL.md 人设与 Skills 技能，强制剥离聊天记录、个人记忆和密钥；成员一键安装并各自运行。
             </p>
           </div>
@@ -185,7 +185,7 @@ export function CollabBotsTab({
           type="button"
           disabled={busy || overview.local_bots.length === 0}
           onClick={openNewShare}
-          className={`${COLLAB_BUTTON} ui-button-primary shrink-0 px-3.5 text-[12.5px]`}
+          className={`${COLLAB_BUTTON} ui-button-primary shrink-0 px-3.5 text-[13px]`}
         >
           <Plus size={14} aria-hidden="true" />共享我的 Bot
         </button>
@@ -245,9 +245,9 @@ export function CollabBotsTab({
                           {initialGlyph(bot.name)}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13.5px] font-semibold text-ink">{bot.name}</span>
-                          {bot.title && <span className="block truncate text-[11.5px] text-ink-secondary">{bot.title}</span>}
-                          <span className="mt-1 flex flex-wrap gap-1.5 text-[10.5px] text-ink-tertiary">
+                          <span className="block truncate text-[14px] font-semibold text-ink">{bot.name}</span>
+                          {bot.title && <span className="block truncate text-[12px] text-ink-secondary">{bot.title}</span>}
+                          <span className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-ink-tertiary">
                             <span>{bot.has_soul ? "含 SOUL.md" : "无人设文件"}</span>
                             <span>· {bot.skill_count} 个技能</span>
                           </span>
@@ -271,7 +271,7 @@ export function CollabBotsTab({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] font-medium text-ink-secondary">共享给哪些团队或好友</span>
-                  <span className="text-[11.5px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
+                  <span className="text-[12px] text-ink-tertiary">已选 {draft.grants.size} 项</span>
                 </div>
                 {candidates.length > 0 ? (
                   <div className="max-h-52 divide-y divide-ink/[0.05] overflow-y-auto rounded-xl bg-app/80 ring-1 ring-inset ring-ink/[0.08]">
@@ -331,12 +331,12 @@ export function CollabBotsTab({
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="truncate text-[14px] font-semibold text-ink">{item.name}</span>
                             {item.has_soul && (
-                              <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">SOUL.md</span>
+                              <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">SOUL.md</span>
                             )}
-                            <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">
+                            <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">
                               {item.skill_count} 个技能
                             </span>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[10.5px] font-medium text-success ring-1 ring-inset ring-success/20">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success ring-1 ring-inset ring-success/20">
                               <ShieldCheck size={11} aria-hidden="true" />不含记忆
                             </span>
                           </div>
@@ -372,7 +372,7 @@ export function CollabBotsTab({
                           {g.label || g.subject_id}
                         </span>
                       )) : (
-                        <span className="text-[11.5px] text-ink-tertiary">尚未指定共享对象，点击「授权」添加好友或团队。</span>
+                        <span className="text-[12px] text-ink-tertiary">尚未指定共享对象，点击「授权」添加好友或团队。</span>
                       )}
                     </div>
                   </li>
@@ -384,7 +384,7 @@ export function CollabBotsTab({
               <div className="flex size-11 items-center justify-center rounded-2xl bg-ink/[0.05] text-ink-tertiary">
                 <Bot size={19} aria-hidden="true" />
               </div>
-              <p className="text-[13.5px] font-medium text-ink">还没有共享任何 Bot</p>
+              <p className="text-[14px] font-medium text-ink">还没有共享任何 Bot</p>
               <p className="max-w-md text-[12px] leading-relaxed text-ink-tertiary">
                 把你调教好的得力 Bot（连同 SOUL.md 人设和 Skills 技能）共享给团队或好友，对方一键就能建出同样能力的全新 Bot。
               </p>
@@ -415,16 +415,16 @@ export function CollabBotsTab({
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="truncate text-[14px] font-semibold text-ink">{item.name}</span>
                           {item.has_soul && (
-                            <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">SOUL.md</span>
+                            <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">SOUL.md</span>
                           )}
-                          <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">
+                          <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">
                             {item.skill_count} 个技能
                           </span>
                         </div>
                         {(item.title || item.description) && (
                           <p className="mt-0.5 line-clamp-2 text-[12px] text-ink-secondary">{item.title || item.description}</p>
                         )}
-                        <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-ink-tertiary">
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-ink-tertiary">
                           <CollabAvatar
                             avatarUrl={item.owner_avatar_url}
                             remark={item.owner_remark}
@@ -450,7 +450,7 @@ export function CollabBotsTab({
               })}
             </ul>
           ) : (
-            <div className="px-6 py-10 text-center text-[12.5px] text-ink-tertiary">
+            <div className="px-6 py-10 text-center text-[13px] text-ink-tertiary">
               还没有好友或队友向你共享 Bot。
             </div>
           )}

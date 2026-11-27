@@ -49,7 +49,7 @@ export function CollabWorkspacePage() {
   if (!loaded) {
     return (
       <main data-collab-workspace="" className="flex min-w-0 flex-1 flex-col items-center justify-center bg-app p-6 text-ink">
-        <div className="flex items-center gap-2.5 text-[13.5px] text-ink-secondary">
+        <div className="flex items-center gap-2.5 text-[14px] text-ink-secondary">
           <Loader2 size={16} className="animate-spin" aria-hidden="true" />
           <span role="status">正在加载好友与团队…</span>
         </div>
@@ -74,7 +74,7 @@ export function CollabWorkspacePage() {
               </div>
             )}
             <div>
-              <button type="button" onClick={() => void reload()} disabled={refreshing} className={`${COLLAB_BUTTON} text-[12.5px]`}>
+              <button type="button" onClick={() => void reload()} disabled={refreshing} className={`${COLLAB_BUTTON} text-[13px]`}>
                 <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />重新连接
               </button>
             </div>

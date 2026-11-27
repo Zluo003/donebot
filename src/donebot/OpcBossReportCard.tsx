@@ -100,7 +100,7 @@ export function ReportAttachmentTile({
         >
           {attachment.name}
         </button>
-        <div className="mt-0.5 text-[11.5px] text-ink-tertiary">
+        <div className="mt-0.5 text-[12px] text-ink-tertiary">
           {save.state === "failed" && save.reason ? (
             <span className="text-danger">{save.reason}</span>
           ) : save.state === "saved" ? (
@@ -115,7 +115,7 @@ export function ReportAttachmentTile({
         <button
           type="button"
           onClick={onPreview}
-          className="inline-flex h-7 items-center gap-1 rounded-full bg-ink/[0.05] px-2.5 text-[11.5px] font-medium text-ink-secondary transition-colors hover:bg-ink/[0.1] hover:text-ink"
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-ink/[0.05] px-2.5 text-[12px] font-medium text-ink-secondary transition-colors hover:bg-ink/[0.1] hover:text-ink"
         >
           <Eye size={12} aria-hidden="true" /> 预览
         </button>
@@ -123,7 +123,7 @@ export function ReportAttachmentTile({
           type="button"
           disabled={save.state === "saving"}
           onClick={() => void save.save()}
-          className="inline-flex h-7 items-center gap-1 rounded-full bg-ink/[0.05] px-2.5 text-[11.5px] font-medium text-ink-secondary transition-colors hover:bg-ink/[0.1] hover:text-ink disabled:opacity-45"
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-ink/[0.05] px-2.5 text-[12px] font-medium text-ink-secondary transition-colors hover:bg-ink/[0.1] hover:text-ink disabled:opacity-45"
         >
           {save.state === "saving"
             ? <Loader2 size={12} className="animate-spin" aria-hidden="true" />
@@ -335,14 +335,14 @@ export function OpcBossReportCard({
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="truncate text-[14.5px] font-semibold text-ink">{report.title}</span>
-              <span className="shrink-0 rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary">
+              <span className="truncate text-[15px] font-semibold text-ink">{report.title}</span>
+              <span className="shrink-0 rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">
                 {report.workflow
                   ? `${report.workflow.workflowName} · ${report.workflow.stepIndex + 1}/${report.workflow.totalSteps}`
                   : "正式汇报"}
               </span>
               {report.attachments.length > 0 && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.05] px-2 py-0.5 text-[10.5px] tabular-nums text-ink-secondary">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.05] px-2 py-0.5 text-[11px] tabular-nums text-ink-secondary">
                   <Paperclip size={10.5} aria-hidden="true" />
                   {report.attachments.length} 份附件
                 </span>
@@ -364,7 +364,7 @@ export function OpcBossReportCard({
               )}
             </div>
             {!expanded && report.summary && (
-              <p className="mt-1.5 line-clamp-2 text-[12.5px] leading-relaxed text-ink-secondary">
+              <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-ink-secondary">
                 {report.summary}
               </p>
             )}
@@ -376,7 +376,7 @@ export function OpcBossReportCard({
             type="button"
             disabled={busy}
             onClick={() => void requestChanges()}
-            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink/[0.06] px-3 text-[12.5px] font-medium text-ink transition-colors hover:bg-ink/[0.11] disabled:opacity-45"
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink/[0.06] px-3 text-[13px] font-medium text-ink transition-colors hover:bg-ink/[0.11] disabled:opacity-45"
           >
             {draft.working === "revise" ? <Loader2 size={12.5} className="animate-spin" aria-hidden="true" /> : <RotateCcw size={12.5} aria-hidden="true" />}
             {draft.revising ? "发送修改" : "打回修改"}
@@ -385,7 +385,7 @@ export function OpcBossReportCard({
             type="button"
             disabled={busy}
             onClick={() => void approve()}
-            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[12.5px] font-medium text-app transition-opacity hover:opacity-85 disabled:opacity-45"
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[13px] font-medium text-app transition-opacity hover:opacity-85 disabled:opacity-45"
           >
             {draft.working === "approve" ? <Loader2 size={12.5} className="animate-spin" aria-hidden="true" /> : <Check size={12.5} aria-hidden="true" />}
             {approveLabel}
@@ -404,10 +404,10 @@ export function OpcBossReportCard({
             <div className="flex min-w-0 items-center gap-2.5">
               {bot && <BotAvatar bot={bot} size={26} />}
               <div className="min-w-0">
-                <div className="truncate text-[12.5px] font-medium text-ink">
+                <div className="truncate text-[13px] font-medium text-ink">
                   汇报人：{authorMeta}
                 </div>
-                <div className="text-[11.5px] text-ink-tertiary">
+                <div className="text-[12px] text-ink-tertiary">
                   {report.workflow
                     ? `来源：固定工作流「${report.workflow.workflowName}」第 ${report.workflow.stepIndex + 1}/${report.workflow.totalSteps} 步「${report.workflow.stepName}」`
                     : "来源：员工正式交付汇报"}
@@ -425,7 +425,7 @@ export function OpcBossReportCard({
           </div>
 
           {/* Formal Markdown report body */}
-          <div className="px-5 py-4 text-[13.5px] leading-7 text-ink">
+          <div className="px-5 py-4 text-[14px] leading-7 text-ink">
             <ChatMarkdown text={report.body} />
           </div>
 
@@ -458,7 +458,7 @@ export function OpcBossReportCard({
                   onChange={e => updateDraft({ reason: e.target.value })}
                   rows={2}
                   placeholder="写一句具体修改意见，点击「发送修改」后将自动派发给汇报人返工并重交正式汇报…"
-                  className="w-full resize-none rounded-xl border border-hairline/70 bg-panel px-3 py-2 text-[12.5px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/40"
+                  className="w-full resize-none rounded-xl border border-hairline/70 bg-panel px-3 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/40"
                 />
               </label>
               <div className="mt-2 flex items-center justify-end gap-2">

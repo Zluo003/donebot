@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { z } from "zod";
@@ -66,6 +66,7 @@ export function createDoneBotImageContext(turn: SendTurnInput, cacheDir: string,
   let toolFolder: string | undefined;
   const sourceBytes = async (reference: Reference) => {
     signal.throwIfAborted();
+    if ((await lstat(reference.path!)).isSymbolicLink()) throw new Error("Image symlinks are not allowed");
     const file = await open(reference.path!, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     try {
       const info = await file.stat();

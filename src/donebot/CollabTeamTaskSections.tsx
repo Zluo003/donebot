@@ -208,7 +208,7 @@ export function ChiefAutoSubmitToggle({ variant = "compact" }: { variant?: "comp
       title={tooltip}
       onClick={() => void toggle()}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-medium transition-colors ring-1 ring-inset disabled:opacity-60",
+        "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium transition-colors ring-1 ring-inset disabled:opacity-60",
         enabled
           ? "bg-accent/14 text-accent-text ring-accent/30 hover:bg-accent/20"
           : "bg-ink/[0.04] text-ink-secondary ring-ink/[0.08] hover:bg-ink/[0.08] hover:text-ink",
@@ -263,8 +263,8 @@ export function CollabTaskCriteriaCard({ criteria }: { criteria?: readonly strin
       </div>
       <ol className="flex flex-col gap-1.5 pl-0.5">
         {criteria.map((item, idx) => (
-          <li key={`${idx}-${item}`} className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ink">
-            <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-ink/[0.08] text-[10.5px] font-medium tabular-nums text-ink-secondary">
+          <li key={`${idx}-${item}`} className="flex items-start gap-2 text-[13px] leading-relaxed text-ink">
+            <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-ink/[0.08] text-[11px] font-medium tabular-nums text-ink-secondary">
               {idx + 1}
             </span>
             <span className="min-w-0 flex-1 break-words">{item}</span>
@@ -284,9 +284,9 @@ export function CollabTaskBotReviewCard({ task }: { task: DoneBotTeamTask }) {
         className="flex items-start gap-2.5 rounded-2xl bg-sky-500/[0.08] p-3 ring-1 ring-inset ring-sky-500/25"
       >
         <Bot size={16} className="mt-0.5 shrink-0 text-sky-500" aria-hidden="true" />
-        <div className="min-w-0 flex-1 text-[12.5px]">
+        <div className="min-w-0 flex-1 text-[13px]">
           <div className="font-medium text-ink">派发方主协调助手正在自动二审本批次交付物…</div>
-          <p className="mt-0.5 text-[11.5px] text-ink-secondary">
+          <p className="mt-0.5 text-[12px] text-ink-secondary">
             二审仅负责核验硬性要求与驳回，绝不代替终审；你也可以随时直接人工审批通过或退回。
           </p>
         </div>
@@ -312,18 +312,18 @@ export function CollabTaskBotReviewCard({ task }: { task: DoneBotTeamTask }) {
       className={cn("flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-inset", boxCls)}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] font-semibold text-ink">
+        <div className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-ink">
           <Sparkles size={13.5} className={isPass ? "text-emerald-500" : isReject ? "text-purple-400" : "text-amber-500"} aria-hidden="true" />
           <span className="truncate">{titleText}</span>
         </div>
         {review.bot_name && (
-          <span className="shrink-0 rounded-full bg-ink/[0.06] px-2 py-0 text-[10.5px] leading-5 text-ink-secondary">
+          <span className="shrink-0 rounded-full bg-ink/[0.06] px-2 py-0 text-[11px] leading-5 text-ink-secondary">
             {review.bot_name}
           </span>
         )}
       </div>
       {review.summary && (
-        <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink">{review.summary}</p>
+        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{review.summary}</p>
       )}
       {review.passed_items && review.passed_items.length > 0 && (
         <div className="flex flex-col gap-1">
@@ -438,8 +438,8 @@ export function CollabTaskDeliverablesGallery({
               </button>
               <div className="flex items-center gap-1.5 px-2.5 py-1.5">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[11.5px] font-medium text-ink">{u.file_name || "交付文件"}</div>
-                  <div className="text-[10.5px] text-ink-tertiary">{formatFileSize(u.file_size)}</div>
+                  <div className="truncate text-[12px] font-medium text-ink">{u.file_name || "交付文件"}</div>
+                  <div className="text-[11px] text-ink-tertiary">{formatFileSize(u.file_size)}</div>
                 </div>
                 {u.file_id && (
                   <button
@@ -489,7 +489,7 @@ export function CollabTaskTimeline({
           });
           if (u.kind === "status_change") {
             return (
-              <div key={u.id} className="flex items-center gap-2 px-1 py-0.5 text-[11.5px] text-ink-tertiary">
+              <div key={u.id} className="flex items-center gap-2 px-1 py-0.5 text-[12px] text-ink-tertiary">
                 <Clock size={11.5} className="shrink-0" aria-hidden="true" />
                 <span className="min-w-0 flex-1">
                   <span className="font-medium text-ink-secondary">{actorName}</span> {u.body}
@@ -536,7 +536,7 @@ export function CollabTaskTimeline({
                     email={u.actor_email}
                     size={22}
                   />
-                  <span className="truncate text-[12.5px] font-medium text-ink">{actorName}</span>
+                  <span className="truncate text-[13px] font-medium text-ink">{actorName}</span>
                   {isBotActor && (
                     <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-ink/[0.07] px-1.5 py-0 text-[10px] font-medium leading-4 text-ink-secondary">
                       <Bot size={10} aria-hidden="true" />

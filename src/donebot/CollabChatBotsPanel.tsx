@@ -64,7 +64,7 @@ function GrantModePicker({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="text-[11.5px] font-medium text-ink-secondary">允许谁在群里 @ 调用此 Bot</div>
+      <div className="text-[12px] font-medium text-ink-secondary">允许谁在群里 @ 调用此 Bot</div>
       <div className="grid grid-cols-3 gap-1 rounded-xl bg-inset/70 p-1 ring-1 ring-inset ring-ink/[0.06]">
         {(
           [
@@ -79,7 +79,7 @@ function GrantModePicker({
             disabled={disabled}
             onClick={() => onModeChange(opt.id)}
             className={cn(
-              "h-7 rounded-lg text-[11.5px] font-medium transition-colors",
+              "h-7 rounded-lg text-[12px] font-medium transition-colors",
               mode === opt.id ? "bg-composer text-ink shadow-xs ring-1 ring-ink/10" : "text-ink-secondary hover:text-ink",
             )}
           >
@@ -90,7 +90,7 @@ function GrantModePicker({
 
       {mode === "selected" && (
         otherMembers.length === 0 ? (
-          <p className="rounded-lg bg-inset/50 px-2.5 py-2 text-[11.5px] text-ink-tertiary">
+          <p className="rounded-lg bg-inset/50 px-2.5 py-2 text-[12px] text-ink-tertiary">
             群里暂时没有其他成员，等成员加入后可随时回来授权。
           </p>
         ) : (
@@ -315,7 +315,7 @@ export function CollabChatBotsPanel({
             ) : (
               <>
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[11.5px] font-medium text-ink-secondary">选择要加入本群的 Bot</span>
+                  <span className="text-[12px] font-medium text-ink-secondary">选择要加入本群的 Bot</span>
                   <div className="flex flex-col gap-1">
                     {availableLocalBots.map(bot => {
                       const picked = selectedBotId === bot.id;
@@ -345,7 +345,7 @@ export function CollabChatBotsPanel({
                             size={26}
                           />
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[12.5px] font-medium text-ink">{bot.name}</div>
+                            <div className="truncate text-[13px] font-medium text-ink">{bot.name}</div>
                             <div className="truncate text-[11px] text-ink-tertiary">
                               {bot.title || `${bot.skill_count} 个技能`}
                             </div>
@@ -413,7 +413,7 @@ export function CollabChatBotsPanel({
                   <CollabBotBadge {...badge} size={32} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[13.5px] font-medium text-ink">{bot.bot_name}</span>
+                      <span className="truncate text-[14px] font-medium text-ink">{bot.bot_name}</span>
                       <span
                         className={cn(
                           "inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset",
@@ -425,7 +425,7 @@ export function CollabChatBotsPanel({
                         {bot.can_invoke ? "可 @调用" : "未授权"}
                       </span>
                     </div>
-                    <div className="truncate text-[11.5px] text-ink-tertiary">
+                    <div className="truncate text-[12px] text-ink-tertiary">
                       {ownerName} 的本机 Bot · {grantSummaryLabel(bot)}
                     </div>
                   </div>
@@ -437,7 +437,7 @@ export function CollabChatBotsPanel({
                         disabled={busyId !== null}
                         onClick={() => startEditGrants(bot)}
                         className={cn(
-                          `${COLLAB_BUTTON} h-7 px-2 text-[11.5px]`,
+                          `${COLLAB_BUTTON} h-7 px-2 text-[12px]`,
                           editing && "bg-accent/14 text-accent-text",
                         )}
                       >
@@ -470,7 +470,7 @@ export function CollabChatBotsPanel({
                       disabled={busyId !== null}
                     />
                     <div className="flex justify-end gap-1.5">
-                      <button type="button" disabled={busyId !== null} onClick={() => setEditingBotId(null)} className={`${COLLAB_BUTTON} h-6 px-2.5 text-[11.5px]`}>
+                      <button type="button" disabled={busyId !== null} onClick={() => setEditingBotId(null)} className={`${COLLAB_BUTTON} h-6 px-2.5 text-[12px]`}>
                         取消
                       </button>
                       <button
@@ -478,7 +478,7 @@ export function CollabChatBotsPanel({
                         data-collab-save-bot-grants={bot.id}
                         disabled={busyId !== null}
                         onClick={() => void saveGrants(bot)}
-                        className={`${COLLAB_BUTTON} ui-button-primary h-6 px-2.5 text-[11.5px]`}
+                        className={`${COLLAB_BUTTON} ui-button-primary h-6 px-2.5 text-[12px]`}
                       >
                         {busyId === `grant:${bot.id}` ? <Loader2 size={11} className="animate-spin" aria-hidden="true" /> : <Check size={11} aria-hidden="true" />}
                         保存授权

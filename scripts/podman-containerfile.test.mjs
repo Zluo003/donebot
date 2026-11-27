@@ -7,8 +7,10 @@ const buildCopies = (text) =>
 
 describe("Podman image build", () => {
   it("ships the bundled skills, as the Docker server image does", () => {
-    const server = read("../Dockerfile").split(/^FROM runtime AS server$/m)[1];
+    const docker = read("../Dockerfile");
+    const server = docker.split(/^FROM runtime AS cloud-service$/m)[1];
     expect(server).toBeDefined();
+    expect(docker).toMatch(/^FROM cloud-service AS server$/m);
     expect(buildCopies(server)).toContain("/src/skills ./skills");
     expect(buildCopies(read("../deploy/podman/Containerfile"))).toContain("/src/skills ./skills");
   });

@@ -250,8 +250,8 @@ function AddFriendDialog({
           )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>关闭</button>
-            <button type="submit" disabled={busy || !email.trim()} className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}>
+            <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[13px]`}>关闭</button>
+            <button type="submit" disabled={busy || !email.trim()} className={`${COLLAB_BUTTON} ui-button-primary text-[13px]`}>
               {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
               发送申请
             </button>
@@ -260,12 +260,12 @@ function AddFriendDialog({
 
         {outgoing.length > 0 && (
           <div className="flex flex-col gap-2 border-t border-hairline/40 pt-3.5">
-            <div className="text-[11.5px] font-medium text-ink-tertiary">等待对方确认（{outgoing.length}）</div>
+            <div className="text-[12px] font-medium text-ink-tertiary">等待对方确认（{outgoing.length}）</div>
             <ul className="flex flex-col gap-2">
               {outgoing.map(req => {
                 const target = displayPersonName({ nickname: req.recipient_nickname, email: req.recipient_email });
                 return (
-                  <li key={req.id} className="flex items-center justify-between gap-2 rounded-xl bg-inset/60 px-3 py-2 text-[12.5px]">
+                  <li key={req.id} className="flex items-center justify-between gap-2 rounded-xl bg-inset/60 px-3 py-2 text-[13px]">
                     <div className="flex min-w-0 items-center gap-2">
                       <CollabAvatar
                         avatarUrl={req.recipient_avatar_url}
@@ -284,7 +284,7 @@ function AddFriendDialog({
                       type="button"
                       disabled={busy}
                       onClick={() => void withdraw(req.id)}
-                      className="shrink-0 rounded-lg px-2 py-1 text-[11.5px] text-ink-tertiary hover:bg-danger/10 hover:text-danger"
+                      className="shrink-0 rounded-lg px-2 py-1 text-[12px] text-ink-tertiary hover:bg-danger/10 hover:text-danger"
                     >
                       撤回
                     </button>
@@ -386,8 +386,8 @@ function AddTeamDialog({
           </div>
         )}
         <div className="flex items-center justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>取消</button>
-          <button type="submit" disabled={busy || !teamName.trim() || !accountId} className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}>
+          <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[13px]`}>取消</button>
+          <button type="submit" disabled={busy || !teamName.trim() || !accountId} className={`${COLLAB_BUTTON} ui-button-primary text-[13px]`}>
             {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
             创建团队
           </button>
@@ -519,7 +519,7 @@ function InviteTeamMemberDialog({
                         size={26}
                       />
                       <div className="min-w-0">
-                        <div className="truncate text-[12.5px] font-medium text-ink">{label}</div>
+                        <div className="truncate text-[13px] font-medium text-ink">{label}</div>
                         {label !== friend.email && (
                           <div className="truncate text-[11px] text-ink-tertiary">{friend.email}</div>
                         )}
@@ -529,7 +529,7 @@ function InviteTeamMemberDialog({
                       type="button"
                       disabled={busy}
                       onClick={() => void sendInvite(friend.email, label)}
-                      className={`${COLLAB_BUTTON} h-7 shrink-0 px-2.5 text-[11.5px]`}
+                      className={`${COLLAB_BUTTON} h-7 shrink-0 px-2.5 text-[12px]`}
                     >
                       邀请
                     </button>
@@ -598,8 +598,8 @@ function InviteTeamMemberDialog({
           )}
 
           <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[12.5px]`}>关闭</button>
-            <button type="submit" disabled={busy || !email.trim()} className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}>
+            <button type="button" onClick={onClose} className={`${COLLAB_BUTTON} text-[13px]`}>关闭</button>
+            <button type="submit" disabled={busy || !email.trim()} className={`${COLLAB_BUTTON} ui-button-primary text-[13px]`}>
               {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
               发送邀请
             </button>
@@ -608,7 +608,7 @@ function InviteTeamMemberDialog({
 
         {invitations.length > 0 && (
           <div className="flex flex-col gap-2 border-t border-hairline/40 pt-3">
-            <div className="text-[11.5px] font-medium text-ink-tertiary">待对方确认的邀请（{invitations.length}）</div>
+            <div className="text-[12px] font-medium text-ink-tertiary">待对方确认的邀请（{invitations.length}）</div>
             <ul className="flex flex-col gap-1.5">
               {invitations.map(inv => (
                 <li key={inv.id} className="flex items-center justify-between gap-2 rounded-xl bg-inset/60 px-3 py-2 text-[12px]">
@@ -619,7 +619,7 @@ function InviteTeamMemberDialog({
                     type="button"
                     disabled={busy}
                     onClick={() => void revoke(inv.id)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-0.5 text-[11.5px] text-ink-tertiary hover:bg-danger/10 hover:text-danger"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-0.5 text-[12px] text-ink-tertiary hover:bg-danger/10 hover:text-danger"
                   >
                     <Trash2 size={11} aria-hidden="true" />撤销
                   </button>
@@ -698,7 +698,7 @@ function CollabRequestsDialog({
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-semibold text-ink">{sender}</div>
-                      <div className="truncate text-[11.5px] text-ink-secondary">请求添加你为好友</div>
+                      <div className="truncate text-[12px] text-ink-secondary">请求添加你为好友</div>
                       {req.note && (
                         <p className="mt-1 rounded-lg bg-app/70 px-2.5 py-1 text-[12px] text-ink-secondary">「{req.note}」</p>
                       )}
@@ -746,7 +746,7 @@ function CollabRequestsDialog({
                           {TEAM_ROLES[inv.role]}
                         </span>
                       </div>
-                      <div className="mt-0.5 text-[11.5px] text-ink-secondary">
+                      <div className="mt-0.5 text-[12px] text-ink-secondary">
                         {inviter} 邀请你加入团队
                       </div>
                     </div>

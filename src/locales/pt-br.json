@@ -10347,5 +10347,7 @@
   "teamFiles.error.notFound": "Isso não está mais aqui.",
   "teamFiles.error.badName": "Esse nome não pode ser usado.",
   "teamFiles.error.failed": "Não funcionou. Tente de novo.",
-  "teamFiles.previewLoading": "Carregando prévia…"
+  "teamFiles.previewLoading": "Carregando prévia…",
+  "activity.tool.team.skillFind": "Buscar habilidade",
+  "activity.tool.team.skillImport": "Importar habilidade"
 }

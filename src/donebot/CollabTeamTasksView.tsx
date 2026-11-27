@@ -188,12 +188,12 @@ export function CollabTeamTasksView({
 
   const renderPersonChip = (uid: number | undefined, roleHint: string) => {
     if (!uid) {
-      return <span className="text-[11.5px] text-ink-tertiary">{roleHint}：待认领</span>;
+      return <span className="text-[12px] text-ink-tertiary">{roleHint}：待认领</span>;
     }
     const m = memberById.get(uid);
     const label = m ? displayPersonName(m) : `成员 #${uid}`;
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11.5px] text-ink-secondary">
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-secondary">
         {m && (
           <CollabAvatar
             avatarUrl={m.avatar_url}
@@ -235,12 +235,12 @@ export function CollabTeamTasksView({
               title={`${TASK_PRIORITY_LABEL[task.priority]}优先级`}
               className={cn("size-2 shrink-0 rounded-full", TASK_PRIORITY_DOT[task.priority])}
             />
-            <span className={cn("truncate text-[13.5px] font-medium", task.status === "done" ? "text-ink-tertiary line-through" : "text-ink")}>
+            <span className={cn("truncate text-[14px] font-medium", task.status === "done" ? "text-ink-tertiary line-through" : "text-ink")}>
               {task.title}
             </span>
           </div>
           {!compact && (
-            <span className={cn("inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset", TASK_STATUS_PILL[task.status])}>
+            <span className={cn("inline-flex shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset", TASK_STATUS_PILL[task.status])}>
               {TASK_STATUS_LABEL[task.status]}
             </span>
           )}
@@ -249,23 +249,23 @@ export function CollabTeamTasksView({
         {(needsMyReview || isBotReviewing || isBotRevising || needsMyFix) && (
           <div className="flex flex-wrap gap-1.5">
             {needsMyReview && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/16 px-2 py-0 text-[10.5px] font-medium leading-5 text-amber-500 ring-1 ring-inset ring-amber-500/30">
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/16 px-2 py-0 text-[11px] font-medium leading-5 text-amber-500 ring-1 ring-inset ring-amber-500/30">
                 {task.status === "ready_for_review" ? "二审通过，待你终审" : "待你终审确认"}
               </span>
             )}
             {isBotReviewing && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/14 px-2 py-0 text-[10.5px] font-medium leading-5 text-sky-500 ring-1 ring-inset ring-sky-500/25">
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/14 px-2 py-0 text-[11px] font-medium leading-5 text-sky-500 ring-1 ring-inset ring-sky-500/25">
                 <Bot size={10.5} aria-hidden="true" />派发方助手正在二审…
               </span>
             )}
             {isBotRevising && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/14 px-2 py-0 text-[10.5px] font-medium leading-5 text-purple-400 ring-1 ring-inset ring-purple-500/25">
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/14 px-2 py-0 text-[11px] font-medium leading-5 text-purple-400 ring-1 ring-inset ring-purple-500/25">
                 <Bot size={10.5} aria-hidden="true" />
                 Bot 自动返工 {task.auto_revision_count ?? 1}/{task.max_auto_revisions ?? 2}
               </span>
             )}
             {needsMyFix && (
-              <span className="inline-flex rounded-full bg-orange-500/14 px-2 py-0 text-[10.5px] font-medium leading-5 text-orange-500 ring-1 ring-inset ring-orange-500/25">
+              <span className="inline-flex rounded-full bg-orange-500/14 px-2 py-0 text-[11px] font-medium leading-5 text-orange-500 ring-1 ring-inset ring-orange-500/25">
                 验收退回，待你修改
               </span>
             )}
@@ -442,14 +442,14 @@ export function CollabTeamTasksView({
               </span>
               <div>
                 <h3 className="text-[15px] font-semibold text-ink">当前视图暂无任务</h3>
-                <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-ink-tertiary">
+                <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-ink-tertiary">
                   直接在上方用一句话告诉主协调助手自动派发任务，也可以在频道聊天里把任意一条消息一键「转为任务」。
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onOpenCreate(channelFilter || undefined)}
-                className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[12.5px]`}
+                className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[13px]`}
               >
                 <Sparkles size={13.5} aria-hidden="true" />让助手派发第一个任务
               </button>
@@ -478,7 +478,7 @@ export function CollabTeamTasksView({
                     </div>
                     <div className="flex flex-col gap-2">
                       {colTasks.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-ink/[0.08] py-6 text-center text-[11.5px] text-ink-tertiary">
+                        <div className="rounded-xl border border-dashed border-ink/[0.08] py-6 text-center text-[12px] text-ink-tertiary">
                           暂无
                         </div>
                       ) : (

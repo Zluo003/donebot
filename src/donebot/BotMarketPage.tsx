@@ -162,7 +162,7 @@ export function BotMarketPage() {
       <header {...dragProps} className="flex h-[54px] shrink-0 items-center justify-between border-b border-hairline px-6">
         <div className="flex items-center gap-2.5">
           <Store size={18} className="text-accent" />
-          <h1 className="text-[15.5px] font-semibold">Bot 广场</h1>
+          <h1 className="text-[16px] font-semibold">Bot 广场</h1>
           <span className="hidden text-[12px] text-ink-secondary sm:inline">
             一键雇佣整套部门或专家员工 · 分享作品持续赚取算力分润
           </span>
@@ -175,7 +175,7 @@ export function BotMarketPage() {
               setUpdatingListing(null);
               setPublishOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:opacity-90"
           >
             <Upload size={14} /> 分享我的 Bot
           </button>
@@ -295,7 +295,7 @@ export function BotMarketPage() {
                         if (!e.target.value.trim()) setQuery("");
                       }}
                       placeholder="搜索 Bot 名称或简介…"
-                      className="w-52 rounded-xl border border-hairline bg-card py-1.5 pl-8 pr-3 text-[12.5px] text-ink outline-none focus:border-accent"
+                      className="w-52 rounded-xl border border-hairline bg-card py-1.5 pl-8 pr-3 text-[13px] text-ink outline-none focus:border-accent"
                     />
                   </form>
                   <Select
@@ -316,8 +316,8 @@ export function BotMarketPage() {
                 </div>
               ) : listings.length === 0 ? (
                 <div className="rounded-2xl border border-hairline bg-card px-6 py-14 text-center space-y-3">
-                  <div className="text-[14.5px] font-medium text-ink">该分类下暂时还没有上架的 Bot</div>
-                  <p className="text-[12.5px] text-ink-secondary">
+                  <div className="text-[15px] font-medium text-ink">该分类下暂时还没有上架的 Bot</div>
+                  <p className="text-[13px] text-ink-secondary">
                     成为第一个分享者，其他人安装使用后即可持续获得四品类消费分润！
                   </p>
                   <button
@@ -370,17 +370,17 @@ export function BotMarketPage() {
                                 <button
                                   type="button"
                                   onClick={() => setDetailId(item.id)}
-                                  className="truncate text-left text-[14.5px] font-semibold text-ink hover:text-accent"
+                                  className="truncate text-left text-[15px] font-semibold text-ink hover:text-accent"
                                 >
                                   {item.name}
                                 </button>
                                 {item.featured && (
-                                  <span className="shrink-0 rounded bg-amber-500/12 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-600 dark:text-amber-400">
+                                  <span className="shrink-0 rounded bg-amber-500/12 px-1.5 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
                                     精选
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-tertiary">
+                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-tertiary">
                                 {isStudio && (
                                   <span className="inline-flex items-center gap-1 font-medium text-accent">
                                     <Users size={11} /> 部门 · {item.bot_count} 位员工
@@ -397,11 +397,11 @@ export function BotMarketPage() {
                             </div>
                           </div>
 
-                          <p className="line-clamp-2 text-[12.5px] leading-relaxed text-ink-secondary">
+                          <p className="line-clamp-2 text-[13px] leading-relaxed text-ink-secondary">
                             {item.tagline}
                           </p>
 
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11.5px] tabular-nums text-ink-tertiary">
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] tabular-nums text-ink-tertiary">
                             <span className="inline-flex items-center gap-1 text-ink-secondary">
                               <Sparkles size={11} className="text-accent" />
                               SOUL + {item.skill_count} 技能
@@ -423,7 +423,7 @@ export function BotMarketPage() {
                           <button
                             type="button"
                             onClick={() => setDetailId(item.id)}
-                            className="rounded-xl px-2.5 py-1.5 text-[12.5px] text-ink-secondary hover:bg-raised hover:text-ink"
+                            className="rounded-xl px-2.5 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
                           >
                             查看详情
                           </button>
@@ -431,7 +431,7 @@ export function BotMarketPage() {
                             <button
                               type="button"
                               onClick={() => hasUpdate ? setDetailId(item.id) : openBotChat(installed.bot_id)}
-                              className="rounded-xl bg-accent/12 px-3 py-1.5 text-[12.5px] font-medium text-accent hover:bg-accent/20"
+                              className="rounded-xl bg-accent/12 px-3 py-1.5 text-[13px] font-medium text-accent hover:bg-accent/20"
                             >
                               {hasUpdate ? "查看更新" : "去对话"}
                             </button>
@@ -440,7 +440,7 @@ export function BotMarketPage() {
                               type="button"
                               onClick={() => void handleQuickInstall(item)}
                               disabled={busyId === item.id}
-                              className="inline-flex items-center gap-1 rounded-xl bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                              className="inline-flex items-center gap-1 rounded-xl bg-accent px-3 py-1.5 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-50"
                             >
                               {busyId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                               {isStudio ? "雇佣部门" : "安装"}
@@ -462,8 +462,8 @@ export function BotMarketPage() {
               </div>
             ) : myListings.length === 0 ? (
               <div className="rounded-2xl border border-hairline bg-card px-6 py-14 text-center space-y-3">
-                <div className="text-[14.5px] font-medium text-ink">你还没有发布过 Bot</div>
-                <p className="text-[12.5px] text-ink-secondary">
+                <div className="text-[15px] font-medium text-ink">你还没有发布过 Bot</div>
+                <p className="text-[13px] text-ink-secondary">
                   将自己打磨好的 SOUL.md 和 SKILL.md 分享出来，自动脱敏、免传截图、AI 极速审核上架！
                 </p>
                 <button
@@ -494,15 +494,15 @@ export function BotMarketPage() {
                           />
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[14.5px] font-semibold text-ink">{item.name}</span>
-                              <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-medium", status.className)}>
+                              <span className="text-[15px] font-semibold text-ink">{item.name}</span>
+                              <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-medium", status.className)}>
                                 {status.label}
                               </span>
                               <span className="text-[12px] text-ink-secondary">
                                 {item.category_name} · v{item.latest_version}
                               </span>
                             </div>
-                            <p className="mt-1 text-[12.5px] text-ink-secondary">{item.tagline}</p>
+                            <p className="mt-1 text-[13px] text-ink-secondary">{item.tagline}</p>
                             <div className="mt-1.5 flex flex-wrap gap-3 text-[12px] text-ink-secondary">
                               <span>安装量：<strong className="text-ink">{item.install_count}</strong></span>
                               <span>归因消费：<strong className="text-ink">{formatCny(item.total_attributed_cost)}</strong></span>

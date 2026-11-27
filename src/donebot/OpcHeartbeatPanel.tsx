@@ -190,7 +190,7 @@ export function OpcHeartbeatPanel({
       </div>
 
       {error && (
-        <div role="alert" className="rounded-xl bg-danger/10 px-3.5 py-2 text-[12.5px] text-danger">
+        <div role="alert" className="rounded-xl bg-danger/10 px-3.5 py-2 text-[13px] text-danger">
           {error}
         </div>
       )}
@@ -286,7 +286,7 @@ export function OpcHeartbeatPanel({
               type="submit"
               disabled={busyId === "create"}
               className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[12.5px] font-medium transition-opacity hover:opacity-85 disabled:opacity-45",
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-4 text-[13px] font-medium transition-opacity hover:opacity-85 disabled:opacity-45",
                 isEditorial ? "bg-ink text-app" : "bg-accent text-accent-ink",
               )}
             >
@@ -305,7 +305,7 @@ export function OpcHeartbeatPanel({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-3.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-ink/[0.11]"
+            className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink/[0.06] px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-ink/[0.11]"
           >
             <Plus size={13} /> 开启首条巡检
           </button>
@@ -344,7 +344,7 @@ export function OpcHeartbeatPanel({
                       {hb.silentWhenOk ? " · 无事静默" : ""}
                     </span>
                   </div>
-                  <p className="text-[12.5px] text-ink-secondary">{hb.prompt}</p>
+                  <p className="text-[13px] text-ink-secondary">{hb.prompt}</p>
                   {tripped && (
                     <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[12px] text-danger">
                       <AlertTriangle size={13} className="shrink-0" />
@@ -353,14 +353,14 @@ export function OpcHeartbeatPanel({
                         type="button"
                         disabled={busyId !== null}
                         onClick={() => void handleResetBreaker(hb)}
-                        className="inline-flex items-center gap-1 rounded-md bg-danger/12 px-2 py-0.5 text-[11.5px] font-medium text-danger hover:bg-danger/20"
+                        className="inline-flex items-center gap-1 rounded-md bg-danger/12 px-2 py-0.5 text-[12px] font-medium text-danger hover:bg-danger/20"
                       >
                         <RotateCcw size={11.5} /> 解除熔断并恢复
                       </button>
                     </div>
                   )}
                   {!tripped && hb.lastSummary && (
-                    <div className="text-[11.5px] text-ink-tertiary">
+                    <div className="text-[12px] text-ink-tertiary">
                       上次结果（{hb.lastRunAt ? new Date(hb.lastRunAt).toLocaleTimeString("zh-CN", { hour12: false }) : "—"}）：{hb.lastSummary}
                     </div>
                   )}

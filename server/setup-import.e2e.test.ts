@@ -101,7 +101,7 @@ describe("bringing in another AI tool's setup through the desktop app's own serv
     const later = JSON.parse((await api("POST", "/api/bots", { name: "Later Bot", useDefaults: false, requireAvailableModel: false })).text).bot as { id: string; threadId: string };
     for (const bot of [starter, later]) {
       const skills = await api("GET", `/api/bots/${bot.id}/skills`);
-      expect(JSON.parse(skills.text).skills).toEqual([
+      expect((JSON.parse(skills.text).skills as Array<{ source?: string }>).filter((skill) => !skill.source?.startsWith("builtin:"))).toEqual([
         expect.objectContaining({ name: "release-notes", enabled: true, source: "~/.claude/skills/release-notes", origin: "imported" }),
         expect.objectContaining({ name: "review-pr", enabled: true, source: "~/.codex/skills/review-pr", origin: "imported" }),
       ]);
@@ -152,7 +152,8 @@ describe("bringing in another AI tool's setup through the desktop app's own serv
     const switched = await api("PATCH", `/api/bots/${later.id}/skills/review-pr`, { enabled: false });
     expect(switched.status).toBe(200);
     expect(JSON.parse(switched.text).skill).toMatchObject({ name: "review-pr", enabled: false, origin: "imported" });
-    const enabled = async (botId: string) => Object.fromEntries((JSON.parse((await api("GET", `/api/bots/${botId}/skills`)).text).skills as Array<{ name: string; enabled: boolean }>)
+    const enabled = async (botId: string) => Object.fromEntries((JSON.parse((await api("GET", `/api/bots/${botId}/skills`)).text).skills as Array<{ name: string; enabled: boolean; source?: string }>)
+      .filter((skill) => !skill.source?.startsWith("builtin:"))
       .map((skill) => [skill.name, skill.enabled]));
     expect(await enabled(later.id)).toEqual({ "release-notes": true, "review-pr": false });
     expect(await enabled(starter.id)).toEqual({ "release-notes": true, "review-pr": true });

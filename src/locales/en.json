@@ -10592,5 +10592,7 @@
   "teamFiles.error.notFound": "That isn't there any more.",
   "teamFiles.error.badName": "That name can't be used.",
   "teamFiles.error.failed": "That didn't work. Try again.",
-  "teamFiles.previewLoading": "Loading preview…"
+  "teamFiles.previewLoading": "Loading preview…",
+  "activity.tool.team.skillFind": "Skill find",
+  "activity.tool.team.skillImport": "Skill import"
 }

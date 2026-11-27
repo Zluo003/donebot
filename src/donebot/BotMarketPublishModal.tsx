@@ -204,7 +204,7 @@ export function BotMarketPublishModal({
         <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
           <div className="flex items-center gap-2">
             <Sparkles size={18} className="text-accent" />
-            <h2 className="text-[15.5px] font-semibold">
+            <h2 className="text-[16px] font-semibold">
               {updatingListing ? `发布新版本 · ${updatingListing.name}` : "分享 Bot 到广场"}
             </h2>
           </div>
@@ -226,8 +226,8 @@ export function BotMarketPublishModal({
                 <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-500" />
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[14.5px] font-semibold">{result.name}</span>
-                    <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-medium", marketStatusMeta(result.status).className)}>
+                    <span className="text-[15px] font-semibold">{result.name}</span>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-medium", marketStatusMeta(result.status).className)}>
                       {marketStatusMeta(result.status).label}
                     </span>
                     <span className="text-[12px] text-ink-secondary">v{result.latest_version}</span>
@@ -243,7 +243,7 @@ export function BotMarketPublishModal({
               </div>
 
               {result.status !== "published" && result.latest_release?.ai_report && (
-                <div className="rounded-xl border border-hairline bg-card p-4 text-[12.5px] space-y-2">
+                <div className="rounded-xl border border-hairline bg-card p-4 text-[13px] space-y-2">
                   <div className="font-medium text-ink">
                     AI 审核摘要（风险分：{result.latest_release.ai_risk_score}）
                   </div>
@@ -288,7 +288,7 @@ export function BotMarketPublishModal({
               </div>
 
               {error && (
-                <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[12.5px] text-danger">
+                <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
                   <AlertCircle size={15} className="mt-0.5 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -296,7 +296,7 @@ export function BotMarketPublishModal({
 
               {!updatingListing && (
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[12.5px] font-medium text-ink">发布形态</span>
+                  <span className="text-[13px] font-medium text-ink">发布形态</span>
                   <div className="inline-flex rounded-xl bg-card p-0.5 ring-[0.5px] ring-hairline/70">
                     {([
                       { key: "bot", label: "单个专家 Bot" },
@@ -325,17 +325,17 @@ export function BotMarketPublishModal({
               )}
 
               <div>
-                <label className="mb-1.5 block text-[12.5px] font-medium text-ink">
+                <label className="mb-1.5 block text-[13px] font-medium text-ink">
                   {listingType === "studio"
                     ? `勾选部门成员（已选 ${selectedStudioBotIds.length}/8，至少 2 位）`
                     : "选择要分享的本地 Bot"}
                 </label>
                 {loadingBots ? (
-                  <div className="flex items-center gap-2 text-[12.5px] text-ink-secondary">
+                  <div className="flex items-center gap-2 text-[13px] text-ink-secondary">
                     <Loader2 size={14} className="animate-spin" /> 正在读取本地 Bot…
                   </div>
                 ) : localBots.length === 0 ? (
-                  <div className="rounded-xl border border-hairline bg-card px-3 py-2.5 text-[12.5px] text-ink-secondary">
+                  <div className="rounded-xl border border-hairline bg-card px-3 py-2.5 text-[13px] text-ink-secondary">
                     暂无可分享的本地 Bot（外部编码代理暂不支持分享）。
                   </div>
                 ) : (
@@ -366,7 +366,7 @@ export function BotMarketPublishModal({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-[13px] font-medium text-ink">{bot.name}</div>
-                            <div className="truncate text-[11.5px] text-ink-secondary">
+                            <div className="truncate text-[12px] text-ink-secondary">
                               SOUL {bot.soul_length} 字 · {bot.skills.length} 个 Skill
                             </div>
                           </div>
@@ -385,7 +385,7 @@ export function BotMarketPublishModal({
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {selectedStudioBots.map(b => (
-                      <span key={b.id} className="rounded-md bg-app px-2 py-0.5 text-[11.5px] text-ink">
+                      <span key={b.id} className="rounded-md bg-app px-2 py-0.5 text-[12px] text-ink">
                         {b.name} · {b.skills.length} 技能
                       </span>
                     ))}
@@ -401,7 +401,7 @@ export function BotMarketPublishModal({
                       {currentBot.soul_length} 字{currentBot.soul_length < 20 ? "（需不少于 20 字）" : ""}
                     </span>
                   </div>
-                  <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg bg-app/70 p-2.5 text-[11.5px] leading-relaxed text-ink-secondary">
+                  <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg bg-app/70 p-2.5 text-[12px] leading-relaxed text-ink-secondary">
                     {currentBot.soul || "（未设置 SOUL.md）"}
                   </pre>
 
@@ -421,7 +421,7 @@ export function BotMarketPublishModal({
                       )}
                     </div>
                     {currentBot.skills.length === 0 ? (
-                      <div className="text-[11.5px] text-ink-secondary">该 Bot 暂未安装任何 SKILL.md（可直接仅发布 SOUL.md）。</div>
+                      <div className="text-[12px] text-ink-secondary">该 Bot 暂未安装任何 SKILL.md（可直接仅发布 SOUL.md）。</div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {currentBot.skills.map(sk => {
@@ -442,7 +442,7 @@ export function BotMarketPublishModal({
                               />
                               <span>{sk.name}</span>
                               {sk.files && sk.files.length > 0 && (
-                                <span className="rounded bg-raised px-1 py-0.5 text-[10.5px] text-ink-tertiary">
+                                <span className="rounded bg-raised px-1 py-0.5 text-[11px] text-ink-tertiary">
                                   +{sk.files.length} 文件
                                 </span>
                               )}
@@ -457,7 +457,7 @@ export function BotMarketPublishModal({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-[12.5px] font-medium text-ink">展示名称 *</label>
+                  <label className="mb-1 block text-[13px] font-medium text-ink">展示名称 *</label>
                   <input
                     value={name}
                     onChange={e => setName(e.target.value)}
@@ -468,7 +468,7 @@ export function BotMarketPublishModal({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[12.5px] font-medium text-ink">分类 *</label>
+                  <label className="mb-1 block text-[13px] font-medium text-ink">分类 *</label>
                   <Select
                     value={categoryId}
                     onChange={e => setCategoryId(Number(e.target.value))}
@@ -483,7 +483,7 @@ export function BotMarketPublishModal({
               </div>
 
               <div>
-                <label className="mb-1 block text-[12.5px] font-medium text-ink">一句话简介 *</label>
+                <label className="mb-1 block text-[13px] font-medium text-ink">一句话简介 *</label>
                 <input
                   value={tagline}
                   onChange={e => setTagline(e.target.value)}
@@ -495,7 +495,7 @@ export function BotMarketPublishModal({
               </div>
 
               <div>
-                <label className="mb-1 block text-[12.5px] font-medium text-ink">详细说明</label>
+                <label className="mb-1 block text-[13px] font-medium text-ink">详细说明</label>
                 <textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
@@ -508,7 +508,7 @@ export function BotMarketPublishModal({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-[12.5px] font-medium text-ink">标签（逗号分隔，最多 6 个）</label>
+                  <label className="mb-1 block text-[13px] font-medium text-ink">标签（逗号分隔，最多 6 个）</label>
                   <input
                     value={tagsText}
                     onChange={e => setTagsText(e.target.value)}
@@ -517,7 +517,7 @@ export function BotMarketPublishModal({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[12.5px] font-medium text-ink">示例提问（每行 1 条，最多 3 条）</label>
+                  <label className="mb-1 block text-[13px] font-medium text-ink">示例提问（每行 1 条，最多 3 条）</label>
                   <textarea
                     value={promptsText}
                     onChange={e => setPromptsText(e.target.value)}
@@ -530,7 +530,7 @@ export function BotMarketPublishModal({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-[12.5px] font-medium text-ink">预估算力档位</label>
+                  <label className="mb-1 block text-[13px] font-medium text-ink">预估算力档位</label>
                   <Select
                     value={costTier}
                     onChange={e => setCostTier(e.target.value as MarketCostTier)}
@@ -559,7 +559,7 @@ export function BotMarketPublishModal({
 
               {updatingListing && (
                 <div>
-                  <label className="mb-1 block text-[12.5px] font-medium text-ink">版本更新日志</label>
+                  <label className="mb-1 block text-[13px] font-medium text-ink">版本更新日志</label>
                   <input
                     value={changelog}
                     onChange={e => setChangelog(e.target.value)}

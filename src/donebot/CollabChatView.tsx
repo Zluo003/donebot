@@ -620,7 +620,7 @@ export function CollabChatView({
       {/* Drop overlay */}
       {draggingOver && (
         <div className="pointer-events-none absolute inset-4 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-app/85 backdrop-blur-xs">
-          <div className="rounded-xl bg-menu px-5 py-3 text-[13.5px] font-medium text-ink shadow-lg ring-1 ring-ink/10">
+          <div className="rounded-xl bg-menu px-5 py-3 text-[14px] font-medium text-ink shadow-lg ring-1 ring-ink/10">
             松开鼠标即可发送文件给「{title}」（最大 100 MB）
           </div>
         </div>
@@ -655,10 +655,10 @@ export function CollabChatView({
               <div>
                 <h2 className="text-[16px] font-semibold text-ink">{title}</h2>
                 {subtitle && subtitle !== title && (
-                  <p className="mt-0.5 text-[12.5px] text-ink-secondary">{subtitle}</p>
+                  <p className="mt-0.5 text-[13px] text-ink-secondary">{subtitle}</p>
                 )}
               </div>
-              <p className="max-w-xs text-[12.5px] leading-relaxed text-ink-tertiary">
+              <p className="max-w-xs text-[13px] leading-relaxed text-ink-tertiary">
                 {isGroupLike
                   ? "在下方发送消息或文件（最大 100 MB）；可在右侧栏「Bot」中添加本机机器人并在群内 @ 调用。"
                   : "在下方直接发送消息或文件（最大 100 MB）；右侧栏可管理共享文件夹与共享 Bot。"}
@@ -709,7 +709,7 @@ export function CollabChatView({
               return (
                 <div key={msg.id} data-collab-msg={msg.id} data-collab-msg-kind={isBot ? "bot" : mine ? "self" : "peer"} className="flex flex-col gap-2">
                   {showTime && (
-                    <div className="my-1 text-center text-[11.5px] text-ink-tertiary">
+                    <div className="my-1 text-center text-[12px] text-ink-tertiary">
                       {formatMessageStamp(msg.created_at)}
                     </div>
                   )}
@@ -729,7 +729,7 @@ export function CollabChatView({
                     )}
                     <div className={cn("flex max-w-[min(78%,520px)] flex-col gap-1", mine ? "items-end" : "items-start")}>
                       {isBot ? (
-                        <div className="flex items-center gap-1.5 px-1 text-[11.5px] text-ink-tertiary">
+                        <div className="flex items-center gap-1.5 px-1 text-[12px] text-ink-tertiary">
                           <span className="font-medium text-ink-secondary">{msg.sender_bot_name || "机器人"}</span>
                           <span className="inline-flex items-center gap-0.5 rounded-full bg-accent/14 px-1.5 py-0 text-[10px] font-medium text-accent-text ring-1 ring-inset ring-accent/25">
                             <Bot size={10} aria-hidden="true" />机器人
@@ -737,7 +737,7 @@ export function CollabChatView({
                           <span>来自 {senderLabel}</span>
                         </div>
                       ) : isGroupLike ? (
-                        <div className="flex items-center gap-1.5 px-1 text-[11.5px] text-ink-tertiary">
+                        <div className="flex items-center gap-1.5 px-1 text-[12px] text-ink-tertiary">
                           <span data-collab-msg-sender="">{senderLabel}</span>
                           {memberJobTitles?.[msg.sender_id] && (
                             <span className="rounded-full bg-ink/[0.05] px-1.5 py-0 text-[10px] text-ink-secondary ring-1 ring-inset ring-ink/10">
@@ -791,7 +791,7 @@ export function CollabChatView({
                             </button>
                           </div>
                           {msg.body && (
-                            <p className="whitespace-pre-wrap break-words px-1 text-[13.5px] leading-relaxed">{msg.body}</p>
+                            <p className="whitespace-pre-wrap break-words px-1 text-[14px] leading-relaxed">{msg.body}</p>
                           )}
                         </div>
                       ) : (

@@ -8048,5 +8048,7 @@
   "teamFiles.previewLoading": "正在加载预览…",
   "chat.notice.restartInterrupted": "回合已中断：DoneBot 已重启",
   "chat.notice.resumingAfterRestart": "重启后继续",
-  "chat.notice.cutOffByRestart": "{name} 因重启而中断；正在继续"
+  "chat.notice.cutOffByRestart": "{name} 因重启而中断；正在继续",
+  "activity.tool.team.skillFind": "查找技能",
+  "activity.tool.team.skillImport": "导入技能"
 }

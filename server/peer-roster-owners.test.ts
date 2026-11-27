@@ -58,8 +58,11 @@ describe("one Chief per person on a Team Cloud", () => {
   it("leaves a team nobody owns bots in, and every other server, on departments for authority only", () => {
     const plain = team.map(({ createdBy: _createdBy, reportsTo: _reportsTo, ...rest }) => rest);
     expect(canReach(plain[0]!, plain[2]!)).toBe(true);
-    expect(hasAuthority(plain[0]!, plain[2]!)).toBe(false);
+    expect(hasAuthority(plain[0]!, plain[2]!)).toBe(true);
+    expect(hasAuthority({ ...plain[0]!, section: "SEO/SEA" }, plain[2]!)).toBe(false);
     expect(ids(reachablePeers(plain, plain.find((one) => one.id === "fox")!))).toEqual(ids(plain.filter((one) => one.id !== "fox")));
-    expect(chiefOfStaffSystemPrompt("ada-chief", plain, true)).toContain("Chief of Staff for the General department");
+    expect(chiefOfStaffSystemPrompt("ada-chief", plain, true)).toContain("workspace's unique System Coordinator");
+    const deptPlain = [{ ...plain[0]!, section: "SEO/SEA" }, ...plain.slice(1)];
+    expect(chiefOfStaffSystemPrompt("ada-chief", deptPlain, true)).toContain("Department Coordinator for the SEO/SEA department");
   });
 });

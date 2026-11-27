@@ -345,7 +345,7 @@ itHost("R5 queues a member's root on the computer seat at the wait ceiling, FIFO
       "--import", pathToFileURL(join(ROOT, "server/testing/desktop-parent.mjs")).href, join(ROOT, "server/index.ts")], {
       cwd: ROOT, env: {
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data, APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data, APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
         TEMP: home, TMP: home, TMPDIR: home, DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1), DONEBOT_STATIC_DIR: ui, DONEBOT_TEST_VM_STATE: stateFile,
         DONEBOT_TEST_DESKTOP_CUA_CONNECTION: join(home, "user-data", "cua-connection.json"), DONEBOT_COMPUTER_CALL_WAIT_MS: "4000", DONEBOT_COMPUTER_CALL_ACT_WITHIN_MS: "1000",
         DONEBOT_COMPUTER_WAIT_MAX_MS: String(CEILING_MS),

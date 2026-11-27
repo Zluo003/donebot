@@ -116,7 +116,7 @@ export function CollabTeamTaskDispatchBar({
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
             placeholder={`一句话让「${chiefName}」自动派发任务，例如：让小王周五前出 3 张 9:16 竖图…`}
-            className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink placeholder:text-ink-tertiary focus:outline-none disabled:opacity-60"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-tertiary focus:outline-none disabled:opacity-60"
           />
           <button
             type="submit"
@@ -198,7 +198,7 @@ export function CollabTeamTaskDispatchBar({
         )}
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="collab-ai-task-prompt" className="text-[12.5px] font-medium text-ink-secondary">
+          <label htmlFor="collab-ai-task-prompt" className="text-[13px] font-medium text-ink-secondary">
             要派发什么任务？（告诉「{chiefName}」给谁、做什么、何时交付）
           </label>
           <textarea
@@ -222,7 +222,7 @@ export function CollabTeamTaskDispatchBar({
 
         {members.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] text-ink-tertiary">点击成员快速填入：</span>
+            <span className="text-[12px] text-ink-tertiary">点击成员快速填入：</span>
             <div className="flex flex-wrap gap-1.5">
               {members.map(m => {
                 const name = displayPersonName(m);
@@ -233,7 +233,7 @@ export function CollabTeamTaskDispatchBar({
                     type="button"
                     disabled={busy}
                     onClick={() => insertMemberMention(m)}
-                    className="inline-flex items-center gap-1 rounded-full bg-inset/80 px-2.5 py-1 text-[11.5px] text-ink-secondary ring-1 ring-inset ring-ink/[0.08] hover:bg-accent/12 hover:text-accent-text hover:ring-accent/25"
+                    className="inline-flex items-center gap-1 rounded-full bg-inset/80 px-2.5 py-1 text-[12px] text-ink-secondary ring-1 ring-inset ring-ink/[0.08] hover:bg-accent/12 hover:text-accent-text hover:ring-accent/25"
                   >
                     <span>@{name}</span>
                     {role && <span className="text-ink-tertiary">· {role}</span>}
@@ -250,7 +250,7 @@ export function CollabTeamTaskDispatchBar({
             className="flex flex-col gap-2 rounded-2xl bg-card p-3.5 ring-1 ring-inset ring-accent/30"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink">
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink">
                 <Bot size={14} className="text-accent-text" aria-hidden="true" />
                 <span>{result.bot_name} 已处理</span>
               </span>
@@ -258,14 +258,14 @@ export function CollabTeamTaskDispatchBar({
                 <button
                   type="button"
                   onClick={() => openChiefChat()}
-                  className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-accent-text hover:underline"
+                  className="inline-flex items-center gap-0.5 text-[12px] font-medium text-accent-text hover:underline"
                 >
                   <span>打开对话继续确认/调整</span>
                   <ArrowUpRight size={12} aria-hidden="true" />
                 </button>
               )}
             </div>
-            <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink-secondary">{result.reply}</p>
+            <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-secondary">{result.reply}</p>
           </div>
         )}
       </form>
@@ -289,7 +289,7 @@ export function CollabTeamTaskDispatchBar({
             type="button"
             disabled={busy}
             onClick={onCloseDialog}
-            className={`${COLLAB_BUTTON} h-8 px-3.5 text-[12.5px]`}
+            className={`${COLLAB_BUTTON} h-8 px-3.5 text-[13px]`}
           >
             {result ? "完成" : "取消"}
           </button>
@@ -298,7 +298,7 @@ export function CollabTeamTaskDispatchBar({
             data-collab-ai-dispatch-dialog-submit=""
             disabled={busy || !prompt.trim()}
             onClick={() => void submit()}
-            className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[12.5px]`}
+            className={`${COLLAB_BUTTON} ui-button-primary h-8 px-4 text-[13px]`}
           >
             {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Sparkles size={13} aria-hidden="true" />}
             <span>{busy ? `${chiefName}正在派发…` : `让「${chiefName}」派发`}</span>

@@ -2,7 +2,6 @@
 import { createElement, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, Group, Message } from "@/state/store";
 
@@ -39,9 +38,13 @@ const text = (id: string, role: "user" | "bot", body: string): Message => ({
 
 const markup = (messages: Message[]) => {
   const group = { ...room, messages };
-  return renderToStaticMarkup(createElement(Transcript, {
+  flushSync(() => root.render(createElement(Transcript, {
     group, members: [lead], locale: "en", messages, transcript: messages, onReply: () => {},
-  }));
+  })));
+  for (const row of host.querySelectorAll<HTMLElement>("[data-message-row]")) {
+    flushSync(() => { row.dispatchEvent(new Event("pointerenter")); });
+  }
+  return host.innerHTML;
 };
 
 function Boom(): ReactNode {
@@ -52,7 +55,6 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
-  vi.stubGlobal("window", {});
   fixture.dispatch.mockClear();
   fixture.canWrite = true;
   host = document.createElement("div");

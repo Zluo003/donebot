@@ -70,11 +70,11 @@ export function OpcWorkflowInspector({
         <>
           <div className="border-b border-hairline/50 px-5 py-4">
             <div className="text-[14px] font-semibold text-ink">触发器与工作流设置</div>
-            <div className="mt-0.5 text-[11.5px] text-ink-tertiary">定义启动方式与首位接棒员工</div>
+            <div className="mt-0.5 text-[12px] text-ink-tertiary">定义启动方式与首位接棒员工</div>
           </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-[12.5px]">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-[13px]">
             <label className="block space-y-1.5">
-              <span className="text-[11.5px] text-ink-tertiary">工作流名称</span>
+              <span className="text-[12px] text-ink-tertiary">工作流名称</span>
               <input
                 value={name}
                 onChange={e => onNameChange(e.target.value)}
@@ -84,7 +84,7 @@ export function OpcWorkflowInspector({
             </label>
 
             <label className="block space-y-1.5">
-              <span className="text-[11.5px] text-ink-tertiary">业务说明（可选）</span>
+              <span className="text-[12px] text-ink-tertiary">业务说明（可选）</span>
               <textarea
                 value={description}
                 onChange={e => onDescriptionChange(e.target.value)}
@@ -95,7 +95,7 @@ export function OpcWorkflowInspector({
             </label>
 
             <div className="space-y-2 border-t border-hairline/40 pt-4">
-              <span className="text-[11.5px] font-medium text-ink-tertiary">触发方式</span>
+              <span className="text-[12px] font-medium text-ink-tertiary">触发方式</span>
               <Select
                 value={scheduleKind}
                 onChange={e => onScheduleKindChange(e.target.value as OpcWorkflowScheduleKind)}
@@ -131,13 +131,13 @@ export function OpcWorkflowInspector({
             </div>
 
             <div className="space-y-2 border-t border-hairline/40 pt-4">
-              <div className="text-[11.5px] font-medium text-ink-tertiary">入口节点（触发后首先启动）</div>
+              <div className="text-[12px] font-medium text-ink-tertiary">入口节点（触发后首先启动）</div>
               <div className="space-y-1">
                 {nodes.map(n => {
                   const checked = entryStepIds.includes(n.id);
                   return (
                     <label key={n.id} className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-ink/[0.04]">
-                      <span className="truncate text-[12.5px] text-ink">{n.name || "未命名步骤"}</span>
+                      <span className="truncate text-[13px] text-ink">{n.name || "未命名步骤"}</span>
                       <input
                         type="checkbox"
                         checked={checked}
@@ -159,7 +159,7 @@ export function OpcWorkflowInspector({
           <div className="flex items-center justify-between border-b border-hairline/50 px-5 py-4">
             <div className="min-w-0">
               <div className="truncate text-[14px] font-semibold text-ink">{selectedNode.name || "员工节点"}</div>
-              <div className="text-[11.5px] text-ink-tertiary">配置执行员工、任务指令与下游连线</div>
+              <div className="text-[12px] text-ink-tertiary">配置执行员工、任务指令与下游连线</div>
             </div>
             {nodes.length > 1 && (
               <button
@@ -173,9 +173,9 @@ export function OpcWorkflowInspector({
             )}
           </div>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-[12.5px]">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-[13px]">
             <label className="block space-y-1.5">
-              <span className="text-[11.5px] text-ink-tertiary">节点名称</span>
+              <span className="text-[12px] text-ink-tertiary">节点名称</span>
               <input
                 value={selectedNode.name}
                 onChange={e => onPatchNode(selectedNode.id, { name: e.target.value })}
@@ -185,7 +185,7 @@ export function OpcWorkflowInspector({
             </label>
 
             <label className="block space-y-1.5">
-              <span className="text-[11.5px] text-ink-tertiary">执行 AI 员工</span>
+              <span className="text-[12px] text-ink-tertiary">执行 AI 员工</span>
               <Select
                 value={selectedNode.botId}
                 onChange={e => onPatchNode(selectedNode.id, { botId: e.target.value })}
@@ -197,7 +197,7 @@ export function OpcWorkflowInspector({
             </label>
 
             <label className="block space-y-1.5">
-              <span className="text-[11.5px] text-ink-tertiary">
+              <span className="text-[12px] text-ink-tertiary">
                 任务指令（自然语言）
               </span>
               <textarea
@@ -216,8 +216,8 @@ export function OpcWorkflowInspector({
 
             <div className="flex items-center justify-between gap-3 border-t border-hairline/40 pt-4">
               <div>
-                <div className="text-[12.5px] font-medium text-ink">完成后等待审批</div>
-                <div className="text-[11.5px] text-ink-tertiary">暂停流水线，通过后才流向下一节点</div>
+                <div className="text-[13px] font-medium text-ink">完成后等待审批</div>
+                <div className="text-[12px] text-ink-tertiary">暂停流水线，通过后才流向下一节点</div>
               </div>
               <Switch
                 checked={selectedNode.approvalGate}
@@ -227,7 +227,7 @@ export function OpcWorkflowInspector({
 
             <div className="space-y-2 border-t border-hairline/40 pt-4">
               <div className="flex items-center justify-between">
-                <span className="text-[11.5px] font-medium text-ink-tertiary">流向下游节点（连线）</span>
+                <span className="text-[12px] font-medium text-ink-tertiary">流向下游节点（连线）</span>
                 <button
                   type="button"
                   onClick={() => onAddNodeAfter(selectedNode.id)}
@@ -238,7 +238,7 @@ export function OpcWorkflowInspector({
               </div>
               <div className="space-y-1">
                 {nodes.filter(n => n.id !== selectedNode.id).length === 0 ? (
-                  <p className="text-[11.5px] text-ink-tertiary">点上方「新接一棒」或在画布新增节点后拉线连接。</p>
+                  <p className="text-[12px] text-ink-tertiary">点上方「新接一棒」或在画布新增节点后拉线连接。</p>
                 ) : (
                   nodes.filter(n => n.id !== selectedNode.id).map(candidate => {
                     const linked = selectedNode.nextStepIds.includes(candidate.id);
@@ -251,7 +251,7 @@ export function OpcWorkflowInspector({
                           blockedCycle ? "opacity-45" : "cursor-pointer hover:bg-ink/[0.04]",
                         )}
                       >
-                        <span className="truncate text-[12.5px] text-ink">{candidate.name || "未命名步骤"}</span>
+                        <span className="truncate text-[13px] text-ink">{candidate.name || "未命名步骤"}</span>
                         <input
                           type="checkbox"
                           checked={linked}

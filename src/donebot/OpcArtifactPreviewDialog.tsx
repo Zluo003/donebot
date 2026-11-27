@@ -108,10 +108,10 @@ export function OpcArtifactPreviewDialog({
         <>
           <div className="flex items-center justify-between gap-3 border-b border-hairline/60 px-5 py-3.5">
             <div className="min-w-0">
-              <h1 id={titleId} className="truncate text-[14.5px] font-semibold text-ink">
+              <h1 id={titleId} className="truncate text-[15px] font-semibold text-ink">
                 {attachment.name}
               </h1>
-              <p className="mt-0.5 truncate text-[11.5px] text-ink-tertiary">
+              <p className="mt-0.5 truncate text-[12px] text-ink-tertiary">
                 汇报附件预览
               </p>
             </div>
@@ -199,7 +199,7 @@ export function OpcArtifactPreviewDialog({
                     <button
                       type="button"
                       onClick={() => setAttempt(v => v + 1)}
-                      className="inline-flex h-8 items-center gap-1 rounded-full bg-ink/[0.06] px-3 text-[12.5px] font-medium text-ink hover:bg-ink/[0.11]"
+                      className="inline-flex h-8 items-center gap-1 rounded-full bg-ink/[0.06] px-3 text-[13px] font-medium text-ink hover:bg-ink/[0.11]"
                     >
                       <RotateCcw size={13} aria-hidden="true" /> 重试
                     </button>
@@ -207,7 +207,7 @@ export function OpcArtifactPreviewDialog({
                       type="button"
                       disabled={save.state === "saving"}
                       onClick={() => void save.save()}
-                      className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[12.5px] font-medium text-app hover:opacity-85 disabled:opacity-50"
+                      className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[13px] font-medium text-app hover:opacity-85 disabled:opacity-50"
                     >
                       <Download size={13} aria-hidden="true" /> 下载到本地
                     </button>
@@ -233,7 +233,7 @@ export function OpcArtifactPreviewDialog({
                   role="region"
                   aria-label={attachment.name}
                   tabIndex={0}
-                  className="h-[68dvh] w-full overflow-auto rounded-xl border border-hairline/45 bg-inset p-4 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap break-words text-ink"
+                  className="h-[68dvh] w-full overflow-auto rounded-xl border border-hairline/45 bg-inset p-4 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink"
                 >
                   <code>{textContent}</code>
                 </pre>
@@ -241,8 +241,8 @@ export function OpcArtifactPreviewDialog({
             ) : (
               <div className="space-y-3 text-center">
                 <FileText size={34} className="mx-auto text-ink-tertiary" aria-hidden="true" />
-                <p className="text-[13.5px] font-medium text-ink">{attachment.name}</p>
-                <p className="text-[12.5px] text-ink-secondary">
+                <p className="text-[14px] font-medium text-ink">{attachment.name}</p>
+                <p className="text-[13px] text-ink-secondary">
                   该文件格式暂不支持在窗口内直接预览，可直接下载到本地打开。
                 </p>
                 <button

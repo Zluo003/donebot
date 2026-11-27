@@ -580,7 +580,7 @@ export function CollabProfileDialog({
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <div className="text-[13px] font-medium text-ink">头像</div>
-                <p className="text-[11.5px] leading-relaxed text-ink-secondary">
+                <p className="text-[12px] leading-relaxed text-ink-secondary">
                   好友和团队成员都会看到你的头像与昵称。
                 </p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
@@ -647,14 +647,14 @@ export function CollabProfileDialog({
                 type="button"
                 disabled={busy}
                 onClick={() => dialogRef.current?.close()}
-                className={`${COLLAB_BUTTON} text-[12.5px]`}
+                className={`${COLLAB_BUTTON} text-[13px]`}
               >
                 取消
               </button>
               <button
                 type="submit"
                 disabled={busy}
-                className={`${COLLAB_BUTTON} ui-button-primary text-[12.5px]`}
+                className={`${COLLAB_BUTTON} ui-button-primary text-[13px]`}
               >
                 {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
                 保存资料

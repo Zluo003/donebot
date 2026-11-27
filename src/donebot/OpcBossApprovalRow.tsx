@@ -116,7 +116,7 @@ export function OpcBossApprovalRow({
             >
               {item.title || item.name}
             </button>
-            <span className="shrink-0 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums text-ink-secondary">
+            <span className="shrink-0 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink-secondary">
               v{item.version}
             </span>
           </div>
@@ -154,7 +154,7 @@ export function OpcBossApprovalRow({
             type="button"
             disabled={busy}
             onClick={() => void requestChanges()}
-            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink/[0.06] px-3 text-[12.5px] font-medium text-ink transition-colors hover:bg-ink/[0.11] disabled:opacity-45"
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink/[0.06] px-3 text-[13px] font-medium text-ink transition-colors hover:bg-ink/[0.11] disabled:opacity-45"
           >
             {draft.working === "revise" ? <Loader2 size={12.5} className="animate-spin" /> : <RotateCcw size={12.5} />}
             {draft.revising ? "发送修改" : "打回修改"}
@@ -163,7 +163,7 @@ export function OpcBossApprovalRow({
             type="button"
             disabled={busy}
             onClick={() => void approve()}
-            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[12.5px] font-medium text-app transition-opacity hover:opacity-85 disabled:opacity-45"
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[13px] font-medium text-app transition-opacity hover:opacity-85 disabled:opacity-45"
           >
             {draft.working === "approve" ? <Loader2 size={12.5} className="animate-spin" /> : <Check size={12.5} />}
             通过
@@ -178,7 +178,7 @@ export function OpcBossApprovalRow({
             onChange={(e) => updateDraft({ reason: e.target.value })}
             rows={2}
             placeholder="写一句修改意见，点击「发送修改」后自动派发给该员工返工…"
-            className="w-full resize-none rounded-xl border border-hairline/70 bg-inset px-3 py-2 text-[12.5px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/40"
+            className="w-full resize-none rounded-xl border border-hairline/70 bg-inset px-3 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-ink/40"
           />
           <div className="mt-1.5 flex justify-end">
             <button

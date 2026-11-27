@@ -178,7 +178,7 @@ export function CollabMentionMenu({
                       </div>
                       <span
                         className={cn(
-                          "shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 ring-inset",
+                          "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
                           bot.can_invoke
                             ? "bg-success/12 text-success ring-success/25"
                             : "bg-ink/[0.05] text-ink-tertiary ring-ink/10",
@@ -230,7 +230,7 @@ export function CollabMentionMenu({
                         {sub && <div className="truncate text-[11px] text-ink-tertiary">{sub}</div>}
                       </div>
                       {member.roleLabel && (
-                        <span className="shrink-0 rounded-full bg-ink/[0.05] px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary ring-1 ring-inset ring-ink/10">
+                        <span className="shrink-0 rounded-full bg-ink/[0.05] px-2 py-0.5 text-[11px] font-medium text-ink-secondary ring-1 ring-inset ring-ink/10">
                           {member.roleLabel}
                         </span>
                       )}

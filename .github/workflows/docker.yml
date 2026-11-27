@@ -367,7 +367,7 @@ jobs:
             docker logs "$1" 2>&1 | tail -20; echo "$1 never served 443"; return 1
           }
           first=$(served tls)
-          docker run --rm -v omb-tls-ci:/data:ro --entrypoint sh omb-cloud-home:ci -c 'ls /data/.omb-edge/caddy/certificates/*/home.own-server.internal/home.own-server.internal.crt'
+          docker run --rm -v omb-tls-ci:/data:ro --entrypoint sh omb-cloud-home:ci -c 'ls /data/.donebot-edge/caddy/certificates/*/home.own-server.internal/home.own-server.internal.crt'
           docker restart tls >/dev/null
           healthy tls 18084
           test "$(served tls)" = "$first"
@@ -426,7 +426,7 @@ jobs:
           docker rm -f own >/dev/null
           run_home own2 omb-own-ci 18081
           healthy own2 18081
-          grep -q 7d1e2f3a-4b5c-4d6e-8f70-8192a3b4c5d6 <<<"$(docker run --rm -v omb-own-ci:/data:ro --entrypoint cat omb-cloud-home:ci /data/.omb-cloud-home.json)"
+          grep -q 7d1e2f3a-4b5c-4d6e-8f70-8192a3b4c5d6 <<<"$(docker run --rm -v omb-own-ci:/data:ro --entrypoint cat omb-cloud-home:ci /data/.donebot-cloud-home.json)"
           # A second home on the volume the live one holds refuses to start, and the live one carries on.
           if timeout 90 docker run --name own3 -v omb-own-ci:/data "${contract[@]}" omb-cloud-home:ci; then echo "a second home started on a held volume"; exit 1; fi
           grep -qF "Another DoneBot home is already running on this volume. No data was changed." <<<"$(docker logs own3 2>&1)"

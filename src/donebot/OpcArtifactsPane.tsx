@@ -118,18 +118,18 @@ function ArtifactLightbox({
       <div className="flex items-center justify-between gap-3 border-b border-hairline/60 px-5 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 id={titleId} className="truncate text-[14.5px] font-semibold text-ink">
+            <h1 id={titleId} className="truncate text-[15px] font-semibold text-ink">
               {current.title || current.name}
             </h1>
             <span className="rounded-md bg-raised px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-ink-secondary">
               v{current.version}
             </span>
-            <span className={cn("inline-flex items-center gap-1 text-[11.5px] font-medium", meta.text)}>
+            <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", meta.text)}>
               <span className={cn("size-1.5 rounded-full", meta.dot)} />
               {meta.label}
             </span>
           </div>
-          <div className="mt-0.5 text-[11.5px] tabular-nums text-ink-tertiary">
+          <div className="mt-0.5 text-[12px] tabular-nums text-ink-tertiary">
             {current.name} · {index + 1} / {items.length}
           </div>
         </div>
@@ -199,12 +199,12 @@ function ArtifactLightbox({
             <div className="flex size-14 items-center justify-center rounded-2xl bg-card text-ink-secondary">
               <FileText size={26} />
             </div>
-            <div className="text-[13.5px] font-medium text-ink">{current.name}</div>
+            <div className="text-[14px] font-medium text-ink">{current.name}</div>
             <a
               href={current.previewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[12.5px] text-accent hover:underline"
+              className="text-[13px] text-accent hover:underline"
             >
               打开或下载文档
             </a>
@@ -236,13 +236,13 @@ function ArtifactLightbox({
             value={draft.reason}
             onChange={(e) => updateDraft({ reason: e.target.value, revising: true })}
             placeholder="需要调整？直接输入批注并点「打回修改」，将自动派给该 Bot 返工…"
-            className="min-w-0 flex-1 rounded-xl border border-hairline/70 bg-card px-3 py-2 text-[12.5px] text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
+            className="min-w-0 flex-1 rounded-xl border border-hairline/70 bg-card px-3 py-2 text-[13px] text-ink outline-none placeholder:text-ink-tertiary focus:border-accent"
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => void submitReview("changes_requested")}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-raised px-3.5 text-[12.5px] font-medium text-ink hover:bg-control disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-raised px-3.5 text-[13px] font-medium text-ink hover:bg-control disabled:opacity-50"
           >
             {draft.working === "revise" ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
             打回修改
@@ -251,7 +251,7 @@ function ArtifactLightbox({
             type="button"
             disabled={busy}
             onClick={() => void submitReview("approved")}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-accent px-4 text-[12.5px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-accent px-4 text-[13px] font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
           >
             {draft.working === "approve" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
             通过定稿
@@ -306,7 +306,7 @@ export function OpcArtifactsPane({ bot }: { bot: Bot }) {
               type="button"
               onClick={() => setFilter(opt.id)}
               className={cn(
-                "rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors",
+                "rounded-md px-2 py-1 text-[12px] font-medium transition-colors",
                 filter === opt.id ? "bg-raised text-ink" : "text-ink-tertiary hover:text-ink",
               )}
             >
@@ -318,7 +318,7 @@ export function OpcArtifactsPane({ bot }: { bot: Bot }) {
         <button
           type="button"
           onClick={() => setStudioOpen(true)}
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-medium text-ink-secondary transition-colors hover:bg-raised hover:text-ink"
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-ink-secondary transition-colors hover:bg-raised hover:text-ink"
           title="版本快照回滚与真题试岗评测"
         >
           <FlaskConical size={13} className="text-accent" />
@@ -328,7 +328,7 @@ export function OpcArtifactsPane({ bot }: { bot: Bot }) {
 
       {/* Artifacts Gallery */}
       {loading && artifacts.length === 0 ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-[12.5px] text-ink-tertiary">
+        <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-ink-tertiary">
           <Loader2 size={14} className="animate-spin" /> 加载作品柜…
         </div>
       ) : filtered.length === 0 ? (
@@ -389,7 +389,7 @@ export function OpcArtifactsPane({ bot }: { bot: Bot }) {
                       {meta.label}
                     </span>
                     {!isVisual && (
-                      <span className="font-mono text-[10.5px] tabular-nums text-ink-tertiary">v{item.version}</span>
+                      <span className="font-mono text-[11px] tabular-nums text-ink-tertiary">v{item.version}</span>
                     )}
                   </div>
                 </div>

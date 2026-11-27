@@ -48,7 +48,7 @@ function readNetworkFailure(error: unknown): DoneBotGatewayError {
   return new DoneBotGatewayError(502, "gateway_unreachable", "无法连接 DoneBot 网关，请检查云节点的 CLOUD_EGRESS_MODE、DNS 和防火墙配置。");
 }
 
-const nativePath = /^\/v1\/(?:donebot\/runtime\/mobile\/(?:heartbeat|events)|messages(?:\/count_tokens)?|responses|chat\/completions|models|systemone|images\/(?:generations(?:\/async)?|edits(?:\/async)?|tasks\/[A-Za-z0-9_-]+)|tasks\/[A-Za-z0-9_-]+|videos(?:\/(?:edits|extensions|[A-Za-z0-9_-]+(?:\/content)?))?|music\/(?:generations|tasks\/[A-Za-z0-9_-]+)|audio\/speech|assets(?:\/[A-Za-z0-9_-]+)?)$/;
+const nativePath = /^\/v1\/(?:donebot\/runtime\/mobile\/(?:heartbeat|events)|messages(?:\/count_tokens)?|responses|chat\/completions|models|systemone|images\/(?:generations(?:\/async)?|edits(?:\/async)?|tasks\/[A-Za-z0-9_-]+)|tasks\/[A-Za-z0-9_-]+|videos(?:\/(?:edits|extensions|[A-Za-z0-9_-]+(?:\/content)?))?|music\/(?:generations|tasks\/[A-Za-z0-9_-]+)|audio\/(?:speech|transcriptions\/realtime)|assets(?:\/[A-Za-z0-9_-]+)?)$/;
 const geminiPath = /^\/v1beta\/models\/[A-Za-z0-9._-]+:(?:generateContent|streamGenerateContent)$/;
 const cloudID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const cloudInputText = (value: unknown, pattern: RegExp): value is string => typeof value === "string" && pattern.test(value);
@@ -82,7 +82,10 @@ export function doneBotRequestUrl(path: string, origin = DONEBOT_ORIGIN): URL {
     throw new DoneBotGatewayError(400, "gateway_path", "Unsupported DoneBot gateway operation.");
   }
   for (const name of url.searchParams.keys()) {
-    if (!(name === "alt" && url.searchParams.get(name) === "sse") && name !== "language") {
+    const allowedRealtimeModel = url.pathname === "/v1/audio/transcriptions/realtime"
+      && name === "model"
+      && /^[A-Za-z0-9._-]{1,128}$/.test(url.searchParams.get(name) ?? "");
+    if (!(name === "alt" && url.searchParams.get(name) === "sse") && name !== "language" && !allowedRealtimeModel) {
       throw new DoneBotGatewayError(400, "gateway_query", "Unsupported DoneBot gateway parameter.");
     }
   }
@@ -915,6 +918,63 @@ export class DoneBotGateway {
     const scope = this.scope();
     if (!scope) return Promise.reject(new DoneBotGatewayError(401, "login_required", "Sign in to DoneBot to use models."));
     return this.requestForScope(scope, path, init);
+  }
+
+  /** Opens a server-authenticated WebSocket to the gateway real-time ASR endpoint; credentials never leave the server. */
+  openVoiceAsrSocket(options: {
+    scope: DoneBotScope;
+    model: string;
+    idempotencyKey: string;
+    onAccountChanged?: () => void;
+  }): { ws: WebSocket; close: () => void } {
+    if (!/^[A-Za-z0-9._-]{1,128}$/.test(options.model)) {
+      throw new DoneBotGatewayError(400, "asr_model_invalid", "Unsupported DoneBot ASR model.");
+    }
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(options.idempotencyKey)) {
+      throw new DoneBotGatewayError(400, "idempotency_invalid", "Invalid ASR session key.");
+    }
+    const url = doneBotRequestUrl(`/v1/audio/transcriptions/realtime?model=${encodeURIComponent(options.model)}`, this.origin);
+    const s = this.session;
+    const epoch = this.epoch;
+    if (!s?.credential || s.user.id !== options.scope.accountId || s.installationId !== options.scope.installationId) {
+      throw new DoneBotGatewayError(409, "account_changed", "This ASR session belongs to another DoneBot account or installation.");
+    }
+    const wsUrl = url.toString().replace(/^http/, "ws");
+    const ws = new WebSocket(wsUrl, {
+      headers: {
+        authorization: `Bearer ${s.credential}`,
+        "X-DoneBot-Installation": s.installationId,
+        "Idempotency-Key": options.idempotencyKey,
+      },
+      followRedirects: false,
+      handshakeTimeout: 10_000,
+      maxPayload: 2 * 1024 * 1024,
+      perMessageDeflate: false,
+    });
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    const cleanup = () => {
+      controller.signal.removeEventListener("abort", onAbort);
+      this.controllers.delete(controller);
+    };
+    const onAbort = () => {
+      cleanup();
+      if (this.epoch !== epoch) options.onAccountChanged?.();
+      try { ws.terminate(); } catch {}
+    };
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+    ws.once("close", cleanup);
+    ws.once("error", cleanup);
+    return {
+      ws,
+      close: () => {
+        cleanup();
+        try {
+          if (ws.readyState === WebSocket.OPEN) ws.close(1000, "client closed");
+          else if (ws.readyState === WebSocket.CONNECTING) ws.terminate();
+        } catch {}
+      },
+    };
   }
 
   private async acquireModelSlot(scope: DoneBotScope, signal: AbortSignal): Promise<() => void> {

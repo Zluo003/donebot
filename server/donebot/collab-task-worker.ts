@@ -226,7 +226,7 @@ export function buildTaskEventPrompt(
       "2. 【选派或自动创建专长子助手（含 SOUL.md 与 Skill）】：",
       "   - 先对照本机已有专长子助手（或调用 list_bots 复核）选择能力最匹配的一位（或多领域拆分派发）；切勿重复创建同类助手。",
       "   - 若缺少匹配该任务能力的专长子助手，立即自动补齐（不要先停下来询问主人）：",
-      "     a) 调用 create_bot(name, role, instructions) 创建该岗位专长子助手，在 instructions 中写入清晰完整的 SOUL.md（角色身份、专业职责、工作流程、客观质量自检标准、边界与交付规范：生成的图片/视频/音乐会自动附带切勿重复 attach_file，文档/文案文件/表格/PDF/代码等必须调用 attach_file 附带给主协调助手）；",
+      "     a) 调用 create_bot(name, role, instructions) 创建该岗位专长子助手，在 instructions 中写入清晰完整的 SOUL.md（角色身份、专业职责、工作流程、简要完成标准（完工只需快速目测自查，禁止逐像素/色值检测与写脚本验收）、边界与交付规范：生成的图片/视频/音乐会自动附带切勿重复 attach_file，文档/文案文件/表格/PDF/代码等必须调用 attach_file 附带给主协调助手）；",
       "     b) 调用 skill_find(query, bot_id=新子助手id) 检索匹配的现成高质量 Skill：若找到匹配且可靠的现成技能，调用 skill_import(source, bot_id, preview=false) 导入并用 skill_manage(action='enable', bot_id, skill_name) 启用；若未找到合适现成技能或联网受限，直接调用 skill_manage(action='create', bot_id, skill_md, source='conversation', gist) 为该子助手定制创建并启用专业 SKILL.md。",
       "3. 【派发给专长子助手执行（含高成本视频/音乐护栏）】：",
       "   - 高成本视频/音乐护栏：若本次任务核心需要调用高成本的**视频生成或音乐生成**模型，先在本对话向主人简洁汇报任务要点、选定/新建的专长子助手和初步生成方案，等待主人确认后再派发生成，严禁未经主人确认自动扣费生成视频或音乐。",

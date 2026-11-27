@@ -9,7 +9,11 @@ const FORMAT = "mp3_44100_64";
 export interface Voice {
   id: string;
   label: string;
+  name?: string;
+  gender?: "female" | "male" | "neutral";
   description?: string;
+  tags?: string[];
+  recommended?: boolean;
   publicOwnerId?: string;
 }
 

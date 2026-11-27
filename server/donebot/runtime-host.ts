@@ -21,6 +21,12 @@ import { createDoneBotHelpers, describeDoneBotDecider } from "./helpers.ts";
 import { createDoneBotAccountRoutes } from "./routes.ts";
 import { bindDoneBotVoice } from "../tts/index.ts";
 import { createDoneBotVoice } from "./tts.ts";
+import {
+  doneBotVoiceCapabilities,
+  enrichDoneBotCatalogForClient,
+  resolveDoneBotAsrModel,
+  resolvePreferredDoneBotSpeechModel,
+} from "./media-registry.ts";
 import { publicArtifactResponse } from "./media-download.ts";
 import { DoneBotMediaPreferencesStore, createDoneBotMediaSettingsRoute } from "./media-preferences.ts";
 import { DoneBotMarketInstallStore, attachMarketHeaders, currentMarketBotId } from "./market-installs.ts";
@@ -95,7 +101,13 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
       ? { resumeCursors: {}, lastInstanceId: undefined, rewound: true, lastContextModel: undefined, appliedCompactionId: undefined } : {},
     reconcile(_store: Store) {},
   };
-  if (enabled && !team) bindDoneBotVoice(createDoneBotVoice({ gateway, resolveModel: () => gateway.models()?.models.find(model => model.id === config().tts?.model && model.interfaces.includes("openai.audio.speech")) ?? gateway.models()?.models.find(model => model.interfaces.includes("openai.audio.speech")) }));
+  if (enabled && !team) {
+    bindDoneBotVoice(createDoneBotVoice({
+      gateway,
+      resolveModel: () => resolvePreferredDoneBotSpeechModel(gateway.models(), config().tts?.model),
+      resolveAsrModel: () => resolveDoneBotAsrModel(gateway.models()),
+    }));
+  }
   const teamListeners = new Set<() => void>();
   const notifyTeamChange = () => { for (const listener of teamListeners) listener(); };
   let catalogRetry: ReturnType<typeof setTimeout> | null = null;
@@ -135,13 +147,24 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     res.setHeader("Cache-Control", "no-store");
     if (!team || !teamRuntime || auth.kind !== "session" || !teamRuntimeActor(teamRuntime, auth.session)) return json(res, 403, { error: "A verified team member is required." });
     if (path === "/api/donebot/catalog" && method === "GET") {
-      try { return json(res, 200, await refreshTeamCatalog()); }
+      try { return json(res, 200, enrichDoneBotCatalogForClient(await refreshTeamCatalog())); }
       catch { return json(res, 503, { error: "团队模型目录暂不可用。" }); }
     }
     return json(res, 403, { error: "个人账号与账单只能在个人工作空间管理。" });
   };
   return {
     enabled, localCodingAgentsEnabled, gateway, marketInstalls, driver, drivers, allowsDriver, policy, team, authenticated, state,
+    voiceCapabilities: () => doneBotVoiceCapabilities(
+      team ? null : gateway.models(),
+      enabled && !team && gateway.authenticated(),
+      config().tts?.model,
+    ),
+    asrTarget: () => {
+      if (!enabled || team) return null;
+      const scope = gateway.scope();
+      const asr = resolveDoneBotAsrModel(gateway.models());
+      return scope && asr ? { scope, model: asr.id } : null;
+    },
     setGoalContextProvider(fn: ((botId: string) => string | undefined) | null) { goalContextProvider = fn; },
     onChange(listener: () => void) {
       const unsubGateway = gateway.onChange(listener);

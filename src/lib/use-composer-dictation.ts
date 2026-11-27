@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useDesktopCapabilities } from "@/components/DesktopCapabilities";
 import { withOpenSettings } from "@/components/OpenSystemSettings";
 import { useStoreSelector } from "@/state/store-select";
+import { isCloudSpeechBridge } from "@/donebot/voice/cloud-speech-bridge";
 import { t } from "./i18n";
 import { fishSpeech } from "./fish-speech";
-import { listensHere, speechBridge } from "./speech";
+import { cloudAsrReady, listensHere, speechBridge } from "./speech";
 
 export function useComposerDictation({ draftId, text, onText }: {
   draftId: string;
@@ -12,14 +13,19 @@ export function useComposerDictation({ draftId, text, onText }: {
   onText: (text: string) => void;
 }) {
   const { capabilities } = useDesktopCapabilities();
-  const ready = listensHere(capabilities, useStoreSelector((state) => state.config));
+  const config = useStoreSelector((state) => state.config);
+  const cloudAsr = cloudAsrReady(config);
+  const cloudAsrWsPath = config?.asr?.wsPath ?? config?.tts?.asrWsPath ?? "";
+  const configRef = useRef(config);
+  configRef.current = config;
+  const ready = listensHere(capabilities, config);
   const [recording, setRecording] = useState(false);
   const [speechError, setSpeechError] = useState<ReactNode>(null);
   const draft = useRef({ id: draftId, text });
   draft.current = { id: draftId, text };
   const session = useRef({ draftId: "", base: "" });
   const cancel = useRef<(() => void) | null>(null);
-  // Fish Audio hears the clip only at its end, so stopping the mic must finish it.
+  // Fish Audio and cloud streaming ASR finish the active utterance cleanly when the mic is clicked off.
   const finish = useRef<(() => void) | null>(null);
   const stop = useCallback(() => {
     cancel.current?.();
@@ -28,7 +34,7 @@ export function useComposerDictation({ draftId, text, onText }: {
 
   useEffect(() => {
     if (!recording) return;
-    const bridge = speechBridge();
+    const bridge = speechBridge(configRef.current);
     if (!bridge || session.current.draftId !== draftId) {
       setRecording(false);
       return;
@@ -44,7 +50,9 @@ export function useComposerDictation({ draftId, text, onText }: {
       setRecording(false);
     };
     cancel.current = cancelSession;
-    finish.current = bridge === fishSpeech ? () => void fishSpeech.speechFinish() : null;
+    finish.current = (bridge === fishSpeech || isCloudSpeechBridge(bridge))
+      ? () => void bridge.speechFinish?.()
+      : null;
     const offTranscript = bridge.onSpeechTranscript((line) => {
       if (!active || draft.current.id !== draftId) return;
       if (draft.current.text !== lastText) {
@@ -83,10 +91,10 @@ export function useComposerDictation({ draftId, text, onText }: {
         void bridge.speechStop();
       }
     };
-  }, [recording, draftId, onText]);
+  }, [recording, draftId, onText, cloudAsr, cloudAsrWsPath]);
 
   const toggle = () => {
-    if (!ready || !speechBridge()) {
+    if (!ready || !speechBridge(configRef.current)) {
       setSpeechError(t("composer.dictation.unavailable"));
     } else if (recording) {
       if (finish.current) finish.current();

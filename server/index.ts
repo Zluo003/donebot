@@ -10,6 +10,8 @@ import { homedir } from "node:os";
 import { rm as removeDirectory } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { finishStartedResponse } from "./donebot/http-failure.ts";
+import { petBriefPromptBlock } from "./donebot/pet-brief.ts";
+import { createDispatchClaimGuard, DISPATCH_CORRECTION_ACTIVITY } from "./donebot/dispatch-claim-guard.ts";
 import { ToolResults, TOOL_RESULT_MAX_CHARS } from "./tool-results.ts";
 import { basename, join } from "node:path";
 import { authorizeExternalRuntime, externalRuntimeIsActive, type ExternalRuntimeGrant } from "./external-runtime.ts";
@@ -355,6 +357,8 @@ import { liveCallSettings, liveSettingsFor, liveSettingsForClient, saveLiveSetti
 import { recordLiveCall, spokenLineFields, titleLiveCall } from "./live-call-record.ts"; import { noteGroupTurn, turnsSince } from "./room-round-turns.ts";
 import { narrateTool, toUtterances } from "./tts/speech-text.ts";
 import { createTtsRoutes } from "./routes/tts.ts";
+import { createVoiceRoutes } from "./routes/voice.ts";
+import { VoiceAsrProxy } from "./donebot/voice-asr.ts";
 import { turnStartLogLine } from "./turn-log.ts";
 import { TurnStops, outwardActions, stoppedTurnOutcome, turnEvidence } from "./turn-outcome.ts";
 import { buildRecoveryText, buildTurnContext, engineIsFresh, replaysNatively } from "./turn-context.ts";
@@ -5606,6 +5610,14 @@ function ingestEngineHook(capability: InternalCapability, body: unknown): { ok: 
   return { ok: true };
 }
 
+const dispatchClaimGuard = createDispatchClaimGuard({
+  isCoordinator: (botId) => store.bot(botId)?.chiefOfStaff === true && store.bots.filter((b) => !b.hidden && b.id !== botId).length > 0,
+  threadBusy: (botId, threadId) => threadBusy(botId, threadId) || settlingTurns.has(threadId) || liveTurnByThread.has(threadId),
+  noteCorrection: (threadId) => { store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: DISPATCH_CORRECTION_ACTIVITY, ok: true } }); },
+  startCorrection: (botId, threadId, note, requestMessageId) => startTurn(botId, note, { threadId, cardContinuation: true, ...(requestMessageId ? { requestMessageId } : {}) }),
+  log: (line) => console.warn(line),
+});
+
 async function scheduleTurnDigest(input: {
   botId: string;
   botName: string;
@@ -5618,6 +5630,7 @@ async function scheduleTurnDigest(input: {
   isCurrent: () => boolean;
   usage?: { input: number; output: number; cachedInput?: number; costUsd?: number | null };
   succeeded?: boolean;
+  personTurn?: boolean;
 }): Promise<void> {
   const at = Date.now();
   const startedAt = turnStartedAt.get(input.threadId);
@@ -5651,6 +5664,12 @@ async function scheduleTurnDigest(input: {
         turnSucceeded: input.succeeded,
         ...(input.from ? { from: input.from } : {}),
       }, { kind: "digest.append", key: `${input.threadId}:${input.turnId}` });
+    if (input.personTurn && !input.from) {
+      dispatchClaimGuard.afterTurn({
+        botId: input.botId, threadId: input.threadId, turnId: input.turnId, reply: input.reply,
+        toolCalls: digest.toolCalls ?? 0, succeeded: input.succeeded, personTurn: true, requestMessageId: message.requestMessageId,
+      });
+    }
     if (input.instanceId && !input.from) {
       const handed = store.taskByThread(input.botId, input.threadId)?.handedMessages?.[input.instanceId];
       if (handed) store.setHandedMessages(input.botId, input.threadId, input.instanceId,
@@ -6921,6 +6940,7 @@ bus.subscribe((event: RuntimeEvent) => {
             instanceId: selection.instanceId,
             reply,
             isCurrent,
+            personTurn: !internal && !routineRun && automatedTurnByThread.get(event.threadId) !== true,
             ...(tokens ? { usage: { input: tokens.input ?? 0, output: tokens.output ?? 0, ...(typeof tokens.cachedInput === "number" ? { cachedInput: tokens.cachedInput } : {}), costUsd: event.cost ?? null } } : {}),
           }) : Promise.resolve();
         if (resourceOwner) settlingResourceOwners.set(resourceOwner.threadId, resourceOwner.generation);
@@ -7221,7 +7241,7 @@ function drainQueuedSendsNow() {
   );
 }
 
-async function startOrQueueDirectMessage(botId: string, threadId: string, text: string, replyTo?: ReplyTarget, sendId?: string, sender?: ResolvedSender, trigger?: UsageTrigger, via?: "call", callId?: string, dataContext?: DataContext, app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] }, mentions?: string[]) {
+async function startOrQueueDirectMessage(botId: string, threadId: string, text: string, replyTo?: ReplyTarget, sendId?: string, sender?: ResolvedSender, trigger?: UsageTrigger, via?: "call", callId?: string, dataContext?: DataContext, app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] }, mentions?: string[], petBrief?: boolean) {
   const decision = admit("direct", {}, {
     atCapacity: botAtThreadCapacity(botId, threadId),
     threadBusy: threadBusy(botId, threadId),
@@ -7234,7 +7254,7 @@ async function startOrQueueDirectMessage(botId: string, threadId: string, text: 
       sendId,
       dataContext, fromApp: app?.fromApp, mentions,
       reason: decision.reason,
-      prompt: (app?.context ?? "") + personPrompt(threadId, sender, promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId))),
+      prompt: (app?.context ?? "") + personPrompt(threadId, sender, promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId))) + petBriefPromptBlock(petBrief),
       sender,
       trigger,
       via,
@@ -7243,7 +7263,7 @@ async function startOrQueueDirectMessage(botId: string, threadId: string, text: 
     });
     return { ok: true as const, queued: true as const, queueId: queued.id, threadId, reason: decision.reason, why: waitWords.queued(threadId, decision.reason) };
   }
-  const message = await startTurn(botId, text, { threadId, replyTo, sendId, sender, trigger, via, callId, dataContext, app, mentions, allowRoomTurnElsewhere: true });
+  const message = await startTurn(botId, text, { threadId, replyTo, sendId, sender, trigger, via, callId, dataContext, app, mentions, petBrief, allowRoomTurnElsewhere: true });
   return { ok: true as const, threadId, message };
 }
 
@@ -7273,7 +7293,7 @@ async function acceptDirectSend(
   input: DirectSendInput,
   guardedStart?: (currentAtStart: BotRecord) => Promise<DirectSendReceipt>,
 ): Promise<DirectSendReceipt> {
-  const { botId, threadId, text, sendId, replyTo, sender, trigger, via, callId, dataContext, personPresent, app, followUp, mentions, admin } = input;
+  const { botId, threadId, text, sendId, replyTo, sender, trigger, via, callId, dataContext, personPresent, app, followUp, mentions, admin, petBrief } = input;
   const refused = directSendRefusal(botId, threadId);
   if (refused) throw refused;
   return sendSequencer.run(
@@ -7327,7 +7347,7 @@ async function acceptDirectSend(
       const typedStop = await stopOnTypedCommand({ botId, threadId, text, trigger, personPresent, fromApp: Boolean(app), busy: currentAtStart.busy === true, row: { replyToId: replyTo?.id, sendId, sender, ...spokenLineFields(via, callId) }, by: { ...(sender?.id ? { person: sender.id } : {}), admin: admin === true } });
       if (typedStop) return typedStop;
       if (currentAtStart.busy) {
-        const personsOwn = personPresent && !app && (trigger.kind === "user" || trigger.kind === "owner"), queuedPrompt = (app?.context ?? "") + personPrompt(threadId, sender, promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId))); if (runOwners.arrival(threadId, sender, personPresent && Boolean(sender?.id)) === "queue") return { ok: true as const, queued: true as const, threadId, queueId: queueSteeredMessage(currentAtStart.id, threadId, text, { replyToId: replyTo?.id, sendId, dataContext, fromApp: app?.fromApp, mentions, prompt: queuedPrompt, sender, trigger, via, callId, first: personPresent && Boolean(sender?.id) }).id };
+        const personsOwn = personPresent && !app && (trigger.kind === "user" || trigger.kind === "owner"), queuedPrompt = (app?.context ?? "") + personPrompt(threadId, sender, promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId))) + petBriefPromptBlock(petBrief); if (runOwners.arrival(threadId, sender, personPresent && Boolean(sender?.id)) === "queue") return { ok: true as const, queued: true as const, threadId, queueId: queueSteeredMessage(currentAtStart.id, threadId, text, { replyToId: replyTo?.id, sendId, dataContext, fromApp: app?.fromApp, mentions, prompt: queuedPrompt, sender, trigger, via, callId, first: personPresent && Boolean(sender?.id) }).id };
         const instance = runningTurnInstance(currentAtStart, threadId);
         let steered: SteerOutcome = "refused";
         const steerInput = extractTurnImages(text);
@@ -7343,7 +7363,7 @@ async function acceptDirectSend(
         // A chosen wait (queue, or restart's Stop) is never cut short by person-first.
         const chose = busyAdmission.action === "queue" ? busyAdmission.chose : undefined;
         if (busyAdmission.action === "steer" && instance?.adapter.steer) {
-          const prompt = (app?.context ?? "") + personPrompt(threadId, sender, promptWithReply(promptWithDataContext(steerInput.text, dataContext), replyTo, userNameFor(threadId)));
+          const prompt = (app?.context ?? "") + personPrompt(threadId, sender, promptWithReply(promptWithDataContext(steerInput.text, dataContext), replyTo, userNameFor(threadId))) + petBriefPromptBlock(petBrief);
           steered = await (steerInput.images.length > 0
             ? instance.adapter.steer(threadId, prompt, steerInput.images)
             : instance.adapter.steer(threadId, prompt))
@@ -7383,7 +7403,7 @@ async function acceptDirectSend(
           return { ok: true as const, steered: true as const, threadId, message };
         }
         if (!current.busy) {
-          return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app, mentions);
+          return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app, mentions, petBrief);
         }
         const queued = queueSteeredMessage(current.id, threadId, text, {
           replyToId: replyTo?.id,
@@ -7400,7 +7420,7 @@ async function acceptDirectSend(
         if (chose === "restart") await restartForPerson(botId, threadId, trigger);
         return { ok: true as const, queued: true as const, queueId: queued.id, threadId };
       }
-      return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app, mentions);
+      return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app, mentions, petBrief);
     },
   );
 }
@@ -7602,6 +7622,7 @@ async function beginTurn(
     relayed?: boolean;
     dataContext?: DataContext; mentions?: string[];
     app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] };
+    petBrief?: boolean;
     onDispatchError?: (message: string) => void;
     compactOnly?: boolean;
     automaticRecoveryAttempted?: boolean;
@@ -7917,7 +7938,7 @@ async function beginTurn(
         skillAuthoring ? expandLearnTurnText(setupText) : setupText,
         opts?.replyTo,
         userNameFor(threadId),
-      ), personLine ? activeMessages : [], skipTranscript, userNameFor(threadId)), lineLabels(threadId));
+      ), personLine ? activeMessages : [], skipTranscript, userNameFor(threadId)), lineLabels(threadId)) + petBriefPromptBlock(opts?.petBrief);
       const replay = usesNativeImageInput
         ? extractReplayImages(selection.inline, turnImages)
         : { transcript: selection.inline, images: [] };
@@ -11927,6 +11948,7 @@ function configStatus() {
     vps: { configured: Boolean(vpsSshAlias(cfg)), sshAlias: vpsSshAlias(cfg) ?? "" },
     opencodeGo: { ...keyStatus(cfg.opencodeGo?.apiKey), providerKeys: Object.keys(openCodeProviderKeys(cfg)) },
     tts: tts.describeVoice(cfg),
+    asr: tts.describeAsr(),
     ...(DONEBOT_GATEWAY ? { donebot: donebotHost.state() } : {}),
     decider: DONEBOT_GATEWAY ? donebotHost.describeDecider() : describeDecider(cfg), helpers: DONEBOT_GATEWAY ? { own: { jev: false, workersAi: false, openrouter: false }, extraction: { ready: donebotHost.authenticated() } } : describeHelpers(cfg),
     imageGen: avatarImageStatus(cfg), savedKeys: nestedKeyStatus(cfg),
@@ -12639,6 +12661,31 @@ ROUTES.push(createStatusRoutes({
   browserEngineInstallError: { set: (error) => { browserEngineInstallError = error; } },
 }));
 
+const voiceAsrProxy = new VoiceAsrProxy({
+  openUpstream: ({ scope, model, idempotencyKey, onAccountChanged }) => donebot.openVoiceAsrSocket({
+    scope,
+    model,
+    idempotencyKey,
+    onAccountChanged,
+  }),
+});
+ROUTES.push(createVoiceRoutes({
+  upgrades,
+  asrProxy: DONEBOT_GATEWAY && !DONEBOT_TEAM_RUNTIME ? voiceAsrProxy : null,
+  capabilities: () => donebotHost.voiceCapabilities(),
+  asrTarget: () => donebotHost.asrTarget(),
+  authenticated: () => DONEBOT_GATEWAY && !DONEBOT_TEAM_RUNTIME && donebot.authenticated(),
+  hotwordsFor: (auth) => {
+    const visible = visibleTo(viewerFor(auth));
+    return store.bots
+      .filter((bot) => !bot.hidden && visible.bot(bot.id))
+      .map((bot) => bot.name)
+      .filter((name) => typeof name === "string" && name.trim().length > 0);
+  },
+  isCurrent: (auth) => (auth.kind !== "session" || sessions.isLive(auth.session.id)) && donebot.authenticated(),
+  authorize: async (req, auth) => !HOSTED_WORKSPACE || auth.kind !== "session" ? null
+    : workspaceAccess ? workspaceAccess.authorize(req, auth) : { status: 503, error: "Workspace sign-in is unavailable." },
+}));
 ROUTES.push(desktopViewer.route);
 ROUTES.push(createBrowserViewerRoutes({
   upgrades, viewers: browserLive, dataDir: DATA_DIR, person: (auth) => (auth.kind === "session" ? actorKey(auth) : "local-owner"),
@@ -15747,6 +15794,7 @@ const gracefulShutdown = createGracefulShutdown({
       phones.close(); donebotMobile.stop();
       sharedComputerControl.close();
       browserLive.closeAll();
+      voiceAsrProxy.closeAll();
       desktopViewer.closeAll();
       upgrades.close();
       for (const idle of localVmIdles.values()) idle.cancel();

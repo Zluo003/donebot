@@ -19,8 +19,8 @@ const MIME: Record<string, string> = {
 /** Never framed (a hidden frame could act on a pair or sign-in page unseen), and no Referer. */
 const PAGE_HEADERS = { "content-security-policy": "frame-ancestors 'none'", "x-frame-options": "DENY", "referrer-policy": "no-referrer" } as const;
 
-/** Pages with an entry of their own: the app, and the desktop window's rail of places. */
-const PAGES: Record<string, string> = { "/": "/index.html", "/rail": "/rail.html" };
+/** Pages with an entry of their own: the app, the desktop window's rail of places, and the desktop pet. */
+const PAGES: Record<string, string> = { "/": "/index.html", "/rail": "/rail.html", "/pet": "/pet.html" };
 
 /** Public by design: the same bundle anyone can download, with no secrets, and /pair must load before a session exists. */
 export function serveStatic(res: ServerResponse, path: string, staticDir: string | null): boolean {

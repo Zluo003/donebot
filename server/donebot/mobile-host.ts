@@ -34,6 +34,12 @@ export function mobileChatRoute(method: string, raw: string): boolean {
   const path = url.pathname;
   if (raw.split("?")[0] !== path) return false;
   if (method === "GET" && path === "/api/bots") return [...url.searchParams].every(([key,value]) => key === "messages" && (value === "1" || value === "20"));
+  if (method === "GET" && path === "/api/events") {
+    const entries = [...url.searchParams];
+    return entries.length === 2
+      && entries.some(([key, value]) => key === "screens" && value === "off")
+      && entries.some(([key, value]) => key === "frames" && value === "thread");
+  }
   if (method === "GET" && !url.search && ["/api/routines", "/api/webhooks", "/api/app-triggers", "/api/connectors/connected"].includes(path)) return true;
   if (method === "GET" && path === "/api/donebot/opc/overview") {
     return [...url.searchParams].every(([key, value]) => key === "days" && /^\d{1,3}$/.test(value) && Number(value) >= 1 && Number(value) <= 365);

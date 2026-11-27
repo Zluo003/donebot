@@ -91,9 +91,13 @@ export interface ConfigStatus {
     configured: boolean;
     ready: boolean;
     voice: string;
+    defaultVoice?: string;
     provider?: "donebot" | "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "gemini" | "openai";
     baseUrl?: string;
     model?: string;
+    asrAvailable?: boolean;
+    asrModel?: string;
+    asrWsPath?: string;
     /** Voice note with every reply, for every bot without its own choice. Absent from older servers. */
     everyReply?: boolean;
     /** Fish Audio speech model; present only while Fish is the provider. */
@@ -101,6 +105,8 @@ export interface ConfigStatus {
     /** ElevenLabs voice comes with Cloud Pro; no key is saved. */
     included?: boolean;
   };
+  /** Cloud streaming ASR readiness reported by local server (`GET /api/config`). */
+  asr?: import("../../shared/donebot").DoneBotAsrConfigSummary;
   /** The decision model: switches and whether a key is on file. The key
    * itself never comes back. `enabled` is the switch as it takes effect
    * (off while no key is saved). `included`: Cloud Pro's decisions, no key

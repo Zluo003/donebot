@@ -314,6 +314,12 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   }, [dispatch]);
 
   useEffect(() => {
+    return window.ogb?.desktopPet?.onOpenWorkbench?.(() => {
+      dispatch({ type: "showBoss" });
+    });
+  }, [dispatch]);
+
+  useEffect(() => {
     return window.ogb?.desktopViewer?.onState((viewer) => {
       if (viewer.open || !viewer.contextId) return;
       const botId = viewer.contextId;

@@ -18,14 +18,15 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 const workers = Number(process.env.DONEBOT_VITEST_WORKERS) || 1;
 const page = (file: string) => fileURLToPath(new URL(file, import.meta.url));
 
-/** The window's rail of places loads /rail: rail.html, its own small page, in development as from the server. */
-function railPage(): Plugin {
+/** The window's rail of places loads /rail and the desktop pet loads /pet in development as from the server. */
+function auxiliaryPages(): Plugin {
   const rewrite: Connect.NextHandleFunction = (req, _res, next) => {
     if (req.url === "/rail" || req.url?.startsWith("/rail?")) req.url = `/rail.html${req.url.slice("/rail".length)}`;
+    else if (req.url === "/pet" || req.url?.startsWith("/pet?")) req.url = `/pet.html${req.url.slice("/pet".length)}`;
     next();
   };
   return {
-    name: "rail-page",
+    name: "auxiliary-pages",
     configureServer: (server) => void server.middlewares.use(rewrite),
     configurePreviewServer: (server) => void server.middlewares.use(rewrite),
   };
@@ -45,9 +46,9 @@ const include = [
 ];
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), railPage()],
+  plugins: [react(), tailwindcss(), auxiliaryPages()],
   build: {
-    rollupOptions: { input: { index: page("./index.html"), rail: page("./rail.html") } },
+    rollupOptions: { input: { index: page("./index.html"), rail: page("./rail.html"), pet: page("./pet.html") } },
   },
   define: {
     __APP_VERSION__: JSON.stringify(version),

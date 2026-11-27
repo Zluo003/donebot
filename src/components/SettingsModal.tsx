@@ -15,6 +15,7 @@ import { UpdatesConsentRow } from "./UpdatesConsent";
 import { OpenAtLoginRow } from "./OpenAtLoginRow";
 import { DefaultBotSidebarRow } from "./DefaultBotControls";
 import { TalkShortcutRow, talkShortcutKeywords } from "./TalkShortcutRow";
+import { DesktopPetSettings } from "@/donebot/pet/DesktopPetSettings";
 import { AttachmentStorageSettings } from "./AttachmentStorageSettings";
 import { DiagnosticsRow } from "./DiagnosticsRow";
 import { DecisionModelSettings } from "./DecisionModelSettings";
@@ -393,6 +394,7 @@ function SettingsDialog() {
             <AdvancedModeRow />
             <DefaultBotSidebarRow />
             <TalkShortcutRow />
+            <DesktopPetSettings />
 
             <ProSettingsCard />
             <CloudUsageSettings />

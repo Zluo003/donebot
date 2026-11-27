@@ -41,6 +41,40 @@ export function jsonFile(file, files = fs) {
 const parseChat = value => value && typeof value === "object" && typeof value.botId === "string" && typeof value.threadId === "string"
   && CHAT_ID.test(value.botId) && CHAT_ID.test(value.threadId) ? { botId: value.botId, threadId: value.threadId } : null;
 
+export const DEFAULT_PET_PREFS = Object.freeze({
+  enabled: false,
+  replyMode: "tts",
+  voiceMode: false,
+  autoAnnounceReports: true,
+  hideInFullscreen: true,
+  muted: false,
+  position: null,
+});
+
+function parsePetPosition(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const rx = Number(raw.rx);
+  const ry = Number(raw.ry);
+  if (!Number.isFinite(rx) || !Number.isFinite(ry)) return null;
+  const clampedRx = Math.max(0, Math.min(1, Math.round(rx * 10000) / 10000));
+  const clampedRy = Math.max(0, Math.min(1, Math.round(ry * 10000) / 10000));
+  const displayId = typeof raw.displayId === "number" && Number.isSafeInteger(raw.displayId) ? raw.displayId : undefined;
+  return displayId === undefined ? { rx: clampedRx, ry: clampedRy } : { rx: clampedRx, ry: clampedRy, displayId };
+}
+
+export function parsePetPrefs(raw) {
+  const record = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  return {
+    enabled: record.enabled === true,
+    replyMode: record.replyMode === "text" ? "text" : "tts",
+    voiceMode: record.voiceMode === true,
+    autoAnnounceReports: record.autoAnnounceReports !== false,
+    hideInFullscreen: record.hideInFullscreen !== false,
+    muted: record.muted === true,
+    position: parsePetPosition(record.position),
+  };
+}
+
 function parse(raw) {
   const record = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const seen = Array.isArray(record.seen) ? DESKTOP_NOTICES.filter(id => record.seen.includes(id)) : [];
@@ -48,6 +82,7 @@ function parse(raw) {
   const quickAsks = record.quickAsks && typeof record.quickAsks === "object" && !Array.isArray(record.quickAsks)
     ? Object.fromEntries(Object.entries(record.quickAsks).flatMap(([server, chat]) => { const parsed = parseChat(chat); return parsed ? [[server, parsed]] : []; }))
     : {};
+  const pet = record.pet && typeof record.pet === "object" && !Array.isArray(record.pet) ? parsePetPrefs(record.pet) : undefined;
   return { seen, ...(typeof record.analytics === "boolean" ? { analytics: record.analytics } : {}),
     ...(isLanguage(record.language) ? { language: record.language } : {}),
     ...(typeof record.installId === "string" && INSTALL_ID.test(record.installId) ? { installId: record.installId } : {}),
@@ -56,6 +91,7 @@ function parse(raw) {
     ...(isTalkKey(record.talkKey) ? { talkKey: record.talkKey } : {}),
     ...(typeof record.railHidden === "boolean" ? { railHidden: record.railHidden } : {}),
     ...(typeof record.windowFrame === "boolean" ? { windowFrame: record.windowFrame } : {}),
+    ...(pet ? { pet } : {}),
     ...(Object.keys(quickAsks).length ? { quickAsks } : {}) };
 }
 
@@ -139,6 +175,17 @@ export function createDesktopPrefs({ read, write }) {
     setWindowFrame(on) {
       const windowFrame = on !== false;
       if ((current().windowFrame !== false) !== windowFrame) save({ ...current(), windowFrame });
+    },
+    pet: () => parsePetPrefs(current().pet),
+    setPet(patch) {
+      const prev = parsePetPrefs(current().pet);
+      const next = parsePetPrefs({
+        ...prev,
+        ...(patch && typeof patch === "object" ? patch : {}),
+        position: patch && Object.hasOwn(patch, "position") ? patch.position : prev.position,
+      });
+      save({ ...current(), pet: next });
+      return next;
     },
   };
 }

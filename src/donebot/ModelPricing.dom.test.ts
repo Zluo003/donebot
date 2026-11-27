@@ -87,3 +87,37 @@ it("does not fetch a catalog before sign-in", async () => {
   expect(host.textContent).toContain("登录 DoneBot 账号后");
   expect(fixture.api).not.toHaveBeenCalled();
 });
+it("displays input and output token rates for million_tokens audio models", async () => {
+  const withTokenAudio: DoneBotCatalog = {
+    ...structuredClone(MODEL_PRICING_CATALOG),
+    models: [
+      ...structuredClone(MODEL_PRICING_CATALOG.models),
+      {
+        id: "qwen-audio-3.1-asr-flash-streaming",
+        display_name: "Qwen Audio 3.1 ASR Flash Streaming",
+        media_types: ["audio"],
+        interfaces: ["openai.audio.transcriptions.realtime"],
+        platforms: ["openai"],
+        pricing: { currency: "CNY", unit: "million_tokens", input_per_million: 6, output_per_million: 4.5 },
+      },
+      {
+        id: "qwen-audio-3.1-tts-flash",
+        display_name: "Qwen Audio 3.1 TTS Flash",
+        media_types: ["audio"],
+        interfaces: ["openai.audio.speech"],
+        platforms: ["openai"],
+        pricing: { currency: "CNY", unit: "million_tokens", input_per_million: 1.5, output_per_million: 12 },
+      },
+    ],
+  };
+  fixture.api.mockResolvedValueOnce(withTokenAudio);
+  await mount();
+  const asr = host.querySelector('[data-model-price-id="qwen-audio-3.1-asr-flash-streaming"]')!.textContent;
+  const tts = host.querySelector('[data-model-price-id="qwen-audio-3.1-tts-flash"]')!.textContent;
+  expect(asr).toContain("6 元／百万 tokens");
+  expect(asr).toContain("4.5 元／百万 tokens");
+  expect(asr).not.toContain("价格暂不可用");
+  expect(tts).toContain("1.5 元／百万 tokens");
+  expect(tts).toContain("12 元／百万 tokens");
+  expect(tts).not.toContain("价格暂不可用");
+});

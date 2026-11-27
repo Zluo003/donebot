@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { AppWindow, AudioLines, Bell, ChevronRight, ExternalLink, Eye, FileText, MessageSquareText, ShieldCheck, Slack, Tag } from "lucide-react";
+import { AppWindow, AudioLines, Bell, ChevronDown, ChevronRight, ExternalLink, Eye, FileText, MessageSquareText, ShieldCheck, Slack, Tag, Volume2 } from "lucide-react";
+import { formatDoneBotVoiceLabel } from "@/donebot/Voice";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { mcpServersForBot, useMcpServers } from "@/lib/mcp-servers";
 import { CALL_MODES, callModeHint, effectiveCallMode, setCallMode, useCallMode, type CallMode } from "@/lib/call-mode";
 import { callCapabilityHelp } from "@/lib/call-capability";
-import { fishListeningReady, listensHere, speechBridge } from "@/lib/speech";
+import { cloudAsrReady, fishListeningReady, listensHere, speechBridge } from "@/lib/speech";
 import { requestNotificationPermission } from "@/lib/notify";
 import { firstSentence } from "@/lib/soul";
 import { currentTaskBot, useStore, type Bot } from "@/state/store";
@@ -17,6 +18,7 @@ import { ApprovalChip } from "../ComposerPlusMenu";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
 import { DefaultBotHideRow } from "../DefaultBotControls";
 import { SoulField } from "../SoulField";
+import { VoiceSettings } from "../VoiceSettings";
 import { BotApiCard } from "../bot-settings/BotApiCard";
 import { PackageProvenance } from "../bot-settings/PackageProvenance";
 import { REPLY_STYLE_LABELS } from "../bot-settings/ReplyStyleField";
@@ -57,6 +59,7 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
   const slackUrl = useSlackManagementUrl(bot.id);
   const choosesVisibility = useChoosesVisibility();
   const [jobDraft, setJobDraft] = useState<string | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const { patch, approvalMode, engine } = derived;
   const name = bot.name;
   const commitJob = () => {
@@ -80,7 +83,7 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
 
   const turnsHere = !ready || listensHere(capabilities, state.config);
   const callMode = effectiveCallMode(storedCallMode, { turnsHere, canLive: true });
-  const turnsHelp = turnsHere ? null : callCapabilityHelp(capabilities, Boolean(speechBridge()?.speechStart), fishListeningReady(state.config));
+  const turnsHelp = turnsHere ? null : callCapabilityHelp(capabilities, Boolean(speechBridge(state.config)?.speechStart), fishListeningReady(state.config), cloudAsrReady(state.config));
   const callOptions: SegmentOption<CallMode>[] = CALL_MODES.map((entry) => ({
     value: entry.id,
     label: t(entry.label),
@@ -220,6 +223,29 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
             />
           </div>
         </ColRow>
+        <button
+          type="button"
+          data-panel-row="voice"
+          aria-expanded={voiceOpen}
+          onClick={() => setVoiceOpen((open) => !open)}
+          className={cn(rowCls, "w-full text-left hover:bg-ink/[0.03]")}
+        >
+          <RowIcon icon={Volume2} />
+          <RowText title={t("botSettings.sections.voice")} />
+          <span className="max-w-[55%] truncate text-[13px] text-ink-secondary">
+            {bot.voice ? formatDoneBotVoiceLabel(bot.voice) : "默认声音"}
+          </span>
+          <ChevronDown
+            size={15}
+            className={cn("shrink-0 text-ink-tertiary transition-transform", voiceOpen && "rotate-180")}
+            aria-hidden="true"
+          />
+        </button>
+        {voiceOpen && (
+          <div data-panel-voice-settings className="border-t border-hairline bg-inset/40 px-3 py-3">
+            <VoiceSettings bot={bot} onPatch={patch} />
+          </div>
+        )}
         <SwitchRow
           data-panel-row="notifications"
           icon={Bell}

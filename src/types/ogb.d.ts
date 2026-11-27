@@ -497,7 +497,54 @@ const __APP_VERSION__: string;
         seen?(): Promise<void>;
         onState(cb: (s: UpdaterState) => void): () => void;
       };
+      /** macOS desktop pet companion controller & settings bridge. */
+      desktopPet?: {
+        state(): Promise<DesktopPetState>;
+        set(patch: Partial<DesktopPetConfig>): Promise<DesktopPetState>;
+        onState(cb: (state: DesktopPetState) => void): () => void;
+        onOpenWorkbench(cb: () => void): () => void;
+        moveBy(dx: number, dy: number): Promise<boolean>;
+        commitPosition(): Promise<boolean>;
+        openPopover(mode: DesktopPetPopoverMode, size?: { width?: number; height?: number } | null): Promise<boolean>;
+        closePopover(): Promise<boolean>;
+        resizePopover(size: { width?: number; height?: number }): Promise<boolean>;
+        contextMenu(): Promise<boolean>;
+        setReportCount(count: number): Promise<boolean>;
+        openMainWindow(): Promise<boolean>;
+        openWorkbench(): Promise<boolean>;
+        openSettings(): Promise<boolean>;
+        post(target: "avatar" | "popover", payload: unknown): Promise<boolean>;
+        speechStart(options?: { endpointMs?: number }): Promise<void>;
+        speechStop(): Promise<void>;
+        speechFinish(): Promise<void>;
+        onSpeechTranscript(cb: (line: { text: string; final: boolean }) => void): () => void;
+        onSpeechEnd(cb: (info: { code: number | null; reason?: string; message?: string }) => void): () => void;
+        onMessage(cb: (payload: unknown) => void): () => void;
+        onSkin(cb: (skin: string) => void): () => void;
+        onActive(cb: (active: boolean) => void): () => void;
+        onPopoverMode(cb: (mode: DesktopPetPopoverMode) => void): () => void;
+        onPopoverClosed(cb: () => void): () => void;
+      };
     };
+  }
+
+  type DesktopPetPopoverMode = "composer" | "bubble" | "voice" | "approval" | "preview";
+
+  interface DesktopPetConfig {
+    enabled: boolean;
+    replyMode: "tts" | "text";
+    voiceMode: boolean;
+    autoAnnounceReports: boolean;
+    hideInFullscreen: boolean;
+    muted: boolean;
+    position: { rx: number; ry: number; displayId?: number } | null;
+  }
+
+  interface DesktopPetState extends DesktopPetConfig {
+    available: boolean;
+    visible: boolean;
+    temporarilyHidden: boolean;
+    popoverMode: DesktopPetPopoverMode | null;
   }
 }
 

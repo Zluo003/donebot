@@ -16,9 +16,9 @@ const HARD_CAP = 2000;
 const LISTED_FROM = 1000;
 
 const LINES: Record<string, number> = {
-  "server/index.ts": 15866,
+  "server/index.ts": 15873,
   "src/state/store.tsx": 3348,
-  "electron/main.mjs": 3160,
+  "electron/main.mjs": 3216,
   "server/store.ts": 2315,
   "src/components/Sidebar.tsx": 1689,
   "server/drivers/claude.ts": 2090,
@@ -51,6 +51,8 @@ const LINES: Record<string, number> = {
   "server/drivers/agents-catalog.ts": 1012,
   "shared/wire.ts": 1022,
   "src/components/TeamLibraryPanel.tsx": 1054,
+  "server/donebot/gateway.ts": 1055,
+  "src/donebot/pet/PetAvatarView.tsx": 1128,
 };
 
 function sourceFiles(): string[] {

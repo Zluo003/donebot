@@ -1,3 +1,5 @@
+import type { DoneBotAsrConfigSummary } from "../../shared/donebot.ts";
+import { DONEBOT_ASR_WS_PATH } from "../../shared/donebot-voice.ts";
 import type { AppConfig } from "../config.ts";
 import { voiceCredential } from "../included-services.ts";
 import * as chatterbox from "./chatterbox.ts";
@@ -10,6 +12,15 @@ import * as systemVoices from "./system-voices.ts";
 
 export type VoiceProvider = "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "gemini" | "openai" | "donebot";
 
+export interface DoneBotSpeechOptions {
+  instruction?: string;
+  speed?: number;
+  pitch?: number;
+  volume?: number;
+  languageHints?: string[];
+  fallbackUnknownVoice?: boolean;
+}
+
 export interface VoiceStream {
   body: ReadableStream<Uint8Array>;
   mime: string;
@@ -19,9 +30,11 @@ export interface DoneBotVoice {
   configured(): boolean;
   ready(voiceId?: string): boolean;
   model(): string;
+  defaultVoice?(): string;
+  asr?(): DoneBotAsrConfigSummary;
   voices(): elevenlabs.Voice[];
-  stream(text: string, voiceId?: string, signal?: AbortSignal): Promise<VoiceStream>;
-  speak(text: string, voiceId?: string, signal?: AbortSignal): Promise<elevenlabs.Audio>;
+  stream(text: string, voiceId?: string, signal?: AbortSignal, options?: DoneBotSpeechOptions): Promise<VoiceStream>;
+  speak(text: string, voiceId?: string, signal?: AbortSignal, options?: DoneBotSpeechOptions): Promise<elevenlabs.Audio>;
 }
 let doneBotVoice: DoneBotVoice | undefined;
 export function bindDoneBotVoice(service: DoneBotVoice | undefined): void { doneBotVoice = service; }
@@ -29,9 +42,19 @@ function doneBotVoiceId(cfg: AppConfig, voiceId?: string): string | undefined {
   return voiceId || (doneBotVoice?.voices().some(voice => voice.id === cfg.tts?.voice) ? cfg.tts?.voice : undefined);
 }
 export function doneBotVoiceBound(): boolean { return doneBotVoice !== undefined; }
-export function streamVoice(cfg: AppConfig, text: string, voiceId?: string, signal?: AbortSignal): Promise<VoiceStream> {
+export function streamVoice(
+  cfg: AppConfig,
+  text: string,
+  voiceId?: string,
+  signal?: AbortSignal,
+  options?: DoneBotSpeechOptions,
+): Promise<VoiceStream> {
   if (!doneBotVoice) throw new Error("Streaming voice is unavailable.");
-  return doneBotVoice.stream(text, doneBotVoiceId(cfg, voiceId), signal);
+  return doneBotVoice.stream(text, doneBotVoiceId(cfg, voiceId), signal, options);
+}
+
+export function describeAsr(): DoneBotAsrConfigSummary {
+  return doneBotVoice?.asr?.() ?? { ready: false, model: "", wsPath: DONEBOT_ASR_WS_PATH };
 }
 
 export class NoVoiceConfigured extends Error {
@@ -126,6 +149,7 @@ export function voiceReady(cfg: AppConfig, voiceId?: string): boolean {
 export function describeVoice(cfg: AppConfig) {
   const provider = voiceProvider(cfg);
   const included = provider === "elevenlabs" && elevenLabs(cfg)?.included === true;
+  const asr = doneBotVoice ? describeAsr() : null;
   return {
     configured: providerConfigured(cfg),
     ready: voiceConfigured(cfg),
@@ -133,7 +157,15 @@ export function describeVoice(cfg: AppConfig) {
     provider,
     baseUrl: provider === "chatterbox" ? (cfg.tts?.baseUrl ?? "") : "",
     model: doneBotVoice ? doneBotVoice.model() : provider === "gemini" ? (cfg.tts?.model || gemini.DEFAULT_GEMINI_MODEL) : provider === "chatterbox" ? (cfg.tts?.model ?? "") : "",
-    ...(doneBotVoice ? { streaming: true as const } : {}),
+    ...(doneBotVoice
+      ? {
+        streaming: true as const,
+        defaultVoice: doneBotVoice.defaultVoice?.() ?? "",
+        asrAvailable: asr?.ready === true,
+        asrModel: asr?.model ?? "",
+        ...(asr?.ready ? { asrWsPath: asr.wsPath } : {}),
+      }
+      : {}),
     ...(provider === "fish" ? { fishModel: cfg.tts?.fishModel ?? fish.DEFAULT_FISH_MODEL } : {}),
     ...(included ? { included: true as const } : {}),
     ...(cfg.tts?.everyReply ? { everyReply: true as const } : {}),
@@ -207,8 +239,15 @@ export async function addSharedVoice(cfg: AppConfig, publicOwnerId: string, voic
  * @param run Optional runner for system voices.
  * @returns Synthesized audio buffer or stream promise.
  */
-export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: systemVoices.Runner, signal?: AbortSignal) {
-  if (doneBotVoice) return doneBotVoice.speak(text, doneBotVoiceId(cfg, voiceId), signal);
+export function speak(
+  cfg: AppConfig,
+  text: string,
+  voiceId?: string,
+  run?: systemVoices.Runner,
+  signal?: AbortSignal,
+  options?: DoneBotSpeechOptions,
+) {
+  if (doneBotVoice) return doneBotVoice.speak(text, doneBotVoiceId(cfg, voiceId), signal, options);
   const provider = voiceProvider(cfg);
   if (provider === "gemini") {
     const key = cfg.tts?.geminiKey;

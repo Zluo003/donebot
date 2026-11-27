@@ -35,6 +35,9 @@ const mediaModels = [
   ["seedance-2-5", "video", "openai.videos", "seedance.videos.v1"],
   ["seedance-2-5-flash", "video", "openai.videos", "seedance.videos.v1"],
   ["suno", "music", "openai.music", "apimart.music.v1"],
+  ["qwen-audio-3.1-tts-flash", "audio", "openai.audio.speech", "dashscope.speech.v1"],
+  ["qwen-audio-3.1-tts-plus", "audio", "openai.audio.speech", "dashscope.speech.v1"],
+  ["qwen-audio-3.1-asr-flash-streaming", "audio", "openai.audio.transcriptions.realtime", "dashscope.asr.realtime.v1"],
   ["gpt-4o-mini-tts", "audio", "openai.audio.speech", "apimart.speech.v1"],
 ] as const;
 function model(id: string, kind: DoneBotModelKind, nativeInterface: string, adapter?: string): DoneBotGatewayModel {
@@ -60,7 +63,7 @@ describe("DoneBot local model registration", () => {
       expect(result.native!.sources.length).toBeGreaterThan(0);
       for (const source of result.native!.sources) {
         expect(new URL(source).protocol).toBe("https:");
-        expect(["developers.openai.com", "platform.claude.com", "docs.cloud.google.com", "api-docs.deepseek.com", "docs.z.ai", "docs.volcengine.com", "help.suno.com", "docs.apimart.ai"]).toContain(new URL(source).hostname);
+        expect(["developers.openai.com", "platform.claude.com", "docs.cloud.google.com", "api-docs.deepseek.com", "docs.z.ai", "docs.volcengine.com", "help.suno.com", "docs.apimart.ai", "help.aliyun.com"]).toContain(new URL(source).hostname);
       }
     }
     for (const id of ["gateway-new-text", "toString", "__proto__"]) {
@@ -222,6 +225,24 @@ describe("DoneBot local model registration", () => {
     expect(capabilities.gateway.parameters.voices).toHaveLength(6);
     expect(capabilities.client).toMatchObject({ delivery: "streaming", playbackFormat: "pcm", inputLimit: { maxUnicodeCharacters: 4096, nativeTokenLimit: 2000 } });
     expect(() => validateMediaParameters(entry, { input: "fixture" }, "generate")).toThrow("Speech");
+  });
+
+  it("registers Qwen-Audio-3.1 streaming TTS and realtime ASR even when gateway strips media_parameters", () => {
+    const flash = model("qwen-audio-3.1-tts-flash", "audio", "openai.audio.speech");
+    const plus = model("qwen-audio-3.1-tts-plus", "audio", "openai.audio.speech");
+    const asr = model("qwen-audio-3.1-asr-flash-streaming", "audio", "openai.audio.transcriptions.realtime");
+    const flashCaps = modelCapabilities(flash);
+    const plusCaps = modelCapabilities(plus);
+    const asrCaps = modelCapabilities(asr);
+    expect(flashCaps.availability).toMatchObject({ locallyVerified: true, usable: true });
+    expect(flashCaps.native!.media!.voices).toHaveLength(13);
+    expect(flashCaps.client).toMatchObject({ delivery: "streaming", playbackFormat: "pcm", inputLimit: { maxUnicodeCharacters: 20_000 } });
+    expect(plusCaps.availability).toMatchObject({ locallyVerified: true, usable: true });
+    expect(plusCaps.native!.media!.voices).toHaveLength(4);
+    expect(asrCaps.availability).toMatchObject({ locallyVerified: true, usable: true });
+    expect(asrCaps.client).toMatchObject({ delivery: "streaming", inputFormat: "pcm", sampleRate: 16_000, wsEndpoint: "/api/voice/asr" });
+    expect(modelCapabilities({ ...asr, interfaces: ["openai.audio.speech"] }).availability.usable).toBe(false);
+    expect(modelCapabilities({ ...flash, interfaces: ["openai.audio.transcriptions.realtime"] }).availability.usable).toBe(false);
   });
 });
 

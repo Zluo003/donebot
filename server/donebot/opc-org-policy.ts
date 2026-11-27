@@ -128,6 +128,9 @@ export function evaluateOrgCoordination(
 export const BOSS_FORMAL_REPORT_RULE =
   "正式汇报规范：凡是正式汇报阶段成果、提交工作流门禁产出或请求人工审批确认时，必须使用清晰的正式汇报格式（Markdown 排版）：① 一级或二级标题写明汇报主题；② 「核心结论」先行（1–3 句概括结论与关键产出）；③ 「执行摘要」列出关键数据、完成项或风险；④ 「待确认事项」（如有需决断事项，给出明确选项与建议方案）；⑤ 「交付附件」（如有产出文件，逐项说明文件用途并确保文件真实已生成）。严禁将零散过程日志、思维草稿或未整理的原始输出直接当作正式汇报提交。";
 
+export const LIGHT_DELIVERY_CHECK_RULE =
+  "完工检查从简：完成工作后只做一次快速自查——确认交付文件已真实生成、内容符合需求即可；图片/视频看一眼确认主体、构图与明显瑕疵即可交付。严禁为验收逐像素取色或核对色值、测量尺寸比例、为检查编写临时脚本或安装依赖、反复多轮自我验证；技能或岗位说明中的验收清单一律按目测快速过一遍，与本条冲突时以本条为准（用户本次明确要求精细检查时除外）。最终质量由主协调与负责人审批把关，你应尽快交付并汇报。";
+
 /** Renders concise fenced Org & Workflow Discipline instructions for LLM system prompt injection. */
 export function buildOrgPromptForBot(
   orgChart: OpcOrgChartState,
@@ -142,8 +145,9 @@ export function buildOrgPromptForBot(
     || hasDepartments
     || Boolean(orgChart.generalDepartmentName);
   if (!hasConfigured) {
-    const fence = safeFence(BOSS_FORMAL_REPORT_RULE);
-    return `[Studio Boss Reporting Rules]\n${fence}\n${BOSS_FORMAL_REPORT_RULE}\n${fence}`;
+    const rules = `${BOSS_FORMAL_REPORT_RULE}\n${LIGHT_DELIVERY_CHECK_RULE}`;
+    const fence = safeFence(rules);
+    return `[Studio Boss Reporting Rules]\n${fence}\n${rules}\n${fence}`;
   }
 
   const node = orgChart.nodes[botId] ?? defaultNode(botId);
@@ -194,6 +198,7 @@ export function buildOrgPromptForBot(
     crossDeptRule,
     node.requireBossApproval ? "审批纪律：你的关键交付物需提交工作台审批确认后再对外流转或收尾。" : "",
     BOSS_FORMAL_REPORT_RULE,
+    LIGHT_DELIVERY_CHECK_RULE,
     "固定工作流优先级：固定/定时工作流优先于日常组织架构约束，跨部门工作流节点直接按编排执行。",
     bot?.chiefOfStaff ? (!mySection ? "总协调机器人编排权限：当用户要求建立固定或定时工作流（含跨部门流程）时，可直接调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 创建、修改或启动。" : "部门协调机器人编排权限：仅可调用 opc_list_workflows / opc_save_workflow / opc_run_workflow 编排或启动本部门（含受权管辖部门）内的固定工作流；跨部门工作流请汇报给总协调机器人或在工作空间「组织与流程」编排。") : "",
   ].filter(Boolean);

@@ -1,4 +1,5 @@
 import type { DoneBotGatewayModel, DoneBotModelKind, DoneBotProtocol } from "../../shared/donebot.ts";
+import { DONEBOT_SPEECH_MODEL_SPECS, DONEBOT_VOICE_MODELS } from "../../shared/donebot-voice.ts";
 import { MAX_MEDIA_REFERENCE_BYTES, MAX_MEDIA_REFERENCE_FILES } from "./media-assets.ts";
 import { SEEDREAM55_SOURCE, seedream55, seedream55ParameterRules, SEEDREAM55_FIELDS, SEEDREAM55_RATIOS } from "./seedream-capabilities.ts";
 import { SUNO_FIELDS, SUNO_FIXED_PARAMETERS, SUNO_FORMATS, SUNO_LIMITS, SUNO_VARIETIES, sunoParameterRules, sunoV6 } from "./suno-capabilities.ts";
@@ -74,6 +75,34 @@ export interface NativeModel {
   };
   sources: string[];
   verifiedAt: string;
+}
+
+const ALIYUN_AUDIO_VOICE_LIST = "https://help.aliyun.com/zh/model-studio/developer-reference/qwen-audio-tts-voice-list";
+const ALIYUN_AUDIO_ASR_STREAMING = "https://help.aliyun.com/zh/model-studio/developer-reference/qwen-audio-asr-streaming";
+const VERIFIED_AUDIO_31 = "2026-11-28";
+
+function qwen31Tts(id: typeof DONEBOT_VOICE_MODELS.ttsFlash | typeof DONEBOT_VOICE_MODELS.ttsPlus): NativeModel {
+  const spec = DONEBOT_SPEECH_MODEL_SPECS[id]!;
+  return {
+    officialId: id,
+    kind: "audio",
+    tools: false,
+    input: ["text"],
+    output: ["audio"],
+    streaming: true,
+    verifiedAt: VERIFIED_AUDIO_31,
+    sources: [ALIYUN_AUDIO_VOICE_LIST],
+    media: {
+      operations: ["speech"],
+      formats: [...spec.formats],
+      voices: spec.voices.map((voice) => voice.id),
+      notes: [
+        "Alibaba Cloud DashScope Qwen-Audio-3.1 streaming TTS over /api-ws/v1/inference, proxied by DoneBot gateway /v1/audio/speech as 24 kHz 16-bit mono PCM.",
+        "Voice IDs must match the active model; mixing voices across models triggers DashScope InvalidParameter.",
+        "Input ceiling is 20,000 Unicode characters per request.",
+      ],
+    },
+  };
 }
 
 const VERIFIED = "2026-11-05";
@@ -219,6 +248,26 @@ const MODELS: Readonly<Record<string, NativeModel>> = {
         "For subject plus environment, select the complete subject as one transparent foreground layer and keep the remaining environment together in the base. Target one base plus one foreground, rather than extracting background as another foreground layer. Exact output count is not guaranteed by a separate parameter.",
         "Coordinate edits use prompt <point> or <bbox> markers normalized to 0..999; layer bounding_box.normalized response coordinates use 0..1000."] } },
   "suno": sunoV6,
+  "qwen-audio-3.1-tts-flash": qwen31Tts(DONEBOT_VOICE_MODELS.ttsFlash),
+  "qwen-audio-3.1-tts-plus": qwen31Tts(DONEBOT_VOICE_MODELS.ttsPlus),
+  "qwen-audio-3.1-asr-flash-streaming": {
+    officialId: DONEBOT_VOICE_MODELS.asrRealtime,
+    kind: "audio",
+    tools: false,
+    input: ["audio"],
+    output: ["text"],
+    streaming: true,
+    verifiedAt: VERIFIED_AUDIO_31,
+    sources: [ALIYUN_AUDIO_ASR_STREAMING],
+    media: {
+      operations: ["transcribe_realtime"],
+      formats: ["pcm", "wav", "opus"],
+      notes: [
+        "Alibaba Cloud DashScope Qwen-Audio-3.1 real-time duplex ASR over /api-ws/v1/inference, proxied by DoneBot gateway /v1/audio/transcriptions/realtime.",
+        "Supports 16 kHz / 8 kHz 16-bit mono PCM, instant hotwords via parameters.vocabulary, and server-side VAD.",
+      ],
+    },
+  },
   "gpt-4o-mini-tts": { officialId: "gpt-4o-mini-tts", kind: "audio", tools: false, input: ["text"], output: ["audio"], contextWindow: 2000, streaming: true,
     verifiedAt: VERIFIED, sources: [`${OPENAI}models/gpt-4o-mini-tts`, `${OPENAI}guides/text-to-speech`],
     media: { operations: ["speech"], formats: ["mp3", "opus", "aac", "flac", "wav", "pcm"],
@@ -255,9 +304,16 @@ export const registeredMediaAdapters: Readonly<Record<string, string>> = {
   "seedance-2-5": "seedance.videos.v1",
   "seedance-2-5-flash": "seedance.videos.v1",
   suno: "apimart.music.v1",
+  "qwen-audio-3.1-tts-flash": "dashscope.speech.v1",
+  "qwen-audio-3.1-tts-plus": "dashscope.speech.v1",
+  "qwen-audio-3.1-asr-flash-streaming": "dashscope.asr.realtime.v1",
   "gpt-4o-mini-tts": "apimart.speech.v1",
 };
 const expectedMediaInterface: Record<string, string> = { image: "openai.images", video: "openai.videos", music: "openai.music", audio: "openai.audio.speech" };
+function expectedInterfaceFor(native: NativeModel): string | undefined {
+  if (native.kind === "audio" && native.media?.operations.includes("transcribe_realtime")) return "openai.audio.transcriptions.realtime";
+  return expectedMediaInterface[native.kind];
+}
 const gptImageFields = ["model", "prompt", "images", "n", "size", "quality", "background", "output_format", "output_compression", "moderation", "response_format", "user", "safety_identifier"];
 const seedreamFields = ["model", "prompt", "image_urls", "n", "size", "resolution", "layer_decomposition", "background", "output_format", "watermark", "optimize_prompt_options"];
 
@@ -304,12 +360,20 @@ function parameterRules(native: NativeModel, adapter: unknown) {
 function registeredModelCapabilities(model: DoneBotGatewayModel) {
   const native = nativeModel(model.id);
   const adapter = record(model.media_parameters?.protocol)?.adapter;
-  const matched = native && model.media_types.includes(native.kind) && (native.kind === "text" ? textModelProtocol(model, native) !== undefined : model.interfaces.includes(expectedMediaInterface[native.kind]!));
-  const supported = Boolean(matched && (native?.kind === "text" ? true : typeof adapter === "string" && registeredMediaAdapters[model.id] === adapter));
+  const expectedInterface = native ? expectedInterfaceFor(native) : undefined;
+  const matched = native && model.media_types.includes(native.kind) && (native.kind === "text" ? textModelProtocol(model, native) !== undefined : Boolean(expectedInterface && model.interfaces.includes(expectedInterface)));
+  const isRealtimeAsr = native?.kind === "audio" && native.media?.operations.includes("transcribe_realtime") === true;
+  const adapterValid = native?.kind === "text"
+    ? true
+    : native?.kind === "audio"
+      ? (adapter === undefined || (typeof adapter === "string" && registeredMediaAdapters[model.id] === adapter))
+      : typeof adapter === "string" && registeredMediaAdapters[model.id] === adapter;
+  const supported = Boolean(matched && adapterValid);
   const clientInput = native?.input.filter(modality => native.kind === "text" ? modality === "text" || modality === "image" : native.kind !== "music" || modality === "text") ?? [];
   const operations = native?.kind === "text" ? ["conversation", ...(model.capabilities?.tool_calling === true ? ["tool_calling"] : [])] : native?.kind === "music" ? ["generate", "custom_lyrics", "instrumental"] : native?.media?.operations.filter(x => !["mask_edit", "markup_edit"].includes(x) && !(native.officialId === SEEDANCE_25 && x === "edit") && !(native.officialId === SEEDANCE_25_FLASH && (x === "edit" || x === "extend"))) ?? [];
   const fixedParameters: Record<string, unknown> | undefined = native?.kind === "music" ? SUNO_FIXED_PARAMETERS : adapter === "seedance.videos.v1" ? { generate_audio: true } : native?.media?.complexity ? { complexity: "high" } : undefined;
   const referenceBytes = native?.media?.referenceMedia ? native.media.referenceMedia.video.maxMegabytes * 1024 * 1024 : native?.media?.referenceImage?.maxBytes ?? MAX_MEDIA_REFERENCE_BYTES;
+  const speechSpec = native?.kind === "audio" && !isRealtimeAsr ? DONEBOT_SPEECH_MODEL_SPECS[native.officialId] : undefined;
   return { model: model.id, native: native ?? null,
     gateway: { capabilities: model.capabilities ?? {}, parameters: model.media_parameters ?? {}, ...(adapter === "apimart.images.v1" ? { adapterSources: [model.id === "seedream-5-5" ? SEEDREAM55_SOURCE : APIMART_SEEDREAM] } : adapter === "apimart.music.v1" ? { adapterSources: [APIMART_SUNO] } : {}), ...(native?.media?.mask === true ? { maskEditing: false, restriction: "DoneBot gateway forbids GPT Image mask edits.", responseFormatCompatibility: ["url", "b64_json"] } : {}) },
     client: { implemented: supported, input: clientInput, operations: supported ? operations : [],
@@ -333,7 +397,8 @@ function registeredModelCapabilities(model: DoneBotGatewayModel) {
       textAudioVideoInput: false, reasoningOverride: false, longDecoding: false,
       ...(native?.outputLimits ? { maxOutputPerRequest: native.outputLimits.streamingRequest } : {}),
       ...(native ? { parameterRules: parameterRules(native, supported ? adapter : undefined) } : {}),
-      ...(native?.kind === "audio" ? { streaming: true, playbackFormat: "pcm", inputLimit: { maxUnicodeCharacters: 4096, nativeTokenLimit: 2000 } } : {}) },
+      ...(native?.kind === "audio" && !isRealtimeAsr ? { streaming: true, playbackFormat: "pcm", inputLimit: { maxUnicodeCharacters: speechSpec?.maxInputChars ?? 4096, ...(native.contextWindow ? { nativeTokenLimit: native.contextWindow } : {}) } } : {}),
+      ...(isRealtimeAsr ? { streaming: true, inputFormat: "pcm", sampleRate: 16_000, wsEndpoint: "/api/voice/asr" } : {}) },
     availability: { inCatalog: true, locallyVerified: Boolean(native), usable: supported, reason: supported ? null : !native ? "Exact model ID needs official local registration." : "Model kind, native interface or client adapter is unavailable." } };
 }
 

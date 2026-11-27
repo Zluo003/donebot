@@ -33,6 +33,16 @@ ipcRenderer.on("desktop-notifications:open", (_event, target) => {
   for (const listener of notificationOpenListeners) listener(target);
 });
 
+let pendingWorkbenchOpen = false;
+const workbenchOpenListeners = new Set();
+ipcRenderer.on("desktop-pet:open-workbench", () => {
+  if (!workbenchOpenListeners.size) {
+    pendingWorkbenchOpen = true;
+    return;
+  }
+  for (const listener of workbenchOpenListeners) listener();
+});
+
 // Only fixed actions are retained, never a destination supplied by a renderer.
 const FIXED_SETTINGS_ACTIONS = new Set(["organization", "cloud", "cloud-settings", "cloud-add", "cloud-add-howto"]);
 let pendingSettingsAction = null;
@@ -67,14 +77,16 @@ ipcRenderer.on("rail:beside", (_event, width) => { railBeside = Math.max(0, Math
 // The rail's own page keeps its size whatever the zoom of this app's page: Chromium gives every page of a host the same
 // zoom, the rail's included, so the rail takes it back out and stays as wide as its strip.
 function railKeepsItsSize() {
-  if (!isLocalPage || location.pathname !== "/rail" || typeof document === "undefined" || !document.documentElement) return;
+  if (!isLocalPage && location.pathname !== "/pet") return;
+  if ((location.pathname !== "/rail" && location.pathname !== "/pet") || typeof document === "undefined" || !document.documentElement) return;
   const zoom = Number(webFrame?.getZoomFactor?.()) || 1;
   document.documentElement.style.zoom = zoom === 1 ? "" : String(Math.round((1 / zoom) * 10000) / 10000);
 }
 if (typeof window !== "undefined") {
   for (const type of ["resize", "DOMContentLoaded"]) window.addEventListener(type, () => { leaveRailRoom(); railKeepsItsSize(); });
 }
-const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "accountSheet", "desktopNotices", "desktopNotifications", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering"]);
+const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "accountSheet", "desktopNotices", "desktopNotifications", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering", "desktopPet"]);
+const PET_REMOTE_SAFE = ["callActive", "permRequestMic", "permOpenSettings", "copyText", "openExternal"];
 /** My Cloud's own page once it is the person's home (main checks the sender again): it is this app's page then. */
 const HOME_PAGE = ["home", "onChatLink", "onPackageInstall", "exportDiagnostics", "openLogsFolder", "openAtLogin", "callActive"];
 function updaterOffered() {
@@ -101,7 +113,8 @@ ipcRenderer.on("desktop-language:changed", (_event, language) => {
   for (const listener of languageListeners) listener(language);
 });
 const onHomePage = !isLocalPage && homePage();
-const remoteKeys = isLocalPage ? REMOTE_SAFE : new Set([...REMOTE_SAFE, ...(updaterOffered() ? ["updater"] : []), ...(onHomePage ? HOME_PAGE : [])]);
+const onPetPage = typeof location !== "undefined" && location.pathname === "/pet";
+const remoteKeys = isLocalPage ? REMOTE_SAFE : new Set([...REMOTE_SAFE, ...(updaterOffered() ? ["updater"] : []), ...(onHomePage ? HOME_PAGE : []), ...(onPetPage ? PET_REMOTE_SAFE : [])]);
 
 // Keep in parity with shared/workspace-backup-client.ts (a sandboxed preload cannot import it).
 const COMPANY_BACKUP_CLIENT_KEYS = [
@@ -731,6 +744,72 @@ const bridge = {
       return analyticsChoice;
     },
     ...(isLocalPage ? { set: enabled => { analyticsChoice = enabled === true; return ipcRenderer.invoke("desktop-analytics:set", analyticsChoice); } } : {}),
+  },
+  desktopPet: {
+    state: () => ipcRenderer.invoke("desktop-pet:state"),
+    set: (patch) => ipcRenderer.invoke("desktop-pet:set", patch && typeof patch === "object" ? patch : {}),
+    onState: (cb) => {
+      const handler = (_event, state) => cb(state);
+      ipcRenderer.on("desktop-pet:state", handler);
+      return () => ipcRenderer.removeListener("desktop-pet:state", handler);
+    },
+    onOpenWorkbench: (cb) => {
+      workbenchOpenListeners.add(cb);
+      if (pendingWorkbenchOpen) {
+        pendingWorkbenchOpen = false;
+        queueMicrotask(() => cb());
+      }
+      return () => workbenchOpenListeners.delete(cb);
+    },
+    moveBy: (dx, dy) => ipcRenderer.invoke("desktop-pet:move-by", { dx: Number(dx) || 0, dy: Number(dy) || 0 }),
+    commitPosition: () => ipcRenderer.invoke("desktop-pet:commit-position"),
+    openPopover: (mode, size) => ipcRenderer.invoke("desktop-pet:open-popover", String(mode), size ?? null),
+    closePopover: () => ipcRenderer.invoke("desktop-pet:close-popover"),
+    resizePopover: (size) => ipcRenderer.invoke("desktop-pet:resize-popover", size ?? null),
+    contextMenu: () => ipcRenderer.invoke("desktop-pet:context-menu"),
+    setReportCount: (count) => ipcRenderer.invoke("desktop-pet:set-report-count", Number(count) || 0),
+    openMainWindow: () => ipcRenderer.invoke("desktop-pet:open-main"),
+    openWorkbench: () => ipcRenderer.invoke("desktop-pet:open-workbench"),
+    openSettings: () => ipcRenderer.invoke("desktop-pet:open-settings"),
+    post: (target, payload) => ipcRenderer.invoke("desktop-pet:post", String(target), payload),
+    speechStart: (options) => ipcRenderer.invoke("desktop-pet:speech-start", options),
+    speechStop: () => ipcRenderer.invoke("desktop-pet:speech-stop"),
+    speechFinish: () => ipcRenderer.invoke("desktop-pet:speech-finish"),
+    onSpeechTranscript: (cb) => {
+      const handler = (_event, line) => cb(line);
+      ipcRenderer.on("speech:transcript", handler);
+      return () => ipcRenderer.removeListener("speech:transcript", handler);
+    },
+    onSpeechEnd: (cb) => {
+      const handler = (_event, info) => cb(info);
+      ipcRenderer.on("speech:end", handler);
+      return () => ipcRenderer.removeListener("speech:end", handler);
+    },
+    onMessage: (cb) => {
+      const handler = (_event, payload) => cb(payload);
+      ipcRenderer.on("desktop-pet:message", handler);
+      return () => ipcRenderer.removeListener("desktop-pet:message", handler);
+    },
+    onSkin: (cb) => {
+      const handler = (_event, skin) => cb(String(skin));
+      ipcRenderer.on("desktop-pet:skin", handler);
+      return () => ipcRenderer.removeListener("desktop-pet:skin", handler);
+    },
+    onActive: (cb) => {
+      const handler = (_event, active) => cb(active === true);
+      ipcRenderer.on("desktop-pet:active", handler);
+      return () => ipcRenderer.removeListener("desktop-pet:active", handler);
+    },
+    onPopoverMode: (cb) => {
+      const handler = (_event, mode) => cb(String(mode));
+      ipcRenderer.on("desktop-pet:popover-mode", handler);
+      return () => ipcRenderer.removeListener("desktop-pet:popover-mode", handler);
+    },
+    onPopoverClosed: (cb) => {
+      const handler = () => cb();
+      ipcRenderer.on("desktop-pet:popover-closed", handler);
+      return () => ipcRenderer.removeListener("desktop-pet:popover-closed", handler);
+    },
   },
   desktopLanguage: {
     choice: () => {

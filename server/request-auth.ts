@@ -415,6 +415,9 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/tts\/voices$/ },
   { methods: ["POST"], path: /^\/api\/tts\/prepare$/ },
   { methods: ["POST"], path: /^\/api\/tts\/speak$/ },
+  { methods: ["POST"], path: /^\/api\/tts\/stream$/ },
+  { methods: ["GET"], path: /^\/api\/voice\/capabilities$/ },
+  { methods: ["GET"], path: /^\/api\/voice\/asr$/ },
   // routines: the input carries no cwd or permission field
   { methods: ["GET"], path: /^\/api\/routines$/ },
   { methods: ["POST"], path: /^\/api\/routines$/ },
@@ -593,6 +596,8 @@ function mutatingPublicRoute(method: string, path: string): boolean {
   if (upper === "GET" && path === "/api/setup-import/grok") return true;
   // Drives a bot's browser: a WebSocket upgrade is a GET, but what it carries is input.
   if (/^\/api\/bots\/[\w-]+\/browser\/stream$/.test(path)) return true;
+  // Streams live microphone audio to billable cloud ASR: treat as mutating like browser/stream.
+  if (path === "/api/voice/asr") return true;
   if (["GET", "HEAD", "OPTIONS"].includes(upper)) return false;
   // Internal routes carry their own per-boot authorization; pairing-code exchange is public (the one-time code is its authorization).
   return !path.startsWith("/api/internal/") &&

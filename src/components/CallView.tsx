@@ -28,7 +28,8 @@ import { callStarted } from "@/lib/product-events";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { callCapabilityHelp, type CallCapabilityHelp } from "@/lib/call-capability";
 import { onCallStartRequest } from "@/lib/call-start-request";
-import { fishListeningReady, listensHere, speechBridge } from "@/lib/speech";
+import { cloudAsrReady, fishListeningReady, listensHere, speechBridge } from "@/lib/speech";
+import { isCloudSpeechBridge } from "@/donebot/voice/cloud-speech-bridge";
 import { VoiceSetupDialog } from "./VoiceSetupDialog";
 import { openBotSettings } from "./bot-panel/panel-link";
 import { MENU_SHEET } from "./menu-recipe";
@@ -103,8 +104,9 @@ export function CallTargetButton({
   const onCall = useOnCall() === targetId;
   const active = onCall || onLiveCall;
   const remoteClient = globalThis.window?.ogb?.remoteClient?.active === true;
+  const cloudAsr = cloudAsrReady(state.config);
   const capabilityHelp = capabilitiesReady
-    ? callCapabilityHelp(capabilities, Boolean(speechBridge()?.speechStart), fishListeningReady(state.config))
+    ? callCapabilityHelp(capabilities, Boolean(speechBridge(state.config)?.speechStart), fishListeningReady(state.config), cloudAsr)
     : null;
   const supported = capabilitiesReady && !capabilityHelp;
   const localVoice = localSystemVoiceActive();
@@ -469,8 +471,11 @@ export function CallOverlay({ bot }: { bot: Bot }) {
 }
 
 function Call({ bot }: { bot: Bot }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
   const speech = useSpeech();
+  const cloudAsr = cloudAsrReady(state.config);
+  const configRef = useRef(state.config);
+  configRef.current = state.config;
   const initialPhase: Phase = bot.busy ? "working" : "listening";
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [heard, setHeard] = useState("");
@@ -507,6 +512,13 @@ function Call({ bot }: { bot: Bot }) {
   const phaseRef = useRef<Phase>(initialPhase);
   const alive = useRef(true);
   const sayGeneration = useRef(0);
+  const bargeInStopRef = useRef<(() => void) | null>(null);
+  const speakingTextRef = useRef("");
+
+  const stopBargeIn = useCallback(() => {
+    bargeInStopRef.current?.();
+    bargeInStopRef.current = null;
+  }, []);
 
   /** React state alone is too late: the helper can exit in the same tick as a final transcript or a mute. */
   const move = useCallback((next: Phase) => {
@@ -515,33 +527,65 @@ function Call({ bot }: { bot: Bot }) {
   }, []);
 
   const hush = useCallback(() => {
-    void speechBridge()?.speechStop();
-  }, []);
+    stopBargeIn();
+    void speechBridge(configRef.current)?.speechStop();
+  }, [stopBargeIn]);
 
-  const listen = useCallback(() => {
+  const listen = useCallback((opts?: { adoptBargeIn?: boolean; initialHeard?: string }) => {
     if (!alive.current || currentCall() !== bot.id) return;
+    if (!opts?.adoptBargeIn) stopBargeIn();
     move("listening");
-    setHeard("");
+    setHeard(opts?.initialHeard ?? "");
     setNote(null);
-    void speechBridge()?.speechStart({ endpointMs: CALL_ENDPOINT_MS }).catch(() => {
+    const bridge = speechBridge(configRef.current);
+    const startOpts = isCloudSpeechBridge(bridge)
+      ? {
+          endpointMs: CALL_ENDPOINT_MS,
+          ...(opts?.adoptBargeIn ? { adoptBargeIn: true } : {}),
+          ...(bot.name ? { hotwords: { [bot.name]: 5, DoneBot: 5 } } : {}),
+        }
+      : { endpointMs: CALL_ENDPOINT_MS };
+    void bridge?.speechStart(startOpts).catch(() => {
       if (alive.current && currentCall() === bot.id) {
         setNote(t("call.turns.micFailed"));
       }
     });
-  }, [bot.id, move]);
+  }, [bot.id, bot.name, move, stopBargeIn]);
 
   const say = useCallback(
     async (text: string) => {
       if (!alive.current || currentCall() !== bot.id) return false;
       const mine = ++sayGeneration.current;
+      const bridge = speechBridge(configRef.current);
+      const supportsBargeIn = isCloudSpeechBridge(bridge);
       // Move first: stopSpeech() closes asynchronously and must never observe an old "listening" phase and reopen the
       // mic.
       move("speaking");
-      hush();
-      await speaker.speak(text, { botId: bot.id, voiceId: bot.voice });
+      speakingTextRef.current = text;
+      if (supportsBargeIn) {
+        stopBargeIn();
+        bargeInStopRef.current = bridge.startBargeInMonitor({
+          spokenText: () => speakingTextRef.current,
+          hotwords: bot.name ? { [bot.name]: 5, DoneBot: 5 } : undefined,
+          onBargeIn: ({ text: initialText }) => {
+            if (!alive.current || currentCall() !== bot.id || phaseRef.current !== "speaking") return;
+            sayGeneration.current += 1;
+            stopBargeIn();
+            speaker.stop();
+            listen({ adoptBargeIn: true, initialHeard: initialText });
+          },
+        });
+      } else {
+        hush();
+      }
+      try {
+        await speaker.speak(text, { botId: bot.id, voiceId: bot.voice });
+      } finally {
+        if (sayGeneration.current === mine) stopBargeIn();
+      }
       return alive.current && currentCall() === bot.id && sayGeneration.current === mine;
     },
-    [bot.id, bot.voice, hush, move],
+    [bot.id, bot.name, bot.voice, hush, listen, move, stopBargeIn],
   );
 
   const sayThenListen = useCallback(
@@ -557,13 +601,14 @@ function Call({ bot }: { bot: Bot }) {
     return () => {
       alive.current = false;
       sayGeneration.current += 1;
+      stopBargeIn();
       // StrictMode remounts effects once in development; a microtask tells that probe from real navigation.
       deferCallCleanup(bot.id, () => alive.current);
     };
-  }, [bot.id]);
+  }, [bot.id, stopBargeIn]);
 
   useEffect(() => {
-    const bridge = speechBridge();
+    const bridge = speechBridge(configRef.current);
     if (!bridge) return;
     const offTranscript = bridge.onSpeechTranscript((line) => {
       if (!alive.current || currentCall() !== bot.id || phaseRef.current !== "listening") return;
@@ -661,10 +706,11 @@ function Call({ bot }: { bot: Bot }) {
     return () => {
       offTranscript();
       offEnd();
-      void speechBridge()?.speechStop();
+      stopBargeIn();
+      void bridge.speechStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bot.id, bot.threadId, dispatch, hush, listen, move, sayThenListen]);
+  }, [bot.id, bot.threadId, cloudAsr, dispatch, hush, listen, move, sayThenListen, stopBargeIn]);
 
   useEffect(() => {
     // The card may be resolved elsewhere (the approval UI, another client) while this call is open.
@@ -755,13 +801,14 @@ function Call({ bot }: { bot: Bot }) {
       } else if (e.code === "Space" && speaker.isSpeaking()) {
         e.preventDefault();
         sayGeneration.current += 1;
+        stopBargeIn();
         speaker.stop();
         listen();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [bot.id, listen]);
+  }, [bot.id, listen, stopBargeIn]);
 
   const mascotState =
     phase === "listening" ? "listening" : phase === "speaking" ? "sending" : phase === "sending" ? "thinking" : "working";
@@ -812,7 +859,7 @@ function Call({ bot }: { bot: Bot }) {
         <div className="flex max-w-[460px] flex-col items-center gap-2 text-center text-[13px] text-warning">
           <span>{note}</span>
           <button
-            onClick={listen}
+            onClick={() => listen()}
             className="rounded-full border border-warning/40 px-3 py-1.5 text-[12px] hover:bg-warning/10"
           >
             {t("call.turns.tryMicrophone")}
@@ -826,6 +873,7 @@ function Call({ bot }: { bot: Bot }) {
           <button
             onClick={() => {
               sayGeneration.current += 1;
+              stopBargeIn();
               speaker.stop();
               listen();
             }}
@@ -843,7 +891,9 @@ function Call({ bot }: { bot: Bot }) {
       </div>
 
       <div className="text-[12px] text-ink-tertiary">
-        {t("call.turns.keysHint", { keys: pushToTalkKeys() })}
+        {cloudAsr && phase === "speaking"
+          ? "可直接开口插话打断 · Esc 挂断"
+          : t("call.turns.keysHint", { keys: pushToTalkKeys() })}
       </div>
     </>
   );

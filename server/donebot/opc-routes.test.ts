@@ -9,7 +9,7 @@ import type { DoneBotGateway } from "./gateway.ts";
 import { DoneBotMarketInstallStore, attachMarketHeaders, MARKET_BOT_ID_HEADER, MARKET_INSTALL_HEADER } from "./market-installs.ts";
 import { createDoneBotOpcRoutes } from "./opc-routes.ts";
 import { createDoneBotOrgWorkflowRoutes, DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
-import { BOSS_FORMAL_REPORT_RULE } from "./opc-org-policy.ts";
+import { BOSS_FORMAL_REPORT_RULE, LIGHT_DELIVERY_CHECK_RULE } from "./opc-org-policy.ts";
 import { DoneBotOpcStore } from "./opc-store.ts";
 import { evaluateRewakeThrottle } from "./paperclip-rewake-throttle.ts";
 
@@ -346,6 +346,7 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     // 1. Global Boss formal reporting rule is always injected even before configuring org nodes.
     const defaultPrompt = orgStore.orgPromptForBot(bot.id, [bot]);
     expect(defaultPrompt).toContain(BOSS_FORMAL_REPORT_RULE);
+    expect(defaultPrompt).toContain(LIGHT_DELIVERY_CHECK_RULE);
 
     // 2. Create a gated workflow run whose step produced the two attachments above.
     const wf = orgStore.createWorkflow({

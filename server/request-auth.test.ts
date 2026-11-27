@@ -163,6 +163,7 @@ describe("scopes", () => {
       ["POST", "/api/routine-runs/seen-all"], ["POST", "/api/inbox/read-all"],
       ["GET", "/api/bots"], ["GET", "/api/threads/t/messages"], ["GET", "/api/search"], ["GET", "/api/events"],
       ["GET", "/api/config"], ["GET", "/api/webhooks"], ["POST", "/api/tts/speak"],
+      ["POST", "/api/tts/stream"], ["GET", "/api/voice/capabilities"], ["GET", "/api/voice/asr"],
       ["GET", "/api/auth/session"], ["POST", "/api/auth/stream-ticket"], ["POST", "/api/auth/logout"],
       ["GET", "/api/bots/x/slack-management"], ["GET", "/api/bots/x/artifacts"],
       ["POST", "/api/bots/x/sign-in-cards/m/done"], ["POST", "/api/bots/x/sign-in-cards/m/cancel"], ["POST", "/api/bots/x/sign-in-cards/m/save-login"],
@@ -421,7 +422,7 @@ describe("resolveRequestAuth", () => {
     expect(connectorRefresh.auth).toBeNull();
     expect(connectorRefresh.status).toBe(403);
     for (const path of ["/api/desktop-viewer/vps/bot-1", "/api/desktop-viewer/local/shared/websockify", "/api/webhooks/hook-1/address", "/api/setup-import/grok",
-      "/api/local-computer", "/api/bots/bot-1/local-computer"]) {
+      "/api/local-computer", "/api/bots/bot-1/local-computer", "/api/voice/asr"]) {
       expect(resolveRequestAuth(request({ host: "127.0.0.1:18899" }, "GET"), options(path)).status, path).toBe(403);
       expect(resolveRequestAuth(request({ host: "127.0.0.1:18899", "x-donebot-desktop-owner": "owner-token-123" }, "GET"), options(path)).auth?.kind, path)
         .toBe("loopback");

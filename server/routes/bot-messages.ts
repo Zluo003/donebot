@@ -332,6 +332,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
             return { ok: true as const, threadId, message };
           }
         : undefined;
+      const petBrief = body.petBrief === true && !guarded && !press && !appSent;
       if (phone && sendId) notePhoneSend(sendId);
       // The bot's own shell reaches this route on a headless server (loopback is the owner), so only a
       // paired session or the desktop capability proves a person and lifts the webhook block.
@@ -343,6 +344,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
           botId: bot.id, threadId, text, sendId, replyTo, sender, trigger, dataContext, ...(app ? { app } : {}),
           personPresent, admin: owners.admin(auth), ...(followUp ? { followUp } : {}),
           ...(mentions?.length && !press && !appSent ? { mentions } : {}),
+          ...(petBrief ? { petBrief: true } : {}),
         }, guardedStart);
         press?.settle("queueId" in receipt ? receipt.queueId : undefined);
         appContext?.deliver();

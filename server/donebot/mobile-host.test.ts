@@ -41,6 +41,8 @@ it("admits bounded remote browser takeover, chat controls, and Boss Desk review 
   for (const [method, path] of [
     ["GET", "/api/bots/bot-1/browser/live"],
     ["GET", "/api/bots/bot-1/browser/live?threadId=thread-1&width=390&height=700"],
+    ["GET", "/api/events?screens=off&frames=thread"],
+    ["GET", "/api/events?frames=thread&screens=off"],
     ["POST", "/api/bots/bot-1/browser/action"],
     ["POST", "/api/bots/bot-1/browser/action?threadId=thread-1"],
     ["POST", "/api/bots/bot-1/sign-in-cards/msg-1/done"],
@@ -61,6 +63,12 @@ it("admits bounded remote browser takeover, chat controls, and Boss Desk review 
   for (const [method, path] of [
     ["GET", "/api/bots/bot-1/browser/live?admin=1"],
     ["GET", "/api/bots/bot-1/browser/live?width=99999"],
+    ["GET", "/api/events"],
+    ["GET", "/api/events?screens=on&frames=thread"],
+    ["GET", "/api/events?screens=off"],
+    ["GET", "/api/events?screens=off&frames=thread&since=1"],
+    ["GET", "/api/events?screens=off&frames=thread&admin=1"],
+    ["POST", "/api/events?screens=off&frames=thread"],
     ["GET", "/api/bots/bot-1/browser/stream"],
     ["POST", "/api/bots/bot-1/browser/upload"],
     ["POST", "/api/bots/bot-1/sign-in-cards/msg-1/save-login"],

@@ -29,7 +29,9 @@ export function callCapabilityHelp(
   capabilities: DesktopCapabilities,
   speechServiceAvailable: boolean,
   fishKeySaved: boolean,
+  cloudAsrAvailable = false,
 ): CallCapabilityHelp | null {
+  if (cloudAsrAvailable && speechServiceAvailable) return null;
   if (!capabilities.dictation.available) {
     switch (capabilities.dictation.reasonCode) {
       case "remote-server":

@@ -25,6 +25,8 @@ export const phoneMovedRefusal = (place: string | null, platform: NodeJS.Platfor
 export const HOME_SCREEN = "/home";
 /** The desktop window's own rail of places (electron/chrome-rail.mjs): this app's page, beside whichever place is open. */
 export const RAIL_PAGE = "/rail";
+/** The desktop pet floating companion page (electron/pet-window.mjs). */
+export const PET_PAGE = "/pet";
 /** A path whose last part has an extension is a file of the page (a script, a picture), never a page. */
 const FILE = /\.[A-Za-z0-9]+$/u;
 export const ENDED_REFUSAL = "My Cloud has ended. It is open only so you can take your things home.";
@@ -97,7 +99,7 @@ export function createMoveFreeze({ dataDir, exportOnly = false }: { dataDir: str
     /** Where a page of this computer's frozen copy goes instead: its home screen, never the frozen workspace. The
      * window's rail stays the rail: it shows no workspace, only the places main lists. */
     screen(path: string): string | null {
-      if (!frozen || exportOnly || path === HOME_SCREEN || path === RAIL_PAGE || FILE.test(path)) return null;
+      if (!frozen || exportOnly || path === HOME_SCREEN || path === RAIL_PAGE || path === PET_PAGE || FILE.test(path)) return null;
       return HOME_SCREEN;
     },
     /** Starts it now unless this server is frozen; a freeze stops it, and lifting the freeze starts it again. */

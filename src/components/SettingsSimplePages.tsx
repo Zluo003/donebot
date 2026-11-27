@@ -12,6 +12,7 @@ import { UpdatesConsentRow } from "./UpdatesConsent";
 import { OpenAtLoginRow } from "./OpenAtLoginRow";
 import { DefaultBotSidebarRow } from "./DefaultBotControls";
 import { TalkShortcutRow } from "./TalkShortcutRow";
+import { DesktopPetSettings } from "@/donebot/pet/DesktopPetSettings";
 import { AttachmentStorageSettings } from "./AttachmentStorageSettings";
 import { DiagnosticsRow } from "./DiagnosticsRow";
 import { EnginesSettings } from "./EnginesSettings";
@@ -109,6 +110,7 @@ export function SimpleGeneralPage({ has, peopleOpen, onLooks, onMore }: { has: H
             <OpenAtLoginRow simple />
             <DefaultBotSidebarRow simple />
             <TalkShortcutRow />
+            <DesktopPetSettings simple />
             <AttachmentStorageSettings />
             <AnalyticsRow simple />
           </SettingsRows>

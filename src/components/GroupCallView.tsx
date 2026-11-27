@@ -17,7 +17,8 @@ import { cn } from "@/lib/cn";
 import { BotAvatar } from "./Avatar";
 import { CallTargetButton, type CallButtonPlacement } from "./CallView";
 import { useAdvancedMode } from "@/lib/interface-mode";
-import { speechBridge } from "@/lib/speech";
+import { cloudAsrReady, speechBridge } from "@/lib/speech";
+import { isCloudSpeechBridge } from "@/donebot/voice/cloud-speech-bridge";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { isRoutineApproval, isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
 import { titledCard } from "./ApprovalCard";
@@ -30,9 +31,10 @@ type Phase = "listening" | "sending" | "working" | "speaking";
 
 /** `fill` (Simple composer): a round button in that colour, with its glyph in `ink`. */
 export function GroupCallButton({ group, members, placement, fill, ink }: { group: Group; members: Bot[]; placement?: CallButtonPlacement; fill?: string; ink?: string }) {
+  const { state } = useStore();
   const { capabilities, ready } = useDesktopCapabilities();
   if (group.dm) return null;
-  if (ready && !capabilities.dictation.available) return null;
+  if (ready && !capabilities.dictation.available && !cloudAsrReady(state.config)) return null;
   const localMembers = members.filter((member) => !isRemoteBotId(member.id));
   return (
     <CallTargetButton
@@ -73,8 +75,11 @@ function questionIn(messages: Message[]): Message | undefined {
 }
 
 function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
   const speech = useSpeech();
+  const cloudAsr = cloudAsrReady(state.config);
+  const configRef = useRef(state.config);
+  configRef.current = state.config;
   const initialPhase: Phase = group.working || group.busyBotId ? "working" : "listening";
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [heard, setHeard] = useState("");
@@ -119,6 +124,13 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
   const listenWhenDrained = useRef(false);
   const listenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const allowBargeIn = useRef(false);
+  const bargeInStopRef = useRef<(() => void) | null>(null);
+  const speakingTextRef = useRef("");
+
+  const stopBargeIn = useCallback(() => {
+    bargeInStopRef.current?.();
+    bargeInStopRef.current = null;
+  }, []);
 
   const move = useCallback((next: Phase) => {
     phaseRef.current = next;
@@ -126,21 +138,27 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
   }, []);
 
   const hush = useCallback(() => {
-    void speechBridge()?.speechStop();
-  }, []);
+    stopBargeIn();
+    void speechBridge(configRef.current)?.speechStop();
+  }, [stopBargeIn]);
 
-  const listen = useCallback(() => {
+  const listen = useCallback((opts?: { adoptBargeIn?: boolean; initialHeard?: string }) => {
     if (!alive.current || currentCall() !== group.id) return;
+    if (!opts?.adoptBargeIn) stopBargeIn();
     move("listening");
     setSpeakingMemberId(null);
-    setHeard("");
+    setHeard(opts?.initialHeard ?? "");
     setNote(null);
-    void speechBridge()?.speechStart({ endpointMs: CALL_ENDPOINT_MS }).catch(() => {
+    const bridge = speechBridge(configRef.current);
+    const startOpts = isCloudSpeechBridge(bridge)
+      ? { endpointMs: CALL_ENDPOINT_MS, ...(opts?.adoptBargeIn ? { adoptBargeIn: true } : {}) }
+      : { endpointMs: CALL_ENDPOINT_MS };
+    void bridge?.speechStart(startOpts).catch(() => {
       if (alive.current && currentCall() === group.id) {
         setNote(t("call.turns.micFailed"));
       }
     });
-  }, [group.id, move]);
+  }, [group.id, move, stopBargeIn]);
 
   const scheduleListen = useCallback(
     (force = false, delay = 140) => {
@@ -154,17 +172,50 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
     [group.id, listen],
   );
 
+  const interruptSpeech = useCallback((opts?: { adoptBargeIn?: boolean; initialHeard?: string }) => {
+    const wasBusy = busyRef.current;
+    queueGeneration.current += 1;
+    queue.current = Promise.resolve();
+    queuedJobs.current.clear();
+    listenWhenDrained.current = false;
+    sayGeneration.current += 1;
+    stopBargeIn();
+    speaker.stop();
+    setSpeakingMemberId(null);
+    allowBargeIn.current = true;
+    if (wasBusy) dispatch({ type: "interruptGroup", groupId: group.id });
+    listen(opts);
+  }, [dispatch, group.id, listen, stopBargeIn]);
+
   const say = useCallback(
     async (text: string, member?: Bot) => {
       if (!alive.current || currentCall() !== group.id) return false;
       const mine = ++sayGeneration.current;
+      const bridge = speechBridge(configRef.current);
+      const supportsBargeIn = isCloudSpeechBridge(bridge);
       move("speaking");
       setSpeakingMemberId(member?.id ?? null);
-      hush();
-      await speaker.speak(text, { botId: member?.id, voiceId: member?.voice });
+      speakingTextRef.current = text;
+      if (supportsBargeIn) {
+        stopBargeIn();
+        bargeInStopRef.current = bridge.startBargeInMonitor({
+          spokenText: () => speakingTextRef.current,
+          onBargeIn: ({ text: initialText }) => {
+            if (!alive.current || currentCall() !== group.id || phaseRef.current !== "speaking") return;
+            interruptSpeech({ adoptBargeIn: true, initialHeard: initialText });
+          },
+        });
+      } else {
+        hush();
+      }
+      try {
+        await speaker.speak(text, { botId: member?.id, voiceId: member?.voice });
+      } finally {
+        if (sayGeneration.current === mine) stopBargeIn();
+      }
       return alive.current && currentCall() === group.id && sayGeneration.current === mine;
     },
-    [group.id, hush, move],
+    [group.id, hush, interruptSpeech, move, stopBargeIn],
   );
 
   const enqueueSpeech = useCallback(
@@ -192,33 +243,20 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
     [say, scheduleListen],
   );
 
-  const interruptSpeech = useCallback(() => {
-    const wasBusy = busyRef.current;
-    queueGeneration.current += 1;
-    queue.current = Promise.resolve();
-    queuedJobs.current.clear();
-    listenWhenDrained.current = false;
-    sayGeneration.current += 1;
-    speaker.stop();
-    setSpeakingMemberId(null);
-    allowBargeIn.current = true;
-    if (wasBusy) dispatch({ type: "interruptGroup", groupId: group.id });
-    listen();
-  }, [dispatch, group.id, listen]);
-
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
       queueGeneration.current += 1;
       sayGeneration.current += 1;
+      stopBargeIn();
       if (listenTimer.current) clearTimeout(listenTimer.current);
       deferCallCleanup(group.id, () => alive.current);
     };
-  }, [group.id]);
+  }, [group.id, stopBargeIn]);
 
   useEffect(() => {
-    const bridge = speechBridge();
+    const bridge = speechBridge(configRef.current);
     if (!bridge) return;
     const offTranscript = bridge.onSpeechTranscript((line) => {
       if (!alive.current || currentCall() !== group.id || phaseRef.current !== "listening") return;
@@ -340,10 +378,11 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
     return () => {
       offTranscript();
       offEnd();
-      void speechBridge()?.speechStop();
+      stopBargeIn();
+      void bridge.speechStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, enqueueSpeech, group.id, group.threadId, hush, listen, move, scheduleListen]);
+  }, [cloudAsr, dispatch, enqueueSpeech, group.id, group.threadId, hush, listen, move, scheduleListen, stopBargeIn]);
 
   useEffect(() => {
     let resumeAfterRoutine = false;
@@ -545,7 +584,7 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
         <div className="flex max-w-[520px] flex-col items-center gap-2 text-center text-[13px] text-warning">
           <span>{note}</span>
           <button
-            onClick={listen}
+            onClick={() => listen()}
             className="rounded-full border border-warning/40 px-3 py-1.5 text-[12px] hover:bg-warning/10"
           >
             {t("call.turns.tryMicrophone")}
@@ -557,7 +596,7 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
       <div className="flex items-center gap-3">
         {speaker.isSpeaking() && (
           <button
-            onClick={interruptSpeech}
+            onClick={() => interruptSpeech()}
             className="rounded-full border border-hairline/50 px-4 py-2 text-[14px] text-ink hover:bg-raised"
           >
             {t("call.turns.interrupt")}

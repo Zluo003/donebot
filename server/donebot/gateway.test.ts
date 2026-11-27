@@ -1,4 +1,7 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { describe, expect, it, vi } from "vitest";
+import { WebSocketServer } from "ws";
 import { DoneBotGateway, doneBotRequestUrl, type DoneBotCredential, type DoneBotCredentialStore } from "./gateway.ts";
 const catalog = { gateway_contract_version: 3, catalog_scope_id: "scope", catalog_version: "v1", defaults: { text: "gpt-6.1-sol" }, models: [{ id: "gpt-6.1-sol", display_name: "GPT", interfaces: ["openai.responses"], platforms: ["openai"], media_types: ["text"] }] };
 const auth = (id = "1") => ({ code: 0, data: { access_token: `access-${id}`, refresh_token: `refresh-${id}`, expires_in: 3600, user: { id, email: `${id}@example.test` } } });
@@ -247,5 +250,68 @@ describe("DoneBot gateway account boundary", () => {
     await gateway.login("owner@example.test", "fixture-password");
     await expect(gateway.request("/v1/responses", { method: "POST" })).rejects.toThrow("fixture transport failed");
     expect(gateway.activeModelCount("1")).toBe(0);
+  });
+
+  it("permits realtime ASR WebSocket URLs, sends server credentials only, and tears down upstream on logout", async () => {
+    expect(doneBotRequestUrl("/v1/audio/transcriptions/realtime?model=qwen-audio-3.1-asr-flash-streaming").pathname)
+      .toBe("/v1/audio/transcriptions/realtime");
+    expect(() => doneBotRequestUrl("/v1/audio/transcriptions/realtime?model=../evil")).toThrow();
+    expect(() => doneBotRequestUrl("/v1/audio/transcriptions/realtime?token=leak")).toThrow();
+
+    const seen: Array<{ url: string; auth?: string; installation?: string; idem?: string }> = [];
+    let upstreamClosed = false;
+    const server = createServer((_req, res) => { res.writeHead(404).end(); });
+    const wss = new WebSocketServer({ server });
+    wss.on("connection", (ws, req) => {
+      seen.push({
+        url: req.url ?? "",
+        auth: req.headers.authorization,
+        installation: String(req.headers["x-donebot-installation"] ?? ""),
+        idem: String(req.headers["idempotency-key"] ?? ""),
+      });
+      ws.once("close", () => { upstreamClosed = true; });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      const vault = store();
+      const gateway = new DoneBotGateway(vault, {
+        testOrigin: origin,
+        fetch: (async (url: string | URL | Request) => {
+          const path = new URL(String(url)).pathname;
+          if (path.endsWith("/auth/login")) return json(auth());
+          if (path.endsWith("/installations/claim")) return json({ credential: "secret-installation-cred" });
+          if (path.endsWith("/donebot/models")) return json(catalog);
+          if (path.endsWith("/auth/logout")) return json({ code: 0 });
+          return json({});
+        }) as typeof fetch,
+      });
+      await gateway.login("owner@example.test", "fixture-password");
+      const scope = gateway.scope()!;
+      const accountChanged = vi.fn();
+      const handle = gateway.openVoiceAsrSocket({
+        scope,
+        model: "qwen-audio-3.1-asr-flash-streaming",
+        idempotencyKey: "asr-idem-1",
+        onAccountChanged: accountChanged,
+      });
+      await new Promise<void>((resolve, reject) => {
+        handle.ws.once("open", () => resolve());
+        handle.ws.once("error", reject);
+      });
+      expect(seen).toEqual([{
+        url: "/v1/audio/transcriptions/realtime?model=qwen-audio-3.1-asr-flash-streaming",
+        auth: "Bearer secret-installation-cred",
+        installation: scope.installationId,
+        idem: "asr-idem-1",
+      }]);
+      await gateway.logout();
+      expect(accountChanged).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(upstreamClosed).toBe(true));
+    } finally {
+      wss.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

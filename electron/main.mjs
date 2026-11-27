@@ -11,6 +11,7 @@ import { startCua, stopCua, registerCuaIpc, requestComputerUse, setCuaStateListe
 import { createAndroidDeviceController } from "./android-device.mjs";
 import { finishSpeech, speechBusy, startSpeech, stopSpeech } from "./speech.mjs";
 import { installTalk, isTalkPanel } from "./talk-main.mjs";
+import { installDesktopPet, isPetWindow } from "./pet-window.mjs";
 import { openBlankTerminal } from "./terminal-launch.mjs";
 import { linuxDisablesGpu, SOFTWARE_RENDERING_ARG } from "./linux-gpu.mjs";
 import { pasteMenuItem } from "./paste-menu-item.mjs";
@@ -141,6 +142,7 @@ const { MIN_BOUNDS, normalizeUnreadCount, resolveWindowState } = require("./wind
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 configureAppIdentity(app);
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 // vite binds IPv4; a bare "localhost" can resolve to ::1.
 const DEV_URL = process.env.ELECTRON_START_URL ?? "http://127.0.0.1:5299";
 let SERVER_PORT = 18899;
@@ -152,7 +154,7 @@ let desktopWorkspaceManager = null;
 let desktopWorkspaceOwner = null;
 let pendingOrganizationEntry = takeOrganizationDeepLink(process.argv);
 function appWindows() {
-  return BrowserWindow.getAllWindows().filter((win) => !isTalkPanel(win));
+  return BrowserWindow.getAllWindows().filter((win) => !isTalkPanel(win) && !isPetWindow(win));
 }
 const cloudEntry = createCloudEntry({
   reveal: () => { if (!desktopTray?.show()) activateExistingWindow(appWindows()); },
@@ -224,6 +226,13 @@ function deliverPackageInstall(win = mainWindow) {
 
 function deliverChatLink(win = mainWindow) {
   if (pendingChatLink && sendToPage(win, "chat:open", pendingChatLink)) pendingChatLink = null;
+}
+
+let pendingWorkbenchOpen = false;
+let pendingPetSettingsOpen = false;
+function deliverPetMainIntents(win = mainWindow) {
+  if (pendingWorkbenchOpen && sendToPage(win, "desktop-pet:open-workbench", true)) pendingWorkbenchOpen = false;
+  if (pendingPetSettingsOpen && sendToPage(win, "app:open-settings", undefined)) pendingPetSettingsOpen = false;
 }
 
 let openWindowForLink = null;
@@ -1961,6 +1970,7 @@ function createWindow({ deferNavigation = false } = {}) {
     },
   });
   mainWindow = win; hiddenStart = false; chromeRail.attach(win);
+  desktopPet.attachMainWindow(win);
   win.on("show", () => desktopTray?.windowShown(win));
   win.on("focus", () => { if (cloudAccount?.checkoutPending()) void cloudAccount.refresh().catch(() => {}); });
   win.on("close", (event) => {
@@ -2047,11 +2057,15 @@ function createWindow({ deferNavigation = false } = {}) {
     });
     void workspaceMenuAction(() => switchEnvironment(LOCAL_ID));
   });
-  win.webContents.on("did-navigate", (_event, url) => homeWindow.navigated(url));
+  win.webContents.on("did-navigate", (_event, url) => {
+    homeWindow.navigated(url);
+    desktopPet.originChanged();
+  });
   // Not did-finish-load: Electron still reports the main frame as loading then.
   win.webContents.on("did-stop-loading", () => {
     deliverPackageInstall(win);
     deliverChatLink(win); desktopNotifications.arrived();
+    deliverPetMainIntents(win);
   });
   win.webContents.on("did-finish-load", () => void serverLending.offer(win));
 
@@ -2261,14 +2275,18 @@ ipcMain.handle("desktop:skin", (event, skin) => {
   if (!isKnownSkin(skin)) return false;
   if (chromeRail.owns(event)) return true;
   try {
-    talk.skin(skin); const { color } = skinChrome(skin);
-    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    talk.skin(skin);
+    const senderWin = BrowserWindow.fromWebContents(event.sender);
+    if (isPetWindow(senderWin)) return true;
+    const { color } = skinChrome(skin);
+    const win = senderWin ?? mainWindow;
     if (win && !win.isDestroyed()) {
       try { win.setBackgroundColor(color); } catch {}
     }
     if (mainWindow && event.sender === mainWindow.webContents) {
       mainWindowSkin = skin;
       chromeRail.send("rail:skin", skin);
+      desktopPet.skin(skin);
       donebotCloud.refreshTheme();
     }
   } catch {}
@@ -2360,6 +2378,48 @@ ipcMain.handle("desktop:relaunch", localOnly("desktop:relaunch", (event) => {
 
 const talk = installTalk({ ipcMain, localOnly, localOrHome, BrowserWindow, appleSpeech: nativeActions.appleSpeech,
   speech: { start: startSpeech, stop: stopSpeech, finish: finishSpeech, busy: speechBusy }, packaged: app.isPackaged, devUrl: DEV_URL, nativeImage, iconPath: APP_ICON, openLink: queueChatLink, reveal: revealForLink, log: slog, t: nativeT });
+
+const desktopPet = installDesktopPet({
+  ipcMain,
+  BrowserWindow,
+  Menu,
+  screen,
+  platform: process.platform,
+  appleSpeech: nativeActions.appleSpeech,
+  speech: { start: startSpeech, stop: stopSpeech, finish: finishSpeech },
+  prefs: () => desktopPrefs ?? nativeText.prefs,
+  preload: path.join(__dirname, "preload.cjs"),
+  rendererArgs: () => [
+    ...desktopCompanionRendererArguments(rendererOrigin(), desktopRemoteAccess),
+    ...(app.isPackaged && !desktopRemoteAccess ? ["--omb-company-desktop=1"] : []),
+    `--omb-app-version=${app.getVersion()}`,
+    ...(linuxSoftwareRendering ? [SOFTWARE_RENDERING_ARG] : []),
+  ],
+  localOrigin: rendererOrigin,
+  activeOrigin: () => activeEnvironment(environmentsState)?.origin || homeWindow.cloudOrigin() || rendererOrigin(),
+  probeFetch: (...args) => session.defaultSession.fetch(...args),
+  pageGuard: (channel, handler) => (event, ...args) => (
+    homeWindow.homePage(event) || workspaceSenderAllowed(event, mainWindow?.webContents, environmentsState, rendererOrigin())
+      ? handler(event, ...args)
+      : localOnly(channel, handler)(event, ...args)
+  ),
+  openMainWindow: () => revealForLink(),
+  openWorkbench: () => {
+    pendingWorkbenchOpen = true;
+    revealForLink();
+    deliverPetMainIntents();
+  },
+  openSettings: () => {
+    pendingPetSettingsOpen = true;
+    revealForLink();
+    deliverPetMainIntents();
+  },
+  quitApp: () => app.quit(),
+  isStartupBusy: () => Boolean(startupScreen),
+  isMainVisible: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()),
+  initialSkin: mainWindowSkin,
+  log: slog,
+});
 
 ipcMain.handle("companion:state", localOnly("companion:state", () => desktopCompanionState()));
 function managedRemoteAccessRefusal() {
@@ -2830,7 +2890,10 @@ app.whenReady().then(async () => {
     onHide: desktopTray ? (win) => desktopTray.hide(win) : undefined,
     isHidden: () => desktopTray?.isHidden() ?? false,
     onShow: (win) => desktopTray?.windowShown(win),
-    onFinished: () => { startupScreen = null; },
+    onFinished: () => {
+      startupScreen = null;
+      void desktopPet.syncVisibility();
+    },
   });
   await startupScreen?.ready;
   if (desktopShutdownStarted) return;
@@ -3071,6 +3134,7 @@ app.whenReady().then(async () => {
     if (desktopTray?.show()) return;
     if (appWindows().length === 0) openWindowForLink();
   });
+  void desktopPet.syncVisibility();
 }).finally(() => allWindowsClosedQuit.settleStartup());
 
 const allWindowsClosedQuit = createAllWindowsClosedQuit({
@@ -3095,6 +3159,7 @@ process.once("SIGTERM", requestSignalQuit);
 
 app.on("before-quit", (e) => {
   talk.close();
+  desktopPet.close();
   desktopShutdownStarted = true;
   startupScreen?.dispose();
   companyBackupSchedule?.close();

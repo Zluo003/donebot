@@ -41,6 +41,33 @@ export interface DoneBotMediaSettings {
   models: { id: string; name: string; kind: "image" | "video" }[];
 }
 
+export {
+  DONEBOT_ASR_DEFAULT_SAMPLE_RATE,
+  DONEBOT_ASR_WS_PATH,
+  DONEBOT_SPEECH_MODEL_SPECS,
+  DONEBOT_TTS_DEFAULT_SAMPLE_RATE,
+  DONEBOT_TTS_MODEL_PRIORITY,
+  DONEBOT_VOICE_ID_PATTERN,
+  DONEBOT_VOICE_MODELS,
+  doneBotSpeechMaxInputChars,
+  doneBotSpeechModelSpec,
+  doneBotSpeechVoices,
+  doneBotVoiceLabel,
+  isKnownDoneBotSpeechVoice,
+  isQwen31SpeechModel,
+  isValidDoneBotVoiceId,
+  resolveDoneBotSpeechVoice,
+  type DoneBotAsrClientMessage,
+  type DoneBotAsrConfigSummary,
+  type DoneBotAsrErrorCode,
+  type DoneBotAsrServerMessage,
+  type DoneBotAsrVadModel,
+  type DoneBotSpeechModelSpec,
+  type DoneBotVoiceCapabilities,
+  type DoneBotVoiceDescriptor,
+  type DoneBotVoiceGender,
+} from "./donebot-voice.ts";
+
 /** Account state sent to clients never contains a login token or installation credential. */
 export interface DoneBotAccountState {
   enabled: boolean;

@@ -8,8 +8,9 @@ import type {
   OpcWorkflowStepRun,
 } from "../../shared/donebot-opc.ts";
 import { collectBotArtifacts, type ArtifactThread } from "../bot-artifacts.ts";
-import type { BotRecord, Store } from "../store.ts";
+import type { BotRecord, Message, Store } from "../store.ts";
 import type { DoneBotOpcStore } from "./opc-store.ts";
+import { describeMediaAsset, type MediaAssetMeta } from "./thread-files.ts";
 
 const STEP_START_SLACK_MS = 3_000;
 const STEP_END_SLACK_MS = 15_000;
@@ -115,19 +116,213 @@ function stripMarkdownInline(text: string): string {
     .trim();
 }
 
+const GENERIC_SECTION_HEADING = /^(?:核心结论|结论|摘要|汇报摘要|执行摘要|概要|待确认事项|待确认|下一步|下一步建议|交付附件|交付附件说明|交付物|交付文件|附件|说明|备注|总结|正式汇报|汇报|summary|conclusion|deliverables?|attachments?|next steps?)$/i;
+const MEDIA_BADGE_TEXT = /^(?:image|video|music|audio)\s*·\s*[A-Za-z0-9._:/-]+$/i;
+const CONVERSATIONAL_CHAT_TEXT = /^(?:我发现|我感觉|我觉得|我想|我要|你还是|你没|你怎么|你刚才|能不能|可以帮|麻烦|请帮|帮我|给我|来一张|再来|再画|再做|再改|换一下|改一下|调整[，,、\s]|把(?:图片|这张|这个|面料|帽子|刚才|上面|下面|它|他|她)|刚才那|刚才的|不要|为什么|怎么还是|怎么没|好了吗|画好了吗|还没)/u;
+const OPAQUE_FILENAME = /^(?:(?:image|img|photo|pic|video|vid|audio|music|track|file|output|result|render|asset|generated|gen|artifact|attachment|media|seedream|seedance|suno|gpt[-_]?image|muse|frame|clip|shot|screen|screenshot|capture|tmp|temp)[-_.\s\da-z]*|[a-f\d]{8,}|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}|\d{6,})$/i;
+const MAX_REPORT_TITLE_CHARS = 28;
+
+export function isMediaBadgeText(text: string): boolean {
+  return MEDIA_BADGE_TEXT.test(text.trim());
+}
+
+function trimTitleConcise(raw: string, maxChars = MAX_REPORT_TITLE_CHARS): string {
+  const cleaned = stripMarkdownInline(raw)
+    .replace(/^(?:正式汇报|阶段汇报|工作汇报|汇报主题|汇报|主题|标题)\s*[:：\-—·]\s*/u, "")
+    .replace(/^[\s「『【《（("'\-—·:：,，、.。]+|[\s」』】》）)"'\-—·:：,，、.。!！?？;；]+$/g, "")
+    .trim();
+  if (!cleaned) return "";
+  const chars = [...cleaned];
+  if (chars.length <= maxChars) return cleaned;
+  const slice = chars.slice(0, maxChars).join("");
+  const cut = Math.max(
+    slice.lastIndexOf("，"),
+    slice.lastIndexOf("、"),
+    slice.lastIndexOf("；"),
+    slice.lastIndexOf("："),
+    slice.lastIndexOf(","),
+    slice.lastIndexOf(" "),
+  );
+  if (cut >= Math.floor(maxChars * 0.45)) {
+    return slice.slice(0, cut).replace(/[，,、；;：:\s]+$/g, "").trim();
+  }
+  return `${chars.slice(0, maxChars - 1).join("").trim()}…`;
+}
+
+function distillSentenceToTitle(text: string): string {
+  const withoutBlocks = text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/(?:file:\/\/|https?:\/\/|\/(?:Users|home|tmp|var)\/)[^\s<>]+/g, " ");
+  const lines = withoutBlocks
+    .split(/\r?\n/)
+    .map(l => stripMarkdownInline(l))
+    .filter(l => l.length > 0 && !isMediaBadgeText(l) && !GENERIC_SECTION_HEADING.test(l));
+  if (!lines.length) return "";
+
+  const firstSentence = lines[0]!.split(/[。！？!?\n]/u)[0] ?? "";
+  let candidate = firstSentence
+    .replace(/^(?:(?:老板|主人|老大|经理|总监|先生|女士|您好|您好|你好|哈喽|嗨|好的|好嘞|收到|明白|没问题|当然|遵命|报告|汇报一下)[，,、!！。.\s]*)+/u, "")
+    .replace(/^(?:(?:我|这里|本次|这次|刚才|刚刚)?(?:已经|已)?(?:按(?:照)?(?:您的要求|要求|指示)?|为您|帮你|帮您)?(?:重新)?(?:完成|生成|绘制|画好|画完|制作|整理|输出|产出|导出|渲染|更新|修改|调整|优化|替换|去掉|去除|提交|做好|处理好)(?:了)?)\s*/u, "")
+    .replace(/^(?:一[张个份幅段首篇套组]|新的|新生成的|最新(?:生成)?的|这张|这幅|这份|这套)\s*/u, "")
+    .replace(/(?:[，,、；;\s]*(?:请(?:您)?(?:查收|审阅|查看|审批|确认|过目|预览|验收)|需要您审批|等待您审批|详见(?:下方|附件).*|已(?:经)?(?:完成|画好|画完|生成|做好|处理好|提交(?:到工作台)?|附上|放在下方|送至工作台).*|供您(?:参考|审阅|查看).*|如有(?:需要|问题).*|如需(?:调整|修改).*|欢迎.*))+$/u, "")
+    .replace(/(?:已经|已)(?:画好|画完|生成|完成|做好|处理好|搞定|交付|输出|更新|修改|调整|优化|替换|去掉|去除)(?:了)?$/u, "")
+    .trim();
+
+  if (!candidate || candidate.length < 2) return "";
+  if (CONVERSATIONAL_CHAT_TEXT.test(candidate)) return "";
+  if (/^(?:好的|收到|完成|好了|搞定|请查收|已处理|已完成|已生成|已画好|暂无|无)$/u.test(candidate)) return "";
+  return trimTitleConcise(candidate);
+}
+
+function distillMediaPromptTitle(meta: MediaAssetMeta | undefined): string {
+  const raw = meta?.prompt?.trim() ?? "";
+  if (!raw) return "";
+  const cleaned = raw
+    .replace(/\b(?:masterpiece|best quality|ultra[- ]?detailed|high resolution|photorealistic|hyperrealistic|8k|4k|uhd|hdr|studio lighting|cinematic lighting|octane render|unreal engine)\b/gi, " ")
+    .replace(/(?:超清|高清|高画质|最高画质|极致细节|电影级光效|电影灯光|8K|4K|大师级|杰作|保持(?:原图|主体|构图|版型)不变|根据参考图(?:片)?\s*\d*)/giu, " ")
+    .replace(/^(?:请|帮我|生成|绘制|画|制作|保留|将|把)\s*(?:一[张个幅段首套])?\s*/u, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  // Pick the first substantive subject clause (split on sentence/comma boundaries).
+  const clauses = cleaned
+    .split(/[。！？!?;\n]+/u)
+    .flatMap(part => part.split(/[，,]+/u))
+    .map(part => part.replace(/^[\s\-—·:：]+|[\s\-—·:：]+$/g, "").trim())
+    .filter(part => [...part].length >= 3);
+  if (!clauses.length) return "";
+  let combined = clauses[0]!;
+  if ([...combined].length < 8 && clauses[1] && [...combined].length + [...clauses[1]].length + 1 <= 22) {
+    combined = `${combined}·${clauses[1]}`;
+  }
+  const title = trimTitleConcise(combined, 24);
+  if (!title || CONVERSATIONAL_CHAT_TEXT.test(title)) return "";
+  return title;
+}
+
+function readableAttachmentTitle(items: readonly OpcArtifactItem[]): string {
+  for (const item of items) {
+    const base = item.name
+      .replace(/\.[a-z\d]{1,12}$/i, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!base || [...base].length < 2) continue;
+    if (OPAQUE_FILENAME.test(base.replace(/\s+/g, ""))) continue;
+    return trimTitleConcise(base, 26);
+  }
+  return "";
+}
+
+function isUsableFallbackTitle(raw: string | undefined, botName?: string): boolean {
+  const clean = raw?.trim() ?? "";
+  if (!clean || [...clean].length < 2) return false;
+  if (botName && clean === botName.trim()) return false;
+  if (isMediaBadgeText(clean)) return false;
+  if (CONVERSATIONAL_CHAT_TEXT.test(clean)) return false;
+  if (OPAQUE_FILENAME.test(clean.replace(/\.[a-z\d]{1,12}$/i, ""))) return false;
+  return true;
+}
+
+function genericDeliverableTitle(items: readonly OpcArtifactItem[], meta?: MediaAssetMeta): string {
+  const kind = meta?.kind ?? items[0]?.kind;
+  const label = kind === "image"
+    ? "图片交付汇报"
+    : kind === "video"
+      ? "视频交付汇报"
+      : kind === "music" || kind === "audio"
+        ? "音频交付汇报"
+        : items.length > 1
+          ? "多文件交付汇报"
+          : "文档交付汇报";
+  return label;
+}
+
 export function extractReportTitle(markdown: string, fallback: string): string {
   const lines = markdown.split(/\r?\n/);
+  let seenNonEmpty = 0;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
+    seenNonEmpty += 1;
+    if (seenNonEmpty > 6) break;
+
     const heading = /^#{1,3}\s+(.+?)\s*#*$/.exec(line);
     if (heading) {
       const cleaned = stripMarkdownInline(heading[1]!);
-      if (cleaned) return cleaned.slice(0, 80);
+      if (cleaned && !GENERIC_SECTION_HEADING.test(cleaned)) {
+        return trimTitleConcise(cleaned, 60);
+      }
+      continue;
     }
-    break;
+
+    if (seenNonEmpty <= 3) {
+      const labelled = /^(?:正式汇报|阶段汇报|工作汇报|汇报主题|主题|标题)\s*[:：]\s*(.+)$/u.exec(stripMarkdownInline(line));
+      if (labelled?.[1]) {
+        const cleaned = trimTitleConcise(labelled[1], 60);
+        if (cleaned && !GENERIC_SECTION_HEADING.test(cleaned)) return cleaned;
+      }
+
+      const bracketed = /^【([^】]{2,36})】$/u.exec(stripMarkdownInline(line));
+      if (bracketed?.[1]) {
+        const cleaned = trimTitleConcise(bracketed[1], 60);
+        if (cleaned && !GENERIC_SECTION_HEADING.test(cleaned)) return cleaned;
+      }
+
+      const boldOnly = /^\*\*([^*\n]{2,40})\*\*$/.exec(line);
+      if (boldOnly?.[1]) {
+        const cleaned = stripMarkdownInline(boldOnly[1]);
+        if (cleaned && !GENERIC_SECTION_HEADING.test(cleaned) && !/[。！？!?]$/.test(cleaned)) {
+          return trimTitleConcise(cleaned, 60);
+        }
+      }
+    }
   }
+
+  const distilled = distillSentenceToTitle(markdown);
+  if (distilled) return distilled;
+
   return fallback.trim() || "正式汇报";
+}
+
+function findCompanionBotReply(messages: readonly Message[], reportMsg: Message | undefined, botId: string): Message | undefined {
+  if (!reportMsg) return undefined;
+  const idx = messages.findIndex(m => m.id === reportMsg.id);
+  if (idx < 0) return undefined;
+  const isCandidate = (m: Message) =>
+    m.id !== reportMsg.id
+    && m.role === "bot"
+    && m.kind === "text"
+    && !m.peerAsk
+    && !m.roomRequest
+    && (!m.from?.botId || m.from.botId === botId)
+    && Boolean(m.text?.trim())
+    && !isMediaBadgeText(m.text!.trim());
+
+  // 1. Prefer a substantive bot reply in the same turn.
+  if (reportMsg.turnId) {
+    for (let i = idx + 1; i < messages.length; i++) {
+      const m = messages[i]!;
+      if (m.role === "user") break;
+      if (m.turnId === reportMsg.turnId && isCandidate(m)) return m;
+    }
+    for (let i = idx - 1; i >= 0; i--) {
+      const m = messages[i]!;
+      if (m.role === "user") break;
+      if (m.turnId === reportMsg.turnId && isCandidate(m)) return m;
+    }
+  }
+
+  // 2. Otherwise inspect the immediate bot text right after the media message before the next user message.
+  for (let i = idx + 1; i < messages.length; i++) {
+    const m = messages[i]!;
+    if (m.role === "user") break;
+    if (m.at - reportMsg.at > 180_000) break;
+    if (isCandidate(m)) return m;
+  }
+  return undefined;
 }
 
 export function extractReportSummary(markdown: string, title: string): string {
@@ -207,7 +402,7 @@ function buildWorkflowReportItem(params: {
   const { run, stepIndex, step, bot, roleTitle, stepArts, runArtifactIds, approvedAt } = params;
   const body = step.output?.trim() || "（该步骤已完成，暂无补充说明正文）";
   const fallbackTitle = `${run.workflowName} · ${step.stepName}`;
-  const title = extractReportTitle(body, fallbackTitle);
+  const title = step.output?.trim() ? extractReportTitle(step.output.trim(), fallbackTitle) : fallbackTitle;
   const summary = extractReportSummary(body, title);
   const reportMessageId = stepArts[0]?.reportMessageId;
 
@@ -253,10 +448,35 @@ function buildBotReportItem(params: {
   const reportMsg = messages.find(m => m.id === primary.reportMessageId)
     ?? messages.find(m => m.id === primary.messageId);
   const rawBody = reportMsg?.text?.trim() ?? "";
-  const fallbackTitle = primary.title || primary.threadTitle || primary.name;
-  const title = rawBody ? extractReportTitle(rawBody, fallbackTitle) : fallbackTitle;
-  const body = rawBody || `**交付文件**：${items.map(i => `\`${i.name}\``).join("、")}`;
-  const summary = extractReportSummary(body, title)
+  const mediaOnly = !rawBody || isMediaBadgeText(rawBody);
+  const companionMsg = mediaOnly ? findCompanionBotReply(messages, reportMsg, primary.botId) : undefined;
+  const effectiveText = companionMsg?.text?.trim() || (mediaOnly ? "" : rawBody);
+  const mediaMeta = items
+    .map(item => describeMediaAsset(item.path) ?? describeMediaAsset(item.name))
+    .find((m): m is MediaAssetMeta => Boolean(m));
+
+  // Derive report title strictly from deliverable content (report body -> media prompt -> readable filename -> clean fallback),
+  // never blindly copying raw conversational user chat text.
+  let title = effectiveText ? extractReportTitle(effectiveText, "") : "";
+  if (!title) title = distillMediaPromptTitle(mediaMeta);
+  if (!title) title = readableAttachmentTitle(items);
+  if (!title && isUsableFallbackTitle(primary.threadTitle, primary.botName)) {
+    title = trimTitleConcise(primary.threadTitle);
+  }
+  if (!title && isUsableFallbackTitle(primary.title, primary.botName)) {
+    title = trimTitleConcise(primary.title.replace(/\s*·\s*\d+$/, ""));
+  }
+  if (!title) title = genericDeliverableTitle(items, mediaMeta);
+
+  const deliverableLine = `**交付文件**：${items.map(i => `\`${i.name}\``).join("、")}`;
+  const body = effectiveText
+    || (mediaMeta?.prompt
+      ? `${mediaMeta.prompt.trim()}\n\n${deliverableLine}`
+      : rawBody && !mediaOnly
+        ? rawBody
+        : deliverableLine);
+  const summary = extractReportSummary(effectiveText || (mediaMeta?.prompt ?? ""), title)
+    || (rawBody && !isMediaBadgeText(rawBody) ? extractReportSummary(rawBody, title) : "")
     || (approvedAt !== undefined ? `共 ${items.length} 份已通过附件` : `共 ${items.length} 份交付附件等待审阅`);
   const latestAt = Math.max(...items.map(i => i.at));
 

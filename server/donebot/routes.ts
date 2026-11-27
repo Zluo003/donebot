@@ -1,6 +1,7 @@
 import { ownerOrAdmin } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { DoneBotGatewayError, type DoneBotGateway } from "./gateway.ts";
+import { enrichDoneBotCatalogForClient } from "./media-registry.ts";
 import type { DoneBotCloudMutation } from "../../shared/donebot-cloud.ts";
 import { createPaymentOrder, paymentOrder, paymentSnapshot } from "./payments.ts";
 import type { DoneBotPaymentInput } from "../../shared/donebot-payments.ts";
@@ -48,7 +49,7 @@ export function createDoneBotAccountRoutes(gateway: DoneBotGateway): RouteHandle
       if (method === "GET" && path === "/api/donebot/state") return json(res, 200, gateway.state());
       if (method === "GET" && path === "/api/donebot/settings") return json(res, 200, await gateway.publicSettings());
       if (method === "GET" && path === "/api/donebot/account") return json(res, 200, await gateway.account());
-      if (method === "GET" && path === "/api/donebot/catalog") return json(res, 200, await gateway.refreshCatalog());
+      if (method === "GET" && path === "/api/donebot/catalog") return json(res, 200, enrichDoneBotCatalogForClient(await gateway.refreshCatalog()));
       if (method === "GET" && path === "/api/donebot/cloud") return json(res, 200, await gateway.cloudSnapshot());
       if (method === "GET" && path === "/api/donebot/workspaces") return json(res, 200, await gateway.workspaceSnapshot());
       if (method === "GET" && path === "/api/donebot/teams/plans") return json(res, 200, await gateway.teamPlans());

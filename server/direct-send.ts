@@ -24,6 +24,8 @@ export interface DirectSendInput {
   mentions?: string[];
   /** The sender is the team's Owner or an Admin, so a typed stop may end someone else's run. */
   admin?: boolean;
+  /** Desktop pet brief spoken-report turn: keeps stored user text clean while asking the model for a concise oral reply. */
+  petBrief?: boolean;
 }
 
 export type DirectSendReceipt =

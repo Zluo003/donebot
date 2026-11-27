@@ -30,7 +30,7 @@ export function doneBotModelPrices(model: DoneBotGatewayModel, kind: DoneBotMode
   const add = (label: string, amount: unknown, unit: ModelPriceLine["unit"], divisor = 1) => {
     if (price(amount)) lines.push({ label, amount: amount / divisor, unit });
   };
-  if (kind === "text") {
+  if (kind === "text" || p.unit === "million_tokens") {
     add(t("donebot.pricing.input"), p.input_per_million, "millionTokens");
     add(t("donebot.pricing.output"), p.output_per_million, "millionTokens");
   } else if (kind === "image") {

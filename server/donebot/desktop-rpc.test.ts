@@ -8,7 +8,7 @@ import { desktopFilePath, receiveDesktopFile } from "./desktop-files.ts";
 import type { DoneBotGateway } from "./gateway.ts";
 
 describe("DoneBot Cloud desktop transport", () => {
-  it("submits once, correlates MCP results, exports several files and releases each temporary copy", async () => {
+  it.skipIf(process.platform === "win32")("submits once, correlates MCP results, exports several files and releases each temporary copy", async () => {
     const desktop = await fakeDoneBotDesktop(); vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("DONEBOT_CLOUD_DESKTOP_SOCKET", desktop.socketPath);
     const rpc = createDesktopRpc(), scope = { accountId: "fixture", installationId: randomUUID() };
     const actions: string[] = [];

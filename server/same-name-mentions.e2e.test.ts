@@ -163,7 +163,7 @@ it("refuses a bot's post_to_room that tags the shared name, with each bot's id, 
   const [refused, posted] = turn.evidence.filter((entry) => entry.step).map((entry) => entry.response!.result!);
   expect(refused!.isError).toBe(true);
   expect(refused!.content![0]!.text).toBe(`2 bots in the room "Launch" are named "Marlowe", so nothing was posted: Marlowe, Analyst (id ${analyst.id}); `
-    + `Marlowe, Chief of Staff (id ${chief.id}). Post it again with the id of the one you mean in mention_ids.`);
+    + `Marlowe, System Coordinator (id ${chief.id}). Post it again with the id of the one you mean in mention_ids.`);
   expect(posted!.isError).toBeFalsy();
   const lines = await transcript();
   expect(lines.filter((message) => message.text === UPDATE).map((message) => message.from?.botId)).toEqual([lead.id]);
@@ -183,7 +183,7 @@ it("wakes neither bot when a bot's reply tags the shared name, tells the person,
   expect({ analyst: ran(analyst), chief: ran(chief) }).toEqual(before);
   const system = turns().filter((turn) => turn.botId === lead.id && JSON.stringify(turn.prompt).includes(ASK)).at(-1)!.system;
   expect(system).toContain(`Some members here share a name, so an @mention of that name reaches none of them: "Marlowe" is Marlowe, Analyst (id ${analyst.id}); `
-    + `Marlowe, Chief of Staff (id ${chief.id}). To bring one in, use coordinate_bots with its id.`);
+    + `Marlowe, System Coordinator (id ${chief.id}). To bring one in, use coordinate_bots with its id.`);
 }, hostTimeout(120_000));
 
 it("refuses a program on the machine with each bot's id, and takes the line again by id", async () => {

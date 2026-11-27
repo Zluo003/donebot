@@ -23,7 +23,7 @@ describe.skipIf(detection.box !== "bwrap")(`paths on a boxed command line (${det
     for (const file of [settings, join(dataDir, "messages.db"), join(dataDir, "workspaces", "bot-2", "MEMORY.md")]) writeFileSync(file, CANARY, { mode: 0o600 });
     writeFileSync(handed, "a file the server hands this turn");
     writeFileSync(outside, "the turn's own config");
-    expect((await box.start({ dataDir, home, port: 1, env: ENV, denyEnv: new Set(), log: () => {} })).box).toBe("bwrap");
+    expect((await box.start({ dataDir, home, port: 18999, env: ENV, denyEnv: new Set(), log: () => {} })).box).toBe("bwrap");
   });
   afterAll(async () => { await box.stop(); rmSync(root, { recursive: true, force: true }); });
 

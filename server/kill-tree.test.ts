@@ -143,7 +143,7 @@ describe("killCliTree", () => {
       if (exitFirst) await rootClosed;
       expect(alive(helper)).toBe(true);
       await expect(killCliTree(parent, 80)).resolves.toBe(true);
-      expect(alive(helper)).toBe(false);
+      await vi.waitFor(() => expect(alive(helper)).toBe(false), { timeout: 2_000 });
       expect(parent.exitCode !== null || parent.signalCode !== null).toBe(true);
     } finally {
       await killCliTree(parent, 0);

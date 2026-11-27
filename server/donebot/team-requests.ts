@@ -50,7 +50,7 @@ export function privateJson(path: string): unknown {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size > 65_536 || (stat.mode & 0o077) !== 0 || process.getuid && stat.uid !== process.getuid()) throw new Error("Private team state is unavailable");
+    if (!stat.isFile() || stat.size > 65_536 || (process.platform !== "win32" && (stat.mode & 0o077) !== 0) || process.getuid && stat.uid !== process.getuid()) throw new Error("Private team state is unavailable");
     return JSON.parse(readFileSync(fd, "utf8"));
   } finally { closeSync(fd); }
 }

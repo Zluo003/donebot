@@ -3,6 +3,7 @@ import { AlertCircle, ArrowUpRight, CheckCircle2, Cloud, Loader2, RefreshCw } fr
 import { api } from "@/state/api";
 import { SettingsGroup, SIMPLE_CARD, Switch } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
+import { randomUuid } from "@/lib/random-uuid";
 import type { DoneBotCloudAction, DoneBotCloudMutation, DoneBotCloudMutationResult, DoneBotCloudSnapshot } from "../../shared/donebot-cloud";
 import { DoneBotBotLink } from "./BotLink";
 
@@ -83,7 +84,7 @@ export function DoneBotCloudAccess({ heading = true }: { heading?: boolean }) {
   const confirm = (action: DoneBotCloudAction) => {
     if (!snapshot || flight.current || pending) return;
     setError(""); setNotice("");
-    setPending({ action, id: instance?.id, key: crypto.randomUUID(), account_id: snapshot.account_id, monthly_price: snapshot.plan.monthly_price });
+    setPending({ action, id: instance?.id, key: randomUuid(), account_id: snapshot.account_id, monthly_price: snapshot.plan.monthly_price });
   };
 
   const submit = async () => {

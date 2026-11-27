@@ -35,7 +35,7 @@ describe.skipIf(!available)(`the real box (${detection.box === "bwrap" ? "bubble
     const expected: Record<string, string[]> = {
       "bind-data": ["messages-db-hidden", "config-hidden", "data-dir-empty", "other-bot-folder-hidden", "other-task-folder-hidden", "secret-not-on-disk"],
       "share-pid": ["other-pid-hidden", "server-pid-hidden"],
-      "share-net": ["host-loopback-unreachable", "no-direct-internet"],
+      "share-net": ["harness-other-refused", "egress-loopback-refused", "egress-metadata-refused", "egress-private-refused"],
       "env-all": ["secret-not-in-env"],
       "tmp-shared": ["tmp-private"],
       "engines-rw": ["engine-read-only"],

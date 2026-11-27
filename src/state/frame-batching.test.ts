@@ -28,7 +28,9 @@ const answers: Record<string, unknown> = {
   "/api/instances": { instances: [] },
   "/api/config": {},
   "/api/routines": { routines: [], runs: [] },
+  "/api/notifications": { notifications: [] },
   "/api/webhooks": { webhooks: [], attempts: [] },
+  "/api/live/call": {},
 };
 
 const paints: FrameRequestCallback[] = [];
@@ -45,7 +47,7 @@ function Probe() {
 }
 let root: Root;
 const task = () => new Promise((resolve) => setTimeout(resolve, 0));
-const settle = async () => { for (let i = 0; i < 5; i++) await task(); };
+const settle = async () => { for (let i = 0; i < 12; i++) await task(); };
 const paint = async () => {
   painting = true;
   for (const callback of paints.splice(0)) callback(performance.now());

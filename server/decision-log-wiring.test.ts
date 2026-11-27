@@ -120,6 +120,7 @@ posixOnly("authorization decisions are logged", () => {
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home,

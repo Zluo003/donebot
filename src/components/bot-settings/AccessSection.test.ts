@@ -2,6 +2,7 @@ import { Children, createElement, isValidElement, type ReactElement, type ReactN
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DONEBOT_CLOUD_DESKTOP_ENABLED } from "@/donebot/services";
 import { api, StoreProvider, type Bot, type ConfigStatus } from "@/state/store";
 import { BotEditorContext } from "./BotEditorContext";
 import type { useBotSettingsDerived } from "./useBotSettingsDerived";
@@ -214,7 +215,7 @@ describe("AccessSection Works on", () => {
     ]);
   });
 
-  it("offers the place itself in a bot not made yet, which has no Screen panel to open", () => {
+  it.skipIf(!DONEBOT_CLOUD_DESKTOP_ENABLED)("offers the place itself in a bot not made yet, which has no Screen panel to open", () => {
     const derived = makeDerived();
     const draft = (bot: Bot) => {
       let tree!: ReturnType<typeof AccessSection>;
@@ -250,7 +251,7 @@ describe("AccessSection Works on", () => {
     expect(vi.mocked(derived.patch).mock.calls).toEqual([[{ computer: "browser", browser: true }], [{ computer: null }]]);
   });
 
-  it("says on a selectable tile of a bot not made yet what stands in its way, with no name to borrow", () => {
+  it.skipIf(!DONEBOT_CLOUD_DESKTOP_ENABLED)("says on a selectable tile of a bot not made yet what stands in its way, with no name to borrow", () => {
     fixture.config = { box: { configured: true } } as Partial<ConfigStatus>;
     fixture.instances = [{ instanceId: "local", capabilities: { computerMcp: true } }];
     fixture.capabilities.host = { homeDir: undefined, platform: "darwin" };
@@ -283,7 +284,7 @@ describe("AccessSection Works on", () => {
     expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>(?:(?!<\/button>).)*?Auto/);
   });
 
-  it("hides the Boat or VPS choice on My Cloud, whose cloud computers are the plan's", () => {
+  it.skipIf(!DONEBOT_CLOUD_DESKTOP_ENABLED)("hides the Boat or VPS choice on My Cloud, whose cloud computers are the plan's", () => {
     expect(render(makeBot())).toContain("Cloud backend");
     fixture.config = { cloudHome: true } as Partial<ConfigStatus>;
     expect(render(makeBot())).not.toContain("Cloud backend");
@@ -354,7 +355,7 @@ describe("Research (treg) card", () => {
 });
 
 describe("a VPS bot's own server", () => {
-  it("is offered on a saved VPS bot beside the default, and never while a new bot or the New bot defaults are drafted", async () => {
+  it.skipIf(!DONEBOT_CLOUD_DESKTOP_ENABLED)("is offered on a saved VPS bot beside the default, and never while a new bot or the New bot defaults are drafted", async () => {
     fixture.config = { vps: { configured: true, sshAlias: "production-vps" } } as Partial<ConfigStatus>;
     const vpsBot = makeBot({ computer: "cloud", cloudBackend: "vps", vpsAlias: "alpha-vps" });
     const saved = render(vpsBot);

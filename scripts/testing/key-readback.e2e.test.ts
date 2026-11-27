@@ -2,6 +2,8 @@
 // /api/config and shown masked. The services that check a key before it is kept (Boat, Composio, ElevenLabs, Fish Audio
 // the decision models and Postiz) answer from one loopback stand-in, so nothing leaves this machine.
 import { spawn, type ChildProcess } from "node:child_process";
+import { withUpstreamServices } from "../../src/testing/upstream-services.ts";
+withUpstreamServices();
 import { randomBytes } from "node:crypto";
 import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";

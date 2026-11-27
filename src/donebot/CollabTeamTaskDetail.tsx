@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { randomUuid } from "@/lib/random-uuid";
 import {
   AlertCircle,
   AlertTriangle,
@@ -276,9 +277,7 @@ export function CollabTeamTaskDetailPanel({
         setUploadPct(0);
         next = await uploadTaskFile(team.id, task.id, "submission", submitFiles[0]!, submitBody, submitNotify, setUploadPct);
       } else if (submitFiles.length > 1) {
-        const batchId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `batch-${Date.now()}`;
+        const batchId = randomUuid();
         setUploadPct(0);
         for (let i = 0; i < submitFiles.length; i += 1) {
           const file = submitFiles[i]!;

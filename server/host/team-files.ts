@@ -423,7 +423,7 @@ export function createTeamFiles(options: TeamFilesOptions) {
         changedSize();
         if (used() - (again.stat?.size ?? 0) + taken > cap) throw new TeamFilesError(507, "full", "Team files are full. Remove files to make room.");
         settledParent(again.full);
-        const fd = openSync(temp, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const fd = openSync(temp, (process.platform === "win32" ? constants.O_RDWR : constants.O_RDONLY) | (constants.O_NOFOLLOW ?? 0));
         try { fsyncSync(fd); } finally { closeSync(fd); }
         renameSync(temp, again.full);
         changedSize();

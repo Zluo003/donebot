@@ -148,6 +148,7 @@ describe("a slow cloud computer start", () => {
     child = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT,
       env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
         PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
         DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1),

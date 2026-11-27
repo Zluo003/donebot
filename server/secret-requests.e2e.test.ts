@@ -110,7 +110,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   const { server, secrets } = cloudHomeChildEnvironments(cloudHomeConfiguration(imageEnv)!, imageEnv, home);
   const offline = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
   child = spawnWithSecrets(process.execPath, ["--import", offline, join(SERVER_DIR, "index.ts")], {
-    ...server, DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1), USERPROFILE: home,
+    ...server, NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", DONEBOT_BOT_BOX: "0", DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1), USERPROFILE: home,
     ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
   }, secrets, null, true);
   child.stdout?.on("data", (chunk) => { log += chunk; });

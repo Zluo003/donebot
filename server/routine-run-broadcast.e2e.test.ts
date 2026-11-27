@@ -89,6 +89,7 @@ posixOnly("a routine run's task on the event stream", () => {
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         HOME: home, DONEBOT_PORT: String(PORT), DONEBOT_WEBHOOK_PORT: String(PORT + 1),
       },

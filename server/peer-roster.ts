@@ -169,7 +169,7 @@ const startsId = (id: string, raw: string): boolean => isIdStart(raw) && id.toLo
 
 export function botById<T extends RosterMember>(bots: readonly T[], raw: string): T | "ambiguous" | undefined {
   const wanted = raw.trim(), lower = wanted.toLowerCase();
-  const sameId = bots.filter(bot => bot.id.toLowerCase() === lower);
+  const sameId = bots.filter(bot => bot.id === wanted || (isIdStart(wanted) && bot.id.toLowerCase() === lower));
   const found = sameId.length ? sameId : bots.filter(bot => startsId(bot.id, wanted));
   return found.length > 1 ? "ambiguous" : found[0];
 }

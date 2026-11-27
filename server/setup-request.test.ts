@@ -317,6 +317,6 @@ describe("a Chief that sets itself up", () => {
     expect(applied.state).toBe("applied");
     const chief = s.store.bot(s.bot.id)!;
     expect(chief).toMatchObject({ name: "Inbox", soul: "Your only job is sorting the inbox every morning.", chiefOfStaff: true });
-    expect(chiefOfStaffSystemPrompt(chief.id, s.store.bots, true)).toContain("You are the person's assistant and the Chief of Staff");
+    expect(chiefOfStaffSystemPrompt(chief.id, s.store.bots, true)).toContain("You are the person's assistant and the workspace's unique System Coordinator");
   });
 });

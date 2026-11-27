@@ -86,7 +86,7 @@ export function RemoteCollab({ standalone = false }: { standalone?: boolean }) {
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
                   active
-                    ? "bg-surface text-ink shadow-xs ring-1 ring-ink/10"
+                    ? "bg-panel text-ink shadow-xs ring-1 ring-ink/10"
                     : "text-ink-secondary hover:text-ink",
                 )}
               >

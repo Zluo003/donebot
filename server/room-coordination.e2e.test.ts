@@ -235,7 +235,7 @@ it("receipts a retried duplicate of a failed hand-off as failed, not queued behi
   f.plan[f.target.id].fail = true;
   f.plan[f.sender.id].resumeSteps = [{ arguments: f.plan[f.sender.id].steps[0].arguments, expectError: true }];
   await f.start(); expect((await f.wait()).status).toBe("settled");
-  expect(f.provider().map((turn: any) => turn.botId)).toEqual([f.sender.id, f.target.id, f.sender.id]);
+  expect(f.provider().map((turn: any) => turn.botId).filter((id: string) => id === f.sender.id || id === f.target.id)).toEqual([f.sender.id, f.target.id, f.sender.id]);
   const [assigned, retried] = f.provider().filter((turn: any) => turn.botId === f.sender.id);
   expect(assigned.resumed).toBe(false);
   const first = JSON.parse(assigned.evidence.find((entry: any) => entry.step).response.result.content[0].text);

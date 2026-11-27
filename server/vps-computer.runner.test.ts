@@ -126,7 +126,7 @@ describe("default VPS command runner", () => {
       expect(alive(helper)).toBe(true);
       if (failure === "stdin") docker.stdin!.emit("error", new Error("write EPIPE"));
       await rejected;
-      expect(alive(helper)).toBe(false);
+      await vi.waitFor(() => expect(alive(helper)).toBe(false), { timeout: 2_000 });
       expect(docker.exitCode !== null || docker.signalCode !== null).toBe(true);
       expect(docker.stdin!.destroyed && docker.stdout!.destroyed && docker.stderr!.destroyed).toBe(true);
       expect(alive(master.pid!)).toBe(true);

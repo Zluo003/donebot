@@ -722,7 +722,7 @@ export function CollabChatView({
                         title="转为团队任务"
                         aria-label="转为团队任务"
                         onClick={() => onConvertToTask(msg)}
-                        className="mb-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.06] px-2 py-1 text-[11px] font-medium text-ink-secondary opacity-0 transition-opacity hover:bg-ink/[0.12] hover:text-ink group-hover/msg:opacity-100 focus-visible:opacity-100"
+                        className="mb-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.06] px-2 py-1 text-[11px] font-medium text-ink-secondary opacity-0 transition-opacity hover:bg-ink/[0.12] hover:text-ink group-hover/msg:opacity-100 focus-visible:opacity-100 touch:opacity-100"
                       >
                         <ListTodo size={12} aria-hidden="true" />转为任务
                       </button>
@@ -761,7 +761,7 @@ export function CollabChatView({
                           className={cn(
                             "flex w-full max-w-[360px] flex-col gap-2 overflow-hidden rounded-[18px] p-2.5",
                             mine
-                              ? "rounded-br-[6px] bg-bubble-user text-bubble-user-ink"
+                              ? "rounded-br-[6px] bg-bubble-user text-ink"
                               : "rounded-bl-[6px] bg-card text-ink ring-1 ring-inset ring-ink/[0.07]",
                           )}
                         >
@@ -799,7 +799,7 @@ export function CollabChatView({
                           className={cn(
                             "whitespace-pre-wrap break-words rounded-[18px] px-3.5 py-2 text-[14px] leading-relaxed",
                             mine
-                              ? "rounded-br-[6px] bg-bubble-user text-bubble-user-ink"
+                              ? "rounded-br-[6px] bg-bubble-user text-ink"
                               : isBot
                                 ? "rounded-bl-[6px] bg-card text-ink ring-1 ring-inset ring-accent/28"
                                 : "rounded-bl-[6px] bg-card text-ink ring-1 ring-inset ring-ink/[0.07]",
@@ -816,7 +816,7 @@ export function CollabChatView({
                         title="转为团队任务"
                         aria-label="转为团队任务"
                         onClick={() => onConvertToTask(msg)}
-                        className="mb-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.06] px-2 py-1 text-[11px] font-medium text-ink-secondary opacity-0 transition-opacity hover:bg-ink/[0.12] hover:text-ink group-hover/msg:opacity-100 focus-visible:opacity-100"
+                        className="mb-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-ink/[0.06] px-2 py-1 text-[11px] font-medium text-ink-secondary opacity-0 transition-opacity hover:bg-ink/[0.12] hover:text-ink group-hover/msg:opacity-100 focus-visible:opacity-100 touch:opacity-100"
                       >
                         <ListTodo size={12} aria-hidden="true" />转为任务
                       </button>

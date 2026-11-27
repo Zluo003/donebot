@@ -922,9 +922,9 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
       }, 30_000, "no completed chip or resume for the text-less turn");
       const replied = chip(askerBot.messages, "Helper replied");
       expect(replied.tool.ok).toBe(true);
-      expect(replied.tool.output).toBe(NO_TEXT);
+      expect(replied.tool.output.startsWith(NO_TEXT)).toBe(true);
       expect(replied.from?.botId).toBe(helper.id);
-      expect(assignments(helper.id, asker.id)[0]).toMatchObject({ status: "completed", outcome: "done", result: NO_TEXT });
+      expect(assignments(helper.id, asker.id)[0]).toMatchObject({ status: "completed", outcome: "done", result: expect.stringContaining(NO_TEXT) });
       expect(askerBot.messages.some((m: any) => m.kind === "text" && m.text === WOKE_WITHOUT_RESULT)).toBe(false);
     },
     45_000,

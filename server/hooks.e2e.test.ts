@@ -70,7 +70,7 @@ function harness(label: string, serverEnv: Record<string, string>, instanceEnv: 
         },
       },
     }));
-    const env: NodeJS.ProcessEnv = { HOME: home, USERPROFILE: home, DONEBOT_PORT: String(PORT), ...serverEnv };
+    const env: NodeJS.ProcessEnv = { NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", HOME: home, USERPROFILE: home, DONEBOT_PORT: String(PORT), ...serverEnv };
     if (process.env.PATH) env.PATH = process.env.PATH;
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], { cwd: join(SERVER_DIR, ".."), env, stdio: ["ignore", "pipe", "pipe"] });
     child.stderr!.on("data", (c) => (stderr += c));

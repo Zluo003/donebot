@@ -37,7 +37,7 @@ export function openBridge(spec: BridgeSpec): Promise<Server> {
       upstream.on("close", () => client.destroy());
     });
     server.once("error", reject);
-    server.listen(spec.port, "127.0.0.1", () => { server.off("error", reject); resolve(server); });
+    server.listen(spec.port, "127.0.0.1", () => { server.off("error", reject); server.unref(); resolve(server); });
   });
 }
 

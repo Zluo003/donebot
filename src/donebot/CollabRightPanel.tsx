@@ -508,13 +508,13 @@ export function CollabRightPanel({
                       <CollabTeamBadge name={primaryTitle} avatarUrl={currentBadgeAvatar} size={64} />
                       <span
                         aria-hidden="true"
-                        className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 text-white opacity-0 transition-[opacity,background-color] group-hover:bg-black/45 group-hover:opacity-100 group-focus-visible:bg-black/45 group-focus-visible:opacity-100"
+                        className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 text-white opacity-0 transition-[opacity,background-color] group-hover:bg-black/45 group-hover:opacity-100 group-focus-visible:bg-black/45 group-focus-visible:opacity-100 group-focus-within:opacity-100 touch:opacity-100"
                       >
                         {avatarBusy ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
                       </span>
                       <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute left-1/2 top-[calc(100%+4px)] z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-hairline bg-menu px-[7px] py-0.5 text-[12px] text-ink opacity-0 transition-opacity group-hover:opacity-100"
+                        className="pointer-events-none absolute left-1/2 top-[calc(100%+4px)] z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-hairline bg-menu px-[7px] py-0.5 text-[12px] text-ink opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100"
                       >
                         更换头像
                       </span>
@@ -551,7 +551,7 @@ export function CollabRightPanel({
                     <Pencil
                       size={13}
                       aria-hidden="true"
-                      className="absolute -right-4 shrink-0 text-ink-tertiary opacity-0 transition-opacity group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
+                      className="absolute -right-4 shrink-0 text-ink-tertiary opacity-0 transition-opacity group-hover/name:opacity-100 group-focus-visible/name:opacity-100 group-focus-within/name:opacity-100 touch:opacity-100"
                     />
                   </button>
                 ) : (

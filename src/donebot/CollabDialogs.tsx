@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { api } from "@/state/api";
 import { cn } from "@/lib/cn";
+import { randomUuid } from "@/lib/random-uuid";
 import type { DoneBotTeamCommand, DoneBotTeamIdentity, DoneBotTeamInvitation } from "../../shared/donebot-teams";
 import {
   collabPendingCount,
@@ -357,7 +358,7 @@ function AddTeamDialog({
           const clean = teamName.trim();
           if (!clean || !accountId) return;
           if (!createKey.current || createKey.current.name !== clean) {
-            createKey.current = { name: clean, key: crypto.randomUUID() };
+            createKey.current = { name: clean, key: randomUuid() };
           }
           void submitCommand({ action: "create", account_id: accountId, name: clean, key: createKey.current.key });
         }}

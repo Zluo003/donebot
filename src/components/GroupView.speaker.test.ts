@@ -57,7 +57,7 @@ describe("room speaker names", () => {
     ]);
     expect(html.match(/data-bot-color="blue"/g)).toHaveLength(1);
     expect(html.match(/data-bot-color="orange"/g)).toHaveLength(1);
-    expect(html).toContain('class="text-[11px] font-medium bot-identity" data-bot-color="blue"');
+    expect(html).toContain('class="text-[13px] font-semibold bot-identity" data-bot-color="blue"');
     expect(html).toContain(">Ada<");
     expect(html).toContain(">Kai<");
     expect(html).toContain("var(--identity-blue)");

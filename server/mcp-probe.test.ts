@@ -50,7 +50,8 @@ afterEach(() => { vi.useRealTimers(); });
 
 describe("custom MCP probe", () => {
   it("uses a writable default npm cache and preserves a per-server override", () => {
-    const inherited = { npm_config_cache: "/data/.npm/_cacache", PATH: "/bin" };
+    const unwritable = process.platform === "win32" ? "Z:\\definitely-missing\\.npm\\_cacache" : "/data/.npm/_cacache";
+    const inherited = { npm_config_cache: unwritable, PATH: "/bin" };
     const defaultEnv = probeEnvironment({ env: {} }, inherited);
     expect(defaultEnv.npm_config_cache).toContain("donebot-mcp-npm-");
     expect(defaultEnv.npm_config_cache).not.toBe(inherited.npm_config_cache);

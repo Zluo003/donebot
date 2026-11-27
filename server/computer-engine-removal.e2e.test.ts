@@ -81,6 +81,7 @@ function install(home: string, boatPort: () => number) {
     output = "";
     const proc = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT, env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),

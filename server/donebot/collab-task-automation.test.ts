@@ -925,10 +925,10 @@ describe("team task bot automation", () => {
 
     try {
       worker.kick();
-      await new Promise(resolve => setTimeout(resolve, 120));
+      await vi.waitFor(() => {
+        expect(startTurn).toHaveBeenCalledTimes(1);
+      }, { timeout: 5_000 });
       worker.setActive(false);
-
-      expect(startTurn).toHaveBeenCalledTimes(1);
       const threadMsgs = messages.get("t-chief") ?? [];
       // 1) User notification has NO broken /tmp attachments.
       const userMsg = threadMsgs.find(m => m.role === "user");

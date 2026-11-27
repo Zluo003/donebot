@@ -153,6 +153,7 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     HERMES_HOME: join(dataDir, ".hermes"),
     NODE_ENV: "test",
     DONEBOT_UPSTREAM_FIXTURE: "1",
+    DONEBOT_DISABLE_MODEL_MANIFEST_FETCH: "1",
     DONEBOT_DATA_DIR: dataDir,
     DONEBOT_PORT: String(port),
     DONEBOT_WEBHOOK_PORT: String(port + 1),

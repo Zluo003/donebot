@@ -184,7 +184,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
   const [membership, setMembership] = useState<Membership | null>(null);
   const [lists, setLists] = useState<SignInLists | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [base, setBase] = useState<string>(typeof window !== "undefined" ? window.location.origin : "");
+  const [base, setBase] = useState<string>(typeof window !== "undefined" ? window.location?.origin ?? "" : "");
   const [emailOffered, setEmailOffered] = useState<boolean | null>(null);
   const [draft, setDraft] = useState("");
   const [role, setRole] = useState<Role>("member");

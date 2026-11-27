@@ -355,7 +355,10 @@ export class RoutineManager {
     this.unreadable = read.state === "unreadable";
     // The file's path and a fixed reason only: its content never reaches the log.
     if (read.state === "unreadable" && !before) console.error(`routines: ${this.file} cannot be read (${read.reason}), so no routine runs until it can; it is left as it is, with a copy at ${keepUnreadableAside(this.file) ?? "no path (the copy failed)"}`);
-    if (read.state !== "ok") return read.state === "missing";
+    if (read.state !== "ok") {
+      if (read.state === "missing" && this.options.moveFrozen?.() !== true) this.noStartOffsChecked = true;
+      return read.state === "missing";
+    }
     ({ routines: this.routines, unloadedRoutines: this.unloadedRoutines, runs: this.runs, malformedAttachments: this.malformedAttachments, routineRequestReceipts: this.routineRequestReceipts,
       webhookRunReceipts: this.webhookRunReceipts, frozenPending: this.frozenPending, ownerNotices: this.ownerNotices, holds: this.holds,
       startupLaunchId: this.startupLaunchId, noStartOffsChecked: this.noStartOffsChecked } = read);

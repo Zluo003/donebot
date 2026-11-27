@@ -1,11 +1,14 @@
 // The real sidecar process and the real relay process, with a fake harness, driven by the reference phone.
 import { createHash, randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { SessionClosed } from "../../src/e2e/session.ts";
 import { attachmentByte } from "./fake-harness.ts";
 import { events, freePort, http, json, pairViaRelay, spawnRelay, startRig, waitFor, type RelayProcess, type Rig } from "./rig.ts";
 
+const HAS_RELAY = existsSync(fileURLToPath(new URL("../../../relay/src/main.ts", import.meta.url)));
 const LONG = process.env.DONEBOT_E2E_LONG === "1";
 let rig: Rig;
 let relay: RelayProcess;
@@ -14,6 +17,7 @@ let deviceToken = "";
 let deviceId = "";
 
 beforeAll(async () => {
+  if (!HAS_RELAY) return;
   relayPort = await freePort();
   rig = await startRig(async (publicKey) => {
     relay = await spawnRelay(publicKey, relayPort);
@@ -28,7 +32,7 @@ afterAll(async () => {
 
 const state = () => rig.control("GET", "/state");
 
-describe("the sidecar's end-to-end connection, through the real relay", () => {
+describe.skipIf(!HAS_RELAY)("the sidecar's end-to-end connection, through the real relay", () => {
   it("pairs through the relay with the pairing token, then serves the new device in the same session", async () => {
     const before = await rig.control("POST", "/pairing");
     expect(before.e2e.descriptor).toEqual({ v: 1, k: expect.any(String), h: rig.hid, r: ["relay1.openmausbot.com"] });

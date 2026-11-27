@@ -56,7 +56,9 @@ const answers: Record<string, unknown> = {
   "/api/instances": { instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test", snapshot: { state: "available" }, models: { options: [{ id: "m", label: "Model" }] } } as unknown as InstanceInfo] },
   "/api/config": { features: { showToolCalls: true } },
   "/api/routines": { routines: [], runs: [] },
+  "/api/notifications": { notifications: [] },
   "/api/webhooks": { webhooks: [], attempts: [] },
+  "/api/live/call": {},
 };
 
 const { StoreProvider, useStore } = await import("@/state/store");
@@ -76,7 +78,7 @@ function Shell() {
 let root: Root;
 let cursor = 0;
 const task = () => new Promise((resolve) => setTimeout(resolve, 0));
-const settle = async () => { for (let i = 0; i < 6; i++) await task(); };
+const settle = async () => { for (let i = 0; i < 12; i++) await task(); };
 const stream = () => FixtureEventSource.opened[0]!;
 const send = async (frame: object) => { stream().send(frame, `run:${++cursor}`); await settle(); };
 const runtime = (threadId: string, event: object) => send({ kind: "runtime", event: {

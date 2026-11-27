@@ -39,6 +39,5 @@ it("shows a session without the admin scope a plain sentence instead of the inst
 it("keeps them for an admin", () => {
   fixture.admin = true;
   const html = pages();
-  for (const shown of ["AI ACCOUNTS", "NEW BOT DEFAULTS", "CLOUD DESKTOPS", "USAGE TABLE"]) expect(html).toContain(shown);
-  expect(html).not.toContain("KEYS");
+  for (const shown of ["AI ACCOUNTS", "NEW BOT DEFAULTS", "KEYS", "CLOUD DESKTOPS", "USAGE TABLE"]) expect(html).toContain(shown);
 });

@@ -123,7 +123,7 @@ if (process.argv[2] === "exec") {
   });
   const textMode = process.env.FAKE_CODEX_TEXT_MODE ?? "ok";
   if (process.env.FAKE_CODEX_TEXT_LOG) {
-    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(?:HOME|CODEX_HOME|OPENAI_API_KEY|DONEBOT_.*)$/.test(key)));
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(?:HOME|CODEX_HOME|OPENAI_API_KEY|(?:OPENMAUSBOT|DONEBOT)_.*)$/.test(key)));
     appendFileSync(process.env.FAKE_CODEX_TEXT_LOG, `${JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), prompt, env })}\n`);
   }
   const event = (value: unknown) => process.stdout.write(`${JSON.stringify(value)}\n`);

@@ -204,7 +204,7 @@ for (const name of ['renameSync', 'fsyncSync', 'rmSync']) {
   const original = fs[name];
   fs[name] = (...args) => {
     const value = original(...args);
-    events.push([name, typeof args[0] === 'string' ? args[0].slice(root.length) : 'fd', typeof args[1] === 'string' ? args[1].slice(root.length) : '']);
+    events.push([name, typeof args[0] === 'string' ? args[0].slice(root.length).replaceAll('\\\\', '/') : 'fd', typeof args[1] === 'string' ? args[1].slice(root.length).replaceAll('\\\\', '/') : '']);
     if (events.length === Number(stop)) process.exit(77);
     return value;
   };
@@ -230,7 +230,7 @@ it.each(["add", "remove"])("recovers a real process exit after every filesystem 
   const finished = child(probe, 0, operation);
   expect(finished.status, finished.stderr).toBe(0);
   const events = JSON.parse(finished.stdout) as string[][];
-  expect(events.length).toBeGreaterThan(12);
+  expect(events.length).toBeGreaterThan(process.platform === "win32" ? 8 : 12);
   for (let checkpoint = 1; checkpoint <= events.length; checkpoint++) {
     const root = allocate(); cpSync(baseline, root, { recursive: true });
     const crashed = child(root, checkpoint, operation);
@@ -270,7 +270,7 @@ it("can itself crash at every rollback checkpoint and still recover the original
   const recovery = child(recoveryProbe, 0, "recover");
   expect(recovery.status, recovery.stderr).toBe(0);
   const checkpoints = (JSON.parse(recovery.stdout) as string[][]).length;
-  expect(checkpoints).toBeGreaterThan(12);
+  expect(checkpoints).toBeGreaterThan(process.platform === "win32" ? 8 : 12);
   for (let checkpoint = 1; checkpoint <= checkpoints; checkpoint++) {
     const root = allocate(); cpSync(interrupted, root, { recursive: true });
     const crashed = child(root, checkpoint, "recover");

@@ -94,6 +94,7 @@ posixOnly("a steered message does not lift the unattended mark on its own", () =
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         HOME: home,
         USERPROFILE: home,

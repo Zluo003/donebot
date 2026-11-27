@@ -127,6 +127,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
     env: {
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", DONEBOT_BOT_BOX: "0",
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: dataDir, DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1),
       DONEBOT_CLOUD_ROLE: "home", DONEBOT_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", DONEBOT_CLOUD_ADMIN_URL: "https://cloud.example.test",

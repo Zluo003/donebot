@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, InstanceInfo, Message } from "@/state/store";
+import { DONEBOT_CLOUD_DESKTOP_ENABLED } from "@/donebot/services";
 import { failedTurnCause, failedTurnTool } from "../../shared/failed-turn";
 import { placeRowText, type PlaceRow } from "../../shared/place-view";
 
@@ -51,7 +52,7 @@ beforeEach(() => {
   fixture.bots = [{ id: "scout", name: "Scout", computer: "cloud", modelSelection: { instanceId: "claude", model: "m" } } as Bot];
 });
 
-describe("J11: a failed place's row", () => {
+describe.skipIf(!DONEBOT_CLOUD_DESKTOP_ENABLED)("J11: a failed place's row", () => {
   it("says no hours are left in one line, with one button: See your plan", () => {
     const { html, buttons } = show(stored(hours), vi.fn());
     expect(html).toContain("This month&#x27;s 50 cloud desktop hours are used up. They come back on 1 November.");

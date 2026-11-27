@@ -289,7 +289,7 @@ export function OpcSkillStudioModal({
                           disabled={busy !== null}
                           onClick={() => void handleDeleteSnapshot(snap)}
                           aria-label={`删除快照「${snap.label}」`}
-                          className="rounded p-1 text-ink-tertiary opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100 focus-visible:opacity-100"
+                          className="rounded p-1 text-ink-tertiary opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100 focus-visible:opacity-100 touch:opacity-100"
                         >
                           <Trash2 size={13} />
                         </button>

@@ -80,6 +80,7 @@ it("retains empty teams, moves existing bots, and keeps legacy imports additive 
       if (process.env[key]) env[key] = process.env[key];
     }
     Object.assign(env, {
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
       HOME: dataDir, USERPROFILE: dataDir, DONEBOT_DATA_DIR: dataDir,
       APPDATA: join(dataDir, "AppData", "Roaming"), LOCALAPPDATA: join(dataDir, "AppData", "Local"),
       XDG_CONFIG_HOME: join(dataDir, ".config"), XDG_CACHE_HOME: join(dataDir, ".cache"),

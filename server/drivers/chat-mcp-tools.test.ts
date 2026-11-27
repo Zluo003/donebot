@@ -43,7 +43,8 @@ const schema = { type: "object", properties: { value: { type: "string" } }, requ
 
 describe("configured MCP environment", () => {
   it("replaces an inherited npm cache with a writable default and preserves an explicit override", () => {
-    const inherited = { npm_config_cache: "/data/.npm/_cacache", PATH: "/bin" };
+    const unwritable = process.platform === "win32" ? "Z:\\definitely-missing\\.npm\\_cacache" : "/data/.npm/_cacache";
+    const inherited = { npm_config_cache: unwritable, PATH: "/bin" };
     const env = chatMcpEnvironment({}, inherited);
     expect(env.npm_config_cache).toContain("donebot-mcp-npm-");
     expect(env.npm_config_cache).not.toBe(inherited.npm_config_cache);

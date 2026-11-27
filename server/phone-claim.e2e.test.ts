@@ -124,6 +124,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
     cwd: ROOT, env: {
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
       PATH: process.env.PATH, HOME: fixtureHome, USERPROFILE: fixtureHome, DONEBOT_DATA_DIR: data,
       APPDATA: join(fixtureHome, "appdata"), LOCALAPPDATA: join(fixtureHome, "localappdata"),
       TEMP: fixtureHome, TMP: fixtureHome, TMPDIR: fixtureHome,

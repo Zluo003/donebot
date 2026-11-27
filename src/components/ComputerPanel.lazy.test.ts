@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { AppState, Bot, InstanceInfo } from "@/state/store";
+import { DONEBOT_CLOUD_DESKTOP_ENABLED } from "@/donebot/services";
 
 const fixture = vi.hoisted(() => ({
   boatState: null as string | null,
@@ -109,7 +110,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("Computer panel on Cloud computer", () => {
+describe.skipIf(!DONEBOT_CLOUD_DESKTOP_ENABLED)("Computer panel on Cloud computer", () => {
   it("opening it before the bot has a cloud computer creates nothing and says when it starts", async () => {
     await open(makeBot({ computer: "cloud" }));
     expect(text()).toContain("Scout gets its own cloud desktop from Boat the first time a task needs one. The first start takes about a minute.");

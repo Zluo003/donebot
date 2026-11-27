@@ -73,7 +73,7 @@ function profiles(): Record<string, Record<string, string>> {
 
 const PROFILES = profiles();
 /** Refused by the server to every bot that is not a Chief of Staff. */
-const CHIEF_ONLY_TOOLS = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"];
+const CHIEF_ONLY_TOOLS = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "manage_department_instructions", "retry_thread"];
 /** The profile that mounts the most: its bridged list is checked in whole. */
 const FULL = "skills+shared+voice+x+team+images";
 
@@ -82,34 +82,34 @@ const FULL = "skills+shared+voice+x+team+images";
  * either: lock a saving in by lowering the number. A Chief's list is longer
  * than another bot's only by the Chief-only names in find_tool's description. */
 const BUDGET_BASELINE: Record<string, number> = {
-  "default": 17964,
-  "voice": 18839,
-  "shared": 18004,
-  "shared+voice": 18879,
-  "skills": 18017,
-  "skills+voice": 18892,
-  "skills+shared": 18057,
-  "skills+shared+voice": 18932,
-  "non-chief": 17847,
-  "voice+non-chief": 18628,
-  "shared+non-chief": 17887,
-  "shared+voice+non-chief": 18668,
-  "skills+non-chief": 17900,
-  "skills+voice+non-chief": 18681,
-  "skills+shared+non-chief": 17940,
-  "skills+shared+voice+non-chief": 18721,
-  "skills+shared+voice+cloud-home": 18948,
-  "skills+shared+voice+non-chief+cloud-home": 18737,
-  "skills+shared+voice+x": 19011,
-  "skills+shared+voice+x+team": 19011,
-  "default+legacy-switches": 17964,
-  "default+mausbot": 18016,
-  "skills+shared+voice+mausbot": 18984,
-  "default+no-computer-pick": 16752,
-  "default+room": 17010,
-  "non-chief+room": 16893,
-  "skills+shared+voice+x+team+images": 18933,
-  "default+images": 17980,
+  "default": 18275,
+  "voice": 19056,
+  "shared": 18315,
+  "shared+voice": 19096,
+  "skills": 18328,
+  "skills+voice": 19109,
+  "skills+shared": 18368,
+  "skills+shared+voice": 19149,
+  "non-chief": 18126,
+  "voice+non-chief": 18907,
+  "shared+non-chief": 18166,
+  "shared+voice+non-chief": 18947,
+  "skills+non-chief": 18179,
+  "skills+voice+non-chief": 18960,
+  "skills+shared+non-chief": 18219,
+  "skills+shared+voice+non-chief": 19000,
+  "skills+shared+voice+cloud-home": 19165,
+  "skills+shared+voice+non-chief+cloud-home": 19016,
+  "skills+shared+voice+x": 19210,
+  "skills+shared+voice+x+team": 19210,
+  "default+legacy-switches": 18275,
+  "default+mausbot": 18327,
+  "skills+shared+voice+mausbot": 19201,
+  "default+no-computer-pick": 17071,
+  "default+room": 17015,
+  "non-chief+room": 16866,
+  "skills+shared+voice+x+team+images": 19226,
+  "default+images": 18291,
 };
 
 type RpcAnswer = { id: number; result?: { tools?: unknown[]; content?: Array<{ text: string }>; isError?: boolean }; error?: { code: number; message: string } };

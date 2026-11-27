@@ -109,7 +109,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-ac
     };
     this.child = spawn(process.execPath, ["--import", prelude, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: { PATH: process.env.PATH, HOME: this.home, USERPROFILE: this.home, DONEBOT_DATA_DIR: this.dataDir, DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1), ...roleEnv, ...this.extraEnv },
+      env: { NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", DONEBOT_BOT_BOX: "0", PATH: process.env.PATH, HOME: this.home, USERPROFILE: this.home, DONEBOT_DATA_DIR: this.dataDir, DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1), ...roleEnv, ...this.extraEnv },
       stdio: ["ignore", "pipe", "pipe"],
     });
     this.child.stdout?.on("data", (chunk) => { this.log += chunk; });

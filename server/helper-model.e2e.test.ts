@@ -61,7 +61,7 @@ async function boot(extraConfig: Record<string, unknown>) {
     ...extraConfig,
   }));
   let stderr = "";
-  const env: NodeJS.ProcessEnv = { HOME: home, USERPROFILE: home, DONEBOT_PORT: String(port), FAKE_CLAUDE_TEXT_ROUTES: routes };
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", HOME: home, USERPROFILE: home, DONEBOT_PORT: String(port), FAKE_CLAUDE_TEXT_ROUTES: routes };
   if (process.env.PATH) env.PATH = process.env.PATH;
   const child: ChildProcess = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], { cwd: join(SERVER_DIR, ".."), env, stdio: ["ignore", "pipe", "pipe"] });
   child.stderr!.on("data", (chunk) => (stderr += chunk));

@@ -740,7 +740,7 @@ type CardState = { status?: string; stopped?: boolean; resumed?: boolean };
 type StallFixture = {
   dataDir: string;
   clive: { id: string };
-  roots(): Array<{ status: string; outcome?: string; executions: number; cards?: string[] }>;
+  roots(): Array<{ assignee?: { botId?: string }; status: string; outcome?: string; executions: number; cards?: string[] }>;
   messages(threadId: string): Promise<Array<{ id: string; kind: string; tool?: { name: string }; secret?: CardState; connector?: CardState; signIn?: CardState }>>;
   turns(botId: string): Array<{ planKey?: string }>;
   open(name: string): void;
@@ -749,12 +749,14 @@ type StallFixture = {
   said(threadId: string, text: string): Promise<number>;
 };
 
+const cliveRoots = (f: StallFixture) => f.roots().filter((row) => row.assignee?.botId === f.clive.id);
+
 const stallOverCards = async (f: StallFixture, job: string, ids: string[]) => {
   const marker = join(f.dataDir, "stall-turns");
   writeFileSync(marker, "now");
-  try { await expect.poll(() => f.roots()[0]?.status, { timeout: 20_000 }).not.toBe("running"); } finally { rmSync(marker, { force: true }); }
-  expect(f.roots()[0]).toMatchObject({ status: "failed", outcome: "stalled", executions: 1 });
-  expect(f.roots()[0]!.cards).toBeUndefined();
+  try { await expect.poll(() => cliveRoots(f)[0]?.status, { timeout: 20_000 }).not.toBe("running"); } finally { rmSync(marker, { force: true }); }
+  expect(cliveRoots(f)[0]).toMatchObject({ status: "failed", outcome: "stalled", executions: 1 });
+  expect(cliveRoots(f)[0]!.cards).toBeUndefined();
   expect((await f.messages(job)).filter((message) => message.kind === "activity" && message.tool?.name.startsWith("error:")).map((message) => message.tool!.name))
     .toEqual(["error: no activity for 20 minutes — the turn was stopped"]);
   const cards = (await f.messages(job)).filter((message) => ids.includes(message.id));
@@ -765,8 +767,8 @@ const answerStartsNothing = async (f: StallFixture, job: string) => {
   f.open("c0");
   f.script(f.clive.id, { key: "C-AFTER", match: ["AFTER-ANSWER"], reply: "AFTER-ANSWER-DONE: hello back." });
   await f.say(f.clive.id, job, "AFTER-ANSWER: hello after the card was answered.");
-  await expect.poll(() => f.roots().map((row) => row.status), { timeout: 30_000 }).toEqual(["failed", "completed"]);
-  expect(f.roots().map((row) => [row.outcome, row.executions])).toEqual([["stalled", 1], ["done", 1]]);
+  await expect.poll(() => cliveRoots(f).map((row) => row.status), { timeout: 30_000 }).toEqual(["failed", "completed"]);
+  expect(cliveRoots(f).map((row) => [row.outcome, row.executions])).toEqual([["stalled", 1], ["done", 1]]);
   expect(await f.said(job, "AFTER-ANSWER-DONE")).toBe(1);
   expect(f.turns(f.clive.id).map((record) => record.planKey)).toEqual(["C-AFTER"]);
 };

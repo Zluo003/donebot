@@ -606,7 +606,7 @@ export function OpcWorkflowCanvasEditor({
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="输入工作流名称（如：每日爆款内容流水线）"
-            className="h-8 w-[240px] rounded-lg border border-transparent bg-transparent px-2 text-[14px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink-tertiary hover:bg-ink/[0.04] focus:border-hairline/80 focus:bg-inset sm:w-[300px]"
+            className="h-8 w-[240px] rounded-lg border border-transparent bg-transparent px-2 text-[14px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink-tertiary hover:bg-ink/[0.04] focus:border-accent-border focus:bg-inset sm:w-[300px]"
           />
           <span className="hidden text-[12px] tabular-nums text-ink-tertiary md:inline">
             {nodes.length} 节点 · {edges.length} 连线
@@ -870,7 +870,7 @@ export function OpcWorkflowCanvasEditor({
                         e.stopPropagation();
                         addNodeAfter(node.id);
                       }}
-                      className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] text-ink-tertiary opacity-0 transition-opacity hover:bg-ink/[0.07] hover:text-ink group-hover:opacity-100"
+                      className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] text-ink-tertiary opacity-0 transition-opacity hover:bg-ink/[0.07] hover:text-ink group-hover:opacity-100 focus-visible:opacity-100 touch:opacity-100"
                     >
                       <Plus size={10} /> 下一棒
                     </button>

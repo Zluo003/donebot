@@ -124,6 +124,7 @@ posixOnly("Live call e2e", () => {
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         HOME: home,
         USERPROFILE: home,
@@ -673,6 +674,7 @@ posixOnly("Live call on the person's Cloud", () => {
     child = spawn(process.execPath, ["--import", loopbackOnly, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1", DONEBOT_BOT_BOX: "0",
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: dataDir, DONEBOT_STATIC_DIR: join(home, "web"),
         DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1),
@@ -786,6 +788,7 @@ posixOnly("Live calls for everyone, with the person's own OpenAI key", () => {
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
+        NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         HOME: home, USERPROFILE: home, DONEBOT_DATA_DIR: dataDir,
         DONEBOT_PORT: String(port), DONEBOT_WEBHOOK_PORT: String(port + 1),

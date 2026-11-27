@@ -28,6 +28,7 @@ it("boots, starts an interrupted routine once more, and reports it back to its s
       if (process.env[key]) env[key] = process.env[key];
     }
     Object.assign(env, {
+      NODE_ENV: "test", DONEBOT_UPSTREAM_FIXTURE: "1",
       HOME: dataDir, USERPROFILE: dataDir, DONEBOT_DATA_DIR: dataDir,
       APPDATA: join(dataDir, "AppData", "Roaming"), LOCALAPPDATA: join(dataDir, "AppData", "Local"),
       XDG_CONFIG_HOME: join(dataDir, ".config"), XDG_CACHE_HOME: join(dataDir, ".cache"),

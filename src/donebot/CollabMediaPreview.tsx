@@ -75,7 +75,7 @@ export function CollabMediaBubble({
             preload="metadata"
             muted
             playsInline
-            className="block max-h-64 min-h-[120px] min-w-[200px] max-w-[min(300px,68vw)] object-cover opacity-90 transition-opacity group-hover:opacity-100"
+            className="block max-h-64 min-h-[120px] min-w-[200px] max-w-[min(300px,68vw)] object-cover opacity-90 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100"
           />
           <span
             aria-hidden="true"
@@ -103,7 +103,7 @@ export function CollabMediaBubble({
           className={cn(
             "group flex w-[min(280px,68vw)] items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
             mine
-              ? "bg-bubble-user text-bubble-user-ink hover:brightness-105"
+              ? "bg-bubble-user text-ink hover:brightness-105"
               : "bg-card text-ink ring-1 ring-inset ring-ink/[0.08] hover:bg-raised/80",
           )}
         >
@@ -132,7 +132,7 @@ export function CollabMediaBubble({
           className={cn(
             "whitespace-pre-wrap break-words rounded-[18px] px-3.5 py-2 text-[14px] leading-relaxed",
             mine
-              ? "rounded-br-[6px] bg-bubble-user text-bubble-user-ink"
+              ? "rounded-br-[6px] bg-bubble-user text-ink"
               : "rounded-bl-[6px] bg-card text-ink ring-1 ring-inset ring-ink/[0.07]",
           )}
         >

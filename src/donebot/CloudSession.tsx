@@ -22,7 +22,7 @@ export function DoneBotCloudSessionEnded() {
   };
   useEffect(() => { void restore(); }, [restore]);
   return <main className="flex min-h-screen items-center justify-center bg-app p-6 text-ink">
-    <section className="max-w-md rounded-2xl border border-hairline bg-surface p-8 text-center">
+    <section className="max-w-md rounded-2xl border border-hairline bg-panel p-8 text-center">
       <h1 className="text-xl font-semibold">{connecting ? "正在重新连接 Cloud…" : "Cloud 会话已结束"}</h1>
       <p className="mt-3 text-sm text-ink-secondary">{error || (connecting ? "正在恢复你的云端工作空间，也可以先返回本地对话。" : "聊天记录仍保留在云端，可以稍后重新连接。")}</p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">

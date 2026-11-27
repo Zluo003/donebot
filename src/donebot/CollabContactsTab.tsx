@@ -13,6 +13,7 @@ import {
 import { api } from "@/state/api";
 import { CommandLine } from "@/components/SettingsPrimitives";
 import { cn } from "@/lib/cn";
+import { randomUuid } from "@/lib/random-uuid";
 import type { DoneBotTeamCommand, DoneBotTeamInvitation } from "../../shared/donebot-teams";
 import { CollabAvatar, CollabTeamBadge } from "./CollabAvatar";
 import { CollabSelect } from "./CollabSelect";
@@ -276,7 +277,7 @@ export function CollabContactsTab({
               onSubmit={e => {
                 e.preventDefault();
                 const clean = teamName.trim();
-                if (!createKey.current || createKey.current.name !== clean) createKey.current = { name: clean, key: crypto.randomUUID() };
+                if (!createKey.current || createKey.current.name !== clean) createKey.current = { name: clean, key: randomUuid() };
                 void mutateTeam({ action: "create", account_id: overview.identity.account_id, name: clean, key: createKey.current.key });
               }}
             >

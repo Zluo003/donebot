@@ -50,7 +50,7 @@ describe("room routing with picks", () => {
 });
 
 describe("a bot's or another app's room line that tags a name two bots share", () => {
-  const ids = `Quill, Analyst (id ${analyst.id}); Quill, Chief of Staff (id ${chief.id})`;
+  const ids = `Quill, Analyst (id ${analyst.id}); Quill, System Coordinator (id ${chief.id})`;
 
   it("is refused with each bot's role and id, and how to send it again", () => {
     expect(sameNameRefusalForBots("@Quill check this", room, undefined, "Launch", "posted")).toBe(

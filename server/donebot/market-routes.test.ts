@@ -15,6 +15,7 @@ import {
   runWithMarketBot,
 } from "./market-installs.ts";
 import { createDoneBotMarketRoutes } from "./market-routes.ts";
+import { DoneBotOrgWorkflowStore } from "./opc-org-workflow.ts";
 import { createDoneBotAccountRoutes } from "./routes.ts";
 
 const tempDirs: string[] = [];
@@ -48,19 +49,23 @@ function makeBot(overrides: Partial<BotRecord> = {}): BotRecord {
 
 function makeStore(initialBots: BotRecord[]): Store {
   const bots = [...initialBots];
+  const sections: string[] = [...new Set(initialBots.map(b => b.section?.trim()).filter((s): s is string => Boolean(s)))];
   let seq = 10;
   return {
     get bots() { return bots; },
     get groups() { return []; },
-    get sections() { return []; },
+    get sections() { return sections; },
     bot(id: string) { return bots.find(b => b.id === id); },
     deleteBot(id: string) {
       const idx = bots.findIndex(b => b.id === id);
       if (idx >= 0) bots.splice(idx, 1);
     },
     createBot(input: Partial<BotRecord>) {
+      const cleanSection = input.section?.trim() || undefined;
+      if (cleanSection && !sections.includes(cleanSection)) sections.push(cleanSection);
       const created = makeBot({
         ...input,
+        section: cleanSection,
         id: `installed-${++seq}`,
         threadId: `thread-${seq}`,
       });
@@ -73,11 +78,19 @@ function makeStore(initialBots: BotRecord[]): Store {
       bots[idx] = { ...bots[idx]!, ...patch };
       return bots[idx];
     },
-    setChiefOfStaff(id: string, on: boolean) {
-      const idx = bots.findIndex(b => b.id === id);
-      if (idx >= 0) bots[idx] = { ...bots[idx]!, chiefOfStaff: on };
+    setChiefOfStaff(id: string, section?: string | null) {
+      const selected = bots.find(b => b.id === id);
+      if (!selected) return;
+      const scope = selected.section?.trim() || (section?.trim() ?? "");
+      for (const candidate of bots) {
+        if ((candidate.section?.trim() || "") !== scope) continue;
+        candidate.chiefOfStaff = candidate.id === id;
+      }
     },
-    addSection() {},
+    addSection(name?: string) {
+      const clean = name?.trim();
+      if (clean && !sections.includes(clean)) sections.push(clean);
+    },
   } as unknown as Store;
 }
 
@@ -762,5 +775,177 @@ describe("createDoneBotMarketRoutes", () => {
       "references/style/pacing.md",
       "references/outline.md",
     ]);
+  });
+
+  it("installs a single market bot directly into General (under the System Coordinator) without creating a named department or displacing the coordinator, while studio packs keep their department", async () => {
+    const chief = makeBot({
+      id: "bot-chief",
+      name: "多宝",
+      chiefOfStaff: true,
+      section: undefined,
+      soul: "你是全局唯一的总协调机器人，负责通用部门与跨部门任务统筹。",
+    });
+    const sourceLead = makeBot({
+      id: "bot-source-lead",
+      name: "抖音猎手",
+      chiefOfStaff: true,
+      section: "增长部",
+      soul: "你是抖音精准获客与短视频增长专家，负责拆解选题与评论区线索跟进。",
+    });
+    const deptPeer = makeBot({
+      id: "bot-dept-peer",
+      name: "剪辑助手",
+      section: "增长部",
+      soul: "你是短视频后期剪辑与字幕排版专家，负责将文案脚本高效落地成片。",
+    });
+    const store = makeStore([chief, sourceLead, deptPeer]);
+    const marketInstalls = new DoneBotMarketInstallStore(tempFile("single-vs-studio-installs.json"));
+    const orgStore = new DoneBotOrgWorkflowStore(tempFile("single-vs-studio-org.json"));
+    const singleListingId = "77777777-7777-4777-8777-777777777777";
+    const studioListingId = "88888888-8888-4888-8888-888888888888";
+    const publishedPackages = new Map<string, Record<string, unknown>>();
+
+    const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/donebot/market/bots") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        const id = body.listing_type === "studio" ? studioListingId : singleListingId;
+        publishedPackages.set(id, body);
+        return Response.json({
+          code: 0,
+          data: { id, listing_type: body.listing_type, name: body.name, status: "published", latest_version: 1 },
+        });
+      }
+      if (url.endsWith(`/api/v1/donebot/market/bots/${singleListingId}/install`) && init?.method === "POST") {
+        const rawPkg = structuredClone(publishedPackages.get(singleListingId)!.package) as {
+          package: { team?: { name: string; brief?: string; leader?: string }; agents: Array<{ key: string }> };
+        };
+        // Simulate an older market listing whose exported single-bot package carried team.brief, team.leader, and blueprint.
+        rawPkg.package.team = {
+          name: "抖音猎手",
+          brief: "旧包残留的部门说明不应写入通用部门或新建部门",
+          leader: rawPkg.package.agents[0]!.key,
+        };
+        return Response.json({
+          code: 0,
+          data: {
+            install_id: "inst-single-1",
+            listing_id: singleListingId,
+            listing_type: "bot",
+            release_id: "rel-single-1",
+            version: 1,
+            name: "抖音猎手",
+            install_token: "v1.single.token",
+            expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+            package: {
+              ...rawPkg,
+              donebotOrgBlueprint: {
+                version: 1,
+                enforcementMode: "enforced",
+                allowChiefCrossDispatch: true,
+                entries: [{ slotIndex: 0, reportsToSlot: null }],
+              },
+            },
+            skills: [],
+            soul_text: String(publishedPackages.get(singleListingId)!.soul_text ?? ""),
+          },
+        });
+      }
+      if (url.endsWith(`/api/v1/donebot/market/bots/${studioListingId}/install`) && init?.method === "POST") {
+        return Response.json({
+          code: 0,
+          data: {
+            install_id: "inst-studio-1",
+            listing_id: studioListingId,
+            listing_type: "studio",
+            release_id: "rel-studio-1",
+            version: 1,
+            name: "增长突击部",
+            install_token: "v1.studio.token",
+            expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+            package: publishedPackages.get(studioListingId)!.package,
+            skills: [],
+            soul_text: String(publishedPackages.get(studioListingId)!.soul_text ?? ""),
+          },
+        });
+      }
+      return Response.json({ code: 0, data: {} });
+    }) as unknown as typeof fetch;
+
+    const writeBrief = vi.fn();
+    const broadcasts: Array<{ kind: string }> = [];
+    const packageImportDeps = (): PackageImportDeps => ({
+      store,
+      routines: { create: vi.fn(), remove: vi.fn() },
+      skills: {
+        install: () => ({ name: "ok", description: "", source: "package", enabled: false }) as never,
+        setEnabled: () => ({ name: "ok", description: "", source: "package", enabled: true }) as never,
+      },
+      memory: { writeIndex: vi.fn(), writeTopic: vi.fn() },
+      mcp: { servers: () => ({}), refusal: () => undefined, persist: vi.fn() },
+      sections: { writeBrief },
+      images: { save: () => "/img.png" },
+      defaultSelection: () => ({ instanceId: "donebot", model: "gpt-5.4" }),
+    });
+
+    const handler = createDoneBotMarketRoutes({
+      gateway: mockGateway(fetcher),
+      store,
+      marketInstalls,
+      listBotSkills: () => [],
+      collectTeamSkills: () => ({ ok: true, all: true, skillsByBot: new Map(), skipped: [], available: [] }),
+      defaultSelection: async () => ({ instanceId: "donebot", model: "gpt-5.4" }),
+      packageImportDeps,
+      broadcast: (frame) => broadcasts.push(frame as { kind: string }),
+      publicBot: (b: BotRecord) => b,
+      listSections: () => [...store.sections],
+      orgStore,
+    });
+
+    // 1. Publish a single bot that happens to be a department chief locally -> exported package must not mark leader.
+    const pubSingle = await callRoute(handler, "POST", "/api/donebot/market/publish", {
+      listing_type: "bot",
+      bot_id: sourceLead.id,
+      category_id: 1,
+      name: "抖音猎手",
+      tagline: "精准挖掘抖音行业客户并产出转化话术",
+    });
+    expect(pubSingle.status, JSON.stringify(pubSingle.payload)).toBe(200);
+    const exportedSinglePkg = publishedPackages.get(singleListingId)!.package as { package: { team?: { leader?: string } } };
+    expect(exportedSinglePkg.package.team?.leader).toBeUndefined();
+
+    // 2. Install single bot -> must land in General (section undefined), under System Coordinator, with NO new section.
+    const sectionsBeforeSingle = [...store.sections];
+    const instSingle = await callRoute(handler, "POST", `/api/donebot/market/bots/${singleListingId}/install`, {});
+    expect(instSingle.status, JSON.stringify(instSingle.payload)).toBe(200);
+    const singleBotId = (instSingle.payload as { bot_id: string }).bot_id;
+    const installedSingle = store.bot(singleBotId)!;
+    expect(installedSingle.section).toBeUndefined();
+    expect(installedSingle.chiefOfStaff).toBeFalsy();
+    expect(store.bot(chief.id)!.chiefOfStaff).toBe(true);
+    expect(store.sections).toEqual(sectionsBeforeSingle);
+    expect(writeBrief).not.toHaveBeenCalled();
+    expect(broadcasts.some(b => b.kind === "sections")).toBe(false);
+    const orgAfterSingle = orgStore.getOrgChart(store.bots);
+    expect(orgAfterSingle.nodes[singleBotId]?.reportsToBotId).toBe(chief.id);
+    expect(orgAfterSingle.enforcementMode).toBe("free");
+
+    // 3. Publish & install a multi-bot department pack -> still creates its dedicated department section.
+    const pubStudio = await callRoute(handler, "POST", "/api/donebot/market/publish-department", {
+      team: "增长部",
+      category_id: 1,
+      name: "增长突击部",
+      tagline: "抖音猎手与剪辑助手协同获客部门",
+    });
+    expect(pubStudio.status, JSON.stringify(pubStudio.payload)).toBe(200);
+    const instStudio = await callRoute(handler, "POST", `/api/donebot/market/bots/${studioListingId}/install`, {});
+    expect(instStudio.status, JSON.stringify(instStudio.payload)).toBe(200);
+    const studioBotIds = (instStudio.payload as { bot_ids: string[] }).bot_ids;
+    expect(studioBotIds).toHaveLength(2);
+    const studioSection = store.bot(studioBotIds[0]!)!.section;
+    expect(studioSection).toBeTruthy();
+    expect(store.bot(studioBotIds[1]!)!.section).toBe(studioSection);
+    expect(store.sections).toContain(studioSection!);
+    expect(broadcasts.some(b => b.kind === "sections")).toBe(true);
   });
 });

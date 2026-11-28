@@ -141,6 +141,31 @@ function enableInstalledSkills(
   return enabled;
 }
 
+function singleBotImportDeps(importDeps: PackageImportDeps): PackageImportDeps {
+  return {
+    ...importDeps,
+    store: new Proxy(importDeps.store, {
+      get(target, prop) {
+        if (prop === "createBot") {
+          return (input: Parameters<Store["createBot"]>[0], opts?: Parameters<Store["createBot"]>[1]) =>
+            target.createBot({ ...input, section: undefined }, opts);
+        }
+        if (prop === "createGroup") {
+          return (
+            name: string,
+            memberIds: string[],
+            dm?: boolean,
+            _section?: string,
+            setup?: Parameters<Store["createGroup"]>[4],
+          ) => target.createGroup(name, memberIds, dm, undefined, setup);
+        }
+        const value = Reflect.get(target, prop, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }),
+  };
+}
+
 export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHandler {
   const client = createDoneBotMarketClient(() => deps.gateway.collabCtx());
 
@@ -313,6 +338,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           : [{
             ...primaryBot,
             section: "",
+            chiefOfStaff: false,
             name: input.name,
             title: input.tagline,
             description: input.description || input.tagline,
@@ -435,7 +461,11 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           summary: input.description || input.tagline,
           notes: input.changelog || undefined,
           authorName: identity.email || undefined,
-          bots: deptBots.map(bot => ({ ...bot, soul: (bot.soul ?? "").trim() })),
+          bots: deptBots.map(bot => ({
+            ...bot,
+            ...(isStudio ? {} : { chiefOfStaff: false }),
+            soul: (bot.soul ?? "").trim(),
+          })),
           groups: deps.store.groups ?? [],
           routines: input.include_routines ? (deps.listRoutines?.() ?? []) : [],
           brief,
@@ -479,7 +509,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           ...(primaryBot.mascotFaceColor ? { mascot_face_color: primaryBot.mascotFaceColor } : {}),
           ...(primaryBot.mascotExpression ? { mascot_expression: primaryBot.mascotExpression } : {}),
         };
-        const orgBlueprint = deps.orgStore ? deps.orgStore.exportOrgBlueprint(deptBots.map(b => b.id)) : undefined;
+        const orgBlueprint = isStudio && deps.orgStore ? deps.orgStore.exportOrgBlueprint(deptBots.map(b => b.id)) : undefined;
         const packagePayload = orgBlueprint
           ? { ...(exported.document as unknown as Record<string, unknown>), donebotOrgBlueprint: orgBlueprint }
           : exported.document;
@@ -525,8 +555,19 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           rawPackage = cloned;
         }
         const parsedDoc = parsePackageDocument(rawPackage, { trust: "file" });
-        const importDeps = deps.packageImportDeps(await deps.defaultSelection());
-        const imported = importPackageDocument(parsedDoc, { mode: "add", trust: "file" }, importDeps);
+        const isSingleBot = fetched.listing_type !== "studio" && parsedDoc.package.agents.length === 1;
+        const docToImport = isSingleBot && parsedDoc.package.team
+          ? {
+            ...parsedDoc,
+            package: {
+              ...parsedDoc.package,
+              team: { name: parsedDoc.package.team.name },
+            },
+          }
+          : parsedDoc;
+        const baseImportDeps = deps.packageImportDeps(await deps.defaultSelection());
+        const importDeps = isSingleBot ? singleBotImportDeps(baseImportDeps) : baseImportDeps;
+        const imported = importPackageDocument(docToImport, { mode: "add", trust: "file" }, importDeps);
         if (imported.alreadyAdded || imported.bots.length === 0) {
           return json(res, 400, { error: "未能从广场模板创建本地 Bot，请稍后重试。" });
         }
@@ -553,8 +594,10 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
           };
         });
         deps.marketInstalls.setMany(installRecords);
-        if (orgBlueprint && deps.orgStore) {
+        if (!isSingleBot && orgBlueprint && deps.orgStore) {
           deps.orgStore.importOrgBlueprint(imported.bots.map(b => b.id), orgBlueprint);
+        } else if (isSingleBot && deps.orgStore) {
+          deps.orgStore.getOrgChart(deps.store.bots);
         }
         const installRecord = installRecords[0]!;
         const enabledSkills = [...enabledSkillsSet];
@@ -571,7 +614,7 @@ export function createDoneBotMarketRoutes(deps: DoneBotMarketRouteDeps): RouteHa
             deps.broadcast({ kind: "group", group: deps.publicGroup(group) });
           }
         }
-        if (imported.section && deps.listSections) {
+        if (!isSingleBot && imported.section && deps.listSections) {
           deps.broadcast({ kind: "sections", sections: deps.listSections() });
         }
         const fullCreated = deps.store.bot(created.id) ?? created;

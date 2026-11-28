@@ -63,6 +63,7 @@ beforeEach(() => {
     enabled: false,
     replyMode: "tts",
     voiceMode: false,
+    wakeWord: "",
     autoAnnounceReports: true,
     hideInFullscreen: true,
     muted: false,
@@ -153,5 +154,47 @@ describe("DesktopPetSettings", () => {
     expect(host.textContent).toContain("已启用云端实时语音，支持播报中随时插话打断");
     // Chief currently holds legacy "nova", so fallback hint is shown smoothly without breaking select.
     expect(host.textContent).toContain("nova（清亮女声）");
+  });
+
+  it("lets the user save a custom wake word, validates minimum length, and restores default", async () => {
+    state = { ...state, enabled: true, voiceMode: true };
+    await mount();
+
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="自定义唤醒词"]');
+    expect(input).not.toBeNull();
+    expect(input!.value).toBe("");
+
+    const setInputValue = async (val: string) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      await act(async () => {
+        setter.call(input!, val);
+        input!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+
+    const findButton = (label: string) =>
+      Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((btn) => btn.textContent?.trim() === label);
+
+    // 1-char wake word is rejected with a friendly hint and not persisted.
+    await setInputValue("宝");
+    await act(async () => findButton("保存")!.click());
+    expect(bridge.set).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("唤醒词至少需要 2 个字");
+
+    // Valid custom wake word saves and immediately updates the wake-word label.
+    await setInputValue("小宝同学");
+    await act(async () => findButton("保存")!.click());
+    await act(async () => { await Promise.resolve(); });
+    expect(bridge.set).toHaveBeenCalledWith({ wakeWord: "小宝同学" });
+    expect(host.textContent).toContain("语音唤醒（喊「小宝同学」）");
+    expect(host.textContent).toContain("已保存，现在直接喊「小宝同学」即可唤醒。");
+
+    // Resetting restores the default wake phrase.
+    const resetBtn = findButton("恢复默认");
+    expect(resetBtn).toBeDefined();
+    await act(async () => resetBtn!.click());
+    await act(async () => { await Promise.resolve(); });
+    expect(bridge.set).toHaveBeenCalledWith({ wakeWord: "" });
+    expect(host.textContent).toContain("语音唤醒（喊「你好多宝」）");
   });
 });

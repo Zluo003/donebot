@@ -109,6 +109,7 @@ export const UNSHARED_NOTICE = `Sites that turn away data centres, such as Insta
 /** One gate per browser session for the life of the server, so a Chrome keeps the port it launched with. */
 export class BrowserEgress {
   private setup: Required<Omit<EgressSetup, "device">> & Pick<EgressSetup, "device"> | null = null;
+  private desktopUpstream: ((target: GateTarget, rules: EgressRules) => GateUpstream | null) | null = null;
   private readonly gates = new Map<string, Promise<EgressGate>>();
   private readonly blocked = new Map<string, Blocked[]>();
   /** Sessions told those sites load from My Cloud's own connection, until the computer is back. */
@@ -122,6 +123,11 @@ export class BrowserEgress {
       ownership: setup.ownership ?? new ListenerOwnership({ sessions: botEngineSessions }),
       resolve: setup.resolve ?? resolveTarget,
     };
+  }
+
+  /** Registers an optional desktop-only upstream proxy provider (e.g. OS system proxy / user VPN port). */
+  setDesktopUpstream(fn: ((target: GateTarget, rules: EgressRules) => GateUpstream | null) | null): void {
+    this.desktopUpstream = fn;
   }
 
   /** Why a destination is refused by its name alone on this host: Reddit, from DoneBot Cloud. */
@@ -169,7 +175,10 @@ export class BrowserEgress {
         decide: (target, addresses) => refusalFor(target, addresses, this.rules()),
         onRefusal: (target, reason) => this.note(session, target, reason as Refusal),
         resolve: this.setup.resolve,
-        upstream: (target) => opensFromHome(target.host) ? this.through(session) : null,
+        upstream: (target) => {
+          if (this.setup?.host === "desktop") return this.desktopUpstream?.(target, this.rules()) ?? null;
+          return opensFromHome(target.host) ? this.through(session) : null;
+        },
       });
       this.gates.set(session, gate);
       gate.then((opened) => this.setup?.listeners.add(opened.port), () => this.gates.delete(session));

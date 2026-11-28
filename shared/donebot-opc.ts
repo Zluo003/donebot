@@ -294,7 +294,9 @@ export interface OpcBossReportAttachment {
 
 export interface OpcBossReportItem {
   id: string;
-  source: "workflow" | "bot_report";
+  source: "workflow" | "bot_report" | "routine";
+  /** True when waiting for Boss approval; false for non-approval briefing reports. */
+  approvalRequired?: boolean;
   title: string;
   summary: string;
   body: string;
@@ -306,6 +308,8 @@ export interface OpcBossReportItem {
   at: number;
   /** Timestamp when approved by the Boss (present on approved archive items). */
   approvedAt?: number;
+  /** Timestamp when marked read by the Boss (present on non-approval briefing items). */
+  readAt?: number;
   threadId: string;
   reportMessageId?: string;
   attachments: OpcBossReportAttachment[];
@@ -324,6 +328,8 @@ export interface OpcBossReportItem {
 export interface OpcBossOverview {
   pendingArtifactCount: number;
   pendingReportCount?: number;
+  briefingReportCount?: number;
+  unreadBriefingCount?: number;
   approvedReportCount?: number;
   activeHeartbeatCount: number;
   trippedCircuitBreakerCount: number;
@@ -334,7 +340,11 @@ export interface OpcBossOverview {
   spend: OpcSpendResponse;
   pendingArtifacts: OpcArtifactItem[];
   pendingReports?: OpcBossReportItem[];
+  briefingReports?: OpcBossReportItem[];
   approvedReports?: OpcBossReportItem[];
   waitingWorkflowRuns?: OpcWorkflowRun[];
+  activeWorkflowRuns?: OpcWorkflowRun[];
+  recentWorkflowRuns?: OpcWorkflowRun[];
+  workflows?: OpcWorkflowDefinition[];
   heartbeats: OpcHeartbeatConfig[];
 }

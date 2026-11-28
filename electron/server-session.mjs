@@ -27,11 +27,14 @@ export function targetsServer(url, serverPort) {
   }
 }
 
+let proxySession = null;
+
 /**
  * `ownerToken()` is the desktop capability, or null while there is none to send. Chromium adds the header below
  * JavaScript, on http: and ws: alike, so a shell using curl cannot impersonate the person at the desktop.
  */
 export function installServerSessions({ app, defaultSession, serverPort, ownerToken }) {
+  proxySession = defaultSession ?? null;
   defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const token = ownerToken();
     let owns = false;
@@ -64,9 +67,32 @@ subscribe("tracing:net.server.listen:asyncEnd", ({ server }) => {
   report();
 });
 
+function attachProxyResolver(proc) {
+  if (!proc || typeof proc.on !== "function" || proc.__donebotProxyResolverAttached) return;
+  proc.__donebotProxyResolverAttached = true;
+  proc.on("message", (message) => {
+    if (!message || message.type !== "donebot:resolve-proxy") return;
+    const { id, url } = message;
+    if (typeof id !== "string" || typeof url !== "string" || url.length > 2048 || !/^https?:\/\//i.test(url)) return;
+    const session = proxySession;
+    if (!session || typeof session.resolveProxy !== "function") {
+      try { proc.postMessage({ type: "donebot:resolve-proxy-result", id, proxy: null }); } catch {}
+      return;
+    }
+    void Promise.resolve(session.resolveProxy(url))
+      .then((proxy) => {
+        try { proc.postMessage({ type: "donebot:resolve-proxy-result", id, proxy: typeof proxy === "string" ? proxy : null }); } catch {}
+      })
+      .catch(() => {
+        try { proc.postMessage({ type: "donebot:resolve-proxy-result", id, proxy: null }); } catch {}
+      });
+  });
+}
+
 /** Tells a server that has just become ready which ports this app listens on, and tells it again as more open. */
 export function reportOwnListeners(proc, ports = []) {
   for (const port of ports) ownPorts.add(port);
   reportTo = proc;
+  attachProxyResolver(proc);
   report();
 }

@@ -1,7 +1,7 @@
 import type { ModelCatalog, ProviderDriver } from "../contracts.ts";
 import type { SendTurnInput } from "../contracts.ts";
 import { allowsTool, parseToolScope } from "../../shared/tool-scope.ts";
-import type { DoneBotCatalog, DoneBotMediaPreferences } from "../../shared/donebot.ts";
+import { DEFAULT_DONEBOT_TURN_LIMITS, type DoneBotCatalog, type DoneBotMediaPreferences, type DoneBotTurnLimits } from "../../shared/donebot.ts";
 import { createOpenAIChatRuntime } from "../drivers/openai-chat.ts";
 import { createDoneBotCompletion, type DoneBotLlmProtocol, type DoneBotLlmRequest } from "./llm-protocol.ts";
 import { guideDoneBotMedia } from "./media-guidance.ts";
@@ -31,6 +31,7 @@ export interface DoneBotLlmDependencies {
   mediaPreferences?(): DoneBotMediaPreferences;
   toolUse?(model: string): boolean;
   goalContext?(botId: string): string | undefined;
+  turnLimits?(): DoneBotTurnLimits;
 }
 
 export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDriver<Record<string, never>> {
@@ -73,6 +74,8 @@ export function createDoneBotLlmDriver(deps: DoneBotLlmDependencies): ProviderDr
         }, computerUse: true, imageInput: deps.imageInput, toolUse: deps.toolUse, modelVariants: true,
         requestBody: () => { throw new Error("DoneBot models require their registered native protocol"); },
         httpErrorLabel: "DoneBot gateway", missingKeyError: "Sign in to DoneBot to use models", unavailableReason: "Sign in to DoneBot to use models", timeoutMs: 180_000,
+        maxChatRounds: () => deps.turnLimits?.().maxSteps ?? DEFAULT_DONEBOT_TURN_LIMITS.maxSteps,
+        maxTurnToolCalls: () => deps.turnLimits?.().maxToolCalls ?? DEFAULT_DONEBOT_TURN_LIMITS.maxToolCalls,
         retryScale: deps.requiresExecutionContext ? undefined : 1,
         reasoning: true, billing: "metered", includeUsageInCompleted: true,
         nativeLog: { source: "donebot.native", outgoing: (_turn, messages, model, tools) => ({ model, messageCount: messages.length, tools: tools.map(({ function: fn }) => fn.name) }), incoming: ({ text, reasoning, usage }) => ({ textLength: text.length, reasoningLength: reasoning.length, usage }) },

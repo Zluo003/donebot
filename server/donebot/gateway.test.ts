@@ -255,6 +255,7 @@ describe("DoneBot gateway account boundary", () => {
   it("permits realtime ASR WebSocket URLs, sends server credentials only, and tears down upstream on logout", async () => {
     expect(doneBotRequestUrl("/v1/audio/transcriptions/realtime?model=qwen-audio-3.1-asr-flash-streaming").pathname)
       .toBe("/v1/audio/transcriptions/realtime");
+    expect(doneBotRequestUrl("/v1/audio/transcriptions").pathname).toBe("/v1/audio/transcriptions");
     expect(() => doneBotRequestUrl("/v1/audio/transcriptions/realtime?model=../evil")).toThrow();
     expect(() => doneBotRequestUrl("/v1/audio/transcriptions/realtime?token=leak")).toThrow();
 

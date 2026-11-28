@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Coins,
   Download,
   Eye,
@@ -33,9 +35,34 @@ import { BotMarketPublishModal } from "./BotMarketPublishModal";
 
 type MarketTab = "browse" | "mine" | "earnings";
 
+export const MARKET_PAGE_SIZE = 12;
+
+export function buildPaginationItems(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
+  if (totalPages <= 1) return [1];
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  const pages = new Set<number>([1, totalPages]);
+  const start = currentPage <= 4 ? 2 : currentPage >= totalPages - 3 ? totalPages - 4 : currentPage - 1;
+  const end = currentPage <= 4 ? 5 : currentPage >= totalPages - 3 ? totalPages - 1 : currentPage + 1;
+  for (let p = start; p <= end; p++) {
+    if (p > 1 && p < totalPages) pages.add(p);
+  }
+
+  const sorted = Array.from(pages).sort((a, b) => a - b);
+  const out: Array<number | "ellipsis"> = [];
+  for (const p of sorted) {
+    const prev = out.at(-1);
+    if (typeof prev === "number" && p - prev > 1) out.push("ellipsis");
+    out.push(p);
+  }
+  return out;
+}
+
 export function BotMarketPage() {
   const { state, dispatch } = useStore();
   const { dragProps } = useCaptionChrome();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const browseReqRef = useRef(0);
   const [tab, setTab] = useState<MarketTab>("browse");
   const [categories, setCategories] = useState<MarketCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
@@ -43,8 +70,10 @@ export function BotMarketPage() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"installs" | "newest">("installs");
+  const [page, setPage] = useState(1);
 
   const [listings, setListings] = useState<MarketListingSummary[]>([]);
+  const [total, setTotal] = useState(0);
   const [installedMap, setInstalledMap] = useState<Record<string, MarketInstalledBotInfo>>({});
   const [myListings, setMyListings] = useState<MarketListingSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +85,17 @@ export function BotMarketPage() {
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishBotId, setPublishBotId] = useState<string | null>(null);
   const [updatingListing, setUpdatingListing] = useState<MarketListingSummary | null>(null);
+
+  const totalPages = Math.max(1, Math.ceil(total / MARKET_PAGE_SIZE));
+
+  const goToPage = useCallback((nextPage: number) => {
+    const clamped = Math.max(1, Math.min(totalPages, nextPage));
+    if (clamped === page || loading) return;
+    setPage(clamped);
+    if (typeof scrollRef.current?.scrollTo === "function") {
+      scrollRef.current.scrollTo({ top: 0 });
+    }
+  }, [totalPages, page, loading]);
 
   useEffect(() => {
     if (state.marketPublishBotId) {
@@ -76,6 +116,7 @@ export function BotMarketPage() {
   }, []);
 
   const loadBrowse = useCallback(async () => {
+    const reqId = ++browseReqRef.current;
     setLoading(true);
     setError("");
     try {
@@ -84,17 +125,28 @@ export function BotMarketPage() {
         listing_type: listingTypeFilter === "all" ? undefined : listingTypeFilter,
         q: query || undefined,
         sort,
-        page: 1,
-        page_size: 40,
+        page,
+        page_size: MARKET_PAGE_SIZE,
       });
-      setListings(res.items ?? []);
+      if (reqId !== browseReqRef.current) return;
+      const items = res.items ?? [];
+      const nextTotal = typeof res.total === "number" && res.total >= 0 ? res.total : items.length;
+      const maxPage = Math.max(1, Math.ceil(nextTotal / MARKET_PAGE_SIZE));
+      if (page > maxPage) {
+        setTotal(nextTotal);
+        setPage(maxPage);
+        return;
+      }
+      setListings(items);
+      setTotal(nextTotal);
       setInstalledMap(res.installed_by_listing ?? {});
     } catch (err) {
+      if (reqId !== browseReqRef.current) return;
       setError(err instanceof Error ? err.message : "加载 Bot 广场失败，请确认已登录 DoneBot 账号。");
     } finally {
-      setLoading(false);
+      if (reqId === browseReqRef.current) setLoading(false);
     }
-  }, [selectedCategoryId, listingTypeFilter, query, sort]);
+  }, [selectedCategoryId, listingTypeFilter, query, sort, page]);
 
   const loadMine = useCallback(async () => {
     setLoading(true);
@@ -217,7 +269,7 @@ export function BotMarketPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-5xl space-y-4">
           {toast && (
             <div className="flex items-center gap-2 rounded-xl bg-emerald-500/12 px-4 py-2.5 text-[13px] text-emerald-500">
@@ -245,7 +297,7 @@ export function BotMarketPage() {
                       <button
                         key={opt.key}
                         type="button"
-                        onClick={() => setListingTypeFilter(opt.key)}
+                        onClick={() => { setListingTypeFilter(opt.key); setPage(1); }}
                         className={cn(
                           "rounded-lg px-2.5 py-1 text-[12px] font-medium transition-colors",
                           listingTypeFilter === opt.key ? "bg-raised text-ink shadow-xs" : "text-ink-secondary hover:text-ink",
@@ -258,7 +310,7 @@ export function BotMarketPage() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setSelectedCategoryId(0)}
+                      onClick={() => { setSelectedCategoryId(0); setPage(1); }}
                       className={cn(
                         "rounded-full px-3 py-1 text-[12px] transition-colors",
                         selectedCategoryId === 0 ? "bg-accent text-white" : "bg-card text-ink-secondary hover:bg-raised hover:text-ink",
@@ -270,7 +322,7 @@ export function BotMarketPage() {
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => setSelectedCategoryId(cat.id)}
+                        onClick={() => { setSelectedCategoryId(cat.id); setPage(1); }}
                         className={cn(
                           "rounded-full px-3 py-1 text-[12px] transition-colors",
                           selectedCategoryId === cat.id ? "bg-accent text-white" : "bg-card text-ink-secondary hover:bg-raised hover:text-ink",
@@ -284,7 +336,7 @@ export function BotMarketPage() {
 
                 <div className="flex items-center gap-2">
                   <form
-                    onSubmit={e => { e.preventDefault(); setQuery(searchInput); }}
+                    onSubmit={e => { e.preventDefault(); setQuery(searchInput.trim()); setPage(1); }}
                     className="relative"
                   >
                     <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-secondary" />
@@ -292,7 +344,10 @@ export function BotMarketPage() {
                       value={searchInput}
                       onChange={e => {
                         setSearchInput(e.target.value);
-                        if (!e.target.value.trim()) setQuery("");
+                        if (!e.target.value.trim()) {
+                          setQuery("");
+                          setPage(1);
+                        }
                       }}
                       placeholder="搜索 Bot 名称或简介…"
                       className="w-52 rounded-xl border border-hairline bg-card py-1.5 pl-8 pr-3 text-[13px] text-ink outline-none focus:border-accent"
@@ -300,7 +355,7 @@ export function BotMarketPage() {
                   </form>
                   <Select
                     value={sort}
-                    onChange={e => setSort(e.target.value as "installs" | "newest")}
+                    onChange={e => { setSort(e.target.value as "installs" | "newest"); setPage(1); }}
                     size="sm"
                     className="shrink-0"
                   >
@@ -310,7 +365,7 @@ export function BotMarketPage() {
                 </div>
               </div>
 
-              {loading ? (
+              {loading && listings.length === 0 ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-ink-secondary">
                   <Loader2 size={16} className="animate-spin" /> 正在逛 Bot 广场…
                 </div>
@@ -329,7 +384,13 @@ export function BotMarketPage() {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-3">
+                <>
+                  <div
+                    className={cn(
+                      "grid grid-cols-1 gap-3.5 transition-opacity md:grid-cols-2 lg:grid-cols-3",
+                      loading && "pointer-events-none opacity-60",
+                    )}
+                  >
                   {listings.map(item => {
                     const installed = installedMap[item.id];
                     const hasUpdate = Boolean(installed && item.published_version > installed.version);
@@ -450,7 +511,72 @@ export function BotMarketPage() {
                       </article>
                     );
                   })}
-                </div>
+                  </div>
+
+                  <nav
+                    aria-label="Bot 广场分页"
+                    className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline/70 pt-4"
+                  >
+                    <div className="text-[12px] tabular-nums text-ink-secondary">
+                      共 {total} 个 · 第 {page} / {totalPages} 页
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-disabled={page <= 1 || loading}
+                        onClick={() => goToPage(page - 1)}
+                        className={cn(
+                          "inline-flex min-h-8 items-center gap-1 rounded-xl border border-hairline bg-card px-2.5 text-[12px] text-ink-secondary transition-colors",
+                          page <= 1 || loading ? "cursor-not-allowed opacity-45" : "hover:bg-raised hover:text-ink",
+                        )}
+                      >
+                        <ChevronLeft size={14} aria-hidden="true" />
+                        上一页
+                      </button>
+                      {buildPaginationItems(page, totalPages).map((entry, idx) => (
+                        entry === "ellipsis" ? (
+                          <span
+                            key={`ellipsis-${idx}`}
+                            aria-hidden="true"
+                            className="inline-flex min-h-8 min-w-6 items-center justify-center text-[12px] text-ink-tertiary"
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={entry}
+                            type="button"
+                            aria-label={`第 ${entry} 页`}
+                            aria-current={entry === page ? "page" : undefined}
+                            aria-disabled={loading && entry !== page ? true : undefined}
+                            onClick={() => goToPage(entry)}
+                            className={cn(
+                              "inline-flex min-h-8 min-w-8 items-center justify-center rounded-xl px-2 text-[12px] font-medium tabular-nums transition-colors",
+                              entry === page
+                                ? "bg-accent text-white"
+                                : "border border-hairline bg-card text-ink-secondary hover:bg-raised hover:text-ink",
+                              loading && entry !== page && "cursor-not-allowed opacity-45",
+                            )}
+                          >
+                            {entry}
+                          </button>
+                        )
+                      ))}
+                      <button
+                        type="button"
+                        aria-disabled={page >= totalPages || loading}
+                        onClick={() => goToPage(page + 1)}
+                        className={cn(
+                          "inline-flex min-h-8 items-center gap-1 rounded-xl border border-hairline bg-card px-2.5 text-[12px] text-ink-secondary transition-colors",
+                          page >= totalPages || loading ? "cursor-not-allowed opacity-45" : "hover:bg-raised hover:text-ink",
+                        )}
+                      >
+                        下一页
+                        <ChevronRight size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </nav>
+                </>
               )}
             </>
           )}
@@ -588,9 +714,9 @@ export function BotMarketPage() {
             setUpdatingListing(null);
           }}
           onPublished={() => {
+            setPage(1);
             setTab("mine");
             void loadMine();
-            void loadBrowse();
           }}
         />
       )}

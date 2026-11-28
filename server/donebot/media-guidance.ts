@@ -3,7 +3,7 @@ import type { CompletionTransportInput } from "../drivers/openai-chat.ts";
 import { inCollabChatTurn, isForbiddenCollabChatMediaTool } from "./collab-chat-policy.ts";
 import { DONEBOT_MODEL_CREDENTIAL_RULE } from "./credential-policy.ts";
 import { DONEBOT_LEGACY_MEDIA_TOOL_NAMES } from "./media-tools.ts";
-import { doneBotClientMediaCatalog } from "./media-registry.ts";
+import { doneBotClientMediaCatalog, resolveDoneBotAsrModel } from "./media-registry.ts";
 import { mediaModelSchema } from "./media-model-schema.ts";
 import { selectedMediaModels } from "./media-preferences.ts";
 
@@ -12,9 +12,14 @@ const MEDIA_PROVIDER_GUIDANCE = "For image, video and audio generation, choose t
 export function guideDoneBotMedia(input: CompletionTransportInput, catalog: DoneBotCatalog | null, preferences: DoneBotMediaPreferences = DEFAULT_DONEBOT_MEDIA_PREFERENCES): CompletionTransportInput {
   const collabRestricted = inCollabChatTurn();
   const local = doneBotClientMediaCatalog(catalog);
+  const asrModel = resolveDoneBotAsrModel(catalog);
   const tools = input.tools.filter(tool => tool.function.name !== "agents_media_model_capabilities" &&
     !DONEBOT_LEGACY_MEDIA_TOOL_NAMES.has(tool.function.name.replace(/^agents_/, "")) &&
     (!collabRestricted || !isForbiddenCollabChatMediaTool(tool.function.name))).flatMap(tool => {
+    if (tool.function.name === "agents_transcribe_audio") {
+      if (!asrModel) return [];
+      return [{ ...tool, function: { ...tool.function, description: `${tool.function.description} Gateway ASR model: ${asrModel.id}.` } }];
+    }
     const kind = tool.function.name === "agents_generate_image" ? "image"
       : tool.function.name === "agents_generate_video" ? "video" : tool.function.name === "agents_generate_audio" ? "music" : undefined;
     if (!kind) return [tool];

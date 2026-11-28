@@ -20,6 +20,7 @@ import { writeFileAtomic } from "../atomic.ts";
 
 const MAX_SNAPSHOTS_PER_BOT = 30;
 const MAX_EVAL_RUNS_PER_BOT = 12;
+const MAX_REPORT_READS = 500;
 
 const deliverableSchema = z.object({
   id: z.string().min(1).max(80),
@@ -119,6 +120,7 @@ const stateSchema = z.object({
   version: z.literal(1),
   goals: z.record(z.string(), goalSchema).default({}),
   artifactReviews: z.record(z.string(), artifactReviewSchema).default({}),
+  reportReads: z.record(z.string(), z.number().finite()).default({}),
   snapshots: z.record(z.string(), z.array(snapshotSchema)).default({}),
   evalCases: z.record(z.string(), z.array(evalCaseSchema)).default({}),
   evalRuns: z.record(z.string(), z.array(evalRunSchema)).default({}),
@@ -141,6 +143,7 @@ export class DoneBotOpcStore {
     version: 1,
     goals: {},
     artifactReviews: {},
+    reportReads: {},
     snapshots: {},
     evalCases: {},
     evalRuns: {},
@@ -304,6 +307,37 @@ export class DoneBotOpcStore {
     }
     this.persist();
     return rec;
+  }
+
+  // --- Non-approval Briefing Report Read Receipts ---
+
+  getReportReadAt(reportId: string): number | undefined {
+    this.ensureLoaded();
+    return this.state.reportReads[reportId];
+  }
+
+  setReportsRead(reportIds: readonly string[], read = true): { count: number; readAt: number | null } {
+    this.ensureLoaded();
+    const now = Date.now();
+    let changed = 0;
+    for (const rawId of reportIds) {
+      const id = rawId.trim();
+      if (!id) continue;
+      if (read) {
+        if (this.state.reportReads[id] === undefined) changed += 1;
+        this.state.reportReads[id] = now;
+      } else if (id in this.state.reportReads) {
+        delete this.state.reportReads[id];
+        changed += 1;
+      }
+    }
+    const entries = Object.entries(this.state.reportReads);
+    if (entries.length > MAX_REPORT_READS) {
+      entries.sort((a, b) => b[1] - a[1]);
+      this.state.reportReads = Object.fromEntries(entries.slice(0, MAX_REPORT_READS));
+    }
+    if (changed > 0 || (read && reportIds.length > 0)) this.persist();
+    return { count: reportIds.length, readAt: read ? now : null };
   }
 
   // --- SOUL / SKILL Snapshots ---

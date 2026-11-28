@@ -11,7 +11,15 @@ import {
 import { speaker } from "@/lib/tts";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import { api, persistBotUpdate, useStore } from "@/state/store";
-import { buildWakePhrase, resolveChiefCoordinatorBot, resolveUserAddressTitle } from "./pet-protocol";
+import {
+  buildWakePhrase,
+  MAX_WAKE_WORD_LENGTH,
+  MIN_WAKE_WORD_CHARS,
+  resolveChiefCoordinatorBot,
+  resolveUserAddressTitle,
+  sanitizeWakeWord,
+  wakeWordCoreChars,
+} from "./pet-protocol";
 
 export function DesktopPetSettings({ simple = false }: { simple?: boolean }) {
   const bridge = window.ogb?.desktopPet;
@@ -20,23 +28,33 @@ export function DesktopPetSettings({ simple = false }: { simple?: boolean }) {
   const [saving, setSaving] = useState(false);
   const [capabilities, setCapabilities] = useState<DoneBotVoiceCapabilities | null>(null);
   const [savingVoice, setSavingVoice] = useState(false);
+  const [wakeWordDraft, setWakeWordDraft] = useState("");
+  const [wakeWordStatus, setWakeWordStatus] = useState<{ kind: "saved" | "error"; text: string } | null>(null);
   const speech = useSpeech();
 
   const chief = useMemo(
     () => resolveChiefCoordinatorBot(storeState.bots),
     [storeState.bots],
   );
-  const wakePhrase = buildWakePhrase(chief?.name);
+  const defaultWakePhrase = buildWakePhrase(chief?.name);
+  const savedWakeWord = sanitizeWakeWord(state?.wakeWord);
+  const wakePhrase = buildWakePhrase(chief?.name, savedWakeWord);
   const userTitle = resolveUserAddressTitle(chief?.soul, storeState.config?.profile?.name);
 
   useEffect(() => {
     if (!bridge) return;
     let mounted = true;
     void bridge.state().then((next) => {
-      if (mounted) setState(next);
+      if (mounted) {
+        setState(next);
+        setWakeWordDraft(sanitizeWakeWord(next.wakeWord));
+      }
     }).catch(() => {});
     const off = bridge.onState((next) => {
-      if (mounted) setState(next);
+      if (mounted) {
+        setState(next);
+        setWakeWordDraft(sanitizeWakeWord(next.wakeWord));
+      }
     });
     return () => {
       mounted = false;
@@ -75,12 +93,44 @@ export function DesktopPetSettings({ simple = false }: { simple?: boolean }) {
 
   if (!bridge || !state?.available) return null;
 
-  const update = (patch: Partial<DesktopPetConfig>) => {
+  const update = (patch: Partial<DesktopPetConfig>, onDone?: (next: DesktopPetState) => void) => {
     setSaving(true);
     void bridge.set(patch)
-      .then((next) => setState(next))
+      .then((next) => {
+        setState(next);
+        onDone?.(next);
+      })
       .catch(() => {})
       .finally(() => setSaving(false));
+  };
+
+  const normalizedDraft = sanitizeWakeWord(wakeWordDraft);
+  const wakeWordDirty = normalizedDraft !== savedWakeWord;
+
+  const saveWakeWord = () => {
+    if (normalizedDraft && wakeWordCoreChars(normalizedDraft).length < MIN_WAKE_WORD_CHARS) {
+      setWakeWordStatus({ kind: "error", text: `唤醒词至少需要 ${MIN_WAKE_WORD_CHARS} 个字，留空可恢复默认。` });
+      return;
+    }
+    setWakeWordStatus(null);
+    update({ wakeWord: normalizedDraft }, (next) => {
+      const effective = buildWakePhrase(chief?.name, next.wakeWord);
+      setWakeWordDraft(sanitizeWakeWord(next.wakeWord));
+      setWakeWordStatus({
+        kind: "saved",
+        text: next.wakeWord ? `已保存，现在直接喊「${effective}」即可唤醒。` : `已恢复默认唤醒词「${effective}」。`,
+      });
+    });
+  };
+
+  const resetWakeWord = () => {
+    setWakeWordStatus(null);
+    setWakeWordDraft("");
+    update({ wakeWord: "" }, (next) => {
+      const effective = buildWakePhrase(chief?.name, next.wakeWord);
+      setWakeWordDraft("");
+      setWakeWordStatus({ kind: "saved", text: `已恢复默认唤醒词「${effective}」。` });
+    });
   };
 
   const updateChiefVoice = async (voice: string) => {
@@ -197,6 +247,59 @@ export function DesktopPetSettings({ simple = false }: { simple?: boolean }) {
               aria-label="语音唤醒"
               onClick={() => update({ voiceMode: !state.voiceMode })}
             />
+          </SettingRow>
+
+          <SettingRow
+            title="自定义唤醒词"
+            subtitle={
+              wakeWordStatus ? (
+                <span className={wakeWordStatus.kind === "error" ? "text-danger" : "text-ink-secondary"}>
+                  {wakeWordStatus.text}
+                </span>
+              ) : (
+                `留空默认使用「${defaultWakePhrase}」，保存后说设定好的唤醒词即可唤醒（建议 2–12 个字）。`
+              )
+            }
+          >
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <input
+                type="text"
+                aria-label="自定义唤醒词"
+                maxLength={MAX_WAKE_WORD_LENGTH}
+                placeholder={defaultWakePhrase}
+                value={wakeWordDraft}
+                disabled={saving}
+                onChange={(event) => {
+                  setWakeWordDraft(event.target.value);
+                  if (wakeWordStatus) setWakeWordStatus(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    if (wakeWordDirty && !saving) saveWakeWord();
+                  }
+                }}
+                className="h-8 w-[168px] rounded-full border border-hairline bg-app px-3 text-[13px] text-ink placeholder:text-ink-secondary/60 focus:border-ink/40 focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={saving || !wakeWordDirty}
+                onClick={saveWakeWord}
+                className="ui-button ui-button-primary shrink-0 disabled:opacity-40"
+              >
+                保存
+              </button>
+              {savedWakeWord && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={resetWakeWord}
+                  className="ui-button shrink-0"
+                >
+                  恢复默认
+                </button>
+              )}
+            </div>
           </SettingRow>
 
           <SettingRow

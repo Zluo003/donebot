@@ -153,4 +153,81 @@ describe("OPC boss report title extraction & distillation", () => {
     });
     expect(readable.pendingReports[0]!.title).toBe("秋季女帽印花样稿");
   });
+
+  it("collects non-approval deliverables, completed non-gated workflows, and structured text reports into briefingReports with read receipts", () => {
+    const gatedBot = { ...makeBot(), id: "bot-gated", name: "导演", threadId: "t-gated", section: "影视部" } as BotRecord;
+    const freeBot = { ...makeBot(), id: "bot-free", name: "表匠", threadId: "t-free", section: "数据组" } as BotRecord;
+    const messagesByThread: Record<string, Message[]> = {
+      "t-gated": [
+        { id: "m-g1", role: "bot", kind: "text", text: "# 定稿分镜包\n请老板审批。", at: 10_000 },
+      ],
+      "t-free": [
+        { id: "m-f1", role: "bot", kind: "text", text: "好的，这就处理。", at: 11_000 },
+        { id: "m-f2", role: "bot", kind: "text", text: "正式汇报：11 月运营验收报告\n核心指标全部达标，转化率提升 18%，详细对比数据见正文。", at: 12_000 },
+        { id: "m-f3", role: "bot", kind: "text", text: "# 竞品月度复盘\n\n## 核心发现\n\n- 头部竞品加大了短视频矩阵投入，单月发布量同比增长 42%。\n- 客单价集中在 199-299 元区间，复购率依赖私域运营。\n\n## 建议行动\n\n下月优先测试 3 组对比测评脚本并持续跟进转化表现。", at: 13_000 },
+        { id: "m-f4", role: "bot", kind: "text", text: "验收表格已生成并附上。", at: 14_000 },
+      ],
+    };
+
+    const result = buildBossReports({
+      store: {
+        bots: [gatedBot, freeBot],
+        bot: (id) => (id === gatedBot.id ? gatedBot : id === freeBot.id ? freeBot : null),
+        messagesFor: (tid) => messagesByThread[tid] ?? [],
+      },
+      allArtifacts: [
+        makeArtifact({ id: "art-gated", botId: gatedBot.id, botName: gatedBot.name, threadId: "t-gated", messageId: "m-g1", reportMessageId: "m-g1", at: 10_000 }),
+        makeArtifact({ id: "art-free", botId: freeBot.id, botName: freeBot.name, threadId: "t-free", messageId: "m-f4", reportMessageId: "m-f4", name: "验收台账.xlsx", kind: "document", at: 14_000 }),
+      ],
+      workflowRuns: [
+        {
+          id: "run-nogate",
+          workflowId: "wf-daily",
+          workflowName: "每日早报汇总",
+          trigger: "schedule",
+          variables: {},
+          status: "completed",
+          currentStepIndex: 0,
+          stepResults: [{
+            stepId: "s1",
+            stepName: "汇总输出",
+            botId: freeBot.id,
+            botName: freeBot.name,
+            status: "completed",
+            output: "# 每日行业早报\n今日 3 条重点动态已整理。",
+            startedAt: 15_000,
+            finishedAt: 16_000,
+          }],
+          startedAt: 15_000,
+          finishedAt: 16_000,
+        },
+      ],
+      orgChart: {
+        enforcementMode: "enforced",
+        nodes: {
+          "bot-gated": { botId: "bot-gated", reportsToBotId: null, handoffToBotIds: [], requireBossApproval: true },
+          "bot-free": { botId: "bot-free", reportsToBotId: null, handoffToBotIds: [], requireBossApproval: false },
+        },
+        updatedAt: 1,
+      },
+      readAtByReportId: (id) => (id === "msg:t-free:m-f2" ? 99_000 : undefined),
+    });
+
+    // Only gated bot's deliverable enters approval queue.
+    expect(result.pendingReports).toHaveLength(1);
+    expect(result.pendingReports[0]!.botId).toBe("bot-gated");
+    expect(result.pendingReports[0]!.approvalRequired).toBe(true);
+
+    // Non-approval deliverables + completed non-gated workflow + structured text reports enter briefingReports (not short chat).
+    const titles = result.briefingReports.map(r => r.title);
+    expect(titles).toContain("每日行业早报");
+    expect(titles).toContain("11 月运营验收报告");
+    expect(titles).toContain("竞品月度复盘");
+    expect(titles).toContain("验收表格");
+    expect(result.briefingReports.some(r => r.body.includes("好的，这就处理"))).toBe(false);
+    expect(result.briefingReports.every(r => r.approvalRequired === false)).toBe(true);
+
+    const readItem = result.briefingReports.find(r => r.id === "msg:t-free:m-f2");
+    expect(readItem?.readAt).toBe(99_000);
+  });
 });

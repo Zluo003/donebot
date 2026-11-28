@@ -1,29 +1,30 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Archive,
-  ArrowRight,
-  FlaskConical,
-  Layers,
-  MessageSquare,
-  RefreshCw,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import type {
   OpcBossOverview,
   OpcBossReportAttachment,
   OpcBossReportItem,
 } from "../../shared/donebot-opc";
-import { BotAvatar } from "@/components/Avatar";
+import type { InboxRow } from "../../shared/inbox";
 import { useCaptionChrome } from "@/components/DesktopCapabilities";
-import { writeComputerPanelView } from "@/lib/computer-panel-view";
+import { answerThread } from "@/components/inbox/inbox-view";
+import {
+  attentionJumpAction,
+  crossBotAttentionThreads,
+  runningRoutineRuns,
+  type AttentionThread,
+} from "@/components/SidebarBotActivity";
+import type { CardResponse } from "@/lib/card-answer";
 import { cn } from "@/lib/cn";
-import { useStore, type Bot } from "@/state/store";
-import { formatCny } from "./market-api";
-import { OPC_OVERVIEW_CHANGED_EVENT, opcApi } from "./opc-api";
-import { OpcApprovedReportsDrawer } from "./OpcApprovedReportsDrawer";
+import { isCountedSkip, isRoutineProblemRun } from "@/lib/routines";
+import { readInboxRow, refreshInbox, settleInboxRow, useInboxView } from "@/state/inbox";
+import { useStore } from "@/state/store";
+import { notifyOpcOverviewChanged, OPC_OVERVIEW_CHANGED_EVENT, opcApi } from "./opc-api";
+import { computeActionQueueCounts, OpcActionQueueSection } from "./OpcActionQueueSection";
 import { OpcArtifactPreviewDialog } from "./OpcArtifactPreviewDialog";
-import { OpcBossReportCard, resolvePendingBossReports } from "./OpcBossReportCard";
-import { OpcSkillStudioModal } from "./OpcSkillStudioModal";
+import { resolvePendingBossReports } from "./OpcBossReportCard";
+import { OpcBriefingReportsPanel, type WorkbenchReportsTab } from "./OpcBriefingReportsPanel";
+import { OpcActiveWorkBanner, OpcAutomationFooterSection } from "./OpcWorkbenchAutomationSection";
 
 function greetingByHour(): string {
   const hour = new Date().getHours();
@@ -42,26 +43,39 @@ function formattedToday(): string {
   });
 }
 
+function isSameLocalDay(ts: number, now: Date): boolean {
+  if (!ts) return false;
+  const d = new Date(ts);
+  return d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
+}
+
 /**
- * Editorial, borderless-first Workspace Console ("工作台") inspired by Paperclip's plain MetricCard
- * hierarchy and Linear's hairline layout. Adapts cleanly to all 16 light/dark DoneBot skins.
+ * Action-and-Briefing Workspace Console ("工作台"):
+ * focuses on items needing Boss action, live running work, non-approval reports & deliverables,
+ * and recent automation activity — without duplicating the sidebar employee list or billing ledger.
  */
 export function OpcBossConsolePage() {
   const { state, dispatch } = useStore();
   const { dragProps } = useCaptionChrome();
-  const archivePanelId = useId();
+  const inboxView = useInboxView();
+  const reportsSectionRef = useRef<HTMLDivElement>(null);
+
   const visibleBots = useMemo(() => state.bots.filter(b => !b.hidden), [state.bots]);
   const botById = useMemo(() => new Map(visibleBots.map(b => [b.id, b])), [visibleBots]);
+  const routines = useMemo(() => state.routines ?? [], [state.routines]);
+  const routineRuns = useMemo(() => state.routineRuns ?? [], [state.routineRuns]);
 
   const [overview, setOverview] = useState<OpcBossOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [runtimeNotice, setRuntimeNotice] = useState("");
-  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [reportsTab, setReportsTab] = useState<WorkbenchReportsTab>("briefings");
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [previewState, setPreviewState] = useState<{
     attachment: OpcBossReportAttachment;
     report: OpcBossReportItem;
   } | null>(null);
-  const [labBot, setLabBot] = useState<Bot | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -71,7 +85,7 @@ export function OpcBossConsolePage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
-        setRuntimeNotice("当前连接的云端实例镜像版本较旧；升级云端服务镜像后将自动启用正式汇报审批与算力明细。");
+        setRuntimeNotice("当前连接的云端实例镜像版本较旧；升级云端服务镜像后将自动启用完整工作台汇报与工作流能力。");
       } else {
         setRuntimeNotice(msg || "暂时无法读取工作台运行状态，请稍后重试。");
       }
@@ -82,40 +96,144 @@ export function OpcBossConsolePage() {
 
   useEffect(() => {
     void loadAll();
+    void refreshInbox();
+    const timer = window.setInterval(() => void loadAll(), 45_000);
     const onChanged = (event: Event) => {
       const source = (event as CustomEvent<{ source?: string }>).detail?.source;
       if (source === "boss-console") return;
       void loadAll();
     };
     window.addEventListener(OPC_OVERVIEW_CHANGED_EVENT, onChanged);
-    return () => window.removeEventListener(OPC_OVERVIEW_CHANGED_EVENT, onChanged);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(OPC_OVERVIEW_CHANGED_EVENT, onChanged);
+    };
   }, [loadAll]);
 
-  const spendByBotId = useMemo(() => {
-    const map = new Map<string, OpcBossOverview["spend"]["bots"][number]>();
-    for (const row of overview?.spend.bots ?? []) {
-      map.set(row.botId, row);
-    }
-    return map;
-  }, [overview]);
-
-  const employeeRows = useMemo(() => {
-    const rows = visibleBots.map(bot => {
-      const spend = spendByBotId.get(bot.id);
-      return {
-        bot,
-        llmCost: spend?.llmCost ?? 0,
-        mediaCost: (spend?.imageCost ?? 0) + (spend?.videoCost ?? 0) + (spend?.musicCost ?? 0),
-        totalCost: spend?.totalCost ?? 0,
-      };
-    });
-    rows.sort((a, b) => b.totalCost - a.totalCost || a.bot.name.localeCompare(b.bot.name, "zh-CN"));
-    return rows;
-  }, [visibleBots, spendByBotId]);
-
   const pendingReports = useMemo(() => resolvePendingBossReports(overview), [overview]);
+  const briefingReports = useMemo(() => overview?.briefingReports ?? [], [overview]);
   const approvedReports = useMemo(() => overview?.approvedReports ?? [], [overview]);
-  const approvedCount = overview?.approvedReportCount ?? approvedReports.length;
+  const workflows = useMemo(() => overview?.workflows ?? [], [overview]);
+  const activeWorkflowRuns = useMemo(() => overview?.activeWorkflowRuns ?? [], [overview]);
+  const recentWorkflowRuns = useMemo(() => overview?.recentWorkflowRuns ?? [], [overview]);
+  const heartbeats = useMemo(() => overview?.heartbeats ?? [], [overview]);
+
+  // Live bot/group attention threads from client store
+  const attentionThreads = useMemo(
+    () => crossBotAttentionThreads(visibleBots, state.pendingQueued ?? {}, undefined, state.groups ?? []),
+    [visibleBots, state.pendingQueued, state.groups],
+  );
+
+  const inboxAsks = useMemo(
+    () => (inboxView?.rows ?? []).filter(row => row.tab === "needs-you"),
+    [inboxView],
+  );
+
+  const inboxAskedThreadIds = useMemo(
+    () => new Set(inboxAsks.map(r => r.origin?.threadId).filter((id): id is string => Boolean(id))),
+    [inboxAsks],
+  );
+
+  const waitingThreads = useMemo(
+    () => attentionThreads.filter(
+      entry => entry.task.activity === "waiting-on-you" && !inboxAskedThreadIds.has(entry.task.threadId),
+    ),
+    [attentionThreads, inboxAskedThreadIds],
+  );
+
+  const runningThreads = useMemo(() => {
+    const busy = attentionThreads.filter(
+      entry => entry.task.activity !== "waiting-on-you"
+        && (entry.task.activity === "working" || entry.task.busy === true || entry.task.queued === true),
+    );
+    const seen = new Set(busy.map(e => e.task.threadId));
+    const routineBusy: AttentionThread[] = [];
+    for (const bot of visibleBots) {
+      for (const task of runningRoutineRuns(bot)) {
+        if (seen.has(task.threadId)) continue;
+        seen.add(task.threadId);
+        routineBusy.push({ kind: "bot", botId: bot.id, botName: bot.name, task });
+      }
+    }
+    return [...busy, ...routineBusy];
+  }, [attentionThreads, visibleBots]);
+
+  // Alerts: tripped circuit breakers, recent unrecovered workflow failures, unseen problem routine runs
+  const trippedWorkflows = useMemo(
+    () => workflows.filter(w => w.pausedByCircuitBreaker),
+    [workflows],
+  );
+
+  const failedWorkflowRuns = useMemo(() => {
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    const latestByWorkflow = new Map<string, (typeof recentWorkflowRuns)[number]>();
+    for (const run of recentWorkflowRuns) {
+      const existing = latestByWorkflow.get(run.workflowId);
+      if (!existing || run.startedAt > existing.startedAt) {
+        latestByWorkflow.set(run.workflowId, run);
+      }
+    }
+    const trippedIds = new Set(trippedWorkflows.map(w => w.id));
+    return [...latestByWorkflow.values()].filter(
+      run => run.status === "failed"
+        && !trippedIds.has(run.workflowId)
+        && (run.finishedAt ?? run.startedAt) >= cutoff,
+    );
+  }, [recentWorkflowRuns, trippedWorkflows]);
+
+  const trippedHeartbeats = useMemo(
+    () => heartbeats.filter(h => h.pausedByCircuitBreaker),
+    [heartbeats],
+  );
+
+  const problemRoutineRuns = useMemo(
+    () => routineRuns.filter(run => isRoutineProblemRun(run) && !isCountedSkip(run) && !run.seenAt),
+    [routineRuns],
+  );
+
+  const actionCounts = useMemo(
+    () => computeActionQueueCounts({
+      pendingReports,
+      inboxAsks,
+      waitingThreads,
+      trippedWorkflows,
+      failedWorkflowRuns,
+      trippedHeartbeats,
+      problemRoutineRuns,
+    }),
+    [pendingReports, inboxAsks, waitingThreads, trippedWorkflows, failedWorkflowRuns, trippedHeartbeats, problemRoutineRuns],
+  );
+
+  const runningCount = activeWorkflowRuns.length + runningThreads.length;
+  const unreadBriefingCount = useMemo(
+    () => briefingReports.filter(r => r.readAt === undefined).length,
+    [briefingReports],
+  );
+  const todayReportCount = useMemo(() => {
+    const now = new Date();
+    const seen = new Set<string>();
+    for (const r of [...briefingReports, ...approvedReports, ...pendingReports]) {
+      if (isSameLocalDay(r.approvedAt ?? r.at, now)) seen.add(r.id);
+    }
+    return seen.size;
+  }, [briefingReports, approvedReports, pendingReports]);
+
+  const activeRoutineCount = useMemo(
+    () => routines.filter(r => r.enabled).length,
+    [routines],
+  );
+  const activeWorkflowCount = overview?.activeWorkflowCount
+    ?? workflows.filter(w => w.enabled && !w.pausedByCircuitBreaker).length;
+  const dayAutomationCompleted = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const rtOk = routineRuns.filter(
+      r => !isCountedSkip(r) && r.status === "completed" && (r.finishedAt ?? r.startedAt ?? r.createdAt) >= cutoff,
+    ).length;
+    const wfOk = recentWorkflowRuns.filter(
+      r => r.status === "completed" && (r.finishedAt ?? r.startedAt) >= cutoff,
+    ).length;
+    return rtOk + wfOk;
+  }, [routineRuns, recentWorkflowRuns]);
 
   const handleReportResolved = (reportId: string, decision: "approved" | "changes_requested") => {
     setOverview(prev => {
@@ -148,14 +266,25 @@ export function OpcBossConsolePage() {
     });
   };
 
-  const openBotChat = (bot: Bot) => {
-    dispatch({ type: "select", id: bot.id });
-  };
-
-  const openBotArtifacts = (bot: Bot) => {
-    writeComputerPanelView(bot.id, "artifacts");
-    dispatch({ type: "select", id: bot.id });
-    dispatch({ type: "toggleComputer", open: true });
+  const handleMarkReportsRead = async (reportIds: string[], read: boolean) => {
+    const res = await opcApi.markReportsRead(reportIds, read);
+    const idSet = new Set(reportIds);
+    const stamp = res.readAt ?? (read ? Date.now() : undefined);
+    setOverview(prev => {
+      if (!prev) return prev;
+      const nextBriefings: OpcBossReportItem[] = (prev.briefingReports ?? []).map(item => {
+        if (!idSet.has(item.id)) return item;
+        if (read) return { ...item, readAt: stamp };
+        const { readAt: _removed, ...rest } = item;
+        return rest;
+      });
+      return {
+        ...prev,
+        briefingReports: nextBriefings,
+        unreadBriefingCount: nextBriefings.filter(r => r.readAt === undefined).length,
+      };
+    });
+    notifyOpcOverviewChanged("boss-console");
   };
 
   const handleJumpReport = (report: OpcBossReportItem) => {
@@ -165,273 +294,271 @@ export function OpcBossConsolePage() {
     }
   };
 
-  const pendingCount = pendingReports.length;
-  const activeWorkflowCount = overview?.activeWorkflowCount ?? 0;
-  const activeRoutineCount = useMemo(
-    () => (state.routines ?? []).filter(r => r.enabled).length,
-    [state.routines],
-  );
-  const totalSpend = overview?.spend.available ? overview.spend.totalCost : 0;
-  const mediaTotalSpend = overview?.spend.available
-    ? overview.spend.imageCost + overview.spend.videoCost + overview.spend.musicCost
-    : 0;
+  const handleAnswerInboxRow = (row: InboxRow, response: CardResponse) => {
+    const threadId = answerThread(inboxView, row);
+    if (!threadId || !row.card?.requestId) return;
+    readInboxRow(row);
+    settleInboxRow(row);
+    dispatch({
+      type: "decideRequest",
+      threadId,
+      requestId: row.card.requestId,
+      behavior: response.behavior,
+      ...(response.message ? { message: response.message } : {}),
+      onError: () => { void refreshInbox(); },
+    });
+  };
 
-  const statusLine = pendingCount > 0
-    ? `${pendingCount} 份正式汇报等待审批 · ${visibleBots.length} 位员工在岗`
-    : `运行平稳 · ${visibleBots.length} 位 AI 员工在岗`;
+  const handleOpenInboxRow = (row: InboxRow) => {
+    readInboxRow(row);
+    const botId = row.origin?.botId ?? inboxView?.botId;
+    const threadId = row.origin?.threadId ?? inboxView?.threadId;
+    const messageId = row.origin?.messageId ?? row.id;
+    if (row.origin?.groupId && threadId) {
+      dispatch({ type: "switchGroupTask", groupId: row.origin.groupId, threadId });
+    } else if (botId && threadId) {
+      dispatch({ type: "switchTask", botId, threadId });
+    } else if (botId) {
+      dispatch({ type: "select", id: botId });
+    }
+    if (threadId && messageId) {
+      dispatch({ type: "focusMessage", threadId, messageId });
+    }
+  };
+
+  const handleJumpThread = (entry: AttentionThread) => {
+    dispatch(attentionJumpAction(entry));
+  };
+
+  const handleResetWorkflowBreaker = async (workflowId: string) => {
+    await opcApi.updateWorkflow(workflowId, {
+      pausedByCircuitBreaker: false,
+      consecutiveFailures: 0,
+      enabled: true,
+    });
+    notifyOpcOverviewChanged("boss-console");
+    await loadAll();
+  };
+
+  const handleRunWorkflow = async (workflowId: string, variables: Record<string, string>) => {
+    await opcApi.runWorkflow(workflowId, variables);
+    notifyOpcOverviewChanged("boss-console");
+    await loadAll();
+  };
+
+  const handleCancelWorkflowRun = async (runId: string) => {
+    await opcApi.decideWorkflowRun(runId, { action: "cancel" });
+    notifyOpcOverviewChanged("boss-console");
+    await loadAll();
+  };
+
+  const handleResetHeartbeatBreaker = async (heartbeatId: string) => {
+    await opcApi.resetCircuitBreaker(heartbeatId, true);
+    notifyOpcOverviewChanged("boss-console");
+    await loadAll();
+  };
+
+  const focusBriefings = (onlyUnread: boolean) => {
+    setReportsTab("briefings");
+    setUnreadOnly(onlyUnread);
+    if (typeof reportsSectionRef.current?.scrollIntoView === "function") {
+      reportsSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const statusLine = actionCounts.total > 0
+    ? [
+      actionCounts.approvals > 0 ? `${actionCounts.approvals} 项待审批` : "",
+      actionCounts.questions > 0 ? `${actionCounts.questions} 项待回复/确认` : "",
+      actionCounts.alerts > 0 ? `${actionCounts.alerts} 项异常告警` : "",
+    ].filter(Boolean).join(" · ")
+    : runningCount > 0
+      ? `运行平稳 · ${runningCount} 项任务正在后台推进`
+      : unreadBriefingCount > 0
+        ? `运行平稳 · 有 ${unreadBriefingCount} 份新报告待查阅`
+        : "运行平稳 · 当前暂无待处理事项";
 
   return (
     <main data-opc-boss-console="" className="flex min-w-0 flex-1 flex-col bg-app text-ink">
-      {/* Subtle window drag handle — no heavy divider bar */}
       <div {...dragProps} className="h-7 shrink-0" />
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pb-16 pt-2 sm:px-10">
-          <div className="mx-auto max-w-[900px] space-y-10">
-            {/* Editorial Hero Header */}
-            <header className="flex flex-wrap items-end justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-[12px] font-medium tracking-wide text-ink-tertiary">
-                  {formattedToday()} · 工作台
-                </p>
-                <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.025em] text-ink">
-                  {greetingByHour()}
-                </h1>
-                <p className="mt-1.5 text-[14px] text-ink-secondary">
-                  {statusLine}
-                </p>
-              </div>
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pb-16 pt-2 sm:px-10">
+        <div className="mx-auto max-w-[900px] space-y-9">
+          {/* Editorial Hero Header */}
+          <header className="flex flex-wrap items-end justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium tracking-wide text-ink-tertiary">
+                {formattedToday()} · 工作台
+              </p>
+              <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.025em] text-ink">
+                {greetingByHour()}
+              </h1>
+              <p className="mt-1.5 text-[14px] text-ink-secondary">
+                {statusLine}
+              </p>
+            </div>
 
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  aria-expanded={archiveOpen}
-                  aria-controls={archivePanelId}
-                  onClick={() => setArchiveOpen(v => !v)}
-                  className={cn(
-                    "inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors",
-                    archiveOpen
-                      ? "bg-ink/[0.14] text-ink"
-                      : "bg-ink/[0.06] text-ink hover:bg-ink/[0.11]",
-                  )}
-                >
-                  <Archive size={14} aria-hidden="true" />
-                  <span>已通过汇报</span>
-                  {approvedCount > 0 && (
-                    <span className="rounded-full bg-ink/[0.1] px-1.5 py-0.5 text-[11px] font-semibold leading-none tabular-nums text-ink">
-                      {approvedCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void loadAll()}
-                  aria-label="刷新工作台"
-                  title="刷新"
-                  className="flex size-9 items-center justify-center rounded-full bg-ink/[0.05] text-ink-secondary transition-colors hover:bg-ink/[0.1] hover:text-ink"
-                >
-                  <RefreshCw size={14} className={loading ? "animate-spin" : ""} aria-hidden="true" />
-                </button>
-              </div>
-            </header>
-
-            {runtimeNotice && (
-              <div role="status" className="flex items-start gap-2.5 rounded-xl bg-ink/[0.04] px-4 py-3 text-[13px] text-ink-secondary">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
-                <span>{runtimeNotice}</span>
-              </div>
-            )}
-
-            {/* Paperclip-inspired borderless hairline KPI strip */}
-            <section aria-label="核心运行指标" className="grid grid-cols-2 gap-y-5 border-y border-hairline/50 py-5 sm:grid-cols-4 sm:divide-x sm:divide-hairline/40">
-              <div className="pr-4 sm:pr-6">
-                <div className="text-[12px] font-medium text-ink-tertiary">在岗员工</div>
-                <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums text-ink">
-                  {visibleBots.length}
-                </div>
-              </div>
-
-              <div className="pl-4 sm:px-6">
-                <div className="text-[12px] font-medium text-ink-tertiary">待我审批</div>
-                <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", pendingCount > 0 ? "text-ink" : "text-ink/50")}>
-                  {pendingCount}
-                </div>
-                {pendingCount > 0 && (
-                  <div className="mt-2 text-[12px] text-ink-secondary">点击展开汇报并一次通过</div>
-                )}
-              </div>
-
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={() => dispatch({ type: "showRoutines", view: "list" })}
-                className="group pr-4 text-left sm:px-6"
+                onClick={() => {
+                  void loadAll();
+                  void refreshInbox();
+                }}
+                aria-label="刷新工作台"
+                title="刷新"
+                className="flex size-9 items-center justify-center rounded-full bg-ink/[0.05] text-ink-secondary transition-colors hover:bg-ink/[0.1] hover:text-ink"
               >
-                <div className="text-[12px] font-medium text-ink-tertiary transition-colors group-hover:text-ink-secondary">
-                  自动化与工作流
-                </div>
-                <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", activeRoutineCount + activeWorkflowCount > 0 ? "text-ink" : "text-ink/50")}>
-                  {activeRoutineCount + activeWorkflowCount}
-                </div>
-                {(activeRoutineCount > 0 || activeWorkflowCount > 0) && (
-                  <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
-                    自动化 {activeRoutineCount} · 工作流 {activeWorkflowCount}
-                  </div>
-                )}
+                <RefreshCw size={14} className={loading ? "animate-spin" : ""} aria-hidden="true" />
               </button>
+            </div>
+          </header>
 
-              <div className="pl-4 sm:pl-6">
-                <div className="text-[12px] font-medium text-ink-tertiary">30 日真实算力</div>
-                <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", totalSpend > 0 ? "text-ink" : "text-ink/50")}>
-                  {formatCny(totalSpend)}
-                </div>
-                {totalSpend > 0 && overview?.spend.available && (
-                  <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
-                    LLM {formatCny(overview.spend.llmCost)} · 媒体 {formatCny(mediaTotalSpend)}
-                  </div>
-                )}
+          {runtimeNotice && (
+            <div role="status" className="flex items-start gap-2.5 rounded-xl bg-ink/[0.04] px-4 py-3 text-[13px] text-ink-secondary">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+              <span>{runtimeNotice}</span>
+            </div>
+          )}
+
+          {/* Focused 4-Metric Action & Briefing KPI Strip */}
+          <section
+            aria-label="核心运行指标"
+            className="grid grid-cols-2 gap-y-5 border-y border-hairline/50 py-5 sm:grid-cols-4 sm:divide-x sm:divide-hairline/40"
+          >
+            <div className="pr-4 sm:pr-6">
+              <div className="text-[12px] font-medium text-ink-tertiary">待我处理</div>
+              <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", actionCounts.total > 0 ? "text-ink" : "text-ink/50")}>
+                {actionCounts.total}
               </div>
-            </section>
-
-            {/* Pending Formal Reports — one click to approve, click header to expand full report & attachments */}
-            <section aria-label="待我审批">
-              {pendingReports.length === 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink/[0.03] px-4 py-3">
-                  <div className="flex items-center gap-2.5 text-[13px] text-ink-secondary">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-emerald-500/80" />
-                    <span>所有汇报与工作流均已审批，当前无需人工介入。</span>
-                  </div>
-                  {approvedCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setArchiveOpen(true)}
-                      className="inline-flex items-center gap-1 text-[13px] font-medium text-ink transition-opacity hover:opacity-75"
-                    >
-                      查看已通过汇报（{approvedCount}） <ArrowRight size={13} aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline/50 pb-3">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-[13px] font-semibold tracking-wide text-ink">待我审批</h2>
-                      <span className="text-[12px] tabular-nums text-ink-tertiary">{pendingCount}</span>
-                    </div>
-                    <span className="text-[12px] text-ink-tertiary">点击汇报展开正文与附件，一键通过或打回返工</span>
-                  </div>
-                  <div className="divide-y divide-hairline/40 border-b border-hairline/50">
-                    {pendingReports.map(report => (
-                      <OpcBossReportCard
-                        key={report.id}
-                        report={report}
-                        bot={botById.get(report.botId)}
-                        onResolved={handleReportResolved}
-                        onPreviewAttachment={(attachment, targetReport) => setPreviewState({ attachment, report: targetReport })}
-                        onJumpChat={handleJumpReport}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
-
-            {/* Linear-style hairline Employee & Real Spend Directory */}
-            <section aria-label="我的 AI 员工与算力">
-              <div className="flex items-baseline justify-between pb-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-[13px] font-semibold tracking-wide text-ink">我的 AI 员工与算力</h2>
-                  <span className="text-[12px] tabular-nums text-ink-tertiary">{employeeRows.length} 位</span>
-                </div>
-                <span className="text-[12px] text-ink-tertiary">近 30 日网关真实消费</span>
+              <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
+                {actionCounts.total > 0
+                  ? [
+                    actionCounts.approvals > 0 ? `审批 ${actionCounts.approvals}` : "",
+                    actionCounts.questions > 0 ? `提问 ${actionCounts.questions}` : "",
+                    actionCounts.alerts > 0 ? `告警 ${actionCounts.alerts}` : "",
+                  ].filter(Boolean).join(" · ")
+                  : "全部已清空"}
               </div>
+            </div>
 
-              <div
-                tabIndex={0}
-                role="region"
-                aria-label="AI 员工列表与近 30 日真实算力消耗"
-                className="overflow-x-auto border-y border-hairline/50"
-              >
-                {employeeRows.length === 0 ? (
-                  <div className="py-8 text-center text-[13px] text-ink-tertiary">
-                    还没有 AI 员工，可在左侧「Bot 广场」雇佣或新建机器人组建团队。
-                  </div>
-                ) : (
-                  <table className="w-full border-collapse text-left text-[13px]">
-                    <thead className="border-b border-hairline/40 text-[12px] text-ink-tertiary">
-                      <tr>
-                        <th scope="col" className="py-2.5 pr-4 font-normal">员工</th>
-                        <th scope="col" className="px-3 py-2.5 text-right font-normal">LLM</th>
-                        <th scope="col" className="px-3 py-2.5 text-right font-normal">媒体</th>
-                        <th scope="col" className="px-3 py-2.5 text-right font-normal">合计</th>
-                        <th scope="col" className="py-2.5 pl-4 text-right font-normal">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-hairline/35">
-                      {employeeRows.map(({ bot, llmCost, mediaCost, totalCost }) => (
-                        <tr key={bot.id} className="group transition-colors hover:bg-ink/[0.025]">
-                          <th scope="row" className="py-3 pr-4 font-normal">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <BotAvatar bot={bot} size={30} />
-                              <div className="min-w-0">
-                                <div className="truncate text-[14px] font-medium text-ink">{bot.name}</div>
-                                {bot.section && (
-                                  <div className="truncate text-[12px] text-ink-tertiary">{bot.section}</div>
-                                )}
-                              </div>
-                            </div>
-                          </th>
-                          <td className="px-3 py-3 text-right tabular-nums text-ink-tertiary">{formatCny(llmCost)}</td>
-                          <td className="px-3 py-3 text-right tabular-nums text-ink-tertiary">{formatCny(mediaCost)}</td>
-                          <td className={cn("px-3 py-3 text-right font-medium tabular-nums", totalCost > 0 ? "text-ink" : "text-ink-tertiary")}>
-                            {formatCny(totalCost)}
-                          </td>
-                          <td className="py-3 pl-4 text-right">
-                            <div className="inline-flex items-center justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openBotChat(bot)}
-                                className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink"
-                              >
-                                <MessageSquare size={12.5} aria-hidden="true" /> 对话
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => openBotArtifacts(bot)}
-                                className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink"
-                              >
-                                <Layers size={12.5} aria-hidden="true" /> 产物
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setLabBot(bot)}
-                                title="版本快照回滚、真题试岗评测与发布广场"
-                                className="inline-flex h-7 items-center gap-1 rounded-full bg-ink/[0.06] px-2.5 text-[12px] font-medium text-ink transition-colors hover:bg-ink/[0.12]"
-                              >
-                                <FlaskConical size={12.5} aria-hidden="true" /> 能力实验室
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+            <div className="pl-4 sm:px-6">
+              <div className="text-[12px] font-medium text-ink-tertiary">正在进行</div>
+              <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", runningCount > 0 ? "text-ink" : "text-ink/50")}>
+                {runningCount}
               </div>
-            </section>
+              <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
+                {runningCount > 0
+                  ? [
+                    activeWorkflowRuns.length > 0 ? `工作流 ${activeWorkflowRuns.length}` : "",
+                    runningThreads.length > 0 ? `任务 ${runningThreads.length}` : "",
+                  ].filter(Boolean).join(" · ")
+                  : "当前空闲"}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => focusBriefings(unreadBriefingCount > 0)}
+              className="group pr-4 text-left sm:px-6"
+            >
+              <div className="text-[12px] font-medium text-ink-tertiary transition-colors group-hover:text-ink-secondary">
+                今日报告
+              </div>
+              <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", todayReportCount > 0 ? "text-ink" : "text-ink/50")}>
+                {todayReportCount}
+              </div>
+              <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
+                {unreadBriefingCount > 0
+                  ? `${unreadBriefingCount} 份未读报告`
+                  : `累计归档 ${approvedReports.length + briefingReports.length} 份`}
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "showRoutines", view: "list" })}
+              className="group pl-4 text-left sm:pl-6"
+            >
+              <div className="text-[12px] font-medium text-ink-tertiary transition-colors group-hover:text-ink-secondary">
+                自动化运行
+              </div>
+              <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", activeRoutineCount + activeWorkflowCount > 0 ? "text-ink" : "text-ink/50")}>
+                {activeRoutineCount + activeWorkflowCount}
+              </div>
+              <div className="mt-2 truncate text-[12px] tabular-nums text-ink-tertiary">
+                {actionCounts.alerts > 0
+                  ? `${actionCounts.alerts} 项异常待处理`
+                  : `近 24h 完成 ${dayAutomationCompleted} 次`}
+              </div>
+            </button>
+          </section>
+
+          {/* 1. Unified Action Queue (Approvals + Questions/Permissions + Alerts) */}
+          <OpcActionQueueSection
+            pendingReports={pendingReports}
+            inboxView={inboxView}
+            inboxAsks={inboxAsks}
+            waitingThreads={waitingThreads}
+            trippedWorkflows={trippedWorkflows}
+            failedWorkflowRuns={failedWorkflowRuns}
+            trippedHeartbeats={trippedHeartbeats}
+            problemRoutineRuns={problemRoutineRuns}
+            unreadBriefingCount={unreadBriefingCount}
+            botById={botById}
+            onReportResolved={handleReportResolved}
+            onPreviewAttachment={(attachment, report) => setPreviewState({ attachment, report })}
+            onJumpReport={handleJumpReport}
+            onAnswerInboxRow={handleAnswerInboxRow}
+            onOpenInboxRow={handleOpenInboxRow}
+            onJumpThread={handleJumpThread}
+            onResetWorkflowBreaker={handleResetWorkflowBreaker}
+            onRetryWorkflow={wfId => handleRunWorkflow(wfId, {})}
+            onResetHeartbeatBreaker={handleResetHeartbeatBreaker}
+            onOpenRoutinesProblems={() => dispatch({ type: "showRoutines", section: "logs", runStatus: "problems" })}
+            onOpenWorkflows={() => dispatch({ type: "showTeamMap" })}
+            onFocusUnreadBriefings={() => focusBriefings(true)}
+          />
+
+          {/* 2. Live Running Work (auto-hides when idle) */}
+          <OpcActiveWorkBanner
+            activeWorkflowRuns={activeWorkflowRuns}
+            runningThreads={runningThreads}
+            botById={botById}
+            onCancelWorkflowRun={handleCancelWorkflowRun}
+            onJumpThread={handleJumpThread}
+            onOpenWorkflows={() => dispatch({ type: "showTeamMap" })}
+          />
+
+          {/* 3. Primary Hub: Non-Approval Reports, Approved Archive & Deliverables */}
+          <div ref={reportsSectionRef}>
+            <OpcBriefingReportsPanel
+              activeTab={reportsTab}
+              onTabChange={setReportsTab}
+              briefingReports={briefingReports}
+              approvedReports={approvedReports}
+              pendingReports={pendingReports}
+              botById={botById}
+              unreadOnly={unreadOnly}
+              onUnreadOnlyChange={setUnreadOnly}
+              onMarkReportsRead={handleMarkReportsRead}
+              onPreviewAttachment={(attachment, report) => setPreviewState({ attachment, report })}
+              onJumpChat={handleJumpReport}
+            />
           </div>
-        </div>
 
-        {/* Right sidebar drawer for approved reports, sorted reverse-chronologically by approval date */}
-        <OpcApprovedReportsDrawer
-          id={archivePanelId}
-          open={archiveOpen}
-          reports={approvedReports}
-          botById={botById}
-          modalActive={previewState !== null || labBot !== null}
-          onClose={() => setArchiveOpen(false)}
-          onPreviewAttachment={(attachment, report) => setPreviewState({ attachment, report })}
-          onJumpChat={handleJumpReport}
-        />
+          {/* 4. Lightweight Footer: Automation Pulse & Quick-Launch Workflows */}
+          <OpcAutomationFooterSection
+            workflows={workflows}
+            recentWorkflowRuns={recentWorkflowRuns}
+            routines={routines}
+            routineRuns={routineRuns}
+            botById={botById}
+            onRunWorkflow={handleRunWorkflow}
+            onOpenRoutines={() => dispatch({ type: "showRoutines", view: "list" })}
+            onOpenWorkflows={() => dispatch({ type: "showTeamMap" })}
+          />
+        </div>
       </div>
 
       {/* Full-format attachment preview & download modal */}
@@ -440,15 +567,6 @@ export function OpcBossConsolePage() {
         onClose={() => setPreviewState(null)}
         onJumpToChat={previewState ? () => handleJumpReport(previewState.report) : undefined}
       />
-
-      {/* Skill & Bot Studio Modal launched directly from any employee row */}
-      {labBot && (
-        <OpcSkillStudioModal
-          bot={labBot}
-          open
-          onClose={() => setLabBot(null)}
-        />
-      )}
     </main>
   );
 }

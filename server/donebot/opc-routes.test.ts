@@ -508,8 +508,9 @@ describe("OPC Store, Studio Attribution & Routes", () => {
     const mobileOwnerAuth = { kind: "session", via: "bearer", scopes: ["client"], session: { id: "mobile-" + "a".repeat(64) } };
     const regularClientAuth = { kind: "session", via: "bearer", scopes: ["client"], session: { id: "team-member-session-1" } };
 
-    // Personal mobile owner can read Boss overview, but cannot touch goals/heartbeats/org
+    // Personal mobile owner can read Boss overview & mark briefing reports read, but cannot touch goals/heartbeats/org
     expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30", undefined, mobileOwnerAuth)).status).toBe(200);
+    expect((await callRoute(opcHandler, "POST", "/api/donebot/opc/reports/read", { reportIds: ["msg:t-m:m1"], read: true }, mobileOwnerAuth)).status).toBe(200);
     expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/goals", undefined, mobileOwnerAuth)).status).toBe(403);
     expect((await callRoute(opcHandler, "GET", "/api/donebot/opc/heartbeats", undefined, mobileOwnerAuth)).status).toBe(403);
     expect((await callRoute(wfHandler, "GET", "/api/donebot/opc/org", undefined, mobileOwnerAuth)).status).toBe(403);
@@ -530,6 +531,68 @@ describe("OPC Store, Studio Attribution & Routes", () => {
       if (prev === undefined) delete process.env.DONEBOT_TEAM_RUNTIME;
       else process.env.DONEBOT_TEAM_RUNTIME = prev;
     }
+
+    opcHandler.stopScheduler();
+  });
+
+  it("persists briefing report read receipts and returns briefingReports, activeWorkflowRuns, and workflows in overview", async () => {
+    const dir = makeTempDir();
+    const stateFile = join(dir, "opc-state.json");
+    const opcStore = new DoneBotOpcStore(stateFile);
+    const orgStore = new DoneBotOrgWorkflowStore(join(dir, "opc-org.json"));
+    const bot = {
+      id: "bot-r",
+      name: "分析师",
+      color: "blue",
+      section: "增长部",
+      threadId: "t-r",
+      tasks: [{ threadId: "t-r", title: "周报" }],
+    } as unknown as BotRecord;
+    const messages = [
+      { id: "m-brief", role: "bot", kind: "text", text: "正式汇报：本周增长简报\n新增留存提升 12%，建议下周继续放量投放。", at: 5000 },
+    ];
+    const store = {
+      bots: [bot],
+      bot: (id: string) => (id === bot.id ? bot : undefined),
+      messagesFor: (tid: string) => (tid === "t-r" ? messages : []),
+      updateBot: () => {},
+    } as unknown as Store;
+    const wf = orgStore.createWorkflow({
+      name: "每日巡检",
+      steps: [{ name: "分析", botId: bot.id, instruction: "汇总今日数据", approvalGate: false }],
+    });
+    const gateway = { collabCtx: () => null } as unknown as DoneBotGateway;
+    const opcHandler = createDoneBotOpcRoutes({
+      opcStore, orgStore, gateway, store,
+      listBotSkills: () => [], readBotSkill: () => null, installBotSkill: () => ({ name: "x", enabled: true }) as never,
+      setBotSkillEnabled: () => ({ name: "x", enabled: true }) as never, removeBotSkill: () => {},
+      generateBotText: async () => "", startTurn: vi.fn(), broadcast: vi.fn(), publicBot: b => b, startScheduler: false,
+    });
+
+    const before = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
+    expect(before.status).toBe(200);
+    const beforeData = before.payload as {
+      briefingReportCount: number;
+      unreadBriefingCount: number;
+      briefingReports: Array<{ id: string; readAt?: number }>;
+      workflows: Array<{ id: string }>;
+    };
+    expect(beforeData.briefingReportCount).toBe(1);
+    expect(beforeData.unreadBriefingCount).toBe(1);
+    expect(beforeData.workflows.map(w => w.id)).toEqual([wf.id]);
+    const reportId = beforeData.briefingReports[0]!.id;
+
+    const mark = await callRoute(opcHandler, "POST", "/api/donebot/opc/reports/read", { reportIds: [reportId], read: true });
+    expect(mark.status).toBe(200);
+
+    const after = await callRoute(opcHandler, "GET", "/api/donebot/opc/overview?days=30");
+    const afterData = after.payload as { unreadBriefingCount: number; briefingReports: Array<{ id: string; readAt?: number }> };
+    expect(afterData.unreadBriefingCount).toBe(0);
+    expect(typeof afterData.briefingReports[0]!.readAt).toBe("number");
+
+    // Verify persistence across store reload
+    const reloaded = new DoneBotOpcStore(stateFile);
+    expect(reloaded.getReportReadAt(reportId)).toBe(afterData.briefingReports[0]!.readAt);
 
     opcHandler.stopScheduler();
   });

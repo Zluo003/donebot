@@ -111,6 +111,16 @@ export const opcApi = {
     );
   },
 
+  markReportsRead(
+    reportIds: string[],
+    read = true,
+  ): Promise<{ ok: boolean; count: number; readAt: number | null }> {
+    return api<{ ok: boolean; count: number; readAt: number | null }>(
+      "/api/donebot/opc/reports/read",
+      { method: "POST", body: JSON.stringify({ reportIds, read }) },
+    );
+  },
+
   async listSnapshots(botId: string): Promise<OpcConfigSnapshot[]> {
     const res = await api<{ snapshots?: OpcConfigSnapshot[] }>(
       `/api/donebot/opc/bots/${encodeURIComponent(botId)}/snapshots`,

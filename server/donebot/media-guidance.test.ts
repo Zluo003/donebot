@@ -106,4 +106,20 @@ describe("DoneBot configured local media contracts", () => {
     expect(schema.properties.parameters.properties).toHaveProperty("prompt");
     expect(JSON.stringify(body)).not.toContain("agents_media_model_capabilities");
   });
+
+  it("exposes agents_transcribe_audio only when the account catalog enables the ASR model", () => {
+    expect(guideDoneBotMedia(input(), FAKE_DONEBOT_CATALOG).tools.map(t => t.function.name)).not.toContain("agents_transcribe_audio");
+    const catalog = structuredClone(FAKE_DONEBOT_CATALOG);
+    catalog.models.push({
+      id: "qwen-audio-3.1-asr-flash-streaming",
+      display_name: "Qwen Audio ASR",
+      media_types: ["audio"],
+      interfaces: ["openai.audio.transcriptions.realtime"],
+      platforms: [],
+    });
+    const guided = guideDoneBotMedia(input(), catalog);
+    const tool = guided.tools.find(t => t.function.name === "agents_transcribe_audio");
+    expect(tool).toBeDefined();
+    expect(tool!.function.description).toContain("qwen-audio-3.1-asr-flash-streaming");
+  });
 });

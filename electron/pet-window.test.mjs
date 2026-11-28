@@ -76,6 +76,7 @@ describe("desktop pet prefs & geometry", () => {
       enabled: true,
       replyMode: "text",
       voiceMode: true,
+      wakeWord: "  小宝\u0007  同学  ",
       autoAnnounceReports: false,
       hideInFullscreen: false,
       muted: true,
@@ -85,12 +86,17 @@ describe("desktop pet prefs & geometry", () => {
       enabled: true,
       replyMode: "text",
       voiceMode: true,
+      wakeWord: "小宝 同学",
       autoAnnounceReports: false,
       hideInFullscreen: false,
       muted: true,
       position: { rx: 1, ry: 0, displayId: 42 },
     });
-    expect(parsePetPrefs({ replyMode: "invalid" }).replyMode).toBe("tts");
+    expect(parsePetPrefs({ replyMode: "invalid", wakeWord: 123 })).toMatchObject({
+      replyMode: "tts",
+      wakeWord: "",
+    });
+    expect(parsePetPrefs({ wakeWord: "一".repeat(40) }).wakeWord).toBe("一".repeat(24));
   });
 
   it("enforces macOS-only & hidden-while-main-visible rule", () => {

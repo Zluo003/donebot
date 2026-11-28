@@ -29,6 +29,14 @@ import {
 } from "./media-registry.ts";
 import { publicArtifactResponse } from "./media-download.ts";
 import { DoneBotMediaPreferencesStore, createDoneBotMediaSettingsRoute } from "./media-preferences.ts";
+import { DoneBotTurnLimitsStore, createDoneBotTurnLimitsRoute } from "./turn-limits.ts";
+import {
+  DoneBotBrowserProxyStore,
+  createDesktopBrowserProxyBridge,
+  createDoneBotBrowserProxyRoute,
+  type ProxyParentPort,
+} from "./browser-proxy.ts";
+import { browserEgress } from "../browser/egress/registry.ts";
 import { DoneBotMarketInstallStore, attachMarketHeaders, currentMarketBotId } from "./market-installs.ts";
 import { DoneBotTeamModelGateway } from "./team-model-gateway.ts";
 import { teamRuntimeActor, type DoneBotTeamRuntime } from "./team-runtime.ts";
@@ -63,6 +71,15 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
   const authenticated = () => team ? team.authenticated() : gateway.authenticated();
   const model = (id: string) => catalog()?.models.find(model => model.id === id);
   const mediaPreferences = new DoneBotMediaPreferencesStore(join(dataDir, "donebot", "media-preferences.json"));
+  const turnLimits = new DoneBotTurnLimitsStore(join(dataDir, "donebot", "turn-limits.json"));
+  const browserProxy = new DoneBotBrowserProxyStore(join(dataDir, "donebot", "browser-proxy.json"));
+  const browserProxyBridge = createDesktopBrowserProxyBridge(browserProxy, {
+    parentPort: (process as NodeJS.Process & { parentPort?: ProxyParentPort }).parentPort,
+  });
+  const localDesktopProxy = !team && !cloudCredential && !cloudHomeConfigured();
+  if (localDesktopProxy) {
+    browserEgress.setDesktopUpstream(browserProxyBridge.desktopUpstream);
+  }
   const marketInstalls = new DoneBotMarketInstallStore(join(dataDir, "donebot", "bot-market-installs.json"));
   let goalContextProvider: ((botId: string) => string | undefined) | null = null;
   gateway.bindMediaPreferences(() => mediaPreferences.get(gateway.scope()?.accountId));
@@ -79,6 +96,7 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
     mediaPreferences: () => gateway.mediaPreferences(),
     protocol: id => doneBotProtocol(id, catalog()), authenticated, requiresExecutionContext: Boolean(team),
     toolUse: id => model(id)?.capabilities?.tool_calling === true,
+    turnLimits: () => turnLimits.get(),
   });
   const localCodingAgentsEnabled = enabled && !team && !cloudCredential && !cloudHomeConfigured();
   const drivers = localCodingAgentsEnabled ? [driver, ...externalCodingAgentDrivers()] : [driver];
@@ -176,7 +194,16 @@ export function createDoneBotRuntimeHost(dataDir: string, config: () => AppConfi
       return parsed.origin === fixtureOrigin && ["/fixture-audio.mp3", "/fixture-image.png"].includes(parsed.pathname) && !parsed.search && !parsed.hash
         ? fetch(url, { signal, redirect: "error", credentials: "omit" }) : publicArtifactResponse(url, signal);
     } : undefined,
-    routes: enabled ? team ? [teamRoute] : [createDoneBotMediaSettingsRoute(gateway, mediaPreferences), createDoneBotAccountRoutes(gateway)] : [],
+    routes: enabled
+      ? team
+        ? [createDoneBotTurnLimitsRoute(turnLimits), teamRoute]
+        : [
+          createDoneBotTurnLimitsRoute(turnLimits),
+          ...(localDesktopProxy ? [createDoneBotBrowserProxyRoute(browserProxy, browserProxyBridge.detectSystemProxy)] : []),
+          createDoneBotMediaSettingsRoute(gateway, mediaPreferences),
+          createDoneBotAccountRoutes(gateway),
+        ]
+      : [],
     helpers: () => createDoneBotHelpers(gateway, config, dataDir),
     describeDecider: () => describeDoneBotDecider(config(), authenticated()),
     async restore() {

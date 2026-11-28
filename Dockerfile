@@ -139,7 +139,7 @@ FROM runtime AS cloud-home
 ARG UV_VERSION=0.13.4
 ARG TARGETARCH
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 poppler-utils unzip bubblewrap socat \
+  && apt-get install -y --no-install-recommends python3 poppler-utils unzip bubblewrap socat ffmpeg \
   && rm -rf /var/lib/apt/lists/* \
   && HOME=/tmp/omb-build-home npm install -g pnpm@10.33.0 \
   && uv_arch=x86_64 && if [ "$TARGETARCH" = arm64 ]; then uv_arch=aarch64; fi \
@@ -219,7 +219,7 @@ CMD ["node", "/app/dist-server/cloud-home-start.js"]
 
 FROM runtime AS cloud-service
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 bubblewrap socat \
+  && apt-get install -y --no-install-recommends python3 bubblewrap socat ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 LABEL cn.donebot.teams.protocol="donebot.teams.v1"
 # Optional engine CLIs baked into the image (space-separated npm packages).

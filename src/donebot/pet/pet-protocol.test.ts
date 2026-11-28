@@ -49,6 +49,32 @@ describe("desktop pet protocol helpers", () => {
     expect(matchWakeWord("今天天气真不错", "多宝")).toEqual({ matched: false, remainder: "" });
   });
 
+  it("matches saved custom wake word exclusively, extracts remainder, and guards ASCII word boundaries", () => {
+    expect(buildWakePhrase("多宝", "小宝同学")).toBe("小宝同学");
+    expect(buildWakePhrase("多宝", "   ")).toBe("你好多宝");
+
+    expect(matchWakeWord("小宝同学", "多宝", "小宝同学")).toEqual({ matched: true, remainder: "" });
+    expect(matchWakeWord("前面杂音 小宝，同学，帮我查一下汇报", "多宝", "小宝同学")).toEqual({
+      matched: true,
+      remainder: "帮我查一下汇报",
+    });
+    // Once a custom wake word is saved, the old default phrase no longer triggers wake.
+    expect(matchWakeWord("你好多宝", "多宝", "小宝同学")).toEqual({ matched: false, remainder: "" });
+
+    // Custom phrase starting with 你好 still tolerates 您好.
+    expect(matchWakeWord("您好小助手，总结一下", "多宝", "你好小助手")).toEqual({
+      matched: true,
+      remainder: "总结一下",
+    });
+
+    // ASCII custom wake word respects word boundaries so substrings don't false-trigger.
+    expect(matchWakeWord("hey jarvis, open inbox", "多宝", "Hey Jarvis")).toEqual({
+      matched: true,
+      remainder: "open inbox",
+    });
+    expect(matchWakeWord("a robot is here", "多宝", "bot")).toEqual({ matched: false, remainder: "" });
+  });
+
   it("picks idle vs busy wake replies using the user's configured title", () => {
     const pool = buildWakeReplyPool("老板");
     expect(pool.idle).toContain("老板，我在。");

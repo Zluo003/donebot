@@ -26,6 +26,7 @@ import { createMediaApproval } from "./media-approval.ts";
 import { mediaReferenceMime } from "./media-assets.ts";
 import { openMediaArtifact } from "./media-download.ts";
 import { createDoneBotMediaRoutes } from "./media-routes.ts";
+import { createDoneBotMediaTranscriber } from "./media-transcribe.ts";
 import { DoneBotMediaService, type MediaContext, type MediaJob } from "./media.ts";
 import { selectedMediaModels } from "./media-preferences.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
@@ -180,11 +181,33 @@ export function createDoneBotMediaHost(deps: DoneBotMediaHostDeps) {
   }
   const mediaRouteContexts = new AsyncLocalStorage<MediaContext>();
   donebot.bindMediaActivity(accountId => donebotMedia.activeCount(accountId));
+  const MAX_TRANSCRIBE_SOURCE_BYTES = 20 * 1024 * 1024 * 1024;
+  const donebotTranscriber = createDoneBotMediaTranscriber({
+    scope: () => donebot.scope(),
+    catalog: () => donebot.models(),
+    fetchGateway: (scope, path, init) => donebot.requestForScope(scope, path, init),
+    openLocalMedia: async (context, localPath) => {
+      if (!context.active()) throw Object.assign(new Error("This media turn has ended."), { status: 403 });
+      const messages = store.messagesFor(context.threadId);
+      const attachment = messages.some(message => message.attachments?.some(file => file.path === localPath));
+      const attached = attachment || messages.some(message => Boolean(message.text && messageAttachmentName(message.text, localPath)));
+      const roots = deps.messageFileRootsForThread(context.botId, context.threadId).filter(root => root !== deps.attachmentsDir);
+      const file = await openMessageFile(localPath, attached ? [...roots, deps.attachmentsDir] : roots, MAX_TRANSCRIBE_SOURCE_BYTES);
+      return {
+        path: file.path,
+        name: file.name,
+        mime: mediaReferenceMime(file.mime, file.name),
+        bytes: file.bytes,
+        readBytes: async () => new Uint8Array(await file.handle.readFile()),
+        close: () => file.handle.close(),
+      };
+    },
+  });
   const donebotMediaRoutes = createDoneBotMediaRoutes(donebotMedia, () => {
     const context = mediaRouteContexts.getStore();
     if (!context) throw new Error("No active media turn.");
     return context;
-  }, kind => selectedMediaModels(donebot.models(), donebot.mediaPreferences(), kind));
+  }, kind => selectedMediaModels(donebot.models(), donebot.mediaPreferences(), kind), donebotTranscriber);
   const artifactRoute: RouteHandler = async ({ path, method, req, res, json, auth }) => {
     const match = /^\/api\/attachments\/(donebot-([a-f0-9-]{36})-\d+\.[a-z0-9]+)$/.exec(path);
     if (!match || method !== "GET") return PASS;

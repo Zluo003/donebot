@@ -144,6 +144,8 @@ interface RuntimeOptions<Config> {
   /** A model on this machine or network: read a tool call it wrote as text, stop it repeating itself, and send it back
    * to fix a failed call instead of ending the turn on it. */
   localModel?: boolean;
+  maxChatRounds?: () => number;
+  maxTurnToolCalls?: () => number;
 }
 
 const usageFrom = (usage: CompletionJson["usage"]): Usage | null =>
@@ -158,6 +160,7 @@ const asError = (value: unknown): Error =>
 
 const MAX_CHAT_ROUNDS = 64;
 const MAX_TURN_TOOL_CALLS = 200;
+const resolveCap = (raw: number | undefined, fallback: number) => typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0 ? raw : fallback;
 const MAX_ANNOUNCEMENT_NUDGES = 3;
 const stoppedAfter = (count: string) =>
   `Stopped after ${count} without a final answer. The steps so far already ran, so ask only for what's left.`;
@@ -600,7 +603,9 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         if (questionAllowed && !tools.definitions.some((definition) => definition.function.name === ASK_USER_TOOL)) {
           tools.definitions.push(ASK_USER_TOOL_DEFINITION);
         }
-        for (let round = 0; round < MAX_CHAT_ROUNDS; round++) {
+        const maxChatRounds = resolveCap(options.maxChatRounds?.(), MAX_CHAT_ROUNDS);
+        const maxTurnToolCalls = resolveCap(options.maxTurnToolCalls?.(), MAX_TURN_TOOL_CALLS);
+        for (let round = 0; round < maxChatRounds; round++) {
           abort.signal.throwIfAborted();
             // Between rounds, never inside a tool batch.
           unread = turnEntry.asides.splice(0);
@@ -609,7 +614,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             imageNoticeShown = true;
             emit({ ...base(turn.threadId, turnId), type: "runtime.notice", message: "已整理图片上下文，原图仍保留，可按需重新读取。" });
           }
-          turnEntry.ending = round === MAX_CHAT_ROUNDS - 1;
+          turnEntry.ending = round === maxChatRounds - 1;
           native("out", options.nativeLog.outgoing(turn, messages, model, tools.definitions));
           let attempt = 0;
           let resized = false;
@@ -750,7 +755,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             if (options.nudgeAnnouncedAction && tools.definitions.length && announcesAction(completion.text)) {
               if (nudges >= MAX_ANNOUNCEMENT_NUDGES || turnEntry.ending) {
                 stopReason = "incomplete_action";
-                throw new ChatProtocolError(`Stopped after ${turnEntry.ending ? `${MAX_CHAT_ROUNDS} steps` : `${MAX_ANNOUNCEMENT_NUDGES} announcement nudges`} without a verified final answer. Earlier operations may have taken effect; inspect their state and continue only the remaining work.`);
+                throw new ChatProtocolError(`Stopped after ${turnEntry.ending ? `${maxChatRounds} steps` : `${MAX_ANNOUNCEMENT_NUDGES} announcement nudges`} without a verified final answer. Earlier operations may have taken effect; inspect their state and continue only the remaining work.`);
               }
               if (callsAtNudge === seenCalls.size) {
                 stopReason = "incomplete_action";
@@ -774,7 +779,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             if (seenCalls.has(call.id)) throw new ChatProtocolError("provider reused a tool-call ID; refusing to repeat an operation");
             seenCalls.add(call.id);
           }
-          if (seenCalls.size > MAX_TURN_TOOL_CALLS) throw new ChatProtocolError(stoppedAfter(`${MAX_TURN_TOOL_CALLS} tool calls`));
+          if (seenCalls.size > maxTurnToolCalls) throw new ChatProtocolError(stoppedAfter(`${maxTurnToolCalls} tool calls`));
           messages.push(assistantReply(model, completion, completion.text || null, completion.toolCalls));
           // A failure stays pending only until the bot runs tools again: one that went on to use more tools has read the error
           // and reacted (a wrong guess, a bad query, then the right call), so its turn is not failed for it, on any model. The
@@ -874,7 +879,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
           }
           if (screenshotParts.length) messages.push({ role: "user", content: screenshotParts });
         }
-        if (!ok) throw new ChatProtocolError(stoppedAfter(`${MAX_CHAT_ROUNDS} steps`));
+        if (!ok) throw new ChatProtocolError(stoppedAfter(`${maxChatRounds} steps`));
       } catch (value) {
         stopReason = abort.signal.aborted ? "interrupted" : stopReason ?? "error";
         failure = safeText(asError(value).message).slice(0, 2_000);

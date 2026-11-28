@@ -46,6 +46,22 @@ export const DONEBOT_MEDIA_TOOL_DEFINITIONS = [
     description: `Stop a DoneBot media job's local dispatch or automatic follow-up. A queued job is removed from local dispatch; an existing provider task may still finish and its result is retained. Follow reply_context and the returned state; stopping the wait does not establish provider cancellation or billing. ${MEDIA_REPLY_STYLE} ${MEDIA_PROGRESS_RULES}`,
     inputSchema: { type: "object", additionalProperties: false, properties: { job_id: { type: "string", minLength: 1, maxLength: 64 } }, required: ["job_id"] },
   },
+  {
+    name: "transcribe_audio",
+    description: "Transcribe spoken dialogue from a local audio or video file (WAV/PCM directly, or MP4/MOV/MKV/MP3/M4A via local ffmpeg) through the signed-in DoneBot gateway ASR model, returning full text and timestamped segments. Use start_sec and duration_sec (up to 600 s per call) to slice key windows from long videos or livestream recordings instead of transcribing hours at once.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        local_path: { type: "string", minLength: 1, maxLength: 8192, description: "Workspace or attached local audio/video file path." },
+        start_sec: { type: "number", minimum: 0, description: "Optional start offset in seconds (default 0)." },
+        duration_sec: { type: "number", minimum: 1, maximum: 600, description: "Optional slice duration in seconds (max 600 s per call)." },
+        language_hints: { type: "array", items: { type: "string", minLength: 2, maxLength: 32 }, maxItems: 8, description: "Optional language hints such as ['zh', 'en']." },
+        hotwords: { type: "object", additionalProperties: { type: "integer" }, description: "Optional domain vocabulary weights (1-5 or 50), e.g. brand or product names." },
+      },
+      required: ["local_path"],
+    },
+  },
 ];
 
 export const DONEBOT_MEDIA_TOOL_NAMES: ReadonlySet<string> = new Set(DONEBOT_MEDIA_TOOL_DEFINITIONS.map(tool => tool.name));
@@ -53,6 +69,10 @@ export const DONEBOT_LEGACY_MEDIA_TOOL_NAMES: ReadonlySet<string> = new Set(["me
 
 export async function callDoneBotMediaTool(name: string, args: Json, context: ToolCallContext): Promise<ToolCallResult> {
   const input = args as Record<string, Json>;
+  if (name === "transcribe_audio") {
+    const { ok, body: response } = await context.client.apiResponse("/api/internal/donebot/media/transcribe", { method: "POST", body: JSON.stringify(input) });
+    return ok ? { text: JSON.stringify(response) } : { text: String(response.error ?? "DoneBot audio transcription failed."), isError: true };
+  }
   const kind = typeof input.kind === "string" ? input.kind : undefined;
   const model = typeof input.model === "string" ? input.model : undefined;
   const generationKind = name === "generate_audio" ? "audio" : name === "generate_image" || name === "generate_video" ? name.slice("generate_".length) : undefined;

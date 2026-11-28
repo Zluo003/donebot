@@ -9,18 +9,39 @@ import { isCollabEligible, isHumanTeamCollabVisible } from "./collab-store";
 
 const mockApi = vi.hoisted(() => vi.fn<(path: string, init?: RequestInit) => Promise<unknown>>());
 const mockDispatch = vi.hoisted(() => vi.fn());
+const mockInboxView = vi.hoisted(() => ({ current: null as unknown }));
+const mockStoreBots = vi.hoisted(() => ({
+  current: [{
+    id: "b1",
+    name: "封面视觉",
+    color: "blue",
+    hidden: false,
+    threadId: "t1",
+    section: "设计部",
+    modelSelection: { instanceId: "i1", model: "m1" },
+  }] as Array<Record<string, unknown>>,
+}));
 
 vi.mock("@/state/api", () => ({ api: mockApi }));
-vi.mock("@/state/inbox", () => ({ closeInbox: vi.fn() }));
+vi.mock("@/state/inbox", () => ({
+  closeInbox: vi.fn(),
+  readInboxRow: vi.fn(),
+  refreshInbox: vi.fn(async () => {}),
+  settleInboxRow: vi.fn(),
+  useInboxView: () => mockInboxView.current,
+}));
 vi.mock("@/components/DesktopCapabilities", () => ({ useCaptionChrome: () => ({ dragProps: {} }) }));
 vi.mock("@/state/store", () => ({
   openBot: vi.fn(),
   useStore: () => ({
     state: {
       activeView: "boss",
-      bots: [{ id: "b1", name: "封面视觉", color: "blue", hidden: false, modelSelection: { instanceId: "i1", model: "m1" } }],
+      bots: mockStoreBots.current,
       groups: [],
       instances: [],
+      pendingQueued: {},
+      routines: [],
+      routineRuns: [],
       config: { donebot: { enabled: true, authenticated: true } },
     },
     dispatch: mockDispatch,
@@ -50,6 +71,16 @@ afterEach(() => {
   if (container) { container.remove(); container = null; }
   mockApi.mockReset();
   mockDispatch.mockReset();
+  mockInboxView.current = null;
+  mockStoreBots.current = [{
+    id: "b1",
+    name: "封面视觉",
+    color: "blue",
+    hidden: false,
+    threadId: "t1",
+    section: "设计部",
+    modelSelection: { instanceId: "i1", model: "m1" },
+  }];
 });
 
 describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
@@ -187,30 +218,42 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     expect(container.textContent).toContain("工作台");
     expect(container.textContent).toContain("打开完整工作台");
 
-    // 3. Full Boss Console renders KPI strip, employee table, and no duplicate nav/hire buttons or removed Goal Card / 24h Heartbeat
+    // 3. Full Boss Console renders focused 4-metric KPI strip & report hub without employee/spend directory
     await act(async () => {
       root!.render(createElement(OpcBossConsolePage));
     });
-    expect(container.textContent).toContain("在岗员工");
-    expect(container.textContent).toContain("封面视觉");
-    expect(container.textContent).not.toContain("组织与流程");
-    expect(container.textContent).not.toContain("雇佣工作室");
-    expect(container.textContent).not.toContain("去广场逛 AI 工作室");
-    expect(container.textContent).not.toContain("从广场一键雇佣");
+    expect(container.textContent).toContain("待我处理");
+    expect(container.textContent).toContain("正在进行");
+    expect(container.textContent).toContain("今日报告");
+    expect(container.textContent).toContain("自动化运行");
+    expect(container.textContent).toContain("最新报告");
+    expect(container.textContent).toContain("已通过归档");
+    expect(container.textContent).toContain("交付附件");
+    expect(container.textContent).not.toContain("我的 AI 员工与算力");
+    expect(container.textContent).not.toContain("30 日真实算力");
+    expect(container.textContent).not.toContain("在岗员工");
+    expect(container.textContent).not.toContain("正在进行中");
     expect(container.textContent).not.toContain("项目目标卡");
     expect(container.textContent).not.toContain("24h 静默巡检");
   });
 
-  it("expands formal Boss report, approves in one click into the reverse-chronological approved right drawer, and reads archived reports", async () => {
+  it("handles unified action queue (approvals + bot questions + alerts), live running banner, briefing reports read receipts, and quick workflow launch", async () => {
     const earlierApprovedAt = new Date(2026, 10, 20, 10, 30).getTime();
+    mockStoreBots.current = [
+      { id: "b1", name: "封面视觉", color: "blue", hidden: false, threadId: "t1", section: "独立站", modelSelection: { instanceId: "i1", model: "m1" } },
+      { id: "b2", name: "分镜师", color: "purple", hidden: false, threadId: "t2", section: "影视部", activity: "waiting-on-you", tasks: [{ threadId: "t2", title: "第 3 镜构图确认", createdAt: 1000, activity: "waiting-on-you" }], modelSelection: { instanceId: "i1", model: "m1" } },
+      { id: "b3", name: "影匠", color: "teal", hidden: false, threadId: "t3", section: "影视部", busy: true, activity: "working", tasks: [{ threadId: "t3", title: "20秒打斗视频渲染", createdAt: 2000, busy: true, activity: "working" }], modelSelection: { instanceId: "i1", model: "m1" } },
+    ];
     mockApi.mockImplementation(async (path, init) => {
       if (path.startsWith("/api/donebot/opc/overview")) {
         return {
           pendingArtifactCount: 2,
           pendingReportCount: 1,
+          briefingReportCount: 1,
+          unreadBriefingCount: 1,
           approvedReportCount: 1,
           activeHeartbeatCount: 0,
-          trippedCircuitBreakerCount: 0,
+          trippedCircuitBreakerCount: 1,
           activeGoalCount: 0,
           activeWorkflowCount: 1,
           waitingWorkflowCount: 0,
@@ -219,6 +262,7 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
           pendingReports: [{
             id: "msg:t1:m1",
             source: "bot_report",
+            approvalRequired: true,
             title: "独立站首月投放复盘报告",
             summary: "ROI 达到 3.4，建议加大美区短视频预算。",
             body: "# 独立站首月投放复盘报告\n\n## 核心结论\n\n- ROI 达到 **3.4**，超出目标预期。\n",
@@ -236,9 +280,29 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
             ],
             artifactIds: ["a1", "a2"],
           }],
+          briefingReports: [{
+            id: "msg:t3:m-brief",
+            source: "bot_report",
+            approvalRequired: false,
+            title: "20秒打斗视频阶段简报",
+            summary: "已完成第 1 轮动态镜头的生成与自检。",
+            body: "## 20秒打斗视频阶段简报\n\n镜头节奏已对齐分镜脚本。",
+            botId: "b3",
+            botName: "影匠",
+            botColor: "teal",
+            department: "影视部",
+            at: Date.now(),
+            threadId: "t3",
+            reportMessageId: "m-brief",
+            attachments: [
+              { id: "a-vid", name: "fight-20s.mp4", path: "/tmp/fight-20s.mp4", kind: "video", threadId: "t3", messageId: "m-brief", previewUrl: "/api/threads/t3/messages/m-brief/file?preview=1&path=%2Ftmp%2Ffight-20s.mp4" },
+            ],
+            artifactIds: ["a-vid"],
+          }],
           approvedReports: [{
             id: "msg:t1:m0",
             source: "bot_report",
+            approvalRequired: true,
             title: "上周竞品调研简报",
             summary: "竞品上新 2 款高客单 SKU。",
             body: "# 上周竞品调研简报\n\n详细分析如下。",
@@ -255,11 +319,63 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
             ],
             artifactIds: ["a0"],
           }],
+          activeWorkflowRuns: [{
+            id: "run-active-1",
+            workflowId: "wf-1",
+            workflowName: "影视出片流程",
+            trigger: "manual",
+            variables: {},
+            status: "running",
+            currentStepIndex: 1,
+            stepResults: [
+              { stepId: "s1", stepName: "分镜拆解", botId: "b2", botName: "分镜师", status: "completed" },
+              { stepId: "s2", stepName: "视频生成", botId: "b3", botName: "影匠", status: "running" },
+            ],
+            startedAt: Date.now() - 5000,
+          }],
+          recentWorkflowRuns: [],
+          workflows: [
+            {
+              id: "wf-1",
+              name: "影视出片流程",
+              description: "",
+              enabled: true,
+              scheduleKind: "manual",
+              steps: [],
+              variables: [],
+              maxConsecutiveFailures: 3,
+              consecutiveFailures: 0,
+              pausedByCircuitBreaker: false,
+              createdAt: 1,
+              updatedAt: 1,
+            },
+            {
+              id: "wf-tripped",
+              name: "竞品价格巡检",
+              description: "",
+              enabled: false,
+              scheduleKind: "interval",
+              steps: [],
+              variables: [],
+              maxConsecutiveFailures: 3,
+              consecutiveFailures: 3,
+              pausedByCircuitBreaker: true,
+              circuitBreakerReason: "连续失败 3 次已熔断",
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ],
           heartbeats: [],
         };
       }
       if (path === "/api/donebot/opc/reports/review" && init?.method === "POST") {
         return { ok: true, reviewedCount: 2, dispatched: false };
+      }
+      if (path === "/api/donebot/opc/reports/read" && init?.method === "POST") {
+        return { ok: true, count: 1, readAt: Date.now() };
+      }
+      if (path === "/api/donebot/opc/workflows/wf-1/run" && init?.method === "POST") {
+        return { run: { id: "run-new" } };
       }
       return {};
     });
@@ -269,44 +385,131 @@ describe("OPC Studio Frontend & Human Team Soft-Sunset", () => {
     root = createRoot(container);
     await act(async () => { root!.render(createElement(OpcBossConsolePage)); });
 
+    // 1. Unified Action Queue surfaces approval + waiting Bot question + tripped workflow alert
     expect(container.textContent).toContain("独立站首月投放复盘报告");
-    expect(container.textContent).toContain("2 份附件");
-    expect(container.textContent).not.toContain("汇报附件（2）");
+    expect(container.textContent).toContain("分镜师");
+    expect(container.textContent).toContain("第 3 镜构图确认");
+    expect(container.textContent).toContain("工作流「竞品价格巡检」已熔断暂停");
 
-    // Click report header to expand full Markdown report & attachments
+    // 2. Active running work banner displays active workflow progress + busy bot
+    expect(container.textContent).toContain("正在进行中");
+    expect(container.textContent).toContain("影视出片流程");
+    expect(container.textContent).toContain("第 2/2 步");
+    expect(container.textContent).toContain("20秒打斗视频渲染");
+
+    // 3. Expand formal pending report & approve -> archived into 已通过归档 tab
     const expandBtn = [...container.querySelectorAll("button")].find(b => b.getAttribute("aria-expanded") === "false" && b.textContent?.includes("独立站首月投放复盘报告"))!;
     await act(async () => { expandBtn.click(); });
     expect(expandBtn.getAttribute("aria-expanded")).toBe("true");
     expect(container.textContent).toContain("汇报附件（2）");
-    expect(container.textContent).toContain("report.md");
-    expect(container.textContent).toContain("chart.png");
 
-    // Single click on 通过 approves all bundled attachments in one request and archives immediately
     const approveBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.trim() === "通过")!;
     await act(async () => { approveBtn.click(); });
     expect(mockApi).toHaveBeenCalledWith(
       "/api/donebot/opc/reports/review",
       expect.objectContaining({ method: "POST" }),
     );
-    expect(container.textContent).toContain("所有汇报与工作流均已审批");
 
-    // Open the right-hand approved reports sidebar drawer
-    const archiveTrigger = [...container.querySelectorAll("button")].find(b => b.textContent?.includes("已通过汇报") && b.hasAttribute("aria-expanded"))!;
-    await act(async () => { archiveTrigger.click(); });
-    const aside = container.querySelector('aside[aria-label="已通过汇报"]');
-    expect(aside).not.toBeNull();
-    const text = aside!.textContent ?? "";
-    expect(text).toContain("独立站首月投放复盘报告");
-    expect(text).toContain("上周竞品调研简报");
-    // Reverse chronological order: newly approved report appears before the earlier report
-    expect(text.indexOf("独立站首月投放复盘报告")).toBeLessThan(text.indexOf("上周竞品调研简报"));
+    // 4. Briefing reports tab shows non-approval report and supports mark-read persistence
+    expect(container.textContent).toContain("20秒打斗视频阶段简报");
+    const markReadBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.trim() === "标为已读")!;
+    await act(async () => { markReadBtn.click(); });
+    expect(mockApi).toHaveBeenCalledWith(
+      "/api/donebot/opc/reports/read",
+      expect.objectContaining({ method: "POST" }),
+    );
 
-    // Click an archived report to read its full Markdown body and view its attachments
-    const archivedItemBtn = [...aside!.querySelectorAll("button")].find(b => b.textContent?.includes("上周竞品调研简报"))!;
-    await act(async () => { archivedItemBtn.click(); });
-    expect(aside!.textContent).toContain("返回已通过汇报");
-    expect(aside!.textContent).toContain("详细分析如下");
-    expect(aside!.textContent).toContain("competitor.pdf");
+    // 5. Switch to 已通过归档 tab via WAI-ARIA role="tab" and verify reverse-chronological order & body
+    const approvedTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(b => b.textContent?.includes("已通过归档"))!;
+    await act(async () => { approvedTab.click(); });
+    expect(approvedTab.getAttribute("aria-selected")).toBe("true");
+    const panelText = container.querySelector('[role="tabpanel"]')?.textContent ?? "";
+    expect(panelText).toContain("独立站首月投放复盘报告");
+    expect(panelText).toContain("上周竞品调研简报");
+    expect(panelText.indexOf("独立站首月投放复盘报告")).toBeLessThan(panelText.indexOf("上周竞品调研简报"));
+
+    // 6. Switch to 交付附件 tab and see aggregated deliverables across briefings + approved
+    const attachmentsTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(b => b.textContent?.includes("交付附件"))!;
+    await act(async () => { attachmentsTab.click(); });
+    const attText = container.querySelector('[role="tabpanel"]')?.textContent ?? "";
+    expect(attText).toContain("fight-20s.mp4");
+    expect(attText).toContain("competitor.pdf");
+
+    // 7. Quick-launch workflow pill triggers runWorkflow API
+    const quickRunBtn = [...container.querySelectorAll("button")].find(b => b.textContent?.trim() === "影视出片流程")!;
+    await act(async () => { quickRunBtn.click(); });
+    expect(mockApi).toHaveBeenCalledWith(
+      "/api/donebot/opc/workflows/wf-1/run",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("paginates workbench reports at 10 items per page and supports page switching", async () => {
+    const now = Date.now();
+    const briefings = Array.from({ length: 23 }, (_, idx) => ({
+      id: `msg:t1:b-${idx + 1}`,
+      source: "bot_report" as const,
+      approvalRequired: false,
+      title: `运营简报 #${String(idx + 1).padStart(2, "0")}`,
+      summary: `第 ${idx + 1} 份摘要`,
+      body: `第 ${idx + 1} 份正文`,
+      botId: "b1",
+      botName: "封面视觉",
+      botColor: "blue",
+      department: "设计部",
+      at: now - idx * 60_000,
+      threadId: "t1",
+      reportMessageId: `b-${idx + 1}`,
+      attachments: [],
+      artifactIds: [],
+    }));
+    mockApi.mockImplementation(async (path) => {
+      if (path.startsWith("/api/donebot/opc/overview")) {
+        return {
+          pendingArtifactCount: 0,
+          pendingReportCount: 0,
+          briefingReportCount: briefings.length,
+          unreadBriefingCount: briefings.length,
+          approvedReportCount: 0,
+          activeHeartbeatCount: 0,
+          trippedCircuitBreakerCount: 0,
+          activeGoalCount: 0,
+          activeWorkflowCount: 0,
+          waitingWorkflowCount: 0,
+          spend: { available: true, days: 30, totalCost: 0, llmCost: 0, imageCost: 0, videoCost: 0, musicCost: 0, bots: [] },
+          pendingArtifacts: [],
+          pendingReports: [],
+          briefingReports: briefings,
+          approvedReports: [],
+          heartbeats: [],
+        };
+      }
+      return {};
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root!.render(createElement(OpcBossConsolePage)); });
+
+    const panel = () => container!.querySelector('[role="tabpanel"]')!;
+    expect(panel().querySelectorAll("article").length).toBe(10);
+    expect(panel().textContent).toContain("共 23 条 · 第 1 / 3 页");
+    expect(panel().textContent).toContain("运营简报 #01");
+    expect(panel().textContent).not.toContain("运营简报 #11");
+
+    const nextBtn = [...panel().querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("下一页"))!;
+    await act(async () => { nextBtn.click(); });
+    expect(panel().querySelectorAll("article").length).toBe(10);
+    expect(panel().textContent).toContain("共 23 条 · 第 2 / 3 页");
+    expect(panel().textContent).toContain("运营简报 #11");
+    expect(panel().textContent).not.toContain("运营简报 #01");
+
+    const page3Btn = panel().querySelector<HTMLButtonElement>('button[aria-label="第 3 页"]')!;
+    await act(async () => { page3Btn.click(); });
+    expect(panel().querySelectorAll("article").length).toBe(3);
+    expect(panel().textContent).toContain("共 23 条 · 第 3 / 3 页");
+    expect(panel().textContent).toContain("运营简报 #21");
   });
 
   it("lays out org chart via Paperclip layout engine and renders OrgChart + Workflows views", async () => {

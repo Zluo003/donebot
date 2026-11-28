@@ -28,7 +28,8 @@ export interface WakeStandbyMatch {
 export interface WakeStandbyOptions {
   wsPath?: string;
   botName: string;
-  matchWakeWord: (transcript: string, botName: string) => WakeStandbyMatch;
+  wakeWord?: string;
+  matchWakeWord: (transcript: string, botName: string, customWakeWord?: string) => WakeStandbyMatch;
   preRollMs?: number;
   probeSilenceTimeoutMs?: number;
   probeMaxDurationMs?: number;
@@ -40,6 +41,7 @@ export interface WakeStandbyOptions {
 
 export interface WakeStandbySession {
   setBotName(name: string): void;
+  setWakeWord(wakeWord: string): void;
   isAsrConnected(): boolean;
   isMicActive(): boolean;
   stop(): void;
@@ -61,6 +63,7 @@ export function createWakeStandbySession(
   const cooldownMs = options.probeCooldownMs ?? WAKE_PROBE_COOLDOWN_MS;
 
   let botName = options.botName.trim() || "多宝";
+  let wakeWord = (options.wakeWord ?? "").trim();
   let stopped = false;
   let mic: MicCaptureHandle | null = null;
   let asr: RealtimeAsrClient | null = null;
@@ -115,7 +118,7 @@ export function createWakeStandbySession(
     probeStartedAt = now;
     lastSpeechAt = now;
 
-    const wakePhrase = `你好${botName}`;
+    const wakePhrase = wakeWord || `你好${botName}`;
     const hotwords: Record<string, number> = {
       [wakePhrase]: 5,
       [botName]: 5,
@@ -138,7 +141,7 @@ export function createWakeStandbySession(
             const text = event.text.trim();
             if (!text) return;
             resetSilenceTimer();
-            const match = options.matchWakeWord(text, botName);
+            const match = options.matchWakeWord(text, botName, wakeWord);
             options.onTranscript?.({ text, final: event.final, remainder: match.remainder });
             if (match.matched) {
               wakeMatched = true;
@@ -222,6 +225,14 @@ export function createWakeStandbySession(
     setBotName(name: string) {
       const trimmed = name.trim();
       if (trimmed) botName = trimmed;
+    },
+    setWakeWord(next: string) {
+      const trimmed = next.trim();
+      if (trimmed === wakeWord) return;
+      wakeWord = trimmed;
+      if (asr && !wakeMatched) {
+        closeProbe(false);
+      }
     },
     isAsrConnected: () => Boolean(asr && asr.isActive()),
     isMicActive: () => Boolean(mic && mic.isActive()),

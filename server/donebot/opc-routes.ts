@@ -59,6 +59,11 @@ const reportReviewSchema = z.object({
   dispatchRevision: z.boolean().default(true),
 }).strict();
 
+const reportReadSchema = z.object({
+  reportIds: z.array(z.string().trim().min(1).max(200)).min(1).max(100),
+  read: z.boolean().default(true),
+}).strict();
+
 const snapshotCreateSchema = z.object({
   label: z.string().trim().min(1).max(120).optional(),
   source: z.enum(["manual", "before_restore", "before_publish"]).default("manual"),
@@ -328,6 +333,7 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
   const isMobileBossRoute = (method: string, reqPath: string): boolean =>
     (method === "GET" && reqPath === "/api/donebot/opc/overview")
     || (method === "POST" && reqPath === "/api/donebot/opc/reports/review")
+    || (method === "POST" && reqPath === "/api/donebot/opc/reports/read")
     || (method === "POST" && /^\/api\/donebot\/opc\/artifacts\/[\w-]+\/review$/.test(reqPath));
 
   const handler: RouteHandler = async ({ req, res, url, path: reqPath, method, auth, json, readBody }) => {
@@ -349,19 +355,23 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
         const workflowRuns = deps.orgStore?.listWorkflowRuns() ?? [];
         const waitingWorkflowRuns = deps.orgStore?.listWaitingWorkflowRuns() ?? [];
         const orgChart = deps.orgStore?.getOrgChart(deps.store.bots);
-        const { pendingReports, approvedReports, workflowOwnedArtifactIds } = buildBossReports({
+        const { pendingReports, briefingReports, approvedReports, workflowOwnedArtifactIds } = buildBossReports({
           store: deps.store,
           allArtifacts,
           workflowRuns,
           workflows,
           orgChart,
+          readAtByReportId: (id) => deps.opcStore.getReportReadAt(id),
         });
         const pendingArtifacts = allArtifacts.filter(a => a.reviewStatus === "pending" && !workflowOwnedArtifactIds.has(a.id));
+        const activeWorkflowRuns = workflowRuns.filter(r => r.status === "running");
         const trippedWorkflowCount = workflows.filter(w => w.pausedByCircuitBreaker).length;
         const spend = await loadSpend(days);
         const overview: OpcBossOverview = {
           pendingArtifactCount: pendingArtifacts.length,
           pendingReportCount: pendingReports.length,
+          briefingReportCount: briefingReports.length,
+          unreadBriefingCount: briefingReports.filter(r => r.readAt === undefined).length,
           approvedReportCount: approvedReports.length,
           activeHeartbeatCount: heartbeats.filter(h => h.enabled && !h.pausedByCircuitBreaker).length,
           trippedCircuitBreakerCount: heartbeats.filter(h => h.pausedByCircuitBreaker).length + trippedWorkflowCount,
@@ -372,8 +382,12 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
           spend,
           pendingArtifacts: pendingArtifacts.slice(0, 24),
           pendingReports: pendingReports.slice(0, 24),
-          approvedReports: approvedReports.slice(0, 60),
+          briefingReports: briefingReports.slice(0, 100),
+          approvedReports: approvedReports.slice(0, 100),
           waitingWorkflowRuns: waitingWorkflowRuns.slice(0, 12),
+          activeWorkflowRuns: activeWorkflowRuns.slice(0, 12),
+          recentWorkflowRuns: workflowRuns.slice(0, 12),
+          workflows,
           heartbeats,
         };
         return json(res, 200, overview);
@@ -454,6 +468,13 @@ export function createDoneBotOpcRoutes(deps: DoneBotOpcRouteDeps): RouteHandler 
         || reqPath.startsWith("/api/donebot/opc/heartbeats");
       if (!ownedMutation) return PASS;
       const body = await readBody(req, 1024 * 1024);
+
+      if (method === "POST" && reqPath === "/api/donebot/opc/reports/read") {
+        const parsed = reportReadSchema.safeParse(body);
+        if (!parsed.success) return json(res, 400, { error: "报告已读参数无效。" });
+        const result = deps.opcStore.setReportsRead(parsed.data.reportIds, parsed.data.read);
+        return json(res, 200, { ok: true, count: result.count, readAt: result.readAt });
+      }
 
       if (method === "POST" && reqPath === "/api/donebot/opc/reports/review") {
         const parsed = reportReviewSchema.safeParse(body);

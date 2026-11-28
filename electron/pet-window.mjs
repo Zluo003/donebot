@@ -492,7 +492,7 @@ export function installDesktopPet({
       },
       { type: "separator" },
       {
-        label: "语音唤醒（免点击喊「你好 主协调」）",
+        label: `语音唤醒（免点击喊「${settings.wakeWord || "你好 主协调"}」）`,
         type: "checkbox",
         checked: settings.voiceMode,
         click: (item) => {
@@ -552,6 +552,7 @@ export function installDesktopPet({
     if (typeof patch.enabled === "boolean") nextPatch.enabled = patch.enabled;
     if (patch.replyMode === "tts" || patch.replyMode === "text") nextPatch.replyMode = patch.replyMode;
     if (typeof patch.voiceMode === "boolean") nextPatch.voiceMode = patch.voiceMode;
+    if (typeof patch.wakeWord === "string") nextPatch.wakeWord = patch.wakeWord;
     if (typeof patch.autoAnnounceReports === "boolean") nextPatch.autoAnnounceReports = patch.autoAnnounceReports;
     if (typeof patch.hideInFullscreen === "boolean") nextPatch.hideInFullscreen = patch.hideInFullscreen;
     if (typeof patch.muted === "boolean") nextPatch.muted = patch.muted;

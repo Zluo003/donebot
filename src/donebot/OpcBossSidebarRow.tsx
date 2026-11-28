@@ -29,7 +29,7 @@ export function OpcBossSidebarRow({
         if (alive) {
           setBadge({
             pending: res.pendingReportCount ?? ((res.pendingArtifactCount ?? 0) + (res.waitingWorkflowCount ?? 0)),
-            tripped: 0,
+            tripped: res.trippedCircuitBreakerCount ?? 0,
           });
         }
       }).catch(() => {

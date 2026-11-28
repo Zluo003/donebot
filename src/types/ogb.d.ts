@@ -534,6 +534,7 @@ const __APP_VERSION__: string;
     enabled: boolean;
     replyMode: "tts" | "text";
     voiceMode: boolean;
+    wakeWord: string;
     autoAnnounceReports: boolean;
     hideInFullscreen: boolean;
     muted: boolean;

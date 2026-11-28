@@ -175,7 +175,31 @@ export function resolveUserAddressTitle(chiefSoul?: string | null, profileName?:
   return "老板";
 }
 
-export function buildWakePhrase(botName?: string | null): string {
+export const MAX_WAKE_WORD_LENGTH = 24;
+export const MIN_WAKE_WORD_CHARS = 2;
+
+export function sanitizeWakeWord(raw?: string | null): string {
+  if (typeof raw !== "string") return "";
+  const printable = Array.from(raw)
+    .filter((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      return code >= 0x20 && code !== 0x7f;
+    })
+    .join("");
+  const cleaned = printable.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  return Array.from(cleaned).slice(0, MAX_WAKE_WORD_LENGTH).join("");
+}
+
+/** Counts meaningful letters/digits/CJK characters in a wake word (excluding whitespace & punctuation). */
+export function wakeWordCoreChars(raw?: string | null): string[] {
+  const cleaned = sanitizeWakeWord(raw).replace(/[\s,，、.。!！?？:：;；·~～"'「」“”‘’()（）[\]【】-]+/g, "");
+  return Array.from(cleaned);
+}
+
+export function buildWakePhrase(botName?: string | null, customWakeWord?: string | null): string {
+  const custom = sanitizeWakeWord(customWakeWord);
+  if (custom) return custom;
   const name = (botName ?? "").trim() || "多宝";
   return `你好${name}`;
 }
@@ -203,18 +227,48 @@ export function pickWakeReply(userTitle: string, busy: boolean, seed = Math.rand
 }
 
 /**
- * Matches fixed wake word `你好 <chiefBotName>` (tolerating `您好`, punctuation, spaces,
- * and case differences) and returns any trailing command spoken in the same breath.
+ * Matches either the user's saved custom wake word or the default `你好 <chiefBotName>`
+ * (tolerating punctuation, spaces, case differences, and `您/你` for `你好...` prefixes),
+ * returning any trailing command spoken in the same breath.
  */
 export function matchWakeWord(
   rawTranscript: string,
   botName: string,
+  customWakeWord?: string | null,
 ): { matched: boolean; remainder: string } {
   const transcript = String(rawTranscript ?? "").trim();
-  const cleanName = String(botName ?? "").trim();
-  if (!transcript || !cleanName) return { matched: false, remainder: "" };
+  if (!transcript) return { matched: false, remainder: "" };
 
   const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const custom = sanitizeWakeWord(customWakeWord);
+
+  if (custom) {
+    const coreChars = wakeWordCoreChars(custom);
+    if (!coreChars.length) return { matched: false, remainder: "" };
+
+    const isAsciiWordChar = (ch: string) => /[A-Za-z0-9]/.test(ch);
+    const flexChars = coreChars
+      .map((ch, idx) => {
+        if (idx === 0 && ch === "你" && coreChars[1] === "好") return "(?:你|您)";
+        return escapeRegex(ch);
+      })
+      .join("[\\s,，、.。·-]*");
+
+    const leadingBoundary = isAsciiWordChar(coreChars[0]!) ? "(?<![A-Za-z0-9])" : "";
+    const trailingBoundary = isAsciiWordChar(coreChars[coreChars.length - 1]!) ? "(?![A-Za-z0-9])" : "";
+    const pattern = new RegExp(
+      `${leadingBoundary}${flexChars}${trailingBoundary}[\\s,，、.。!！?？:：;；啊呀哈哟~～]*([\\s\\S]*)$`,
+      "i",
+    );
+    const hit = pattern.exec(transcript);
+    if (!hit) return { matched: false, remainder: "" };
+    const remainder = (hit[1] ?? "").replace(/^[，,。.!！?？:：;；、\s]+/, "").trim();
+    return { matched: true, remainder };
+  }
+
+  const cleanName = String(botName ?? "").trim();
+  if (!cleanName) return { matched: false, remainder: "" };
+
   // Allow optional punctuation/whitespace between every character of the bot name
   // (e.g. "你好，多 宝，帮我查一下" or "你好 Done Bot").
   const nameChars = Array.from(cleanName.replace(/\s+/g, ""));

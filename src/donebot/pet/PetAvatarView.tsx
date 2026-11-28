@@ -105,7 +105,7 @@ export function PetAvatarView() {
   } | null>(null);
 
   const userTitle = resolveUserAddressTitle(coordinator?.soul, profileName);
-  const wakePhrase = buildWakePhrase(coordinator?.name);
+  const wakePhrase = buildWakePhrase(coordinator?.name, petState?.wakeWord);
 
   petStateRef.current = petState;
   coordinatorRef.current = coordinator;
@@ -132,7 +132,7 @@ export function PetAvatarView() {
       coordinator: coordinatorRef.current,
       petState: petStateRef.current,
       userTitle: userTitleRef.current,
-      wakePhrase: buildWakePhrase(coordinatorRef.current?.name),
+      wakePhrase: buildWakePhrase(coordinatorRef.current?.name, petStateRef.current?.wakeWord),
       voice: voiceRef.current,
       speaking: speakingRef.current,
       sending: sendingRef.current,
@@ -448,7 +448,7 @@ export function PetAvatarView() {
           callActive: window.ogb?.callActive,
         };
       },
-      initialBotName: coordinatorRef.current?.name || "多宝",
+      initialBotName: coordinatorRef.current?.name || "多宝", initialWakeWord: petStateRef.current?.wakeWord ?? "",
       initialCloudAsr: cloudAsrRef.current,
       currentSpokenText: () => ttsPlayerRef.current?.currentText() ?? "",
       onChange: (next) => {
@@ -499,9 +499,9 @@ export function PetAvatarView() {
       ctrl.suspend();
       return;
     }
-    ctrl.setBotName(coordinator?.name || "多宝");
+    ctrl.setBotName(coordinator?.name || "多宝"); ctrl.setWakeWord(petState?.wakeWord ?? "");
     ctrl.setWakeEnabled(petState?.voiceMode === true);
-  }, [active, petState?.voiceMode, coordinator?.name, cloudAsr]);
+  }, [active, petState?.voiceMode, petState?.wakeWord, coordinator?.name, cloudAsr]);
 
   // Listen to Electron desktop pet state, activation, and popover commands once on mount.
   const actionsRef = useRef({ refreshBotsAndConfig, refreshReports, sendInstruction });
@@ -542,7 +542,7 @@ export function PetAvatarView() {
             coordinator: coordinatorRef.current,
             petState: petStateRef.current,
             userTitle: userTitleRef.current,
-            wakePhrase: buildWakePhrase(coordinatorRef.current?.name),
+            wakePhrase: buildWakePhrase(coordinatorRef.current?.name, petStateRef.current?.wakeWord),
             voice: voiceRef.current,
             speaking: speakingRef.current,
             sending: sendingRef.current,

@@ -271,6 +271,69 @@ describe("WakeStandbySession zero-cost idle gating", () => {
     session.stop();
     expect(mic.isActive()).toBe(false);
   });
+
+  it("injects saved custom wake word into ASR hotwords and updates live via setWakeWord", async () => {
+    let now = 20_000;
+    const mic = makeFakeMicController();
+    const sockets: FakeWebSocket[] = [];
+    const wakeHits: Array<{ remainder: string; final: boolean; text: string }> = [];
+
+    const session = createWakeStandbySession(
+      {
+        botName: "多宝",
+        wakeWord: "小宝同学",
+        matchWakeWord,
+        onWakeHit: (info) => wakeHits.push(info),
+      },
+      {
+        startMic: mic.startMic,
+        createWebSocket: (url) => {
+          const ws = new FakeWebSocket(url);
+          sockets.push(ws);
+          return ws;
+        },
+        now: () => now,
+      },
+    );
+    await Promise.resolve();
+
+    // Trigger speech onset -> opens WS with custom wake word hotword.
+    now += 80;
+    mic.emitChunk(0.09, 80, 11);
+    now += 80;
+    mic.emitChunk(0.09, 80, 12);
+    expect(sockets).toHaveLength(1);
+    const ws1 = sockets[0]!;
+    ws1.open();
+    expect(ws1.sentText[0]).toMatchObject({
+      type: "start",
+      hotwords: { 小宝同学: 5, 多宝: 5, DoneBot: 5 },
+    });
+
+    // Old default phrase does not wake when custom wake word is configured.
+    ws1.receive({ type: "transcript", sentenceId: 1, text: "你好多宝", final: true });
+    expect(wakeHits).toHaveLength(0);
+
+    // Updating wake word closes the active unmatched probe so the next speech uses new hotwords.
+    session.setWakeWord("嘿管家");
+    expect(ws1.closed).toBe(true);
+
+    now += 3_000;
+    mic.emitChunk(0.09, 80, 21);
+    now += 80;
+    mic.emitChunk(0.09, 80, 22);
+    expect(sockets).toHaveLength(2);
+    const ws2 = sockets[1]!;
+    ws2.open();
+    expect(ws2.sentText[0]).toMatchObject({
+      type: "start",
+      hotwords: { 嘿管家: 5, 多宝: 5, DoneBot: 5 },
+    });
+    ws2.receive({ type: "transcript", sentenceId: 2, text: "嘿管家，打开日报", final: true });
+    expect(wakeHits).toEqual([{ remainder: "打开日报", final: true, text: "嘿管家，打开日报" }]);
+
+    session.stop();
+  });
 });
 
 describe("CloudSpeechBridge streaming & seamless barge-in handoff", () => {

@@ -398,8 +398,10 @@ function buildWorkflowReportItem(params: {
   stepArts: readonly OpcArtifactItem[];
   runArtifactIds: string[];
   approvedAt?: number;
+  approvalRequired?: boolean;
+  readAt?: number;
 }): OpcBossReportItem {
-  const { run, stepIndex, step, bot, roleTitle, stepArts, runArtifactIds, approvedAt } = params;
+  const { run, stepIndex, step, bot, roleTitle, stepArts, runArtifactIds, approvedAt, approvalRequired, readAt } = params;
   const body = step.output?.trim() || "（该步骤已完成，暂无补充说明正文）";
   const fallbackTitle = `${run.workflowName} · ${step.stepName}`;
   const title = step.output?.trim() ? extractReportTitle(step.output.trim(), fallbackTitle) : fallbackTitle;
@@ -409,6 +411,7 @@ function buildWorkflowReportItem(params: {
   return {
     id: `wf:${run.id}:${stepIndex}`,
     source: "workflow",
+    ...(approvalRequired !== undefined ? { approvalRequired } : {}),
     title,
     summary,
     body,
@@ -419,6 +422,7 @@ function buildWorkflowReportItem(params: {
     ...(roleTitle ? { roleTitle } : {}),
     at: step.finishedAt ?? step.startedAt ?? run.startedAt,
     ...(approvedAt !== undefined ? { approvedAt } : {}),
+    ...(readAt !== undefined ? { readAt } : {}),
     threadId: step.threadId || bot?.threadId || "",
     ...(reportMessageId ? { reportMessageId } : {}),
     attachments: stepArts.map(toAttachment),
@@ -441,8 +445,10 @@ function buildBotReportItem(params: {
   bot?: BotRecord;
   roleTitle?: string;
   approvedAt?: number;
+  approvalRequired?: boolean;
+  readAt?: number;
 }): OpcBossReportItem {
-  const { items, store, bot, roleTitle, approvedAt } = params;
+  const { items, store, bot, roleTitle, approvedAt, approvalRequired, readAt } = params;
   const primary = items[0]!;
   const messages = store.messagesFor(primary.threadId);
   const reportMsg = messages.find(m => m.id === primary.reportMessageId)
@@ -477,12 +483,17 @@ function buildBotReportItem(params: {
         : deliverableLine);
   const summary = extractReportSummary(effectiveText || (mediaMeta?.prompt ?? ""), title)
     || (rawBody && !isMediaBadgeText(rawBody) ? extractReportSummary(rawBody, title) : "")
-    || (approvedAt !== undefined ? `共 ${items.length} 份已通过附件` : `共 ${items.length} 份交付附件等待审阅`);
+    || (approvedAt !== undefined
+      ? `共 ${items.length} 份已通过附件`
+      : approvalRequired === false
+        ? `共 ${items.length} 份交付附件`
+        : `共 ${items.length} 份交付附件等待审阅`);
   const latestAt = Math.max(...items.map(i => i.at));
 
   return {
     id: `msg:${primary.threadId}:${primary.reportMessageId}`,
     source: "bot_report",
+    ...(approvalRequired !== undefined ? { approvalRequired } : {}),
     title,
     summary,
     body,
@@ -493,11 +504,34 @@ function buildBotReportItem(params: {
     ...(roleTitle ? { roleTitle } : {}),
     at: latestAt,
     ...(approvedAt !== undefined ? { approvedAt } : {}),
+    ...(readAt !== undefined ? { readAt } : {}),
     threadId: primary.threadId,
     reportMessageId: primary.reportMessageId,
     attachments: items.map(toAttachment),
     artifactIds: items.map(i => i.id),
   };
+}
+
+const FORMAL_REPORT_PREFIX = /^(?:正式汇报|阶段汇报|工作汇报|周报|日报|月报|复盘报告|验收报告|巡检报告|调研报告|分析报告|项目汇报|执行报告|简报)\s*[:：\-—·]/u;
+const FORMAL_REPORT_BRACKET = /^【[^】]{2,32}(?:汇报|报告|简报|复盘|验收|总结|巡检)】/u;
+
+function isStructuredTextBriefing(message: Message, isRoutineThread: boolean): boolean {
+  const text = message.text?.trim() ?? "";
+  if (text.length < 16 || isMediaBadgeText(text)) return false;
+  if (/^\[?SILENT_OK\]?/i.test(text)) return false;
+  const firstNonEmpty = text.split(/\r?\n/).map(l => l.trim()).find(Boolean) ?? "";
+  const firstPlain = stripMarkdownInline(firstNonEmpty);
+  if (FORMAL_REPORT_PREFIX.test(firstPlain) || FORMAL_REPORT_BRACKET.test(firstPlain)) {
+    return true;
+  }
+  if (isRoutineThread || Boolean(message.automation)) {
+    return text.length >= 24;
+  }
+  const nonEmptyLines = text.split(/\r?\n/).filter(l => l.trim().length > 0).length;
+  if (text.length >= 90 && nonEmptyLines >= 3 && /^#{1,2}\s+\S/m.test(text)) {
+    return true;
+  }
+  return false;
 }
 
 export function buildBossReports(params: {
@@ -506,9 +540,11 @@ export function buildBossReports(params: {
   workflowRuns: readonly OpcWorkflowRun[];
   workflows?: readonly OpcWorkflowDefinition[];
   orgChart?: OpcOrgChartState | null;
+  readAtByReportId?: (reportId: string) => number | undefined;
   now?: number;
 }): {
   pendingReports: OpcBossReportItem[];
+  briefingReports: OpcBossReportItem[];
   approvedReports: OpcBossReportItem[];
   workflowOwnedArtifactIds: Set<string>;
 } {
@@ -517,6 +553,7 @@ export function buildBossReports(params: {
   const orgNodes = params.orgChart?.nodes ?? {};
   const hasExplicitApprovalNodes = Object.values(orgNodes).some(n => Boolean(n?.requireBossApproval));
   const workflowById = new Map<string, OpcWorkflowDefinition>((params.workflows ?? []).map(w => [w.id, w]));
+  const readAtOf = (id: string) => params.readAtByReportId?.(id);
 
   const roleOf = (botId: string): string | undefined => {
     const bot = botById.get(botId);
@@ -526,8 +563,10 @@ export function buildBossReports(params: {
   // Track every artifact produced inside any workflow run so intermediate/gated workflow
   // files never duplicate into the standalone artifact approval queue.
   const workflowOwnedArtifactIds = new Set<string>();
+  const workflowThreadIds = new Set<string>();
   for (const run of params.workflowRuns) {
     for (const step of run.stepResults) {
+      if (step.threadId) workflowThreadIds.add(step.threadId);
       for (const art of matchStepArtifacts(step, params.allArtifacts, now)) {
         workflowOwnedArtifactIds.add(art.id);
       }
@@ -535,9 +574,11 @@ export function buildBossReports(params: {
   }
 
   const pendingReports: OpcBossReportItem[] = [];
+  const briefingReports: OpcBossReportItem[] = [];
   const approvedReports: OpcBossReportItem[] = [];
 
-  // 1. Workflow approval gates — waiting gates go to pending, approved gates go to archive.
+  // 1. Workflow reports — waiting gates -> pending, approved gates -> archive,
+  //    completed runs whose final step wasn't approval-gated -> non-approval briefing.
   for (const run of params.workflowRuns) {
     const wfDef = workflowById.get(run.workflowId);
     if (run.status === "waiting_approval") {
@@ -552,15 +593,18 @@ export function buildBossReports(params: {
           roleTitle: roleOf(step.botId),
           stepArts: matchStepArtifacts(step, params.allArtifacts, now),
           runArtifactIds: collectWorkflowRunArtifactIds(run, stepIndex, params.allArtifacts, now),
+          approvalRequired: true,
         }));
       }
     }
 
+    const approvedStepIndices = new Set<number>();
     run.stepResults.forEach((step, stepIndex) => {
       if (step.status !== "completed") return;
       const defStep = wfDef?.steps.find(s => s.id === step.stepId);
       const wasGated = step.approvedAt !== undefined || Boolean(defStep?.approvalGate);
       if (!wasGated) return;
+      approvedStepIndices.add(stepIndex);
       const approvedAt = step.approvedAt ?? step.finishedAt ?? step.startedAt ?? run.startedAt;
       approvedReports.push(buildWorkflowReportItem({
         run,
@@ -571,21 +615,57 @@ export function buildBossReports(params: {
         stepArts: matchStepArtifacts(step, params.allArtifacts, now),
         runArtifactIds: collectWorkflowRunArtifactIds(run, stepIndex, params.allArtifacts, now),
         approvedAt,
+        approvalRequired: true,
       }));
     });
+
+    if (run.status === "completed") {
+      let lastIdx = -1;
+      for (let i = run.stepResults.length - 1; i >= 0; i--) {
+        if (run.stepResults[i]?.status === "completed") {
+          lastIdx = i;
+          break;
+        }
+      }
+      if (lastIdx >= 0 && !approvedStepIndices.has(lastIdx)) {
+        const step = run.stepResults[lastIdx]!;
+        const reportId = `wf:${run.id}:${lastIdx}`;
+        briefingReports.push(buildWorkflowReportItem({
+          run,
+          stepIndex: lastIdx,
+          step,
+          bot: botById.get(step.botId),
+          roleTitle: roleOf(step.botId),
+          stepArts: matchStepArtifacts(step, params.allArtifacts, now),
+          runArtifactIds: collectWorkflowRunArtifactIds(run, lastIdx, params.allArtifacts, now),
+          approvalRequired: false,
+          readAt: readAtOf(reportId),
+        }));
+      }
+    }
   }
 
   // 2. Non-workflow deliverables — grouped per report message (1 report = 1 approval click).
+  //    When explicit approval nodes are configured, bots without `requireBossApproval`
+  //    route into non-approval `briefingReports` instead of disappearing from the workbench.
   const pendingGrouped = new Map<string, OpcArtifactItem[]>();
+  const briefingGrouped = new Map<string, OpcArtifactItem[]>();
   const approvedGrouped = new Map<string, OpcArtifactItem[]>();
+  const coveredReportIds = new Set<string>();
   for (const item of params.allArtifacts) {
     if (workflowOwnedArtifactIds.has(item.id)) continue;
     const groupKey = `${item.botId}:${item.threadId}:${item.reportMessageId}`;
+    coveredReportIds.add(`msg:${item.threadId}:${item.reportMessageId}`);
     if (item.reviewStatus === "pending") {
-      if (hasExplicitApprovalNodes && !orgNodes[item.botId]?.requireBossApproval) continue;
-      const list = pendingGrouped.get(groupKey) ?? [];
-      list.push(item);
-      pendingGrouped.set(groupKey, list);
+      if (hasExplicitApprovalNodes && !orgNodes[item.botId]?.requireBossApproval) {
+        const list = briefingGrouped.get(groupKey) ?? [];
+        list.push(item);
+        briefingGrouped.set(groupKey, list);
+      } else {
+        const list = pendingGrouped.get(groupKey) ?? [];
+        list.push(item);
+        pendingGrouped.set(groupKey, list);
+      }
     } else if (item.reviewStatus === "approved") {
       const list = approvedGrouped.get(groupKey) ?? [];
       list.push(item);
@@ -600,6 +680,20 @@ export function buildBossReports(params: {
       store: params.store,
       bot: botById.get(primary.botId),
       roleTitle: roleOf(primary.botId),
+      approvalRequired: true,
+    }));
+  }
+
+  for (const items of briefingGrouped.values()) {
+    const primary = items[0]!;
+    const reportId = `msg:${primary.threadId}:${primary.reportMessageId}`;
+    briefingReports.push(buildBotReportItem({
+      items,
+      store: params.store,
+      bot: botById.get(primary.botId),
+      roleTitle: roleOf(primary.botId),
+      approvalRequired: false,
+      readAt: readAtOf(reportId),
     }));
   }
 
@@ -614,12 +708,77 @@ export function buildBossReports(params: {
       bot: botById.get(primary.botId),
       roleTitle: roleOf(primary.botId),
       approvedAt,
+      approvalRequired: true,
     }));
   }
 
+  // 3. Text-only formal briefing reports & routine outputs (no attachments, never requiring approval).
+  for (const bot of params.store.bots) {
+    if (bot.hidden) continue;
+    const seenThreads = new Set<string>();
+    const threads: Array<{ threadId: string; title: string; isRoutine: boolean }> = [];
+    for (const task of bot.tasks ?? []) {
+      if (task.archivedAt !== undefined || !task.threadId || seenThreads.has(task.threadId)) continue;
+      if (task.openedBy) continue;
+      seenThreads.add(task.threadId);
+      threads.push({
+        threadId: task.threadId,
+        title: task.title || bot.name,
+        isRoutine: Boolean(task.routineRunId),
+      });
+    }
+    if (bot.threadId && !seenThreads.has(bot.threadId)) {
+      seenThreads.add(bot.threadId);
+      threads.push({ threadId: bot.threadId, title: bot.name, isRoutine: false });
+    }
+
+    for (const thread of threads) {
+      if (workflowThreadIds.has(thread.threadId)) continue;
+      const messages = params.store.messagesFor(thread.threadId);
+      for (const msg of messages) {
+        if (msg.role !== "bot" || msg.kind !== "text") continue;
+        if (msg.peerAsk || msg.roomRequest || msg.sendId?.startsWith("handoff_inputs_")) continue;
+        if (msg.from?.botId && msg.from.botId !== bot.id) continue;
+        const reportId = `msg:${thread.threadId}:${msg.id}`;
+        if (coveredReportIds.has(reportId)) continue;
+        if (!isStructuredTextBriefing(msg, thread.isRoutine)) continue;
+
+        const body = msg.text!.trim();
+        const fallbackTitle = isUsableFallbackTitle(thread.title, bot.name)
+          ? trimTitleConcise(thread.title)
+          : thread.isRoutine
+            ? `${bot.name} 定时汇报`
+            : `${bot.name} 工作报告`;
+        const title = extractReportTitle(body, fallbackTitle);
+        const summary = extractReportSummary(body, title);
+        coveredReportIds.add(reportId);
+        briefingReports.push({
+          id: reportId,
+          source: thread.isRoutine || Boolean(msg.automation) ? "routine" : "bot_report",
+          approvalRequired: false,
+          title,
+          summary,
+          body,
+          botId: bot.id,
+          botName: bot.name,
+          botColor: bot.color,
+          ...(bot.section?.trim() ? { department: bot.section.trim() } : {}),
+          ...(roleOf(bot.id) ? { roleTitle: roleOf(bot.id) } : {}),
+          at: msg.at,
+          ...(readAtOf(reportId) !== undefined ? { readAt: readAtOf(reportId) } : {}),
+          threadId: thread.threadId,
+          reportMessageId: msg.id,
+          attachments: [],
+          artifactIds: [],
+        });
+      }
+    }
+  }
+
   pendingReports.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+  briefingReports.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
   approvedReports.sort((a, b) => (b.approvedAt ?? b.at) - (a.approvedAt ?? a.at) || a.id.localeCompare(b.id));
-  return { pendingReports, approvedReports, workflowOwnedArtifactIds };
+  return { pendingReports, briefingReports, approvedReports, workflowOwnedArtifactIds };
 }
 
 export function buildPendingBossReports(params: {

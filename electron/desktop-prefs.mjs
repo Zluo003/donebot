@@ -45,11 +45,25 @@ export const DEFAULT_PET_PREFS = Object.freeze({
   enabled: false,
   replyMode: "tts",
   voiceMode: false,
+  wakeWord: "",
   autoAnnounceReports: true,
   hideInFullscreen: true,
   muted: false,
   position: null,
 });
+
+function parseWakeWord(raw) {
+  if (typeof raw !== "string") return "";
+  const printable = Array.from(raw)
+    .filter((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      return code >= 0x20 && code !== 0x7f;
+    })
+    .join("");
+  const cleaned = printable.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  return Array.from(cleaned).slice(0, 24).join("");
+}
 
 function parsePetPosition(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -68,6 +82,7 @@ export function parsePetPrefs(raw) {
     enabled: record.enabled === true,
     replyMode: record.replyMode === "text" ? "text" : "tts",
     voiceMode: record.voiceMode === true,
+    wakeWord: parseWakeWord(record.wakeWord),
     autoAnnounceReports: record.autoAnnounceReports !== false,
     hideInFullscreen: record.hideInFullscreen !== false,
     muted: record.muted === true,

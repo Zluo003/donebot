@@ -7,6 +7,7 @@ import { mediaKindSchema, type MediaJob } from "./media-store.ts";
 import type { DoneBotMediaService, MediaContext } from "./media.ts";
 import { DONEBOT_MEDIA_MODELS } from "./media-registry.ts";
 import { mediaReplyContext } from "./media-replies.ts";
+import type { DoneBotMediaTranscriber } from "./media-transcribe.ts";
 
 const submitSchema = z.object({ kind: mediaKindSchema, model: z.string().min(1).max(256).optional(), parameters: z.record(z.string(), z.unknown()),
   fallback_model: z.string().min(1).max(256).optional(),
@@ -15,6 +16,13 @@ const submitSchema = z.object({ kind: mediaKindSchema, model: z.string().min(1).
   operation: z.enum(["generate", "edit", "extend"]).optional(), variation_key: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/).optional() }).strict();
 const jobSchema = z.object({ job_id: z.string().uuid() }).strict();
 const capabilitySchema = z.object({ model: z.string().min(1).max(256).optional(), kind: z.enum(["llm", "image", "video", "music", "tts"]).optional() }).strict();
+const transcribeSchema = z.object({
+  local_path: z.string().trim().min(1).max(8192),
+  start_sec: z.number().min(0).max(86_400).optional(),
+  duration_sec: z.number().min(1).max(600).optional(),
+  language_hints: z.array(z.string().regex(/^[A-Za-z0-9_-]{2,32}$/)).max(8).optional(),
+  hotwords: z.record(z.string().min(1).max(32), z.number().int().refine(v => v === 50 || (v >= 1 && v <= 5), "hotword weight must be 1-5 or 50")).optional(),
+}).strict();
 
 export function publicMediaJob(job: MediaJob) {
   return { id: job.id, kind: job.kind, model: job.model, operation: job.operation, status: job.status,
@@ -31,18 +39,25 @@ export function publicMediaJob(job: MediaJob) {
 }
 
 export function createDoneBotMediaRoutes(service: DoneBotMediaService, contextFor: (ctx: HelperToolContext & { threadId: string }) => MediaContext,
-  modelsFor?: (kind: "image" | "video" | "music") => { primary: string; fallback: string }) {
+  modelsFor?: (kind: "image" | "video" | "music") => { primary: string; fallback: string },
+  transcriber?: DoneBotMediaTranscriber) {
   return async (ctx: HelperToolContext & { threadId: string }): Promise<typeof PASS | void> => {
     if (ctx.path === "/api/internal/images/generate") return ctx.json(ctx.res, 403, { error: "Use the DoneBot media tools for image generation." });
     const prefix = "/api/internal/donebot/media/";
     if (ctx.method !== "POST" || !ctx.path.startsWith(prefix)) return PASS;
     const action = ctx.path.slice(prefix.length);
-    if (!["generate", "status", "stop-waiting", "capabilities"].includes(action)) return PASS;
+    if (!["generate", "status", "stop-waiting", "capabilities", "transcribe"].includes(action)) return PASS;
     try {
       const context = contextFor(ctx);
       if (context.botId !== ctx.botId || context.threadId !== ctx.threadId || !context.active()) return ctx.json(ctx.res, 403, { error: "The media capability is no longer active in this conversation." });
       const body = await ctx.readBody();
       if (!context.active()) return ctx.json(ctx.res, 403, { error: "This turn ended before the media request was read." });
+      if (action === "transcribe") {
+        if (!transcriber) return ctx.json(ctx.res, 503, { error: "Audio transcription is unavailable in this runtime." });
+        const input = transcribeSchema.parse(body);
+        const result = await transcriber.transcribe(context, input);
+        return ctx.json(ctx.res, 200, result);
+      }
       if (action === "capabilities") {
         const capQuery = capabilitySchema.parse(body);
         if (isCollabChatThread(context.threadId) && (capQuery.kind === "video" || capQuery.kind === "music")) {

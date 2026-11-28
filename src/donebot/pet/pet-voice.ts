@@ -6,7 +6,7 @@ import {
   createWakeStandbySession,
   type WakeStandbySession,
 } from "@/donebot/voice/wake-standby";
-import { matchWakeWord, type PetVoicePhase, type PetVoiceState } from "./pet-protocol";
+import { buildWakePhrase, matchWakeWord, sanitizeWakeWord, type PetVoicePhase, type PetVoiceState } from "./pet-protocol";
 
 const COMMAND_ENDPOINT_MS = 950;
 const COMMAND_IDLE_TIMEOUT_MS = 9_000;
@@ -26,8 +26,10 @@ export interface PetCloudAsrConfig {
 export interface PetVoiceController {
   /** Keeps passive wake-word listening armed whenever the pet is visible and idle. */
   setWakeEnabled(enabled: boolean): void;
-  /** Updates the chief bot name used for wake word `你好 <botName>`. */
+  /** Updates the chief bot name used for default wake word `你好 <botName>`. */
   setBotName(name: string): void;
+  /** Updates the user's custom wake word (empty string restores default `你好 <botName>`). */
+  setWakeWord(wakeWord: string): void;
   /** Enables/disables cloud streaming ASR (with zero-cost local VAD standby & quasi-full-duplex barge-in). */
   setCloudAsr(config: PetCloudAsrConfig): void;
   /** Manually starts command listening (e.g., clicking mic in composer). */
@@ -96,6 +98,7 @@ const SPEECH_ERROR_TEXT: Record<string, { text: string; needsMicSettings?: boole
 export function createPetVoiceController(deps: {
   bridge: () => SpeechBridgeLike | undefined;
   initialBotName?: string;
+  initialWakeWord?: string;
   initialCloudAsr?: PetCloudAsrConfig;
   cloudBridge?: CloudSpeechBridge;
   createWakeStandby?: typeof createWakeStandbySession;
@@ -119,6 +122,7 @@ export function createPetVoiceController(deps: {
 
   let wakeEnabled = false;
   let botName = deps.initialBotName?.trim() || "多宝";
+  let customWakeWord = sanitizeWakeWord(deps.initialWakeWord);
   let suspended = false;
   let disposed = false;
   let consecutiveFastFails = 0;
@@ -146,7 +150,7 @@ export function createPetVoiceController(deps: {
   const useCloudMode = () => cloudAsr.available === true;
 
   const hotwordsForBot = (): Record<string, number> => ({
-    [`你好${botName}`]: 5,
+    [buildWakePhrase(botName, customWakeWord)]: 5,
     [botName]: 5,
     DoneBot: 5,
   });
@@ -238,6 +242,7 @@ export function createPetVoiceController(deps: {
     wakeStandbySession = makeWakeStandby({
       wsPath: cloudAsr.wsPath,
       botName,
+      wakeWord: customWakeWord,
       matchWakeWord,
       onWakeHit: ({ remainder, final }) => {
         if (token !== sessionToken || disposed || suspended || state.phase !== "wake-standby") return;
@@ -308,7 +313,7 @@ export function createPetVoiceController(deps: {
       consecutiveFastFails = 0;
       const text = typeof line?.text === "string" ? line.text : "";
       if (!text) return;
-      const matched = matchWakeWord(text, botName);
+      const matched = matchWakeWord(text, botName, customWakeWord);
       if (!matched.matched) return;
 
       if (!matched.remainder) {
@@ -573,6 +578,13 @@ export function createPetVoiceController(deps: {
         botName = trimmed;
         wakeStandbySession?.setBotName(trimmed);
       }
+    },
+
+    setWakeWord(next) {
+      const cleaned = sanitizeWakeWord(next);
+      if (cleaned === customWakeWord) return;
+      customWakeWord = cleaned;
+      wakeStandbySession?.setWakeWord(cleaned);
     },
 
     setCloudAsr(config) {

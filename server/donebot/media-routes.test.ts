@@ -100,7 +100,7 @@ describe("DoneBot media capability routes", () => {
     const upstream = availableTools(catalogProfileFromEnv({}));
     const donebot = availableTools(catalogProfileFromEnv({ DONEBOT_MEDIA: "1" }));
     const added = donebot.filter(tool => !upstream.some(original => tool.name === original.name));
-    expect(added.map(tool => tool.name).sort()).toEqual(["media_model_capabilities", "generate_image", "generate_video", "generate_audio", "media_job_status", "media_stop_waiting"].sort());
+    expect(added.map(tool => tool.name).sort()).toEqual(["media_model_capabilities", "generate_image", "generate_video", "generate_audio", "media_job_status", "media_stop_waiting", "transcribe_audio"].sort());
     expect(donebot.map(tool => tool.name)).not.toContain("media_center");
     expect(donebot.map(tool => tool.name)).not.toContain("model_capabilities");
     expect(donebot.map(tool => tool.name)).not.toContain("generate_music");
